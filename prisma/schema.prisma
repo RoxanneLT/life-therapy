@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// CMS: Pages
+// ============================================================
+model Page {
+  id          String        @id @default(cuid())
+  title       String
+  slug        String        @unique
+  description String?
+  isPublished Boolean       @default(false)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  sections    PageSection[]
+
+  @@map("pages")
+}
+
+// ============================================================
+// CMS: Content blocks within a page
+// ============================================================
+model PageSection {
+  id          String   @id @default(cuid())
+  pageId      String
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  sectionType String   // hero, text, image_text, cta, testimonial_carousel, course_grid, features, faq
+  title       String?
+  subtitle    String?
+  content     String?  @db.Text
+  imageUrl    String?
+  imageAlt    String?
+  ctaText     String?
+  ctaLink     String?
+  config      Json?
+  sortOrder   Int      @default(0)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([pageId])
+  @@map("page_sections")
+}
+
+// ============================================================
+// Course catalog
+// ============================================================
+model Course {
+  id               String         @id @default(cuid())
+  title            String
+  slug             String         @unique
+  subtitle         String?
+  shortDescription String?
+  description      String?        @db.Text
+  imageUrl         String?
+  price            Int            @default(0)  // ZAR cents (38900 = R389)
+  category         String?        // self_esteem, mental_wellness, relationships, specialised
+  modulesCount     Int            @default(0)
+  hours            String?        // e.g. "~6 Hours"
+  level            String?        // Beginner, Intermediate, Advanced
+  isPublished      Boolean        @default(false)
+  isFeatured       Boolean        @default(false)
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  bundleCourses    BundleCourse[]
+
+  @@map("courses")
+}
+
+// ============================================================
+// Course bundles
+// ============================================================
+model Bundle {
+  id            String         @id @default(cuid())
+  title         String
+  slug          String         @unique
+  description   String?        @db.Text
+  bestFor       String?
+  imageUrl      String?
+  price         Int            @default(0)  // ZAR cents
+  isPublished   Boolean        @default(false)
+  sortOrder     Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  bundleCourses BundleCourse[]
+
+  @@map("bundles")
+}
+
+model BundleCourse {
+  id        String @id @default(cuid())
+  bundleId  String
+  courseId   String
+  sortOrder Int    @default(0)
+  bundle    Bundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, courseId])
+  @@map("bundle_courses")
+}
+
+// ============================================================
+// Testimonials
+// ============================================================
+model Testimonial {
+  id          String   @id @default(cuid())
+  name        String
+  role        String?
+  location    String?
+  content     String   @db.Text
+  rating      Int      @default(5)
+  imageUrl    String?
+  serviceType String   @default("session") // session, course
+  isPublished Boolean  @default(false)
+  isFeatured  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("testimonials")
+}
+
+// ============================================================
+// Admin users (linked to Supabase Auth)
+// ============================================================
+model AdminUser {
+  id             String   @id @default(cuid())
+  supabaseUserId String   @unique
+  email          String   @unique
+  name           String?
+  role           String   @default("admin") // admin, super_admin
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("admin_users")
+}

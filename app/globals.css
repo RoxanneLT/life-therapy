@@ -2,26 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 0 0% 99%;
+    --foreground: 0 0% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%;
+    --primary: 116 15% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 16 80% 47%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 91%;
+    --muted-foreground: 0 0% 50%;
+    --accent: 116 10% 94%;
+    --accent-foreground: 116 15% 35%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 91%;
+    --input: 0 0% 91%;
+    --ring: 116 15% 48%;
+    --chart-1: 116 15% 48%;
+    --chart-2: 16 80% 47%;
+    --chart-3: 40 50% 65%;
+    --chart-4: 180 30% 45%;
+    --chart-5: 270 30% 55%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 116 8% 8%;
+    --foreground: 0 0% 90%;
+    --card: 116 8% 11%;
+    --card-foreground: 0 0% 90%;
+    --popover: 116 8% 11%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 116 20% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 16 75% 52%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 116 6% 16%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 116 8% 16%;
+    --accent-foreground: 116 20% 70%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 116 6% 20%;
+    --input: 116 6% 20%;
+    --ring: 116 20% 55%;
+    --chart-1: 116 20% 55%;
+    --chart-2: 16 75% 55%;
+    --chart-3: 40 50% 55%;
+    --chart-4: 180 30% 50%;
+    --chart-5: 270 30% 60%;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }

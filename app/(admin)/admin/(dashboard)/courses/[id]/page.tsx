@@ -1,0 +1,77 @@
+export const dynamic = "force-dynamic";
+
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { CourseForm } from "@/components/admin/course-form";
+import { updateCourse, deleteCourse } from "../actions";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
+import { redirect } from "next/navigation";
+
+export default async function EditCoursePage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const course = await prisma.course.findUnique({
+    where: { id: params.id },
+  });
+
+  if (!course) notFound();
+
+  async function handleUpdate(formData: FormData) {
+    "use server";
+    await updateCourse(params.id, formData);
+  }
+
+  async function handleDelete() {
+    "use server";
+    await deleteCourse(params.id);
+    redirect("/admin/courses");
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-heading text-2xl font-bold">Edit Course</h1>
+          <p className="text-sm text-muted-foreground">{course.title}</p>
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete course?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete &ldquo;{course.title}&rdquo;.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <form action={handleDelete}>
+                <AlertDialogAction type="submit">Delete</AlertDialogAction>
+              </form>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+      <CourseForm initialData={course} onSubmit={handleUpdate} />
+    </div>
+  );
+}
