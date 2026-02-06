@@ -14,6 +14,8 @@ import {
 } from "@/lib/email-templates";
 import { getSiteSettings } from "@/lib/settings";
 import { rateLimitBooking } from "@/lib/rate-limit";
+import { getOptionalStudent } from "@/lib/student-auth";
+import { getBalance, deductCredit } from "@/lib/credits";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SessionType } from "@/lib/generated/prisma/client";
@@ -75,6 +77,24 @@ export async function createBooking(formData: FormData) {
   // Generate a secure confirmation token (not guessable like cuid)
   const confirmationToken = randomUUID();
 
+  // Check if using session credit
+  const wantsCredit = raw.useSessionCredit === "true";
+  let paidWithCredit = false;
+  let creditStudentId: string | null = null;
+
+  if (wantsCredit && sessionConfig.priceZarCents > 0) {
+    const student = await getOptionalStudent();
+    if (!student) {
+      throw new Error("You must be logged in to use session credits.");
+    }
+    const balance = await getBalance(student.id);
+    if (balance < 1) {
+      throw new Error("Insufficient session credits.");
+    }
+    creditStudentId = student.id;
+    paidWithCredit = true;
+  }
+
   // Create booking in DB
   const booking = await prisma.booking.create({
     data: {
@@ -83,7 +103,7 @@ export async function createBooking(formData: FormData) {
       startTime: parsed.startTime,
       endTime,
       durationMinutes: sessionConfig.durationMinutes,
-      priceZarCents: sessionConfig.priceZarCents,
+      priceZarCents: paidWithCredit ? 0 : sessionConfig.priceZarCents,
       clientName: parsed.clientName,
       clientEmail: parsed.clientEmail,
       clientPhone: parsed.clientPhone || null,
@@ -94,6 +114,15 @@ export async function createBooking(formData: FormData) {
       confirmationToken,
     },
   });
+
+  // Deduct credit now that we have the booking ID
+  if (paidWithCredit && creditStudentId) {
+    await deductCredit(
+      creditStudentId,
+      booking.id,
+      `Session booking: ${sessionConfig.label}`
+    );
+  }
 
   // Send emails (don't block redirect on failure)
   const settings = await getSiteSettings();

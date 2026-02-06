@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
+import { getOptionalStudent } from "@/lib/student-auth";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { BookingWidget } from "@/components/public/booking/booking-widget";
 import { notFound } from "next/navigation";
@@ -14,16 +15,26 @@ export const metadata: Metadata = {
 };
 
 export default async function BookPage() {
-  const [page, settings] = await Promise.all([
+  const [page, settings, student] = await Promise.all([
     prisma.page.findUnique({
       where: { slug: "book" },
       include: { sections: { orderBy: { sortOrder: "asc" } } },
     }),
     getSiteSettings(),
+    getOptionalStudent(),
   ]);
 
   if (!page?.isPublished) {
     notFound();
+  }
+
+  // Fetch credit balance if student is logged in
+  let creditBalance = 0;
+  if (student) {
+    const bal = await prisma.sessionCreditBalance.findUnique({
+      where: { studentId: student.id },
+    });
+    creditBalance = bal?.balance ?? 0;
   }
 
   // Split sections by type for controlled layout order
@@ -50,7 +61,7 @@ export default async function BookPage() {
       {/* Booking widget with anchor for auto-scroll */}
       {settings.bookingEnabled && (
         <div id="booking">
-          <BookingWidget />
+          <BookingWidget creditBalance={creditBalance} />
         </div>
       )}
 

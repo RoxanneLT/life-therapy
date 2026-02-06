@@ -24,6 +24,25 @@ export async function getAuthenticatedStudent() {
 }
 
 /**
+ * Non-redirecting version: returns the student if logged in, null otherwise.
+ * Useful for public pages that optionally show student-specific features.
+ */
+export async function getOptionalStudent() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const student = await prisma.student.findUnique({
+    where: { supabaseUserId: user.id },
+  });
+
+  return student;
+}
+
+/**
  * Ensures the student has changed their temporary password.
  * Redirects to /portal/change-password if mustChangePassword is true.
  */

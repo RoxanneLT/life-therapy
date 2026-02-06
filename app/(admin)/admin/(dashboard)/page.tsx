@@ -3,26 +3,64 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, GraduationCap, Quote, CalendarDays } from "lucide-react";
+import { FileText, GraduationCap, Quote, CalendarDays, UserCheck, ShoppingCart, Gift } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 
 export default async function AdminDashboard() {
   const { adminUser } = await getAuthenticatedAdmin();
 
-  const [pageCount, courseCount, testimonialCount, upcomingBookings] =
-    await Promise.all([
-      prisma.page.count(),
-      prisma.course.count(),
-      prisma.testimonial.count(),
-      prisma.booking.count({
-        where: {
-          status: { in: ["pending", "confirmed"] },
-          date: { gte: new Date() },
-        },
-      }),
-    ]);
+  const [
+    pageCount,
+    courseCount,
+    testimonialCount,
+    upcomingBookings,
+    studentCount,
+    revenue,
+    pendingGifts,
+  ] = await Promise.all([
+    prisma.page.count(),
+    prisma.course.count(),
+    prisma.testimonial.count(),
+    prisma.booking.count({
+      where: {
+        status: { in: ["pending", "confirmed"] },
+        date: { gte: new Date() },
+      },
+    }),
+    prisma.student.count(),
+    prisma.order.aggregate({
+      where: { status: "paid" },
+      _sum: { totalCents: true },
+    }),
+    prisma.gift.count({ where: { status: "pending" } }),
+  ]);
 
   const stats = [
+    {
+      label: "Students",
+      value: studentCount,
+      icon: UserCheck,
+      href: "/admin/students",
+    },
+    {
+      label: "Revenue",
+      value: formatPrice(revenue._sum.totalCents || 0),
+      icon: ShoppingCart,
+      href: "/admin/orders",
+    },
+    {
+      label: "Upcoming Bookings",
+      value: upcomingBookings,
+      icon: CalendarDays,
+      href: "/admin/bookings",
+    },
+    {
+      label: "Pending Gifts",
+      value: pendingGifts,
+      icon: Gift,
+      href: "/admin/gifts",
+    },
     {
       label: "Pages",
       value: pageCount,
@@ -40,12 +78,6 @@ export default async function AdminDashboard() {
       value: testimonialCount,
       icon: Quote,
       href: "/admin/testimonials",
-    },
-    {
-      label: "Upcoming Bookings",
-      value: upcomingBookings,
-      icon: CalendarDays,
-      href: "/admin/bookings",
     },
   ];
 

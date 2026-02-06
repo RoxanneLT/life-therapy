@@ -55,6 +55,9 @@ export async function updateSettings(formData: FormData) {
     smtpPass: toNullable(raw.smtpPass),
     smtpFromName: toNullable(raw.smtpFromName),
     smtpFromEmail: toNullable(raw.smtpFromEmail),
+    stripeSecretKey: toNullable(raw.stripeSecretKey),
+    stripePublishableKey: toNullable(raw.stripePublishableKey),
+    stripeWebhookSecret: toNullable(raw.stripeWebhookSecret),
     copyrightText: toNullable(raw.copyrightText),
     footerTagline: toNullable(raw.footerTagline),
   };

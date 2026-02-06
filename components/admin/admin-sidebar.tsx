@@ -11,6 +11,11 @@ import {
   CalendarDays,
   Settings,
   Users,
+  ShoppingCart,
+  Gift,
+  Tag,
+  Coins,
+  UserCheck,
 } from "lucide-react";
 import Image from "next/image";
 import type { AdminRole } from "@/lib/generated/prisma/client";
@@ -28,6 +33,11 @@ const navItems: NavItem[] = [
   { href: "/admin/courses", label: "Courses", icon: GraduationCap, roles: ["super_admin", "editor"] },
   { href: "/admin/testimonials", label: "Testimonials", icon: Quote, roles: ["super_admin", "editor", "marketing"] },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, roles: ["super_admin", "editor"] },
+  { href: "/admin/students", label: "Students", icon: UserCheck, roles: ["super_admin"] },
+  { href: "/admin/orders", label: "Orders", icon: ShoppingCart, roles: ["super_admin"] },
+  { href: "/admin/gifts", label: "Gifts", icon: Gift, roles: ["super_admin"] },
+  { href: "/admin/coupons", label: "Coupons", icon: Tag, roles: ["super_admin"] },
+  { href: "/admin/credits", label: "Credit Packs", icon: Coins, roles: ["super_admin"] },
   { href: "/admin/users", label: "Users", icon: Users, roles: ["super_admin"] },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
 ];

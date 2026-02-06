@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2, CalendarDays, Clock, User, Mail } from "lucide-react";
+import { ArrowLeft, Loader2, CalendarDays, Clock, User, Mail, Coins } from "lucide-react";
 import { toast } from "sonner";
 import { format, parse } from "date-fns";
 import { createBooking } from "@/app/(public)/book/actions";
@@ -18,13 +18,18 @@ import type { BookingData } from "./booking-widget";
 interface BookingReviewStepProps {
   readonly data: BookingData;
   readonly onBack: () => void;
+  readonly creditBalance?: number;
 }
 
-export function BookingReviewStep({ data, onBack }: BookingReviewStepProps) {
+export function BookingReviewStep({ data, onBack, creditBalance = 0 }: BookingReviewStepProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [useCredit, setUseCredit] = useState(false);
 
   const dateObj = parse(data.date!, "yyyy-MM-dd", new Date());
   const dateLabel = format(dateObj, "EEEE, d MMMM yyyy");
+
+  // Credits can only be used on paid sessions (not free consultations)
+  const canUseCredit = creditBalance > 0 && data.sessionType!.priceZarCents > 0;
 
   async function handleConfirm() {
     setSubmitting(true);
@@ -37,6 +42,7 @@ export function BookingReviewStep({ data, onBack }: BookingReviewStepProps) {
       formData.set("clientEmail", data.clientEmail);
       if (data.clientPhone) formData.set("clientPhone", data.clientPhone);
       if (data.clientNotes) formData.set("clientNotes", data.clientNotes);
+      if (useCredit) formData.set("useSessionCredit", "true");
 
       await createBooking(formData);
       // redirect happens in the server action
@@ -96,15 +102,61 @@ export function BookingReviewStep({ data, onBack }: BookingReviewStepProps) {
             </>
           )}
           <Separator />
+
+          {/* Session credit toggle */}
+          {canUseCredit && (
+            <>
+              <button
+                type="button"
+                onClick={() => setUseCredit(!useCredit)}
+                className="flex w-full items-center justify-between rounded-md border p-3 text-sm transition-colors hover:bg-muted"
+              >
+                <div className="flex items-center gap-2">
+                  <Coins className="h-4 w-4 text-amber-500" />
+                  <span>Use 1 Session Credit</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({creditBalance} available)
+                  </span>
+                </div>
+                <div
+                  className={`h-5 w-9 rounded-full transition-colors ${
+                    useCredit ? "bg-brand-500" : "bg-muted-foreground/30"
+                  }`}
+                >
+                  <div
+                    className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      useCredit ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </div>
+              </button>
+              <Separator />
+            </>
+          )}
+
           <div className="flex justify-between font-semibold">
             <span>Total</span>
             <span className="text-brand-700">
-              {data.sessionType!.priceLabel}
+              {useCredit ? (
+                <span className="flex items-center gap-1">
+                  <span className="text-muted-foreground line-through">
+                    {data.sessionType!.priceLabel}
+                  </span>
+                  <span className="text-green-600">1 Credit</span>
+                </span>
+              ) : (
+                data.sessionType!.priceLabel
+              )}
             </span>
           </div>
-          {data.sessionType!.priceZarCents > 0 && (
+          {!useCredit && data.sessionType!.priceZarCents > 0 && (
             <p className="text-xs text-muted-foreground">
               Payment details will be sent to you after booking.
+            </p>
+          )}
+          {useCredit && (
+            <p className="text-xs text-green-600">
+              No payment required — session credit will be deducted.
             </p>
           )}
         </CardContent>

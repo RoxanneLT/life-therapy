@@ -84,6 +84,11 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [smtpFromName, setSmtpFromName] = useState(initialSettings.smtpFromName || "");
   const [smtpFromEmail, setSmtpFromEmail] = useState(initialSettings.smtpFromEmail || "");
 
+  // Payments (Stripe)
+  const [stripeSecretKey, setStripeSecretKey] = useState(initialSettings.stripeSecretKey || "");
+  const [stripePublishableKey, setStripePublishableKey] = useState(initialSettings.stripePublishableKey || "");
+  const [stripeWebhookSecret, setStripeWebhookSecret] = useState(initialSettings.stripeWebhookSecret || "");
+
   // Footer
   const [copyrightText, setCopyrightText] = useState(initialSettings.copyrightText || "");
   const [footerTagline, setFooterTagline] = useState(initialSettings.footerTagline || "");
@@ -126,6 +131,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       formData.set("smtpPass", smtpPass);
       formData.set("smtpFromName", smtpFromName);
       formData.set("smtpFromEmail", smtpFromEmail);
+      formData.set("stripeSecretKey", stripeSecretKey);
+      formData.set("stripePublishableKey", stripePublishableKey);
+      formData.set("stripeWebhookSecret", stripeWebhookSecret);
       formData.set("copyrightText", copyrightText);
       formData.set("footerTagline", footerTagline);
 
@@ -149,6 +157,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           <TabsTrigger value="seo">SEO</TabsTrigger>
           <TabsTrigger value="newsletter">Newsletter</TabsTrigger>
           <TabsTrigger value="email">Email (SMTP)</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="footer">Footer</TabsTrigger>
         </TabsList>
 
@@ -384,6 +393,33 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                   <Input id="smtpFromEmail" type="email" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} placeholder="noreply@life-therapy.co.za" />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Payments */}
+        <TabsContent value="payments">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stripe Payment Settings</CardTitle>
+              <CardDescription>Configure Stripe for online payments. Use test keys for development.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="stripePublishableKey">Publishable Key</Label>
+                <Input id="stripePublishableKey" value={stripePublishableKey} onChange={(e) => setStripePublishableKey(e.target.value)} placeholder="pk_test_..." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stripeSecretKey">Secret Key</Label>
+                <Input id="stripeSecretKey" type="password" value={stripeSecretKey} onChange={(e) => setStripeSecretKey(e.target.value)} placeholder="sk_test_..." />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stripeWebhookSecret">Webhook Secret</Label>
+                <Input id="stripeWebhookSecret" type="password" value={stripeWebhookSecret} onChange={(e) => setStripeWebhookSecret(e.target.value)} placeholder="whsec_..." />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Note: Environment variables (STRIPE_SECRET_KEY, etc.) take priority over these settings. Use this for admin-configurable keys.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

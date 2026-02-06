@@ -29,7 +29,11 @@ const STEPS = [
   "Confirm",
 ] as const;
 
-export function BookingWidget() {
+interface BookingWidgetProps {
+  readonly creditBalance?: number;
+}
+
+export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
   const searchParams = useSearchParams();
   const widgetRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(0);
@@ -185,7 +189,7 @@ export function BookingWidget() {
         />
       )}
       {step === 4 && data.sessionType && data.date && data.slot && (
-        <BookingReviewStep data={data} onBack={goBack} />
+        <BookingReviewStep data={data} onBack={goBack} creditBalance={creditBalance} />
       )}
     </section>
   );
