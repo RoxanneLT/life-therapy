@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { bookingFormSchema } from "@/lib/validations";
 import { getSessionTypeConfig } from "@/lib/booking-config";
@@ -11,6 +13,7 @@ import {
   bookingNotificationEmail,
 } from "@/lib/email-templates";
 import { getSiteSettings } from "@/lib/settings";
+import { rateLimitBooking } from "@/lib/rate-limit";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SessionType } from "@/lib/generated/prisma/client";
@@ -27,6 +30,14 @@ function parseTimeToMinutes(t: string): number {
 }
 
 export async function createBooking(formData: FormData) {
+  // Rate limit by IP
+  const headersList = headers();
+  const ip = headersList.get("x-forwarded-for")?.split(",")[0] || "unknown";
+  const { success } = rateLimitBooking(ip);
+  if (!success) {
+    throw new Error("Too many booking attempts. Please try again later.");
+  }
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = bookingFormSchema.parse({
     ...raw,
@@ -61,6 +72,9 @@ export async function createBooking(formData: FormData) {
     description: parsed.clientNotes || "",
   });
 
+  // Generate a secure confirmation token (not guessable like cuid)
+  const confirmationToken = randomUUID();
+
   // Create booking in DB
   const booking = await prisma.booking.create({
     data: {
@@ -77,12 +91,13 @@ export async function createBooking(formData: FormData) {
       status: "confirmed",
       graphEventId: graphResult?.eventId || null,
       teamsMeetingUrl: graphResult?.teamsMeetingUrl || null,
+      confirmationToken,
     },
   });
 
   // Send emails (don't block redirect on failure)
   const settings = await getSiteSettings();
-  const confirmEmail = bookingConfirmationEmail(booking);
+  const confirmEmail = bookingConfirmationEmail(booking, confirmationToken);
   const notifyEmail = bookingNotificationEmail(booking);
 
   await Promise.allSettled([
@@ -99,5 +114,5 @@ export async function createBooking(formData: FormData) {
   });
 
   revalidatePath("/admin/bookings");
-  redirect(`/book/confirmation?id=${booking.id}`);
+  redirect(`/book/confirmation?token=${confirmationToken}`);
 }

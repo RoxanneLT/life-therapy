@@ -239,6 +239,7 @@ model Booking {
   adminNotes         String?       @db.Text
   graphEventId       String?
   teamsMeetingUrl    String?
+  confirmationToken  String?       @unique
   confirmationSentAt DateTime?
   reminderSentAt     DateTime?
   createdAt          DateTime      @default(now())

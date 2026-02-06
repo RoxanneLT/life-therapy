@@ -7,15 +7,19 @@ function baseTemplate(title: string, body: string): string {
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; background-color: #f9fafb;">
   <div style="background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-    <div style="background: #8BA889; padding: 24px; text-align: center;">
-      <h2 style="color: #fff; margin: 0; font-size: 22px;">Life-Therapy</h2>
+    <div style="background: #fff; padding: 24px 24px 16px; text-align: center;">
+      <img src="https://life-therapy.co.za/logo.png" alt="Life-Therapy" style="max-width: 180px; height: auto;" />
+    </div>
+    <div style="background: linear-gradient(135deg, #8BA889 0%, #7a9a78 100%); padding: 14px 24px; text-align: center;">
+      <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 13px; letter-spacing: 0.5px;">Personal Development &amp; Life Coaching</p>
     </div>
     <div style="padding: 32px 24px;">
-      <h3 style="color: #333; margin: 0 0 16px;">${title}</h3>
+      <h3 style="color: #333; margin: 0 0 16px; font-size: 20px;">${title}</h3>
       ${body}
     </div>
-    <div style="border-top: 1px solid #e5e7eb; padding: 16px 24px; font-size: 12px; color: #6b7280; text-align: center;">
-      <p style="margin: 0;">Life-Therapy | hello@life-therapy.co.za | +27 71 017 0353</p>
+    <div style="border-top: 1px solid #e5e7eb; padding: 20px 24px; font-size: 12px; color: #6b7280; text-align: center;">
+      <p style="margin: 0 0 4px;"><a href="https://life-therapy.co.za" style="color: #8BA889; text-decoration: none; font-weight: 600;">life-therapy.co.za</a></p>
+      <p style="margin: 0;">hello@life-therapy.co.za &middot; +27 71 017 0353</p>
     </div>
   </div>
 </body></html>`;
@@ -29,13 +33,17 @@ function formatTimeRange(booking: Booking): string {
   return `${booking.startTime} – ${booking.endTime} (SAST)`;
 }
 
-export function bookingConfirmationEmail(booking: Booking): {
+export function bookingConfirmationEmail(
+  booking: Booking,
+  confirmationToken: string
+): {
   subject: string;
   html: string;
 } {
   const config = getSessionTypeConfig(booking.sessionType);
   const dateStr = formatBookingDate(booking);
   const timeStr = formatTimeRange(booking);
+  const confirmationUrl = `https://life-therapy.co.za/book/confirmation?token=${confirmationToken}`;
 
   const teamsSection = booking.teamsMeetingUrl
     ? `<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;">
@@ -60,6 +68,9 @@ export function bookingConfirmationEmail(booking: Booking): {
       ${priceSection}
     </div>
     ${teamsSection}
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${confirmationUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">View Booking Details</a>
+    </div>
     <h4 style="margin: 24px 0 8px;">What to expect:</h4>
     <ul style="color: #555; padding-left: 20px;">
       <li>Find a quiet, comfortable space for your session</li>
@@ -116,10 +127,9 @@ export function bookingReminderEmail(booking: Booking): {
   const dateStr = formatBookingDate(booking);
   const timeStr = formatTimeRange(booking);
 
-  const teamsSection = booking.teamsMeetingUrl
-    ? `<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;">
-        <p style="margin: 0 0 8px; font-weight: 600;">Join your session:</p>
-        <a href="${booking.teamsMeetingUrl}" style="color: #8BA889; font-weight: 600; word-break: break-all;">${booking.teamsMeetingUrl}</a>
+  const teamsButton = booking.teamsMeetingUrl
+    ? `<div style="text-align: center; margin: 24px 0;">
+        <a href="${booking.teamsMeetingUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Join Microsoft Teams Meeting</a>
       </div>`
     : "";
 
@@ -131,7 +141,7 @@ export function bookingReminderEmail(booking: Booking): {
       <p style="margin: 4px 0;"><strong>Date:</strong> ${dateStr}</p>
       <p style="margin: 4px 0;"><strong>Time:</strong> ${timeStr}</p>
     </div>
-    ${teamsSection}
+    ${teamsButton}
     <p>Looking forward to our session!</p>
     <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
   `;
@@ -158,7 +168,10 @@ export function bookingCancellationEmail(booking: Booking): {
       <p style="margin: 4px 0;"><strong>Date:</strong> ${dateStr}</p>
       <p style="margin: 4px 0;"><strong>Time:</strong> ${timeStr}</p>
     </div>
-    <p>If you&rsquo;d like to rebook, please visit our booking page or contact us.</p>
+    <p>If you&rsquo;d like to rebook, you can schedule a new session below.</p>
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="https://life-therapy.co.za/book" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">Book a New Session</a>
+    </div>
     <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
   `;
 

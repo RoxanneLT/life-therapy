@@ -21,16 +21,16 @@ export const metadata: Metadata = {
 };
 
 interface Props {
-  readonly searchParams: { id?: string };
+  readonly searchParams: { token?: string };
 }
 
 export default async function BookingConfirmationPage({
   searchParams,
 }: Props) {
-  if (!searchParams.id) notFound();
+  if (!searchParams.token) notFound();
 
   const booking = await prisma.booking.findUnique({
-    where: { id: searchParams.id },
+    where: { confirmationToken: searchParams.token },
   });
 
   if (!booking) notFound();
