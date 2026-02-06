@@ -74,6 +74,7 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
 
         {/* Mobile menu */}
         <div className="flex items-center gap-1 md:hidden">
+          <CartBadge />
           <ThemeToggle />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -105,15 +106,12 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
                   </Link>
                 </Button>
               )}
-              <div className="mt-2 flex items-center gap-2">
-                <CartBadge />
-                <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
-                  <Link href="/portal/login" onClick={() => setOpen(false)}>
-                    <User className="h-3.5 w-3.5" />
-                    Portal
-                  </Link>
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" className="mt-2 gap-1.5" asChild>
+                <Link href="/portal/login" onClick={() => setOpen(false)}>
+                  <User className="h-3.5 w-3.5" />
+                  Student Portal
+                </Link>
+              </Button>
             </nav>
           </SheetContent>
         </Sheet>

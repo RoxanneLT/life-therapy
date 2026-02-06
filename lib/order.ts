@@ -55,6 +55,7 @@ export async function processCheckoutCompleted(orderId: string) {
           courseId: item.courseId,
           bundleId: item.bundleId,
           creditPackId: item.creditPackId,
+          hybridPackageId: item.hybridPackageId,
           isGift: true,
           cart: { studentId: order.studentId },
         },
@@ -70,6 +71,7 @@ export async function processCheckoutCompleted(orderId: string) {
             courseId: item.courseId,
             bundleId: item.bundleId,
             creditPackId: item.creditPackId,
+            hybridPackageId: item.hybridPackageId,
             description: item.description,
           },
           {
@@ -157,6 +159,59 @@ export async function processCheckoutCompleted(orderId: string) {
             orderId: order.id,
           },
         });
+      }
+    }
+
+    if (item.hybridPackageId) {
+      // Hybrid package: enroll in included courses + add credits
+      const pkg = await prisma.hybridPackage.findUnique({
+        where: { id: item.hybridPackageId },
+        include: { courses: { select: { courseId: true } } },
+      });
+      if (pkg) {
+        // Enroll in all included courses
+        for (const pc of pkg.courses) {
+          await prisma.enrollment.upsert({
+            where: {
+              studentId_courseId: {
+                studentId: order.studentId,
+                courseId: pc.courseId,
+              },
+            },
+            create: {
+              studentId: order.studentId,
+              courseId: pc.courseId,
+              source: "purchase",
+              orderId: order.id,
+            },
+            update: {},
+          });
+        }
+
+        // Add session credits if included
+        if (pkg.credits > 0) {
+          const balance = await prisma.sessionCreditBalance.upsert({
+            where: { studentId: order.studentId },
+            create: {
+              studentId: order.studentId,
+              balance: pkg.credits * item.quantity,
+            },
+            update: {
+              balance: { increment: pkg.credits * item.quantity },
+            },
+          });
+
+          await prisma.sessionCreditTransaction.create({
+            data: {
+              studentId: order.studentId,
+              type: "purchase",
+              amount: pkg.credits * item.quantity,
+              balanceAfter: balance.balance,
+              description: `Purchased ${pkg.title}`,
+              orderId: order.id,
+            },
+          });
+        }
       }
     }
   }

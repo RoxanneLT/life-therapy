@@ -179,6 +179,18 @@ export const creditPackSchema = z.object({
   sortOrder: z.coerce.number().int().default(0),
 });
 
+export const packageSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  slug: z.string().min(1, "Slug is required"),
+  description: z.string().optional(),
+  imageUrl: z.string().optional(),
+  priceCents: z.coerce.number().int().min(0, "Price is required"),
+  credits: z.coerce.number().int().min(0).default(0),
+  documentUrl: z.string().optional().or(z.literal("")),
+  isPublished: z.boolean().default(false),
+  sortOrder: z.coerce.number().int().default(0),
+});
+
 // ============================================================
 // Student Registration
 // ============================================================
@@ -210,5 +222,6 @@ export type LectureInput = z.infer<typeof lectureSchema>;
 export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
 export type CouponInput = z.infer<typeof couponSchema>;
 export type CreditPackInput = z.infer<typeof creditPackSchema>;
+export type PackageInput = z.infer<typeof packageSchema>;
 export type StudentRegisterInput = z.infer<typeof studentRegisterSchema>;
 export type StudentLoginInput = z.infer<typeof studentLoginSchema>;

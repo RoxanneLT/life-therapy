@@ -552,21 +552,23 @@ model Order {
 }
 
 model OrderItem {
-  id             String  @id @default(cuid())
-  orderId        String
-  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  courseId        String?
-  course         Course? @relation(fields: [courseId], references: [id])
-  bundleId       String?
-  bundle         Bundle? @relation(fields: [bundleId], references: [id])
-  creditPackId   String?
-  description    String
-  unitPriceCents Int
-  quantity       Int     @default(1)
-  totalCents     Int
-  isGift         Boolean @default(false)
-  giftId         String? @unique
-  gift           Gift?   @relation(fields: [giftId], references: [id])
+  id              String         @id @default(cuid())
+  orderId         String
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  courseId         String?
+  course          Course?        @relation(fields: [courseId], references: [id])
+  bundleId        String?
+  bundle          Bundle?        @relation(fields: [bundleId], references: [id])
+  creditPackId    String?
+  hybridPackageId String?
+  hybridPackage   HybridPackage? @relation(fields: [hybridPackageId], references: [id])
+  description     String
+  unitPriceCents  Int
+  quantity        Int            @default(1)
+  totalCents      Int
+  isGift          Boolean        @default(false)
+  giftId          String?        @unique
+  gift            Gift?          @relation(fields: [giftId], references: [id])
 
   @@index([orderId])
   @@map("order_items")
@@ -592,15 +594,17 @@ model Gift {
   course         Course?    @relation(fields: [courseId], references: [id])
   bundleId       String?
   bundle         Bundle?    @relation(fields: [bundleId], references: [id])
-  creditPackId   String?
-  creditAmount   Int?
-  emailSentAt    DateTime?
-  redeemedAt     DateTime?
-  redeemToken    String     @unique @default(cuid())
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  creditPackId    String?
+  hybridPackageId String?
+  hybridPackage   HybridPackage? @relation(fields: [hybridPackageId], references: [id])
+  creditAmount    Int?
+  emailSentAt     DateTime?
+  redeemedAt      DateTime?
+  redeemToken     String     @unique @default(cuid())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  orderItem      OrderItem?
+  orderItem       OrderItem?
 
   @@index([recipientEmail])
   @@index([status])
@@ -695,6 +699,7 @@ model CartItem {
   courseId            String?
   bundleId           String?
   creditPackId       String?
+  hybridPackageId    String?
   quantity           Int       @default(1)
   isGift             Boolean   @default(false)
   giftRecipientName  String?
@@ -708,7 +713,7 @@ model CartItem {
 }
 
 // ============================================================
-// Hybrid Packages (course + session credits)
+// Packages (unified: course bundles, credit packs, hybrids, digital docs)
 // ============================================================
 model HybridPackage {
   id          String   @id @default(cuid())
@@ -717,13 +722,16 @@ model HybridPackage {
   description String?  @db.Text
   imageUrl    String?
   priceCents  Int
-  credits     Int
+  credits     Int      @default(0)
+  documentUrl String?
   isPublished Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   courses     HybridPackageCourse[]
+  orderItems  OrderItem[]
+  gifts       Gift[]
 
   @@map("hybrid_packages")
 }

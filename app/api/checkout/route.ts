@@ -113,6 +113,7 @@ export async function POST(request: Request) {
             courseId: r.product.type === "course" ? r.product.id : null,
             bundleId: r.product.type === "bundle" ? r.product.id : null,
             creditPackId: r.product.type === "credit_pack" ? r.product.id : null,
+            hybridPackageId: r.product.type === "package" ? r.product.id : null,
             isGift: true,
             giftRecipientName: r.giftRecipientName || null,
             giftRecipientEmail: r.giftRecipientEmail || null,
@@ -150,6 +151,8 @@ export async function POST(request: Request) {
             bundleId: r.product.type === "bundle" ? r.product.id : null,
             creditPackId:
               r.product.type === "credit_pack" ? r.product.id : null,
+            hybridPackageId:
+              r.product.type === "package" ? r.product.id : null,
             description: r.product.title,
             unitPriceCents: r.product.priceCents,
             quantity: r.quantity,
