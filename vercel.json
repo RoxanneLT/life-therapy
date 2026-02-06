@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/gift-delivery",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/order-cleanup",
+      "schedule": "0 3 * * *"
     }
   ]
 }

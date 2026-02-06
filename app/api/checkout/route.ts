@@ -35,6 +35,32 @@ export async function POST(request: Request) {
       );
     }
 
+    // Duplicate purchase prevention: filter out courses the student already owns
+    const nonGiftCourseIds = resolved
+      .filter((r) => r.product.type === "course" && !r.isGift)
+      .map((r) => r.product.id);
+
+    if (nonGiftCourseIds.length > 0) {
+      const existingEnrollments = await prisma.enrollment.findMany({
+        where: {
+          studentId: auth.student.id,
+          courseId: { in: nonGiftCourseIds },
+        },
+        select: { courseId: true },
+      });
+
+      if (existingEnrollments.length > 0) {
+        const ownedIds = new Set(existingEnrollments.map((e) => e.courseId));
+        const ownedTitles = resolved
+          .filter((r) => ownedIds.has(r.product.id))
+          .map((r) => r.product.title);
+        return NextResponse.json(
+          { error: `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Calculate subtotal from server-verified prices
     const subtotalCents = resolved.reduce(
       (sum, r) => sum + r.product.priceCents * r.quantity,

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { giftReceivedEmail } from "@/lib/email-templates";
+import { giftReceivedEmail, giftDeliveredToBuyerEmail } from "@/lib/email-templates";
 import { findOrCreateStudent } from "@/lib/account-provisioning";
 
 /**
@@ -106,6 +106,26 @@ export async function sendGiftEmail(giftId: string) {
       emailSentAt: new Date(),
     },
   });
+
+  // Notify the buyer that their gift was delivered (non-blocking)
+  const buyerStudent = await prisma.student.findUnique({
+    where: { id: gift.buyerId },
+    select: { email: true },
+  });
+  if (buyerStudent) {
+    const notification = giftDeliveredToBuyerEmail({
+      buyerName: buyerName,
+      recipientName: gift.recipientName,
+      itemTitle,
+    });
+    sendEmail({
+      to: buyerStudent.email,
+      subject: notification.subject,
+      html: notification.html,
+    }).catch((err) =>
+      console.error("Failed to send gift delivery notification to buyer:", err)
+    );
+  }
 }
 
 /**

@@ -261,6 +261,131 @@ export function orderConfirmationEmail(
   };
 }
 
+export function accountCreatedEmail(params: {
+  firstName: string;
+  loginUrl: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <p>Hi ${params.firstName},</p>
+    <p>Welcome to Life-Therapy! Your student account has been created successfully.</p>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${params.loginUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Go to My Portal</a>
+    </div>
+
+    <p>From your portal, you can:</p>
+    <ul style="color: #555; padding-left: 20px;">
+      <li>Access your courses and track progress</li>
+      <li>View certificates of completion</li>
+      <li>Manage session credits and bookings</li>
+      <li>Update your profile settings</li>
+    </ul>
+
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
+  `;
+
+  return {
+    subject: "Welcome to Life-Therapy!",
+    html: baseTemplate("Welcome to Life-Therapy!", body),
+  };
+}
+
+export function accountProvisionedEmail(params: {
+  firstName: string;
+  tempPassword: string;
+  loginUrl: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <p>Hi ${params.firstName},</p>
+    <p>An account has been created for you on Life-Therapy. You can use the credentials below to log in and access your courses.</p>
+
+    <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0;">
+      <p style="margin: 4px 0;"><strong>Temporary Password:</strong> <code style="background: #fff; padding: 2px 8px; border-radius: 4px; font-size: 15px;">${params.tempPassword}</code></p>
+    </div>
+
+    <p style="color: #dc2626; font-weight: 600;">You will be asked to change your password on first login.</p>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${params.loginUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Log In Now</a>
+    </div>
+
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
+  `;
+
+  return {
+    subject: "Your Life-Therapy Account",
+    html: baseTemplate("Your Account is Ready", body),
+  };
+}
+
+export function courseCompletedEmail(params: {
+  firstName: string;
+  courseTitle: string;
+  certificateNumber: string;
+  portalUrl: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <p>Hi ${params.firstName},</p>
+    <p>Congratulations! You have successfully completed <strong>${params.courseTitle}</strong>.</p>
+
+    <div style="background: linear-gradient(135deg, #f0f7f4 0%, #e8f0e6 100%); border-radius: 6px; padding: 24px; margin: 16px 0; text-align: center;">
+      <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280;">Certificate Number</p>
+      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333; letter-spacing: 1px;">${params.certificateNumber}</p>
+    </div>
+
+    <p>You can view and download your certificate from your student portal.</p>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${params.portalUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">View Certificate</a>
+    </div>
+
+    <p>Thank you for learning with us. We hope this course has been valuable on your personal development journey.</p>
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
+  `;
+
+  return {
+    subject: `Congratulations! You completed ${params.courseTitle}`,
+    html: baseTemplate("Course Completed!", body),
+  };
+}
+
+export function giftDeliveredToBuyerEmail(params: {
+  buyerName: string;
+  recipientName: string;
+  itemTitle: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <p>Hi ${params.buyerName},</p>
+    <p>Just a quick note to let you know that your gift has been delivered!</p>
+
+    <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0; text-align: center;">
+      <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280;">Gift for ${params.recipientName}</p>
+      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333;">${params.itemTitle}</p>
+    </div>
+
+    <p>${params.recipientName} has been sent an email with instructions to redeem their gift.</p>
+
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
+  `;
+
+  return {
+    subject: `Your gift for ${params.recipientName} has been delivered!`,
+    html: baseTemplate("Gift Delivered!", body),
+  };
+}
+
 export function giftReceivedEmail(params: {
   recipientName: string;
   buyerName: string;

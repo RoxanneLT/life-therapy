@@ -5,6 +5,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { studentRegisterSchema } from "@/lib/validations";
 import { headers } from "next/headers";
 import { rateLimit } from "@/lib/rate-limit";
+import { sendEmail } from "@/lib/email";
+import { accountCreatedEmail } from "@/lib/email-templates";
 
 export async function registerStudent(formData: FormData) {
   const headersList = headers();
@@ -59,6 +61,15 @@ export async function registerStudent(formData: FormData) {
       lastName,
     },
   });
+
+  // Send welcome email (non-blocking)
+  const { subject, html } = accountCreatedEmail({
+    firstName,
+    loginUrl: "https://life-therapy.co.za/portal",
+  });
+  sendEmail({ to: email, subject, html }).catch((err) =>
+    console.error("Failed to send welcome email:", err)
+  );
 
   return { success: true };
 }

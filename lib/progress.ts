@@ -1,5 +1,7 @@
 import { prisma } from "./prisma";
 import crypto from "crypto";
+import { sendEmail } from "./email";
+import { courseCompletedEmail } from "./email-templates";
 
 /**
  * Recalculates and updates the progress percentage for an enrollment.
@@ -46,9 +48,27 @@ export async function recalculateProgress(
     },
   });
 
-  // Auto-generate certificate at 100%
+  // Auto-generate certificate at 100% and send congratulations email
   if (completed) {
-    await generateCertificate(studentId, courseId);
+    const certNumber = await generateCertificate(studentId, courseId);
+
+    // Look up student + course for the email
+    const [student, course] = await Promise.all([
+      prisma.student.findUnique({ where: { id: studentId }, select: { email: true, firstName: true } }),
+      prisma.course.findUnique({ where: { id: courseId }, select: { title: true } }),
+    ]);
+
+    if (student && course) {
+      const { subject, html } = courseCompletedEmail({
+        firstName: student.firstName,
+        courseTitle: course.title,
+        certificateNumber: certNumber,
+        portalUrl: "https://life-therapy.co.za/portal/certificates",
+      });
+      sendEmail({ to: student.email, subject, html }).catch((err) =>
+        console.error("Failed to send course completion email:", err)
+      );
+    }
   }
 
   return { progressPercent, completed };
