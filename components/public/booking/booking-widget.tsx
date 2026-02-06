@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { SessionTypeStep } from "./session-type-step";
 import { DatePickerStep } from "./date-picker-step";
 import { TimeSlotStep } from "./time-slot-step";
 import { BookingFormStep } from "./booking-form-step";
 import { BookingReviewStep } from "./booking-review-step";
-import type { SessionTypeConfig } from "@/lib/booking-config";
+import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
 import type { TimeSlot } from "@/lib/availability";
 
 export interface BookingData {
@@ -28,6 +29,7 @@ const STEPS = [
 ] as const;
 
 export function BookingWidget() {
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<BookingData>({
     sessionType: null,
@@ -38,6 +40,18 @@ export function BookingWidget() {
     clientPhone: "",
     clientNotes: "",
   });
+
+  // Pre-select session type from URL param (e.g. /book?type=free_consultation)
+  useEffect(() => {
+    const typeParam = searchParams.get("type");
+    if (typeParam && !data.sessionType) {
+      const match = SESSION_TYPES.find((t) => t.type === typeParam);
+      if (match) {
+        setData((d) => ({ ...d, sessionType: match }));
+        setStep(1);
+      }
+    }
+  }, [searchParams, data.sessionType]);
 
   function goNext() {
     setStep((s) => Math.min(s + 1, STEPS.length - 1));

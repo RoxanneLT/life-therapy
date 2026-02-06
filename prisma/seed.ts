@@ -333,9 +333,9 @@ async function main() {
         title: "Booking Options",
         config: {
           items: [
-            { icon: "MessageCircle", title: "Free Consultation", description: "A no-obligation 30-minute call to discuss your needs, ask questions, and see if we're a good fit.", price: "Free", ctaText: "Book Now", ctaLink: "/book", highlight: true },
-            { icon: "Calendar", title: "1:1 Session", description: "A full 60-minute coaching or counselling session tailored to your specific needs and goals.", price: "R850", priceNote: "per session", ctaText: "Book Now", ctaLink: "/book" },
-            { icon: "Users", title: "Couples Session", description: "A 60-minute couples coaching or counselling session to strengthen your relationship together.", price: "R1,200", priceNote: "per session", ctaText: "Book Now", ctaLink: "/book" },
+            { icon: "MessageCircle", title: "Free Consultation", description: "A no-obligation 30-minute call to discuss your needs, ask questions, and see if we're a good fit.", price: "Free", ctaText: "Book Now", ctaLink: "/book?type=free_consultation", highlight: true },
+            { icon: "Calendar", title: "1:1 Session", description: "A full 60-minute coaching or counselling session tailored to your specific needs and goals.", price: "R850", priceNote: "per session", ctaText: "Book Now", ctaLink: "/book?type=individual" },
+            { icon: "Users", title: "Couples Session", description: "A 60-minute couples coaching or counselling session to strengthen your relationship together.", price: "R1,200", priceNote: "per session", ctaText: "Book Now", ctaLink: "/book?type=couples" },
           ],
         },
         sortOrder: 1,
