@@ -2,7 +2,7 @@
 
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
 import { Card, CardContent } from "@/components/ui/card";
-import { Clock, DollarSign } from "lucide-react";
+import { Clock } from "lucide-react";
 
 interface SessionTypeStepProps {
   readonly onSelect: (config: SessionTypeConfig) => void;
@@ -36,8 +36,7 @@ export function SessionTypeStep({ onSelect }: SessionTypeStepProps) {
                   <Clock className="h-4 w-4" />
                   {config.durationMinutes} min
                 </span>
-                <span className="flex items-center gap-1 font-semibold text-brand-700">
-                  <DollarSign className="h-4 w-4" />
+                <span className="font-semibold text-brand-700">
                   {config.priceLabel}
                 </span>
               </div>

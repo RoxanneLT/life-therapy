@@ -9,7 +9,7 @@ import { BookingFormStep } from "./booking-form-step";
 import { BookingReviewStep } from "./booking-review-step";
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
 import type { TimeSlot } from "@/lib/availability";
-import { Clock, DollarSign } from "lucide-react";
+import { Clock } from "lucide-react";
 
 export interface BookingData {
   sessionType: SessionTypeConfig | null;
@@ -118,8 +118,7 @@ export function BookingWidget() {
               <Clock className="h-3.5 w-3.5" />
               {data.sessionType.durationMinutes} min
             </span>
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <DollarSign className="h-3.5 w-3.5" />
+            <span className="text-muted-foreground">
               {data.sessionType.priceLabel}
             </span>
           </div>
