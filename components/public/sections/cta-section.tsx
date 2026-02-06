@@ -1,4 +1,4 @@
-import type { PageSection } from "@/lib/generated/prisma";
+import type { PageSection } from "@/lib/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 

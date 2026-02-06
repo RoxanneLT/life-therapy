@@ -1,4 +1,4 @@
-import type { PageSection } from "@/lib/generated/prisma";
+import type { PageSection } from "@/lib/generated/prisma/client";
 import {
   Accordion,
   AccordionContent,

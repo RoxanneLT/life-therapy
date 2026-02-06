@@ -1,4 +1,4 @@
-import type { PageSection } from "@/lib/generated/prisma";
+import type { PageSection } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Star } from "lucide-react";

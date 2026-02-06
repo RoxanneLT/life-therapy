@@ -1,4 +1,4 @@
-import type { PageSection } from "@/lib/generated/prisma";
+import type { PageSection } from "@/lib/generated/prisma/client";
 import { HeroSection } from "./sections/hero-section";
 import { TextSection } from "./sections/text-section";
 import { ImageTextSection } from "./sections/image-text-section";
