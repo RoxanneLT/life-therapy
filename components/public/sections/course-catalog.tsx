@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 import Image from "next/image";
+import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
 
 const categories = [
   { value: "all", label: "All Courses" },
@@ -122,9 +123,17 @@ export async function CourseCatalog({
                       {formatPrice(course.price)}
                     </span>
                   </div>
-                  <Button className="mt-4 w-full" variant="outline" asChild>
-                    <Link href={`/courses/${course.slug}`}>Learn More</Link>
-                  </Button>
+                  <div className="mt-4 flex gap-2">
+                    <Button className="flex-1" variant="outline" asChild>
+                      <Link href={`/courses/${course.slug}`}>Learn More</Link>
+                    </Button>
+                    <AddToCartButton
+                      courseId={course.id}
+                      size="default"
+                      variant="default"
+                      label="Add"
+                    />
+                  </div>
                 </CardContent>
               </Card>
             ))}

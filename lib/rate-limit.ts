@@ -56,3 +56,11 @@ export function rateLimitApi(ip: string) {
 export function rateLimitNewsletter(ip: string) {
   return rateLimit(`newsletter:${ip}`, 3, 60 * 60 * 1000); // 3 per hour
 }
+
+export function rateLimitStudentLogin(ip: string) {
+  return rateLimit(`student-login:${ip}`, 5, 15 * 60 * 1000); // 5 attempts per 15 min
+}
+
+export function rateLimitStudentRegister(ip: string) {
+  return rateLimit(`register:${ip}`, 5, 60 * 60 * 1000); // 5 per hour
+}

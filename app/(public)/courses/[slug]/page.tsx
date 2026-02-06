@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
 import {
   BookOpen,
   Clock,
@@ -95,9 +96,11 @@ export default async function CourseDetailPage({
               <span className="text-3xl font-bold text-brand-600">
                 {formatPrice(course.price)}
               </span>
-              <Button size="lg" asChild>
-                <Link href="/book">Enrol Now</Link>
-              </Button>
+              <AddToCartButton
+                courseId={course.id}
+                size="lg"
+                label="Add to Cart"
+              />
             </div>
           </div>
 
@@ -169,9 +172,12 @@ export default async function CourseDetailPage({
             Take the first step toward meaningful change today.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-4">
-            <Button size="lg" variant="secondary" asChild>
-              <Link href="/book">Enrol Now — {formatPrice(course.price)}</Link>
-            </Button>
+            <AddToCartButton
+              courseId={course.id}
+              size="lg"
+              variant="secondary"
+              label={`Add to Cart — ${formatPrice(course.price)}`}
+            />
             <Button
               size="lg"
               variant="outline"

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { CartProvider } from "@/lib/cart-store";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { getSiteSettings } from "@/lib/settings";
 import "./globals.css";
@@ -46,8 +47,10 @@ export default async function RootLayout({
     <html lang="en" className={poppins.variable} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider>
-          {children}
-          <Toaster position="top-right" />
+          <CartProvider>
+            {children}
+            <Toaster position="top-right" />
+          </CartProvider>
         </ThemeProvider>
         {settings.googleAnalyticsId && (
           <GoogleAnalytics gaId={settings.googleAnalyticsId} />

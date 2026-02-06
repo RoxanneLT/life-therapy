@@ -6,9 +6,10 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
+import { Menu, User } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CartBadge } from "@/components/public/cart/cart-badge";
 
 interface NavLink {
   href: string;
@@ -62,6 +63,13 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
             </Button>
           )}
           <ThemeToggle />
+          <CartBadge />
+          <Button variant="outline" size="sm" className="gap-1.5" asChild>
+            <Link href="/portal/login">
+              <User className="h-3.5 w-3.5" />
+              Portal
+            </Link>
+          </Button>
         </nav>
 
         {/* Mobile menu */}
@@ -97,6 +105,15 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
                   </Link>
                 </Button>
               )}
+              <div className="mt-2 flex items-center gap-2">
+                <CartBadge />
+                <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
+                  <Link href="/portal/login" onClick={() => setOpen(false)}>
+                    <User className="h-3.5 w-3.5" />
+                    Portal
+                  </Link>
+                </Button>
+              </div>
             </nav>
           </SheetContent>
         </Sheet>

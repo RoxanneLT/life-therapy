@@ -1,6 +1,6 @@
 import { getSessionTypeConfig } from "./booking-config";
 import { format } from "date-fns";
-import type { Booking } from "@/lib/generated/prisma/client";
+import type { Booking, Order, OrderItem, Student } from "@/lib/generated/prisma/client";
 
 function baseTemplate(title: string, body: string): string {
   return `<!DOCTYPE html>
@@ -178,5 +178,129 @@ export function bookingCancellationEmail(booking: Booking): {
   return {
     subject: `Session Cancelled: ${config.label} on ${dateStr}`,
     html: baseTemplate("Session Cancelled", body),
+  };
+}
+
+// ============================================================
+// E-Commerce Email Templates
+// ============================================================
+
+function formatZAR(cents: number): string {
+  return `R${(cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`;
+}
+
+export function orderConfirmationEmail(
+  order: Order & { items: OrderItem[]; student: Student }
+): {
+  subject: string;
+  html: string;
+} {
+  const itemRows = order.items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatZAR(item.totalCents)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const discountRow =
+    order.discountCents > 0
+      ? `<tr>
+          <td colspan="2" style="padding: 4px 0; text-align: right; color: #16a34a;">Discount</td>
+          <td style="padding: 4px 0; text-align: right; color: #16a34a;">-${formatZAR(order.discountCents)}</td>
+        </tr>`
+      : "";
+
+  const body = `
+    <p>Hi ${order.student.firstName},</p>
+    <p>Thank you for your purchase! Here are the details of your order:</p>
+
+    <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+      <p style="margin: 4px 0;"><strong>Order Number:</strong> ${order.orderNumber}</p>
+      <p style="margin: 4px 0;"><strong>Date:</strong> ${format(new Date(order.createdAt), "d MMMM yyyy")}</p>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+      <thead>
+        <tr style="border-bottom: 2px solid #e5e7eb;">
+          <th style="padding: 8px 0; text-align: left; font-size: 13px; color: #6b7280;">Item</th>
+          <th style="padding: 8px 0; text-align: center; font-size: 13px; color: #6b7280;">Qty</th>
+          <th style="padding: 8px 0; text-align: right; font-size: 13px; color: #6b7280;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" style="padding: 4px 0; text-align: right;">Subtotal</td>
+          <td style="padding: 4px 0; text-align: right;">${formatZAR(order.subtotalCents)}</td>
+        </tr>
+        ${discountRow}
+        <tr>
+          <td colspan="2" style="padding: 8px 0; text-align: right; font-weight: 700; font-size: 16px; border-top: 2px solid #333;">Total Paid</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 700; font-size: 16px; border-top: 2px solid #333;">${formatZAR(order.totalCents)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="https://life-therapy.co.za/portal" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">Go to My Courses</a>
+    </div>
+
+    <p>If you have any questions, feel free to reply to this email.</p>
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
+  `;
+
+  return {
+    subject: `Order Confirmed: ${order.orderNumber}`,
+    html: baseTemplate("Order Confirmation", body),
+  };
+}
+
+export function giftReceivedEmail(params: {
+  recipientName: string;
+  buyerName: string;
+  itemTitle: string;
+  message?: string | null;
+  redeemUrl: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const messageBlock = params.message
+    ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 16px; margin: 16px 0; font-style: italic; color: #92400e;">
+        &ldquo;${params.message}&rdquo;
+        <p style="margin: 8px 0 0; font-style: normal; font-size: 13px; color: #a16207;">&mdash; ${params.buyerName}</p>
+      </div>`
+    : "";
+
+  const body = `
+    <p>Hi ${params.recipientName},</p>
+    <p>Great news! <strong>${params.buyerName}</strong> has sent you a gift from Life-Therapy:</p>
+
+    <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0; text-align: center;">
+      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333;">🎁 ${params.itemTitle}</p>
+    </div>
+
+    ${messageBlock}
+
+    <p>To access your gift, click the button below. If you don&rsquo;t have an account yet, you&rsquo;ll be able to create one during the redemption process.</p>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${params.redeemUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Redeem Your Gift</a>
+    </div>
+
+    <p style="font-size: 13px; color: #6b7280;">This gift doesn&rsquo;t expire — you can redeem it anytime.</p>
+
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
+  `;
+
+  return {
+    subject: `🎁 ${params.buyerName} sent you a gift from Life-Therapy!`,
+    html: baseTemplate("You've Received a Gift!", body),
   };
 }

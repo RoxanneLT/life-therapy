@@ -125,6 +125,78 @@ export const bookingSettingsSchema = z.object({
   msGraphUserEmail: z.string().email().optional().or(z.literal("")),
 });
 
+// ============================================================
+// LMS: Module / Lecture / Quiz
+// ============================================================
+export const moduleSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const lectureSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  lectureType: z.enum(["video", "text", "quiz"]),
+  videoUrl: z.string().optional().or(z.literal("")),
+  textContent: z.string().optional(),
+  worksheetUrl: z.string().optional().or(z.literal("")),
+  durationSeconds: z.coerce.number().int().min(0).optional(),
+  isPreview: z.boolean().default(false),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const quizQuestionSchema = z.object({
+  questionType: z.enum(["multiple_choice", "true_false", "reflection"]),
+  questionText: z.string().min(1, "Question text is required"),
+  options: z.any().optional(),
+  explanation: z.string().optional(),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+// ============================================================
+// E-Commerce: Coupons / Credit Packs
+// ============================================================
+export const couponSchema = z.object({
+  code: z.string().min(1, "Code is required").transform((v) => v.toUpperCase()),
+  type: z.enum(["percentage", "fixed_amount"]),
+  value: z.coerce.number().int().min(1, "Value must be at least 1"),
+  appliesToAll: z.boolean().default(true),
+  courseIds: z.any().optional(),
+  bundleIds: z.any().optional(),
+  maxUses: z.coerce.number().int().min(1).optional().or(z.literal("")),
+  maxUsesPerUser: z.coerce.number().int().min(1).default(1),
+  minOrderCents: z.coerce.number().int().min(0).optional().or(z.literal("")),
+  startsAt: z.string().optional(),
+  expiresAt: z.string().optional().or(z.literal("")),
+  isActive: z.boolean().default(true),
+});
+
+export const creditPackSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  credits: z.coerce.number().int().min(1, "Must offer at least 1 credit"),
+  priceCents: z.coerce.number().int().min(0),
+  isPublished: z.boolean().default(true),
+  sortOrder: z.coerce.number().int().default(0),
+});
+
+// ============================================================
+// Student Registration
+// ============================================================
+export const studentRegisterSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export const studentLoginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+// ============================================================
+// Type exports
+// ============================================================
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PageSectionInput = z.infer<typeof pageSectionSchema>;
 export type CourseInput = z.infer<typeof courseSchema>;
@@ -133,3 +205,10 @@ export type SiteSettingsInput = z.infer<typeof siteSettingsSchema>;
 export type BookingFormInput = z.infer<typeof bookingFormSchema>;
 export type AvailabilityOverrideInput = z.infer<typeof availabilityOverrideSchema>;
 export type BookingSettingsInput = z.infer<typeof bookingSettingsSchema>;
+export type ModuleInput = z.infer<typeof moduleSchema>;
+export type LectureInput = z.infer<typeof lectureSchema>;
+export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
+export type CouponInput = z.infer<typeof couponSchema>;
+export type CreditPackInput = z.infer<typeof creditPackSchema>;
+export type StudentRegisterInput = z.infer<typeof studentRegisterSchema>;
+export type StudentLoginInput = z.infer<typeof studentLoginSchema>;

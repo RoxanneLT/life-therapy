@@ -41,16 +41,30 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Redirect authenticated users away from login
+  // Redirect authenticated admin users away from admin login
   if (request.nextUrl.pathname === "/admin/login" && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
     return NextResponse.redirect(url);
   }
 
+  // Protect portal dashboard routes (not login, register, or change-password)
+  if (
+    request.nextUrl.pathname.startsWith("/portal") &&
+    !request.nextUrl.pathname.startsWith("/portal/login") &&
+    !request.nextUrl.pathname.startsWith("/portal/register") &&
+    !request.nextUrl.pathname.startsWith("/portal/change-password")
+  ) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/portal/login";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/portal/:path*"],
 };

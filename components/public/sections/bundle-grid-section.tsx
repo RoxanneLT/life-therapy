@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { CheckCircle2, Package } from "lucide-react";
 import Link from "next/link";
+import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
 
 interface BundleGridSectionProps {
   section: PageSection;
@@ -116,9 +116,10 @@ export async function BundleGridSection({ section }: BundleGridSectionProps) {
                         {formatPrice(bundle.price)}
                       </p>
                     </div>
-                    <Button asChild>
-                      <Link href="/book">Get This Bundle</Link>
-                    </Button>
+                    <AddToCartButton
+                      bundleId={bundle.id}
+                      label="Add to Cart"
+                    />
                   </div>
                 </CardContent>
               </Card>

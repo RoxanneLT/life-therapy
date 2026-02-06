@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Flower2 } from "lucide-react";
+import Image from "next/image";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -53,9 +53,13 @@ export default function AdminLoginPage() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-600">
-          <Flower2 className="h-6 w-6" />
-        </div>
+        <Image
+          src="/logo.png"
+          alt="Life-Therapy"
+          width={200}
+          height={50}
+          className="mx-auto mb-2 h-12 w-auto"
+        />
         <CardTitle className="font-heading text-2xl">Life-Therapy</CardTitle>
         <CardDescription>Sign in to the admin panel</CardDescription>
       </CardHeader>

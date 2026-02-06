@@ -71,6 +71,13 @@ model Course {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   bundleCourses    BundleCourse[]
+  // LMS relations
+  modules              Module[]
+  enrollments          Enrollment[]
+  certificates         Certificate[]
+  orderItems           OrderItem[]
+  gifts                Gift[]
+  hybridPackageCourses HybridPackageCourse[]
 
   @@map("courses")
 }
@@ -91,6 +98,9 @@ model Bundle {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   bundleCourses BundleCourse[]
+  // E-commerce relations
+  orderItems    OrderItem[]
+  gifts         Gift[]
 
   @@map("bundles")
 }
@@ -199,6 +209,10 @@ model SiteSetting {
   msGraphClientId        String?
   msGraphClientSecret    String?
   msGraphUserEmail       String?
+  // Stripe
+  stripeSecretKey        String?
+  stripePublishableKey   String?
+  stripeWebhookSecret    String?
   // Timestamps
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -263,4 +277,465 @@ model AvailabilityOverride {
 
   @@unique([date])
   @@map("availability_overrides")
+}
+
+// ============================================================
+// LMS Enums
+// ============================================================
+enum LectureType {
+  video
+  text
+  quiz
+}
+
+enum QuestionType {
+  multiple_choice
+  true_false
+  reflection
+}
+
+enum OrderStatus {
+  pending
+  paid
+  failed
+  refunded
+  partially_refunded
+}
+
+enum EnrollmentSource {
+  purchase
+  gift
+  admin_grant
+  upgrade
+}
+
+enum CreditTransactionType {
+  purchase
+  used
+  refund
+  admin_grant
+  gift_received
+}
+
+enum GiftStatus {
+  pending
+  delivered
+  redeemed
+  cancelled
+}
+
+enum CouponType {
+  percentage
+  fixed_amount
+}
+
+// ============================================================
+// Students (linked to Supabase Auth, separate from AdminUser)
+// ============================================================
+model Student {
+  id                 String    @id @default(cuid())
+  supabaseUserId     String    @unique
+  email              String    @unique
+  firstName          String
+  lastName           String
+  avatarUrl          String?
+  mustChangePassword Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  enrollments          Enrollment[]
+  lectureProgress      LectureProgress[]
+  quizAttempts         QuizAttempt[]
+  certificates         Certificate[]
+  orders               Order[]
+  creditBalance        SessionCreditBalance?
+  creditTransactions   SessionCreditTransaction[]
+  cart                 Cart?
+  notes                StudentNote[]
+  giftsGiven           Gift[]   @relation("GiftBuyer")
+  giftsReceived        Gift[]   @relation("GiftRecipient")
+
+  @@map("students")
+}
+
+// ============================================================
+// LMS: Modules (belong to Course)
+// ============================================================
+model Module {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lectures    Lecture[]
+  quiz        Quiz?
+
+  @@index([courseId])
+  @@map("modules")
+}
+
+// ============================================================
+// LMS: Lectures (belong to Module)
+// ============================================================
+model Lecture {
+  id              String      @id @default(cuid())
+  moduleId        String
+  module          Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title           String
+  lectureType     LectureType @default(video)
+  videoUrl        String?
+  textContent     String?     @db.Text
+  worksheetUrl    String?
+  durationSeconds Int?
+  isPreview       Boolean     @default(false)
+  sortOrder       Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  progress        LectureProgress[]
+  notes           StudentNote[]
+
+  @@index([moduleId])
+  @@map("lectures")
+}
+
+// ============================================================
+// LMS: Quizzes (one per Module)
+// ============================================================
+model Quiz {
+  id           String   @id @default(cuid())
+  moduleId     String   @unique
+  module       Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?  @db.Text
+  passingScore Int      @default(70)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  questions    QuizQuestion[]
+  attempts     QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id           String       @id @default(cuid())
+  quizId       String
+  quiz         Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionType QuestionType
+  questionText String       @db.Text
+  options      Json?
+  explanation  String?      @db.Text
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([quizId])
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  score       Int
+  passed      Boolean
+  answers     Json
+  completedAt DateTime @default(now())
+
+  @@index([quizId, studentId])
+  @@map("quiz_attempts")
+}
+
+// ============================================================
+// Enrollment & Progress
+// ============================================================
+model Enrollment {
+  id              String           @id @default(cuid())
+  studentId       String
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId         String
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  source          EnrollmentSource @default(purchase)
+  orderId         String?
+  order           Order?           @relation(fields: [orderId], references: [id])
+  giftId          String?
+  progressPercent Float            @default(0)
+  completedAt     DateTime?
+  enrolledAt      DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model LectureProgress {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lectureId     String
+  lecture        Lecture   @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  completed     Boolean   @default(false)
+  videoPosition Int       @default(0)
+  completedAt   DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([studentId, lectureId])
+  @@index([studentId])
+  @@map("lecture_progress")
+}
+
+model Certificate {
+  id                String   @id @default(cuid())
+  studentId         String
+  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId           String
+  course            Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  certificateNumber String   @unique
+  issuedAt          DateTime @default(now())
+
+  @@unique([studentId, courseId])
+  @@map("certificates")
+}
+
+model StudentNote {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lectureId String
+  lecture   Lecture   @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, lectureId])
+  @@map("student_notes")
+}
+
+// ============================================================
+// E-Commerce: Orders
+// ============================================================
+model Order {
+  id                  String      @id @default(cuid())
+  orderNumber         String      @unique
+  studentId           String
+  student             Student     @relation(fields: [studentId], references: [id])
+  status              OrderStatus @default(pending)
+  subtotalCents       Int
+  discountCents       Int         @default(0)
+  totalCents          Int
+  currency            String      @default("ZAR")
+  couponId            String?
+  coupon              Coupon?     @relation(fields: [couponId], references: [id])
+  stripeSessionId     String?     @unique
+  stripePaymentIntent String?     @unique
+  paidAt              DateTime?
+  refundedAt          DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  items               OrderItem[]
+  enrollments         Enrollment[]
+  gifts               Gift[]
+
+  @@index([studentId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  courseId        String?
+  course         Course? @relation(fields: [courseId], references: [id])
+  bundleId       String?
+  bundle         Bundle? @relation(fields: [bundleId], references: [id])
+  creditPackId   String?
+  description    String
+  unitPriceCents Int
+  quantity       Int     @default(1)
+  totalCents     Int
+  isGift         Boolean @default(false)
+  giftId         String? @unique
+  gift           Gift?   @relation(fields: [giftId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+// ============================================================
+// Gifting
+// ============================================================
+model Gift {
+  id             String     @id @default(cuid())
+  orderId        String
+  order          Order      @relation(fields: [orderId], references: [id])
+  buyerId        String
+  buyer          Student    @relation("GiftBuyer", fields: [buyerId], references: [id])
+  recipientId    String?
+  recipient      Student?   @relation("GiftRecipient", fields: [recipientId], references: [id])
+  recipientEmail String
+  recipientName  String
+  message        String?    @db.Text
+  deliveryDate   DateTime?
+  status         GiftStatus @default(pending)
+  courseId        String?
+  course         Course?    @relation(fields: [courseId], references: [id])
+  bundleId       String?
+  bundle         Bundle?    @relation(fields: [bundleId], references: [id])
+  creditPackId   String?
+  creditAmount   Int?
+  emailSentAt    DateTime?
+  redeemedAt     DateTime?
+  redeemToken    String     @unique @default(cuid())
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  orderItem      OrderItem?
+
+  @@index([recipientEmail])
+  @@index([status])
+  @@map("gifts")
+}
+
+// ============================================================
+// Session Credits
+// ============================================================
+model SessionCreditBalance {
+  id        String  @id @default(cuid())
+  studentId String  @unique
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  balance   Int     @default(0)
+
+  @@map("session_credit_balances")
+}
+
+model SessionCreditTransaction {
+  id           String                @id @default(cuid())
+  studentId    String
+  student      Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type         CreditTransactionType
+  amount       Int
+  balanceAfter Int
+  description  String
+  orderId      String?
+  bookingId    String?
+  createdAt    DateTime              @default(now())
+
+  @@index([studentId])
+  @@map("session_credit_transactions")
+}
+
+model SessionCreditPack {
+  id          String   @id @default(cuid())
+  name        String
+  credits     Int
+  priceCents  Int
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("session_credit_packs")
+}
+
+// ============================================================
+// Coupons
+// ============================================================
+model Coupon {
+  id             String     @id @default(cuid())
+  code           String     @unique
+  type           CouponType
+  value          Int
+  appliesToAll   Boolean    @default(true)
+  courseIds      Json?
+  bundleIds      Json?
+  maxUses        Int?
+  usedCount      Int        @default(0)
+  maxUsesPerUser Int        @default(1)
+  minOrderCents  Int?
+  startsAt       DateTime   @default(now())
+  expiresAt      DateTime?
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  orders         Order[]
+
+  @@map("coupons")
+}
+
+// ============================================================
+// Shopping Cart (DB-persisted for logged-in students)
+// ============================================================
+model Cart {
+  id        String     @id @default(cuid())
+  studentId String     @unique
+  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  updatedAt DateTime   @updatedAt
+
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id                 String    @id @default(cuid())
+  cartId             String
+  cart               Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  courseId            String?
+  bundleId           String?
+  creditPackId       String?
+  quantity           Int       @default(1)
+  isGift             Boolean   @default(false)
+  giftRecipientName  String?
+  giftRecipientEmail String?
+  giftMessage        String?   @db.Text
+  giftDeliveryDate   DateTime?
+  addedAt            DateTime  @default(now())
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+// ============================================================
+// Hybrid Packages (course + session credits)
+// ============================================================
+model HybridPackage {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String?  @db.Text
+  imageUrl    String?
+  priceCents  Int
+  credits     Int
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses     HybridPackageCourse[]
+
+  @@map("hybrid_packages")
+}
+
+model HybridPackageCourse {
+  id              String        @id @default(cuid())
+  hybridPackageId String
+  hybridPackage   HybridPackage @relation(fields: [hybridPackageId], references: [id], onDelete: Cascade)
+  courseId         String
+  course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sortOrder       Int           @default(0)
+
+  @@unique([hybridPackageId, courseId])
+  @@map("hybrid_package_courses")
 }

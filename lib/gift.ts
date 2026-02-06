@@ -1,0 +1,247 @@
+import { prisma } from "@/lib/prisma";
+import { sendEmail } from "@/lib/email";
+import { giftReceivedEmail } from "@/lib/email-templates";
+import { findOrCreateStudent } from "@/lib/account-provisioning";
+
+/**
+ * Create a Gift record for a gift order item.
+ * Called during checkout processing.
+ */
+export async function createGiftFromOrderItem(
+  orderId: string,
+  buyerId: string,
+  item: {
+    id: string;
+    courseId: string | null;
+    bundleId: string | null;
+    creditPackId: string | null;
+    description: string;
+  },
+  giftDetails: {
+    recipientName: string;
+    recipientEmail: string;
+    message?: string | null;
+    deliveryDate?: Date | null;
+  }
+) {
+  // Determine credit amount if it's a credit pack gift
+  let creditAmount: number | null = null;
+  if (item.creditPackId) {
+    const pack = await prisma.sessionCreditPack.findUnique({
+      where: { id: item.creditPackId },
+      select: { credits: true },
+    });
+    creditAmount = pack?.credits || null;
+  }
+
+  const gift = await prisma.gift.create({
+    data: {
+      orderId,
+      buyerId,
+      recipientEmail: giftDetails.recipientEmail,
+      recipientName: giftDetails.recipientName,
+      message: giftDetails.message || null,
+      deliveryDate: giftDetails.deliveryDate || null,
+      courseId: item.courseId,
+      bundleId: item.bundleId,
+      creditPackId: item.creditPackId,
+      creditAmount,
+      status: giftDetails.deliveryDate ? "pending" : "delivered",
+    },
+  });
+
+  // Link gift to order item
+  await prisma.orderItem.update({
+    where: { id: item.id },
+    data: { giftId: gift.id },
+  });
+
+  // If no scheduled delivery date, send immediately
+  if (!giftDetails.deliveryDate) {
+    await sendGiftEmail(gift.id);
+  }
+
+  return gift;
+}
+
+/**
+ * Send the gift notification email to the recipient.
+ */
+export async function sendGiftEmail(giftId: string) {
+  const gift = await prisma.gift.findUnique({
+    where: { id: giftId },
+    include: {
+      buyer: { select: { firstName: true, lastName: true } },
+      course: { select: { title: true } },
+      bundle: { select: { title: true } },
+    },
+  });
+
+  if (!gift) return;
+
+  const itemTitle =
+    gift.course?.title || gift.bundle?.title || "Session Credits";
+  const buyerName = `${gift.buyer.firstName} ${gift.buyer.lastName}`;
+  const redeemUrl = `https://life-therapy.co.za/gift/redeem?token=${gift.redeemToken}`;
+
+  const { subject, html } = giftReceivedEmail({
+    recipientName: gift.recipientName,
+    buyerName,
+    itemTitle,
+    message: gift.message,
+    redeemUrl,
+  });
+
+  await sendEmail({
+    to: gift.recipientEmail,
+    subject,
+    html,
+  });
+
+  // Mark as delivered and record send time
+  await prisma.gift.update({
+    where: { id: giftId },
+    data: {
+      status: "delivered",
+      emailSentAt: new Date(),
+    },
+  });
+}
+
+/**
+ * Redeem a gift: create student if needed, enroll in course/bundle or add credits.
+ */
+export async function redeemGift(
+  token: string,
+  recipientInfo?: {
+    firstName: string;
+    lastName: string;
+    password: string;
+  }
+) {
+  const gift = await prisma.gift.findUnique({
+    where: { redeemToken: token },
+    include: {
+      course: { select: { id: true, title: true } },
+      bundle: {
+        select: {
+          id: true,
+          title: true,
+          bundleCourses: { select: { courseId: true } },
+        },
+      },
+    },
+  });
+
+  if (!gift) return { error: "Gift not found" };
+  if (gift.status === "redeemed") return { error: "This gift has already been redeemed" };
+  if (gift.status === "cancelled") return { error: "This gift has been cancelled" };
+
+  // Find or create the recipient student
+  let studentId: string;
+  if (gift.recipientId) {
+    // Already linked to a student
+    studentId = gift.recipientId;
+  } else if (recipientInfo) {
+    // Create new student
+    const result = await findOrCreateStudent(
+      gift.recipientEmail,
+      recipientInfo.firstName,
+      recipientInfo.lastName
+    );
+    studentId = result.id;
+
+    // If existing student, no need to set password
+    // If new student, the password was set during findOrCreateStudent
+    // Actually, findOrCreateStudent creates with a temp password.
+    // We need to update their password if they provided one.
+    if (result.isNew && recipientInfo.password) {
+      const { supabaseAdmin } = await import("@/lib/supabase-admin");
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        select: { supabaseUserId: true },
+      });
+      if (student) {
+        await supabaseAdmin.auth.admin.updateUserById(
+          student.supabaseUserId,
+          { password: recipientInfo.password }
+        );
+        await prisma.student.update({
+          where: { id: studentId },
+          data: { mustChangePassword: false },
+        });
+      }
+    }
+  } else {
+    return { error: "Account information required" };
+  }
+
+  // Enroll in course(s) or add credits
+  if (gift.courseId) {
+    await prisma.enrollment.upsert({
+      where: {
+        studentId_courseId: {
+          studentId,
+          courseId: gift.courseId,
+        },
+      },
+      create: {
+        studentId,
+        courseId: gift.courseId,
+        source: "gift",
+        giftId: gift.id,
+      },
+      update: {},
+    });
+  }
+
+  if (gift.bundleId && gift.bundle) {
+    for (const bc of gift.bundle.bundleCourses) {
+      await prisma.enrollment.upsert({
+        where: {
+          studentId_courseId: {
+            studentId,
+            courseId: bc.courseId,
+          },
+        },
+        create: {
+          studentId,
+          courseId: bc.courseId,
+          source: "gift",
+          giftId: gift.id,
+        },
+        update: {},
+      });
+    }
+  }
+
+  if (gift.creditAmount && gift.creditAmount > 0) {
+    const balance = await prisma.sessionCreditBalance.upsert({
+      where: { studentId },
+      create: { studentId, balance: gift.creditAmount },
+      update: { balance: { increment: gift.creditAmount } },
+    });
+
+    await prisma.sessionCreditTransaction.create({
+      data: {
+        studentId,
+        type: "gift_received",
+        amount: gift.creditAmount,
+        balanceAfter: balance.balance,
+        description: `Gift from ${gift.recipientName}`,
+      },
+    });
+  }
+
+  // Mark gift as redeemed
+  await prisma.gift.update({
+    where: { id: gift.id },
+    data: {
+      status: "redeemed",
+      recipientId: studentId,
+      redeemedAt: new Date(),
+    },
+  });
+
+  return { success: true };
+}
