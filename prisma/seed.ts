@@ -333,9 +333,9 @@ async function main() {
         title: "Booking Options",
         config: {
           items: [
-            { icon: "MessageCircle", title: "Free Consultation", description: "A no-obligation 30-minute call to discuss your needs, ask questions, and see if we're a good fit.", price: "Free", ctaText: "Book via WhatsApp", ctaLink: "https://wa.me/27710170353?text=Hi%20Roxanne%2C%20I%27d%20like%20to%20book%20a%20free%20consultation.", highlight: true },
-            { icon: "Calendar", title: "1:1 Session", description: "A full 60-minute coaching or counselling session tailored to your specific needs and goals.", price: "R850", priceNote: "per session", ctaText: "Book via WhatsApp", ctaLink: "https://wa.me/27710170353?text=Hi%20Roxanne%2C%20I%27d%20like%20to%20book%20a%20session." },
-            { icon: "Users", title: "Couples Session", description: "A 60-minute couples coaching or counselling session to strengthen your relationship together.", price: "R1,200", priceNote: "per session", ctaText: "Book via WhatsApp", ctaLink: "https://wa.me/27710170353?text=Hi%20Roxanne%2C%20I%27d%20like%20to%20book%20a%20couples%20session." },
+            { icon: "MessageCircle", title: "Free Consultation", description: "A no-obligation 30-minute call to discuss your needs, ask questions, and see if we're a good fit.", price: "Free", ctaText: "Book Now", ctaLink: "/book", highlight: true },
+            { icon: "Calendar", title: "1:1 Session", description: "A full 60-minute coaching or counselling session tailored to your specific needs and goals.", price: "R850", priceNote: "per session", ctaText: "Book Now", ctaLink: "/book" },
+            { icon: "Users", title: "Couples Session", description: "A 60-minute couples coaching or counselling session to strengthen your relationship together.", price: "R1,200", priceNote: "per session", ctaText: "Book Now", ctaLink: "/book" },
           ],
         },
         sortOrder: 1,
@@ -346,7 +346,7 @@ async function main() {
         title: "How Booking Works",
         config: {
           items: [
-            { title: "Send a Message", description: "Send a WhatsApp message or email to book your preferred time slot." },
+            { title: "Choose Your Session", description: "Select a session type, pick a date and time that works for you." },
             { title: "Get Confirmation", description: "Receive a confirmation with your Microsoft Teams meeting link." },
             { title: "Join the Call", description: "Join the call at your scheduled time — no downloads needed." },
           ],
@@ -377,8 +377,8 @@ async function main() {
         sectionType: "cta",
         title: "Still Have Questions?",
         subtitle: "Reach out anytime — I'm here to help.",
-        ctaText: "WhatsApp Us",
-        ctaLink: "https://wa.me/27710170353",
+        ctaText: "Book a Free Consultation",
+        ctaLink: "/book",
         sortOrder: 4,
       },
     ],
