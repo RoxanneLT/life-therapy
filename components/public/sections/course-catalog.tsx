@@ -86,6 +86,7 @@ export async function CourseCatalog({
                     alt={course.title}
                     width={400}
                     height={225}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="aspect-video w-full object-cover"
                   />
                 )}

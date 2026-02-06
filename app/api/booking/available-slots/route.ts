@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAvailableSlots } from "@/lib/availability";
 import { SESSION_TYPES } from "@/lib/booking-config";
-import { parse } from "date-fns";
 
 export async function GET(request: NextRequest) {
   const sessionType = request.nextUrl.searchParams.get("type");
@@ -15,8 +14,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const date = parse(dateStr, "yyyy-MM-dd", new Date());
-  const slots = await getAvailableSlots(date, config);
+  const slots = await getAvailableSlots(dateStr, config);
 
   return NextResponse.json({ slots });
 }

@@ -43,7 +43,7 @@ export async function CourseGrid({ section }: CourseGridProps) {
             {section.subtitle}
           </p>
         )}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {courses.map((course) => (
             <Card key={course.id} className="overflow-hidden">
               {course.imageUrl && (
@@ -52,6 +52,7 @@ export async function CourseGrid({ section }: CourseGridProps) {
                   alt={course.title}
                   width={400}
                   height={225}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   className="aspect-video w-full object-cover"
                 />
               )}

@@ -110,7 +110,7 @@ export function BookingWidget() {
       {/* Session type badge — shown when a type is selected and we're past step 0 */}
       {data.sessionType && step > 0 && (
         <div className="mb-6 flex items-center justify-center gap-3 rounded-lg border border-brand-200 bg-brand-50/50 px-4 py-3 dark:border-brand-800 dark:bg-brand-950/30">
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-2 sm:gap-4 text-sm">
             <span className="font-semibold text-brand-700 dark:text-brand-300">
               {data.sessionType.label}
             </span>

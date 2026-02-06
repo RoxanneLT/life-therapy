@@ -30,7 +30,7 @@ export function StepsSection({ section }: StepsSectionProps) {
           <p className="mt-4 text-muted-foreground">{section.subtitle}</p>
         )}
         <div
-          className={`mt-10 grid gap-8 text-left ${
+          className={`mt-10 grid grid-cols-1 gap-4 sm:gap-8 text-left ${
             items.length <= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-4"
           }`}
         >

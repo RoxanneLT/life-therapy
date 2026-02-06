@@ -32,7 +32,7 @@ export async function TestimonialCarousel({
             <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
           </div>
         )}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {testimonials.map((testimonial) => (
             <Card key={testimonial.id}>
               <CardContent className="pt-6">

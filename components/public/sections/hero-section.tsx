@@ -24,7 +24,7 @@ export function HeroSection({ section }: HeroSectionProps) {
     >
       <div className="mx-auto w-full max-w-6xl">
         <h1
-          className={`font-heading text-4xl font-bold uppercase tracking-wide leading-tight sm:text-5xl lg:text-6xl ${
+          className={`font-heading text-3xl font-bold uppercase tracking-wide leading-tight sm:text-4xl lg:text-6xl ${
             section.imageUrl ? "text-white" : "text-foreground"
           }`}
         >

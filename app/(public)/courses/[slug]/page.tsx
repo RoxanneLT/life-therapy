@@ -109,6 +109,7 @@ export default async function CourseDetailPage({
                 alt={course.title}
                 width={600}
                 height={400}
+                sizes="(max-width: 768px) 100vw, 66vw"
                 className="aspect-video w-full object-cover"
               />
             </div>

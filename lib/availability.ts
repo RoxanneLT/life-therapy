@@ -6,14 +6,8 @@ import {
 } from "@/lib/settings";
 import { getFreeBusy } from "@/lib/graph";
 import { TIMEZONE, type SessionTypeConfig } from "@/lib/booking-config";
-import {
-  format,
-  addDays,
-  startOfDay,
-  endOfDay,
-  eachDayOfInterval,
-} from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import { addDays, eachDayOfInterval } from "date-fns";
+import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 
 export interface TimeSlot {
   start: string; // "09:00"
@@ -84,22 +78,27 @@ function isoToTimeString(iso: string): string {
   return `${match[1]}:${match[2]}`;
 }
 
+/**
+ * Get available time slots for a specific date and session type.
+ * @param dateStr — SAST calendar date string, e.g. "2026-02-10"
+ */
 export async function getAvailableSlots(
-  date: Date,
+  dateStr: string,
   sessionConfig: SessionTypeConfig
 ): Promise<TimeSlot[]> {
   const settings = await getSiteSettings();
   const businessHours = getBusinessHours(settings);
 
-  // 1. Get base hours for this day of week
-  const dayKey = DAY_MAP[date.getDay()];
+  // 1. Day of week — use noon UTC to avoid any date-boundary ambiguity
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`);
+  const dayKey = DAY_MAP[noonUtc.getUTCDay()];
   const dayHours: BusinessHoursDay = businessHours[dayKey];
   if (dayHours.closed) return [];
 
-  // 2. Check availability override for this specific date
-  const dateStart = startOfDay(date);
+  // 2. Check availability override — midnight UTC for @db.Date
+  const dateUtc = new Date(`${dateStr}T00:00:00Z`);
   const override = await prisma.availabilityOverride.findUnique({
-    where: { date: dateStart },
+    where: { date: dateUtc },
   });
   if (override?.isBlocked) return [];
 
@@ -113,31 +112,29 @@ export async function getAvailableSlots(
 
   if (candidates.length === 0) return [];
 
-  // 4. Get Exchange calendar busy times
-  const dayStart = startOfDay(date);
-  const dayEnd = endOfDay(date);
-  const busyTimes = await getFreeBusy(dayStart, dayEnd);
+  // 4. Get Exchange calendar busy times (proper UTC boundaries for SAST day)
+  const dayStartUtc = fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
+  const dayEndUtc = fromZonedTime(`${dateStr}T23:59:59`, TIMEZONE);
+  const busyTimes = await getFreeBusy(dayStartUtc, dayEndUtc);
 
   // 5. Get existing bookings from our DB (resilience layer)
   const existingBookings = await prisma.booking.findMany({
     where: {
-      date: dateStart,
+      date: dateUtc,
       status: { in: ["pending", "confirmed"] },
     },
     select: { startTime: true, endTime: true },
   });
 
   // 6. Filter out unavailable slots
-  const now = toZonedTime(new Date(), TIMEZONE);
+  const nowMs = Date.now();
   const minNoticeMs =
     (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
 
   const available = candidates.filter((slot) => {
-    // Check minimum notice
-    const slotDate = new Date(date);
-    const [h, m] = slot.start.split(":").map(Number);
-    slotDate.setHours(h, m, 0, 0);
-    if (slotDate.getTime() - now.getTime() < minNoticeMs) return false;
+    // Minimum notice — convert SAST slot time to UTC ms for comparison
+    const slotUtc = fromZonedTime(`${dateStr}T${slot.start}:00`, TIMEZONE);
+    if (slotUtc.getTime() - nowMs < minNoticeMs) return false;
 
     // Check Exchange busy times
     for (const busy of busyTimes) {
@@ -194,24 +191,37 @@ export async function getAvailableDates(): Promise<string[]> {
   const maxDays = settings.bookingMaxAdvanceDays ?? 30;
   const businessHours = getBusinessHours(settings);
 
-  const now = toZonedTime(new Date(), TIMEZONE);
-  const start = addDays(startOfDay(now), 1); // tomorrow at earliest
+  // Today in SAST — use formatInTimeZone for correct date regardless of server TZ
+  const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+
+  // Start from tomorrow SAST, span maxDays
+  const start = addDays(new Date(`${todaySast}T12:00:00Z`), 1);
   const end = addDays(start, maxDays);
 
-  // Get all overrides in range
+  // Get all overrides in range (use UTC midnight for @db.Date)
+  const startUtc = new Date(
+    `${formatInTimeZone(start, "UTC", "yyyy-MM-dd")}T00:00:00Z`
+  );
+  const endUtc = new Date(
+    `${formatInTimeZone(end, "UTC", "yyyy-MM-dd")}T00:00:00Z`
+  );
   const overrides = await prisma.availabilityOverride.findMany({
-    where: { date: { gte: start, lte: end } },
+    where: { date: { gte: startUtc, lte: endUtc } },
   });
   const overrideMap = new Map(
-    overrides.map((o) => [format(o.date, "yyyy-MM-dd"), o])
+    overrides.map((o) => [
+      formatInTimeZone(o.date, "UTC", "yyyy-MM-dd"),
+      o,
+    ])
   );
 
   const dates = eachDayOfInterval({ start, end });
 
   const availableDates = dates.filter((d) => {
-    const dayKey = DAY_MAP[d.getDay()];
+    const dateStr = formatInTimeZone(d, "UTC", "yyyy-MM-dd");
+    const noonUtc = new Date(`${dateStr}T12:00:00Z`);
+    const dayKey = DAY_MAP[noonUtc.getUTCDay()];
     const dayHours = businessHours[dayKey];
-    const dateStr = format(d, "yyyy-MM-dd");
     const override = overrideMap.get(dateStr);
 
     // Blocked override = unavailable
@@ -222,5 +232,5 @@ export async function getAvailableDates(): Promise<string[]> {
     return true;
   });
 
-  return availableDates.map((d) => format(d, "yyyy-MM-dd"));
+  return availableDates.map((d) => formatInTimeZone(d, "UTC", "yyyy-MM-dd"));
 }

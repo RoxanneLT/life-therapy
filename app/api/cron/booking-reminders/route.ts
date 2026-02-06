@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { bookingReminderEmail } from "@/lib/email-templates";
-import { addDays, startOfDay, endOfDay } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
+import { addDays } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { TIMEZONE } from "@/lib/booking-config";
 
 export async function GET(request: NextRequest) {
@@ -13,15 +13,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = toZonedTime(new Date(), TIMEZONE);
-  const tomorrow = addDays(startOfDay(now), 1);
-  const tomorrowEnd = endOfDay(tomorrow);
+  // Get tomorrow's date in SAST, then query as UTC midnight for @db.Date
+  const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const tomorrowDate = addDays(new Date(`${todaySast}T12:00:00Z`), 1);
+  const tomorrowStr = formatInTimeZone(tomorrowDate, "UTC", "yyyy-MM-dd");
+  const tomorrowUtc = new Date(`${tomorrowStr}T00:00:00Z`);
 
   // Find confirmed bookings for tomorrow that haven't had a reminder sent
   const bookings = await prisma.booking.findMany({
     where: {
       status: "confirmed",
-      date: { gte: tomorrow, lte: tomorrowEnd },
+      date: tomorrowUtc,
       reminderSentAt: null,
     },
   });

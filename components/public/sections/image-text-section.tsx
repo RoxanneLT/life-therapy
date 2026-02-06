@@ -25,6 +25,7 @@ export function ImageTextSection({ section }: ImageTextSectionProps) {
               alt={section.imageAlt || section.title || ""}
               width={600}
               height={400}
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="max-h-[400px] w-auto rounded-xl object-contain"
             />
           </div>

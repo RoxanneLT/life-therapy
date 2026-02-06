@@ -58,7 +58,7 @@ export function PricingSection({ section }: PricingSectionProps) {
           </p>
         )}
         <div
-          className={`mt-10 grid gap-6 ${
+          className={`mt-10 grid grid-cols-1 gap-6 ${
             items.length <= 2
               ? "sm:grid-cols-2 max-w-4xl mx-auto"
               : "sm:grid-cols-3"

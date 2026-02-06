@@ -17,7 +17,7 @@ export function SessionTypeStep({ onSelect }: SessionTypeStepProps) {
           Select the type of session you&rsquo;d like to book.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {SESSION_TYPES.map((config) => (
           <Card
             key={config.type}

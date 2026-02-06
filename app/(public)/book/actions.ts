@@ -11,7 +11,6 @@ import {
   bookingNotificationEmail,
 } from "@/lib/email-templates";
 import { getSiteSettings } from "@/lib/settings";
-import { parse } from "date-fns";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SessionType } from "@/lib/generated/prisma/client";
@@ -36,10 +35,9 @@ export async function createBooking(formData: FormData) {
   });
 
   const sessionConfig = getSessionTypeConfig(parsed.sessionType as SessionType);
-  const date = parse(parsed.date, "yyyy-MM-dd", new Date());
 
   // Re-validate slot availability (race condition guard)
-  const slots = await getAvailableSlots(date, sessionConfig);
+  const slots = await getAvailableSlots(parsed.date, sessionConfig);
   const slotAvailable = slots.some((s) => s.start === parsed.startTime);
   if (!slotAvailable) {
     throw new Error(
@@ -67,7 +65,7 @@ export async function createBooking(formData: FormData) {
   const booking = await prisma.booking.create({
     data: {
       sessionType: parsed.sessionType as SessionType,
-      date: new Date(parsed.date),
+      date: new Date(`${parsed.date}T00:00:00Z`),
       startTime: parsed.startTime,
       endTime,
       durationMinutes: sessionConfig.durationMinutes,
