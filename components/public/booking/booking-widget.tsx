@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { SessionTypeStep } from "./session-type-step";
 import { DatePickerStep } from "./date-picker-step";
@@ -9,6 +9,7 @@ import { BookingFormStep } from "./booking-form-step";
 import { BookingReviewStep } from "./booking-review-step";
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
 import type { TimeSlot } from "@/lib/availability";
+import { Clock, DollarSign } from "lucide-react";
 
 export interface BookingData {
   sessionType: SessionTypeConfig | null;
@@ -30,7 +31,9 @@ const STEPS = [
 
 export function BookingWidget() {
   const searchParams = useSearchParams();
+  const widgetRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(0);
+  const [preselected, setPreselected] = useState(false);
   const [data, setData] = useState<BookingData>({
     sessionType: null,
     date: null,
@@ -41,7 +44,7 @@ export function BookingWidget() {
     clientNotes: "",
   });
 
-  // Pre-select session type from URL param (e.g. /book?type=free_consultation)
+  // Pre-select session type from URL param and auto-scroll
   useEffect(() => {
     const typeParam = searchParams.get("type");
     if (typeParam && !data.sessionType) {
@@ -49,6 +52,11 @@ export function BookingWidget() {
       if (match) {
         setData((d) => ({ ...d, sessionType: match }));
         setStep(1);
+        setPreselected(true);
+        // Auto-scroll to widget after a brief delay for render
+        setTimeout(() => {
+          widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
       }
     }
   }, [searchParams, data.sessionType]);
@@ -58,12 +66,23 @@ export function BookingWidget() {
   }
 
   function goBack() {
+    if (step === 1 && preselected) {
+      // Going back from date picker when pre-selected — reset to step 0
+      setPreselected(false);
+    }
     setStep((s) => Math.max(s - 1, 0));
   }
 
   function selectSessionType(config: SessionTypeConfig) {
     setData((d) => ({ ...d, sessionType: config, date: null, slot: null }));
+    setPreselected(false);
     goNext();
+  }
+
+  function changeSessionType() {
+    setData((d) => ({ ...d, sessionType: null, date: null, slot: null }));
+    setPreselected(false);
+    setStep(0);
   }
 
   function selectDate(date: string) {
@@ -87,7 +106,32 @@ export function BookingWidget() {
   }
 
   return (
-    <section className="container mx-auto max-w-3xl px-4 py-12">
+    <section ref={widgetRef} className="container mx-auto max-w-3xl px-4 py-12 scroll-mt-20">
+      {/* Session type badge — shown when a type is selected and we're past step 0 */}
+      {data.sessionType && step > 0 && (
+        <div className="mb-6 flex items-center justify-center gap-3 rounded-lg border border-brand-200 bg-brand-50/50 px-4 py-3 dark:border-brand-800 dark:bg-brand-950/30">
+          <div className="flex items-center gap-4 text-sm">
+            <span className="font-semibold text-brand-700 dark:text-brand-300">
+              {data.sessionType.label}
+            </span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              {data.sessionType.durationMinutes} min
+            </span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <DollarSign className="h-3.5 w-3.5" />
+              {data.sessionType.priceLabel}
+            </span>
+          </div>
+          <button
+            onClick={changeSessionType}
+            className="text-xs text-brand-600 underline hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-200"
+          >
+            Change
+          </button>
+        </div>
+      )}
+
       {/* Progress indicator */}
       <div className="mb-8">
         <div className="flex items-center justify-between">

@@ -26,24 +26,47 @@ export default async function BookPage() {
     notFound();
   }
 
-  // Render hero section first, then booking widget, then remaining CMS sections
-  const heroSections = page.sections.filter(
-    (s) => s.sectionType === "hero"
-  );
-  const otherSections = page.sections.filter(
-    (s) => s.sectionType !== "hero"
+  // Split sections by type for controlled layout order
+  const heroSections = page.sections.filter((s) => s.sectionType === "hero");
+  const stepsSections = page.sections.filter((s) => s.sectionType === "steps");
+  const faqSections = page.sections.filter((s) => s.sectionType === "faq");
+  // Exclude pricing (widget replaces it) and types already rendered above
+  const remainingSections = page.sections.filter(
+    (s) =>
+      s.sectionType !== "hero" &&
+      s.sectionType !== "steps" &&
+      s.sectionType !== "pricing" &&
+      s.sectionType !== "faq"
   );
 
   return (
     <>
+      {/* Hero */}
       <SectionRenderer sections={heroSections} />
-      {settings.bookingEnabled ? (
-        <BookingWidget />
-      ) : (
-        <SectionRenderer sections={otherSections} />
+
+      {/* How it Works (steps) */}
+      {stepsSections.length > 0 && <SectionRenderer sections={stepsSections} />}
+
+      {/* Booking widget with anchor for auto-scroll */}
+      {settings.bookingEnabled && (
+        <div id="booking">
+          <BookingWidget />
+        </div>
       )}
-      {settings.bookingEnabled && otherSections.length > 0 && (
-        <SectionRenderer sections={otherSections} />
+
+      {/* FAQ */}
+      {faqSections.length > 0 && <SectionRenderer sections={faqSections} />}
+
+      {/* Any remaining CTA sections */}
+      {remainingSections.length > 0 && (
+        <SectionRenderer sections={remainingSections} />
+      )}
+
+      {/* Fallback: show all CMS sections when booking is disabled */}
+      {!settings.bookingEnabled && (
+        <SectionRenderer
+          sections={page.sections.filter((s) => s.sectionType !== "hero")}
+        />
       )}
     </>
   );
