@@ -58,7 +58,78 @@ export const testimonialSchema = z.object({
   sortOrder: z.coerce.number().int().default(0),
 });
 
+export const siteSettingsSchema = z.object({
+  // Branding
+  siteName: z.string().min(1, "Site name is required"),
+  tagline: z.string().optional(),
+  logoUrl: z.string().optional(),
+  // Contact
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional(),
+  whatsappNumber: z.string().optional(),
+  businessHours: z.any().optional(),
+  locationText: z.string().optional(),
+  // Social Links
+  facebookUrl: z.string().url().optional().or(z.literal("")),
+  linkedinUrl: z.string().url().optional().or(z.literal("")),
+  instagramUrl: z.string().url().optional().or(z.literal("")),
+  tiktokUrl: z.string().url().optional().or(z.literal("")),
+  youtubeUrl: z.string().url().optional().or(z.literal("")),
+  // SEO
+  metaTitle: z.string().optional(),
+  metaDescription: z.string().optional(),
+  ogImageUrl: z.string().optional(),
+  googleAnalyticsId: z.string().optional(),
+  // Newsletter (Mailchimp)
+  mailchimpApiKey: z.string().optional(),
+  mailchimpAudienceId: z.string().optional(),
+  mailchimpServer: z.string().optional(),
+  // Email (SMTP)
+  smtpHost: z.string().optional(),
+  smtpPort: z.coerce.number().int().optional().or(z.literal("")),
+  smtpUser: z.string().optional(),
+  smtpPass: z.string().optional(),
+  smtpFromName: z.string().optional(),
+  smtpFromEmail: z.string().email().optional().or(z.literal("")),
+  // Footer
+  copyrightText: z.string().optional(),
+  footerTagline: z.string().optional(),
+});
+
+export const bookingFormSchema = z.object({
+  sessionType: z.enum(["free_consultation", "individual", "couples"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  clientName: z.string().min(2, "Name is required"),
+  clientEmail: z.string().email("Valid email is required"),
+  clientPhone: z.string().optional(),
+  clientNotes: z.string().max(1000).optional(),
+});
+
+export const availabilityOverrideSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  isBlocked: z.boolean(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal("")),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal("")),
+  reason: z.string().max(200).optional(),
+});
+
+export const bookingSettingsSchema = z.object({
+  bookingMaxAdvanceDays: z.coerce.number().int().min(1).max(365).default(30),
+  bookingMinNoticeHours: z.coerce.number().int().min(0).max(168).default(24),
+  bookingBufferMinutes: z.coerce.number().int().min(0).max(120).default(15),
+  bookingEnabled: z.boolean().default(false),
+  msGraphTenantId: z.string().optional().or(z.literal("")),
+  msGraphClientId: z.string().optional().or(z.literal("")),
+  msGraphClientSecret: z.string().optional().or(z.literal("")),
+  msGraphUserEmail: z.string().email().optional().or(z.literal("")),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type PageSectionInput = z.infer<typeof pageSectionSchema>;
 export type CourseInput = z.infer<typeof courseSchema>;
 export type TestimonialInput = z.infer<typeof testimonialSchema>;
+export type SiteSettingsInput = z.infer<typeof siteSettingsSchema>;
+export type BookingFormInput = z.infer<typeof bookingFormSchema>;
+export type AvailabilityOverrideInput = z.infer<typeof availabilityOverrideSchema>;
+export type BookingSettingsInput = z.infer<typeof bookingSettingsSchema>;

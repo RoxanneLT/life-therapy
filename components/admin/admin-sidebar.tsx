@@ -8,23 +8,36 @@ import {
   FileText,
   GraduationCap,
   Quote,
+  CalendarDays,
   Settings,
-  Flower2,
+  Users,
 } from "lucide-react";
+import Image from "next/image";
+import type { AdminRole } from "@/lib/generated/prisma/client";
 
-const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/pages", label: "Pages", icon: FileText },
-  { href: "/admin/courses", label: "Courses", icon: GraduationCap },
-  { href: "/admin/testimonials", label: "Testimonials", icon: Quote },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  roles: AdminRole[];
+}
+
+const navItems: NavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "editor", "marketing"] },
+  { href: "/admin/pages", label: "Pages", icon: FileText, roles: ["super_admin", "editor"] },
+  { href: "/admin/courses", label: "Courses", icon: GraduationCap, roles: ["super_admin", "editor"] },
+  { href: "/admin/testimonials", label: "Testimonials", icon: Quote, roles: ["super_admin", "editor", "marketing"] },
+  { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, roles: ["super_admin", "editor"] },
+  { href: "/admin/users", label: "Users", icon: Users, roles: ["super_admin"] },
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
 ];
 
 interface AdminSidebarProps {
   readonly className?: string;
+  readonly role: AdminRole;
 }
 
-export function AdminSidebar({ className }: AdminSidebarProps) {
+export function AdminSidebar({ className, role }: AdminSidebarProps) {
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -32,20 +45,25 @@ export function AdminSidebar({ className }: AdminSidebarProps) {
     return pathname.startsWith(href);
   }
 
+  const visibleItems = navItems.filter((item) => item.roles.includes(role));
+
   return (
     <aside className={cn("w-64 flex-shrink-0 border-r bg-card", className)}>
       <div className="flex h-full flex-col">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b px-6">
-          <Flower2 className="h-6 w-6 text-brand-500" />
-          <span className="font-heading text-lg font-semibold">
-            Life-Therapy
-          </span>
+        <div className="flex h-16 items-center border-b px-6">
+          <Image
+            src="/logo.png"
+            alt="Life-Therapy"
+            width={200}
+            height={50}
+            className="h-10 w-auto"
+          />
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 p-4">
-          {navItems.map((item) => (
+          {visibleItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

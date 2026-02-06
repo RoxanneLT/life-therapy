@@ -6,18 +6,22 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Flower2 } from "lucide-react";
+import { Menu } from "lucide-react";
+import Image from "next/image";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/about", label: "About" },
-  { href: "/courses", label: "Courses" },
-  { href: "/sessions", label: "Sessions" },
-  { href: "/packages", label: "Packages" },
-];
+interface NavLink {
+  href: string;
+  label: string;
+}
 
-export function PublicHeader() {
+interface PublicHeaderProps {
+  navLinks: NavLink[];
+  showBookButton: boolean;
+  logoUrl?: string | null;
+}
+
+export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeaderProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -25,11 +29,15 @@ export function PublicHeader() {
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <Flower2 className="h-6 w-6 text-brand-500" />
-          <span className="font-heading text-xl font-semibold">
-            Life-Therapy
-          </span>
+        <Link href="/" className="flex items-center">
+          <Image
+            src={logoUrl || "/logo.png"}
+            alt="Life-Therapy"
+            width={200}
+            height={50}
+            className="h-10 w-auto"
+            priority
+          />
         </Link>
 
         {/* Desktop nav */}
@@ -48,9 +56,11 @@ export function PublicHeader() {
               {link.label}
             </Link>
           ))}
-          <Button size="sm" className="ml-2" asChild>
-            <Link href="/book">Book a Session</Link>
-          </Button>
+          {showBookButton && (
+            <Button size="sm" className="ml-2" asChild>
+              <Link href="/book">Book a Session</Link>
+            </Button>
+          )}
           <ThemeToggle />
         </nav>
 
@@ -80,11 +90,13 @@ export function PublicHeader() {
                   {link.label}
                 </Link>
               ))}
-              <Button className="mt-4" asChild>
-                <Link href="/book" onClick={() => setOpen(false)}>
-                  Book a Session
-                </Link>
-              </Button>
+              {showBookButton && (
+                <Button className="mt-4" asChild>
+                  <Link href="/book" onClick={() => setOpen(false)}>
+                    Book a Session
+                  </Link>
+                </Button>
+              )}
             </nav>
           </SheetContent>
         </Sheet>

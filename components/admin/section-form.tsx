@@ -23,7 +23,11 @@ const SECTION_TYPES = [
   { value: "cta", label: "Call to Action" },
   { value: "testimonial_carousel", label: "Testimonials" },
   { value: "course_grid", label: "Course Grid" },
+  { value: "course_catalog", label: "Course Catalog (full page)" },
+  { value: "bundle_grid", label: "Bundle Grid" },
   { value: "features", label: "Features / Cards" },
+  { value: "pricing", label: "Pricing Cards" },
+  { value: "steps", label: "Steps / How It Works" },
   { value: "faq", label: "FAQ Accordion" },
 ];
 
@@ -83,7 +87,11 @@ export function SectionForm({
     "features",
     "faq",
     "course_grid",
+    "course_catalog",
+    "bundle_grid",
     "testimonial_carousel",
+    "pricing",
+    "steps",
     "hero",
     "image_text",
   ].includes(sectionType);

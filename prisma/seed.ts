@@ -12,15 +12,15 @@ async function main() {
     [
       { title: "Home", slug: "home", description: "Homepage", isPublished: true, sortOrder: 0 },
       { title: "About Roxanne", slug: "about", description: "About page", isPublished: true, sortOrder: 1 },
-      { title: "1:1 Online Sessions", slug: "sessions", description: "Sessions page", isPublished: false, sortOrder: 2 },
-      { title: "Self-Paced Courses", slug: "courses", description: "Courses page", isPublished: false, sortOrder: 3 },
-      { title: "Bundles & Packages", slug: "packages", description: "Packages page", isPublished: false, sortOrder: 4 },
-      { title: "Book a Session", slug: "book", description: "Booking page", isPublished: false, sortOrder: 5 },
-      { title: "Contact", slug: "contact", description: "Contact page", isPublished: false, sortOrder: 6 },
+      { title: "1:1 Online Sessions", slug: "sessions", description: "Sessions page", isPublished: true, sortOrder: 2 },
+      { title: "Self-Paced Courses", slug: "courses", description: "Courses page", isPublished: true, sortOrder: 3 },
+      { title: "Bundles & Packages", slug: "packages", description: "Packages page", isPublished: true, sortOrder: 4 },
+      { title: "Book a Session", slug: "book", description: "Booking page", isPublished: true, sortOrder: 5 },
+      { title: "Contact", slug: "contact", description: "Contact page", isPublished: true, sortOrder: 6 },
     ].map((page) =>
       prisma.page.upsert({
         where: { slug: page.slug },
-        update: {},
+        update: { title: page.title, isPublished: page.isPublished },
         create: page,
       })
     )
@@ -38,6 +38,7 @@ async function main() {
         title: "Master Your Confidence. Transform Your Life.",
         subtitle:
           "Online life coaching, counselling, and self-paced courses — empowering you to build confidence, manage stress, and create meaningful change from anywhere in the world.",
+        imageUrl: "/images/hero-home.jpg",
         ctaText: "Explore Our Courses",
         ctaLink: "/courses",
         config: { ctaSecondaryText: "Book a Free Consultation", ctaSecondaryLink: "/book" },
@@ -50,6 +51,16 @@ async function main() {
         content:
           "Life-Therapy is an online personal development and coaching platform founded by Roxanne Bouwer, a qualified life coach, counsellor, and NLP practitioner. We help people build unshakeable confidence, manage anxiety and stress, strengthen relationships, and create lives they love.\n\nWhether you prefer the personalised guidance of 1:1 sessions or the flexibility of learning at your own pace through our online course library, we meet you where you are — and walk with you toward where you want to be.\n\nAll our services are delivered online, making expert support accessible whether you're in South Africa or anywhere in the world.",
         sortOrder: 1,
+      },
+      {
+        pageId: homePage.id,
+        sectionType: "image_text",
+        title: "The Life-Therapy Framework",
+        content:
+          "Our coaching framework is built around six key phases — from identifying your concerns and assessing your current situation, through reframing your mindset and implementing new habits, to reinforcing new skills and reviewing your personal development.\n\nAt the centre of it all: building a meaningful and confident life through self-awareness, personal growth, self-knowledge, purpose, confidence, and success.",
+        imageUrl: "/images/framework.jpg",
+        config: { imagePosition: "right", background: "muted" },
+        sortOrder: 2,
       },
       {
         pageId: homePage.id,
@@ -83,7 +94,7 @@ async function main() {
             },
           ],
         },
-        sortOrder: 2,
+        sortOrder: 3,
       },
       {
         pageId: homePage.id,
@@ -91,7 +102,7 @@ async function main() {
         title: "Course Library Preview",
         subtitle: "Expert-designed courses for your personal growth journey",
         config: { featuredOnly: true, maxCount: 6 },
-        sortOrder: 3,
+        sortOrder: 4,
       },
       {
         pageId: homePage.id,
@@ -99,17 +110,18 @@ async function main() {
         title: "Meet Your Coach",
         content:
           "Hi, I'm Roxanne Bouwer — a qualified life coach, counsellor, and NLP practitioner. I've spent years creating practical frameworks that help people heal past wounds, build confidence, and step into a more meaningful life. Whether through our 1:1 sessions or our online course library, my mission is the same: to help you uncover the strength and confidence you already have inside.",
+        imageUrl: "/images/roxanne-full.jpg",
         ctaText: "Read My Story",
         ctaLink: "/about",
         config: { imagePosition: "left" },
-        sortOrder: 4,
+        sortOrder: 5,
       },
       {
         pageId: homePage.id,
         sectionType: "testimonial_carousel",
         title: "What Our Clients Say",
         config: { count: 6 },
-        sortOrder: 5,
+        sortOrder: 6,
       },
       {
         pageId: homePage.id,
@@ -119,7 +131,7 @@ async function main() {
           "Join thousands of people on their growth journey. Take the first step today.",
         ctaText: "Book a Free Consultation",
         ctaLink: "/book",
-        sortOrder: 6,
+        sortOrder: 7,
       },
     ],
   });
@@ -132,8 +144,9 @@ async function main() {
       {
         pageId: aboutPage.id,
         sectionType: "hero",
-        title: "The Story Behind Life-Therapy",
-        subtitle: "Founded on the belief that you already have the strength you need — sometimes you just need guidance to find it.",
+        title: "About Roxanne",
+        subtitle: "Qualified life coach, counsellor, and NLP practitioner — empowering people to build confidence and create meaningful change.",
+        imageUrl: "/images/hero-about-lotus.jpg",
         sortOrder: 0,
       },
       {
@@ -150,6 +163,7 @@ async function main() {
         title: "Meet Roxanne",
         content:
           "I'm Roxanne Bouwer, the founder of Life-Therapy. As a qualified life coach, counsellor, and NLP practitioner, I've spent years developing practical, evidence-based approaches that help people transform their lives from the inside out.\n\nMy work is rooted in a simple belief: you already have the confidence and strength you need — sometimes you just need guidance to find it. I've worked with teens navigating the complexities of growing up, adults rebuilding their self-worth, couples reconnecting after drifting apart, and professionals stepping into leadership with authenticity.\n\nThrough Life-Therapy, I've built two ways to support you on that journey. Our 1:1 online sessions offer personalised, in-depth coaching and counselling via secure video call. And our online course library — 10 comprehensive courses covering everything from self-esteem and confidence to anxiety management, relationships, and professional presence — lets you learn and grow at your own pace, on your own schedule.",
+        imageUrl: "/images/roxanne-portrait.jpg",
         config: { imagePosition: "right" },
         sortOrder: 2,
       },
@@ -174,6 +188,237 @@ async function main() {
         title: "What Our Clients Say",
         config: { count: 4 },
         sortOrder: 4,
+      },
+    ],
+  });
+
+  // ── Sessions Page Sections ──────────────────────────────
+  const sessionsPage = pages[2];
+  await prisma.pageSection.deleteMany({ where: { pageId: sessionsPage.id } });
+  await prisma.pageSection.createMany({
+    data: [
+      {
+        pageId: sessionsPage.id,
+        sectionType: "hero",
+        title: "1:1 Online Sessions",
+        subtitle: "Personalised coaching and counselling with Roxanne via secure video call. Work through your unique challenges with expert guidance tailored specifically to your needs.",
+        imageUrl: "/images/hero-sessions.jpg",
+        ctaText: "Book a Free Consultation",
+        ctaLink: "/book",
+        config: { ctaSecondaryText: "View Packages", ctaSecondaryLink: "/packages" },
+        sortOrder: 0,
+      },
+      {
+        pageId: sessionsPage.id,
+        sectionType: "features",
+        title: "How I Can Help",
+        config: {
+          items: [
+            { icon: "Brain", title: "Life Coaching", description: "Goal setting, confidence building, and personal growth strategies tailored to your unique situation." },
+            { icon: "Heart", title: "Counselling", description: "A safe, non-judgemental space to work through emotional challenges, grief, anxiety, and stress." },
+            { icon: "Users", title: "Couples Therapy", description: "Rebuild connection, improve communication, and navigate relationship challenges together." },
+            { icon: "Sparkles", title: "NLP Coaching", description: "Neuro-Linguistic Programming techniques to reframe thought patterns and break through limiting beliefs." },
+            { icon: "Shield", title: "Teen Coaching", description: "Age-appropriate coaching for teenagers dealing with self-esteem, peer pressure, and identity." },
+            { icon: "Users", title: "Family Counselling", description: "Navigate family dynamics, improve relationships, and create a more supportive home environment." },
+          ],
+        },
+        sortOrder: 1,
+      },
+      {
+        pageId: sessionsPage.id,
+        sectionType: "steps",
+        title: "How It Works",
+        config: {
+          items: [
+            { title: "Book a Consultation", description: "Schedule a free 30-minute consultation to discuss your needs and see if we're a good fit." },
+            { title: "Choose Your Path", description: "Select individual sessions or a package that suits your goals and budget." },
+            { title: "Start Growing", description: "Meet via secure video call and begin your journey toward meaningful change." },
+          ],
+        },
+        sortOrder: 2,
+      },
+      {
+        pageId: sessionsPage.id,
+        sectionType: "pricing",
+        title: "Session Pricing",
+        config: {
+          items: [
+            { icon: "Sparkles", title: "Free Consultation", description: "30-minute introductory call", price: "Free", priceNote: "no obligation", ctaText: "Book a Consultation", ctaLink: "/book", highlight: true },
+            { icon: "Video", title: "Individual Session", description: "60-minute 1:1 video call", price: "R850", priceNote: "per session", ctaText: "Book a Session", ctaLink: "/book" },
+            { icon: "Users", title: "Couples Session", description: "60-minute couples video call", price: "R1,200", priceNote: "per session", ctaText: "Book a Session", ctaLink: "/book" },
+          ],
+          footnote: "Save more with session packages. <a href='/packages'>View Packages →</a>",
+        },
+        sortOrder: 3,
+      },
+      {
+        pageId: sessionsPage.id,
+        sectionType: "cta",
+        title: "Ready to Take the First Step?",
+        subtitle: "Book a free consultation and let's discuss how I can support your journey.",
+        ctaText: "Book Your Free Consultation",
+        ctaLink: "/book",
+        sortOrder: 4,
+      },
+    ],
+  });
+
+  // ── Courses Page Sections ──────────────────────────────
+  const coursesPage = pages[3];
+  await prisma.pageSection.deleteMany({ where: { pageId: coursesPage.id } });
+  await prisma.pageSection.createMany({
+    data: [
+      {
+        pageId: coursesPage.id,
+        sectionType: "hero",
+        title: "Online Courses",
+        subtitle: "Expert-designed, self-paced courses to help you build confidence, manage stress, strengthen relationships, and create meaningful change.",
+        imageUrl: "/images/hero-courses.jpg",
+        sortOrder: 0,
+      },
+      {
+        pageId: coursesPage.id,
+        sectionType: "course_catalog",
+        sortOrder: 1,
+      },
+    ],
+  });
+
+  // ── Packages Page Sections ─────────────────────────────
+  const packagesPage = pages[4];
+  await prisma.pageSection.deleteMany({ where: { pageId: packagesPage.id } });
+  await prisma.pageSection.createMany({
+    data: [
+      {
+        pageId: packagesPage.id,
+        sectionType: "hero",
+        title: "Bundles & Packages",
+        subtitle: "Get more value with curated course bundles designed for your specific growth journey. Save up to 30% compared to purchasing courses individually.",
+        imageUrl: "/images/hero-packages.jpg",
+        sortOrder: 0,
+      },
+      {
+        pageId: packagesPage.id,
+        sectionType: "bundle_grid",
+        sortOrder: 1,
+      },
+      {
+        pageId: packagesPage.id,
+        sectionType: "cta",
+        title: "Not Sure Which Bundle Is Right for You?",
+        subtitle: "Book a free consultation and I'll help you find the perfect combination for your goals.",
+        ctaText: "Book a Free Consultation",
+        ctaLink: "/book",
+        sortOrder: 2,
+      },
+    ],
+  });
+
+  // ── Book Page Sections ─────────────────────────────────
+  const bookPage = pages[5];
+  await prisma.pageSection.deleteMany({ where: { pageId: bookPage.id } });
+  await prisma.pageSection.createMany({
+    data: [
+      {
+        pageId: bookPage.id,
+        sectionType: "hero",
+        title: "Book a Session",
+        subtitle: "Ready to start your journey? Book a free 30-minute consultation or schedule your first session below.",
+        imageUrl: "/images/hero-book.jpg",
+        sortOrder: 0,
+      },
+      {
+        pageId: bookPage.id,
+        sectionType: "pricing",
+        title: "Booking Options",
+        config: {
+          items: [
+            { icon: "MessageCircle", title: "Free Consultation", description: "A no-obligation 30-minute call to discuss your needs, ask questions, and see if we're a good fit.", price: "Free", ctaText: "Book via WhatsApp", ctaLink: "https://wa.me/27710170353?text=Hi%20Roxanne%2C%20I%27d%20like%20to%20book%20a%20free%20consultation.", highlight: true },
+            { icon: "Calendar", title: "1:1 Session", description: "A full 60-minute coaching or counselling session tailored to your specific needs and goals.", price: "R850", priceNote: "per session", ctaText: "Book via WhatsApp", ctaLink: "https://wa.me/27710170353?text=Hi%20Roxanne%2C%20I%27d%20like%20to%20book%20a%20session." },
+            { icon: "Users", title: "Couples Session", description: "A 60-minute couples coaching or counselling session to strengthen your relationship together.", price: "R1,200", priceNote: "per session", ctaText: "Book via WhatsApp", ctaLink: "https://wa.me/27710170353?text=Hi%20Roxanne%2C%20I%27d%20like%20to%20book%20a%20couples%20session." },
+          ],
+        },
+        sortOrder: 1,
+      },
+      {
+        pageId: bookPage.id,
+        sectionType: "steps",
+        title: "How Booking Works",
+        config: {
+          items: [
+            { title: "Send a Message", description: "Send a WhatsApp message or email to book your preferred time slot." },
+            { title: "Get Confirmation", description: "Receive a confirmation with your Microsoft Teams meeting link." },
+            { title: "Join the Call", description: "Join the call at your scheduled time — no downloads needed." },
+          ],
+        },
+        sortOrder: 2,
+      },
+      {
+        pageId: bookPage.id,
+        sectionType: "faq",
+        title: "Common Questions",
+        config: {
+          items: [
+            { question: "What happens in the free consultation?", answer: "We'll chat about what you're going through, what you'd like to achieve, and I'll explain how our sessions or courses can help. There's absolutely no pressure or obligation." },
+            { question: "Do I need to prepare anything?", answer: "No preparation needed. Just come as you are. If you have specific questions or goals in mind, feel free to share them." },
+            { question: "I'm in a different time zone — can we still work together?", answer: "Absolutely! I work with clients across South Africa, the UK, Canada, and beyond. We'll find a time that works for both of us." },
+            { question: "Is everything confidential?", answer: "100%. Everything discussed in our sessions is completely confidential. Your privacy and trust are paramount." },
+            { question: "What's the difference between coaching and counselling?", answer: "Coaching is future-focused — we work on goals, confidence, and personal growth. Counselling helps you process emotions, past experiences, and mental health challenges. Many clients benefit from a blend of both, and I tailor each session to what you need most." },
+            { question: "How many sessions will I need?", answer: "It depends on your goals. Some clients see meaningful progress in 4–6 sessions, while others prefer ongoing support over several months. We'll discuss a recommended approach during your free consultation — there's never any pressure to commit to more than you need." },
+            { question: "Should I do a course or book 1:1 sessions?", answer: "Our self-paced courses are great for structured learning at your own speed. 1:1 sessions offer personalised guidance for your specific situation. Many clients combine both — a course for foundational skills and sessions for deeper, tailored support." },
+            { question: "What is your cancellation policy?", answer: "We understand that life happens. Please give at least 24 hours' notice if you need to reschedule. Late cancellations or no-shows may be charged at full rate. We're always happy to find an alternative time that works for you." },
+            { question: "Do you offer couples or family sessions?", answer: "Yes! Couples sessions are available at R1,200 per 60-minute session. Family counselling is also offered — we'll discuss the best format and approach during your free consultation." },
+          ],
+        },
+        sortOrder: 3,
+      },
+      {
+        pageId: bookPage.id,
+        sectionType: "cta",
+        title: "Still Have Questions?",
+        subtitle: "Reach out anytime — I'm here to help.",
+        ctaText: "WhatsApp Us",
+        ctaLink: "https://wa.me/27710170353",
+        sortOrder: 4,
+      },
+    ],
+  });
+
+  // ── Contact Page Sections ──────────────────────────────
+  const contactPage = pages[6];
+  await prisma.pageSection.deleteMany({ where: { pageId: contactPage.id } });
+  await prisma.pageSection.createMany({
+    data: [
+      {
+        pageId: contactPage.id,
+        sectionType: "hero",
+        title: "Get in Touch",
+        subtitle: "Have a question about our courses or sessions? Want to learn more about how Life-Therapy can support your journey? We'd love to hear from you.",
+        imageUrl: "/images/hero-contact.jpg",
+        sortOrder: 0,
+      },
+      {
+        pageId: contactPage.id,
+        sectionType: "features",
+        title: "Contact Details",
+        config: {
+          items: [
+            { icon: "Mail", title: "Email", description: "hello@life-therapy.co.za — We respond within 24 hours" },
+            { icon: "Phone", title: "WhatsApp", description: "+27 71 017 0353 — Quick questions & booking" },
+            { icon: "Clock", title: "Hours", description: "Mon – Fri: 9:00 am – 5:00 pm (SAST) — Session times flexible for international clients" },
+            { icon: "MapPin", title: "Location", description: "100% Online — South Africa based, sessions via Microsoft Teams globally" },
+          ],
+        },
+        sortOrder: 1,
+      },
+      {
+        pageId: contactPage.id,
+        sectionType: "cta",
+        title: "Prefer to Chat in Person?",
+        subtitle: "Book a free 30-minute consultation and let's discuss how I can help.",
+        ctaText: "Book a Free Consultation",
+        ctaLink: "/book",
+        sortOrder: 2,
       },
     ],
   });
@@ -461,6 +706,48 @@ async function main() {
   for (const testimonial of testimonialsData) {
     await prisma.testimonial.create({ data: testimonial });
   }
+
+  // ── Site Settings ──────────────────────────────────────────
+  const existingSettings = await prisma.siteSetting.findFirst();
+  if (existingSettings) {
+    console.log("  Site settings: already exists, skipped");
+  } else {
+    await prisma.siteSetting.create({
+      data: {
+        siteName: "Life-Therapy",
+        tagline: "Online life coaching, counselling, and self-paced courses. Empowering you to build confidence and create meaningful change.",
+        email: "hello@life-therapy.co.za",
+        phone: "+27 71 017 0353",
+        whatsappNumber: "27710170353",
+        businessHours: {
+          monday: { open: "09:00", close: "17:00", closed: false },
+          tuesday: { open: "09:00", close: "17:00", closed: false },
+          wednesday: { open: "09:00", close: "17:00", closed: false },
+          thursday: { open: "09:00", close: "17:00", closed: false },
+          friday: { open: "09:00", close: "17:00", closed: false },
+          saturday: { open: "09:00", close: "13:00", closed: true },
+          sunday: { open: "09:00", close: "13:00", closed: true },
+        },
+        locationText: "100% Online — South Africa based, sessions via Microsoft Teams globally",
+        facebookUrl: "https://facebook.com/lifetherapyza",
+        linkedinUrl: "https://linkedin.com/in/roxanne-bouwer-03551820a",
+        copyrightText: "\u00a92026 All rights reserved by Life Therapy PTY Ltd. Reg nr: 2019/570691/07.",
+        footerTagline: "Online life coaching, counselling, and self-paced courses. Empowering you to build confidence and create meaningful change.",
+        // Booking defaults
+        bookingMaxAdvanceDays: 30,
+        bookingMinNoticeHours: 24,
+        bookingBufferMinutes: 15,
+        bookingEnabled: false,
+      },
+    });
+    console.log("  Site settings: created");
+  }
+
+  // ── Fix admin user roles (enum migration resets to default) ──
+  await prisma.adminUser.updateMany({
+    where: {},
+    data: { role: "super_admin" },
+  });
 
   console.log("Seed complete!");
   console.log(`  Pages: ${pages.length}`);

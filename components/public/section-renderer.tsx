@@ -7,8 +7,15 @@ import { TestimonialCarousel } from "./sections/testimonial-carousel";
 import { CourseGrid } from "./sections/course-grid";
 import { FeaturesSection } from "./sections/features-section";
 import { FaqSection } from "./sections/faq-section";
+import { PricingSection } from "./sections/pricing-section";
+import { StepsSection } from "./sections/steps-section";
+import { CourseCatalog } from "./sections/course-catalog";
+import { BundleGridSection } from "./sections/bundle-grid-section";
 
-type SectionComponent = React.ComponentType<{ section: PageSection }>;
+type SectionComponent = React.ComponentType<{
+  section: PageSection;
+  activeCategory?: string;
+}>;
 
 const sectionComponents: Record<string, SectionComponent> = {
   hero: HeroSection,
@@ -19,13 +26,21 @@ const sectionComponents: Record<string, SectionComponent> = {
   course_grid: CourseGrid,
   features: FeaturesSection,
   faq: FaqSection,
+  pricing: PricingSection,
+  steps: StepsSection,
+  course_catalog: CourseCatalog as SectionComponent,
+  bundle_grid: BundleGridSection,
 };
 
 interface SectionRendererProps {
   sections: PageSection[];
+  activeCategory?: string;
 }
 
-export function SectionRenderer({ sections }: SectionRendererProps) {
+export function SectionRenderer({
+  sections,
+  activeCategory,
+}: SectionRendererProps) {
   return (
     <>
       {sections
@@ -34,7 +49,15 @@ export function SectionRenderer({ sections }: SectionRendererProps) {
         .map((section) => {
           const Component = sectionComponents[section.sectionType];
           if (!Component) return null;
-          return <Component key={section.id} section={section} />;
+          return (
+            <Component
+              key={section.id}
+              section={section}
+              {...(section.sectionType === "course_catalog"
+                ? { activeCategory }
+                : {})}
+            />
+          );
         })}
     </>
   );

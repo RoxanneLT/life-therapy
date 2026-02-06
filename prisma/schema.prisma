@@ -131,14 +131,135 @@ model Testimonial {
 // ============================================================
 // Admin users (linked to Supabase Auth)
 // ============================================================
+enum AdminRole {
+  super_admin
+  editor
+  marketing
+}
+
 model AdminUser {
-  id             String   @id @default(cuid())
-  supabaseUserId String   @unique
-  email          String   @unique
+  id             String    @id @default(cuid())
+  supabaseUserId String    @unique
+  email          String    @unique
   name           String?
-  role           String   @default("admin") // admin, super_admin
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  role           AdminRole @default(editor)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@map("admin_users")
+}
+
+// ============================================================
+// Site-wide settings (single-row table)
+// ============================================================
+model SiteSetting {
+  id                  String   @id @default(cuid())
+  // Branding
+  siteName            String   @default("Life-Therapy")
+  tagline             String?  @db.Text
+  logoUrl             String?
+  // Contact
+  email               String?
+  phone               String?
+  whatsappNumber      String?
+  businessHours       Json?
+  locationText        String?
+  // Social Links
+  facebookUrl         String?
+  linkedinUrl         String?
+  instagramUrl        String?
+  tiktokUrl           String?
+  youtubeUrl          String?
+  // SEO
+  metaTitle           String?
+  metaDescription     String?  @db.Text
+  ogImageUrl          String?
+  googleAnalyticsId   String?
+  // Newsletter (Mailchimp)
+  mailchimpApiKey     String?
+  mailchimpAudienceId String?
+  mailchimpServer     String?
+  // Email (SMTP)
+  smtpHost            String?
+  smtpPort            Int?
+  smtpUser            String?
+  smtpPass            String?
+  smtpFromName        String?
+  smtpFromEmail       String?
+  // Footer
+  copyrightText       String?  @db.Text
+  footerTagline       String?  @db.Text
+  // Booking Settings
+  bookingMaxAdvanceDays  Int     @default(30)
+  bookingMinNoticeHours  Int     @default(24)
+  bookingBufferMinutes   Int     @default(15)
+  bookingEnabled         Boolean @default(false)
+  // Microsoft Graph (Exchange/Teams)
+  msGraphTenantId        String?
+  msGraphClientId        String?
+  msGraphClientSecret    String?
+  msGraphUserEmail       String?
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+// ============================================================
+// Booking System
+// ============================================================
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+  no_show
+}
+
+enum SessionType {
+  free_consultation
+  individual
+  couples
+}
+
+model Booking {
+  id                 String        @id @default(cuid())
+  sessionType        SessionType
+  date               DateTime      @db.Date
+  startTime          String
+  endTime            String
+  durationMinutes    Int
+  priceZarCents      Int           @default(0)
+  clientName         String
+  clientEmail        String
+  clientPhone        String?
+  clientNotes        String?       @db.Text
+  status             BookingStatus @default(pending)
+  adminNotes         String?       @db.Text
+  graphEventId       String?
+  teamsMeetingUrl    String?
+  confirmationSentAt DateTime?
+  reminderSentAt     DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([date])
+  @@index([status])
+  @@index([clientEmail])
+  @@map("bookings")
+}
+
+model AvailabilityOverride {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  isBlocked Boolean  @default(true)
+  startTime String?
+  endTime   String?
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date])
+  @@map("availability_overrides")
 }

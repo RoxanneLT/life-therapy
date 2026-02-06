@@ -10,7 +10,6 @@ interface ImageTextSectionProps {
 export function ImageTextSection({ section }: ImageTextSectionProps) {
   const config = (section.config as Record<string, string>) || {};
   const imageLeft = config.imagePosition === "left";
-
   return (
     <section className="px-4 py-16">
       <div
@@ -20,13 +19,13 @@ export function ImageTextSection({ section }: ImageTextSectionProps) {
       >
         {/* Image */}
         {section.imageUrl && (
-          <div className="w-full md:w-1/2">
+          <div className="flex w-full items-center justify-center md:w-1/2">
             <Image
               src={section.imageUrl}
               alt={section.imageAlt || section.title || ""}
               width={600}
               height={400}
-              className="rounded-xl object-cover"
+              className="max-h-[400px] w-auto rounded-xl object-contain"
             />
           </div>
         )}

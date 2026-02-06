@@ -11,7 +11,7 @@ export function HeroSection({ section }: HeroSectionProps) {
 
   return (
     <section
-      className="relative flex min-h-[500px] items-center justify-center bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-20"
+      className="relative flex min-h-[400px] items-center bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-20"
       style={
         section.imageUrl
           ? {
@@ -22,17 +22,18 @@ export function HeroSection({ section }: HeroSectionProps) {
           : undefined
       }
     >
-      <div className="mx-auto max-w-3xl text-center">
+      <div className="mx-auto w-full max-w-6xl">
         <h1
-          className={`font-heading text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl ${
+          className={`font-heading text-4xl font-bold uppercase tracking-wide leading-tight sm:text-5xl lg:text-6xl ${
             section.imageUrl ? "text-white" : "text-foreground"
           }`}
         >
           {section.title}
         </h1>
+        <div className="mt-3 h-[3px] w-16 bg-terracotta-500" />
         {section.subtitle && (
           <p
-            className={`mx-auto mt-4 max-w-2xl text-lg ${
+            className={`mt-4 max-w-2xl text-lg ${
               section.imageUrl
                 ? "text-white/90"
                 : "text-muted-foreground"
@@ -42,14 +43,23 @@ export function HeroSection({ section }: HeroSectionProps) {
           </p>
         )}
         {(section.ctaText || config.ctaSecondaryText) && (
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <div className="mt-8 flex flex-wrap items-center gap-4">
             {section.ctaText && section.ctaLink && (
-              <Button size="lg" asChild>
+              <Button
+                size="lg"
+                className={section.imageUrl ? "bg-terracotta-500 text-white hover:bg-terracotta-600" : ""}
+                asChild
+              >
                 <Link href={section.ctaLink}>{section.ctaText}</Link>
               </Button>
             )}
             {config.ctaSecondaryText && config.ctaSecondaryLink && (
-              <Button size="lg" variant="outline" asChild>
+              <Button
+                size="lg"
+                variant="outline"
+                className={section.imageUrl ? "border-white/60 bg-transparent text-white hover:bg-white/10" : ""}
+                asChild
+              >
                 <Link href={config.ctaSecondaryLink}>
                   {config.ctaSecondaryText}
                 </Link>

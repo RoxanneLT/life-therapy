@@ -3,17 +3,24 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, GraduationCap, Quote } from "lucide-react";
+import { FileText, GraduationCap, Quote, CalendarDays } from "lucide-react";
 import Link from "next/link";
 
 export default async function AdminDashboard() {
   const { adminUser } = await getAuthenticatedAdmin();
 
-  const [pageCount, courseCount, testimonialCount] = await Promise.all([
-    prisma.page.count(),
-    prisma.course.count(),
-    prisma.testimonial.count(),
-  ]);
+  const [pageCount, courseCount, testimonialCount, upcomingBookings] =
+    await Promise.all([
+      prisma.page.count(),
+      prisma.course.count(),
+      prisma.testimonial.count(),
+      prisma.booking.count({
+        where: {
+          status: { in: ["pending", "confirmed"] },
+          date: { gte: new Date() },
+        },
+      }),
+    ]);
 
   const stats = [
     {
@@ -34,6 +41,12 @@ export default async function AdminDashboard() {
       icon: Quote,
       href: "/admin/testimonials",
     },
+    {
+      label: "Upcoming Bookings",
+      value: upcomingBookings,
+      icon: CalendarDays,
+      href: "/admin/bookings",
+    },
   ];
 
   return (
@@ -47,7 +60,7 @@ export default async function AdminDashboard() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <Card className="transition-shadow hover:shadow-md">
@@ -92,6 +105,16 @@ export default async function AdminDashboard() {
               <p className="font-medium">Manage Testimonials</p>
               <p className="text-sm text-muted-foreground">
                 Add and feature client reviews
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/admin/bookings">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md">
+            <CardContent className="pt-6">
+              <p className="font-medium">View Bookings</p>
+              <p className="text-sm text-muted-foreground">
+                Manage session bookings and availability
               </p>
             </CardContent>
           </Card>

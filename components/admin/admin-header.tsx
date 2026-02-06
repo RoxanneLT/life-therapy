@@ -15,13 +15,15 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, LogOut, ExternalLink } from "lucide-react";
 import { AdminSidebar } from "./admin-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import type { AdminRole } from "@/lib/generated/prisma/client";
 
 interface AdminHeaderProps {
-  adminName?: string | null;
-  adminEmail?: string;
+  readonly adminName?: string | null;
+  readonly adminEmail?: string;
+  readonly role: AdminRole;
 }
 
-export function AdminHeader({ adminName, adminEmail }: AdminHeaderProps) {
+export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -49,7 +51,7 @@ export function AdminHeader({ adminName, adminEmail }: AdminHeaderProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
-          <AdminSidebar className="h-full" />
+          <AdminSidebar className="h-full" role={role} />
         </SheetContent>
       </Sheet>
 

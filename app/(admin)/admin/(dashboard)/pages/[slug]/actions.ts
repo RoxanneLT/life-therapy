@@ -3,8 +3,10 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { pageSectionSchema } from "@/lib/validations";
+import { requireRole } from "@/lib/auth";
 
 export async function createSection(pageId: string, formData: FormData) {
+  await requireRole("super_admin", "editor");
   const raw = Object.fromEntries(formData.entries());
   const parsed = pageSectionSchema.parse({
     ...raw,
@@ -31,6 +33,7 @@ export async function createSection(pageId: string, formData: FormData) {
 }
 
 export async function updateSection(sectionId: string, formData: FormData) {
+  await requireRole("super_admin", "editor");
   const raw = Object.fromEntries(formData.entries());
   const parsed = pageSectionSchema.parse({
     ...raw,
@@ -48,6 +51,7 @@ export async function updateSection(sectionId: string, formData: FormData) {
 }
 
 export async function deleteSection(sectionId: string) {
+  await requireRole("super_admin", "editor");
   await prisma.pageSection.delete({ where: { id: sectionId } });
 
   revalidatePath("/admin/pages");
@@ -58,6 +62,7 @@ export async function reorderSections(
   pageId: string,
   sectionIds: string[]
 ) {
+  await requireRole("super_admin", "editor");
   await Promise.all(
     sectionIds.map((id, index) =>
       prisma.pageSection.update({
@@ -72,6 +77,7 @@ export async function reorderSections(
 }
 
 export async function togglePagePublished(pageId: string) {
+  await requireRole("super_admin", "editor");
   const page = await prisma.page.findUnique({ where: { id: pageId } });
   if (!page) return;
 
@@ -85,6 +91,7 @@ export async function togglePagePublished(pageId: string) {
 }
 
 export async function toggleSectionVisibility(sectionId: string) {
+  await requireRole("super_admin", "editor");
   const section = await prisma.pageSection.findUnique({
     where: { id: sectionId },
   });

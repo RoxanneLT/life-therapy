@@ -12,6 +12,14 @@ import {
   Heart,
   Star,
   Users,
+  Mail,
+  Phone,
+  Clock,
+  MapPin,
+  Shield,
+  Sparkles,
+  MessageCircle,
+  Calendar,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -24,6 +32,14 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Heart,
   Star,
   Users,
+  Mail,
+  Phone,
+  Clock,
+  MapPin,
+  Shield,
+  Sparkles,
+  MessageCircle,
+  Calendar,
 };
 
 interface FeatureItem {
@@ -61,10 +77,10 @@ export function FeaturesSection({ section }: FeaturesSectionProps) {
           </p>
         )}
         <div
-          className={`grid gap-6 ${
-            items.length <= 3
-              ? "sm:grid-cols-2 lg:grid-cols-3"
-              : "sm:grid-cols-2 lg:grid-cols-4"
+          className={`grid gap-6 sm:grid-cols-2 ${
+            items.length <= 3 || items.length % 3 === 0
+              ? "lg:grid-cols-3"
+              : "lg:grid-cols-4"
           }`}
         >
           {items.map((item, i) => {
