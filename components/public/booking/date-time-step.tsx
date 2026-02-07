@@ -109,7 +109,7 @@ export function DateTimeStep({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-6 md:flex-row md:items-start md:justify-center">
+        <div className="flex flex-col items-center gap-6 md:flex-row md:items-stretch md:justify-center">
           {/* Calendar */}
           <div className="shrink-0">
             <Calendar
@@ -134,20 +134,20 @@ export function DateTimeStep({
             />
           </div>
 
-          {/* Time slots panel */}
-          <div className="w-full min-h-[280px] md:w-64 lg:w-72">
+          {/* Time slots panel — md:pt-3 + h-8 matches Calendar's p-3 padding + month_caption height */}
+          <div className="w-full md:w-64 lg:w-72 md:pt-3">
             {!selectedDateStr ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 p-6">
+              <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 p-6">
                 <p className="text-center text-sm text-muted-foreground">
                   Select a date to see available times
                 </p>
               </div>
             ) : loadingSlots ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center">
+              <div className="flex min-h-[280px] items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
               </div>
             ) : slots.length === 0 ? (
-              <div className="flex h-full min-h-[280px] items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 p-6">
+              <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-dashed border-muted-foreground/25 p-6">
                 <p className="text-center text-sm text-muted-foreground">
                   No available times for this date.
                   <br />
@@ -156,7 +156,7 @@ export function DateTimeStep({
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-center text-sm font-medium text-muted-foreground">
+                <p className="flex h-8 items-center justify-center text-sm font-medium text-muted-foreground">
                   {dateLabel}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
