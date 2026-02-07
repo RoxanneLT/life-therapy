@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CartProvider } from "@/lib/cart-store";
 import { GoogleAnalytics } from "@/components/google-analytics";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getSiteSettings } from "@/lib/settings";
 import "./globals.css";
 
@@ -55,6 +56,7 @@ export default async function RootLayout({
         {settings.googleAnalyticsId && (
           <GoogleAnalytics gaId={settings.googleAnalyticsId} />
         )}
+        <SpeedInsights />
       </body>
     </html>
   );

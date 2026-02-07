@@ -6,8 +6,8 @@ import { ShoppingCart, Check } from "lucide-react";
 
 interface AddToCartButtonProps {
   courseId?: string;
-  bundleId?: string;
-  creditPackId?: string;
+  hybridPackageId?: string;
+  moduleId?: string;
   size?: "default" | "sm" | "lg";
   variant?: "default" | "secondary" | "outline";
   label?: string;
@@ -16,8 +16,8 @@ interface AddToCartButtonProps {
 
 export function AddToCartButton({
   courseId,
-  bundleId,
-  creditPackId,
+  hybridPackageId,
+  moduleId,
   size = "default",
   variant = "default",
   label = "Add to Cart",
@@ -28,8 +28,8 @@ export function AddToCartButton({
   const isInCart = items.some(
     (i) =>
       (courseId && i.courseId === courseId) ||
-      (bundleId && i.bundleId === bundleId) ||
-      (creditPackId && i.creditPackId === creditPackId)
+      (hybridPackageId && i.hybridPackageId === hybridPackageId) ||
+      (moduleId && i.moduleId === moduleId)
   );
 
   if (isInCart) {
@@ -49,8 +49,8 @@ export function AddToCartButton({
       onClick={() =>
         addItem({
           courseId,
-          bundleId,
-          creditPackId,
+          hybridPackageId,
+          moduleId,
           isGift: false,
         })
       }

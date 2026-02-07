@@ -37,7 +37,7 @@ export default async function RedeemGiftPage({
     include: {
       buyer: { select: { firstName: true, lastName: true } },
       course: { select: { title: true } },
-      bundle: { select: { title: true } },
+      hybridPackage: { select: { title: true } },
     },
   });
 
@@ -89,7 +89,7 @@ export default async function RedeemGiftPage({
 
   const itemTitle =
     gift.course?.title ||
-    gift.bundle?.title ||
+    gift.hybridPackage?.title ||
     (gift.creditAmount ? `${gift.creditAmount} Session Credits` : "Gift");
   const buyerName = `${gift.buyer.firstName} ${gift.buyer.lastName}`;
 

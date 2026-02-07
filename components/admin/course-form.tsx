@@ -43,6 +43,8 @@ interface CourseFormProps {
     isPublished: boolean;
     isFeatured: boolean;
     sortOrder: number;
+    previewVideoUrl?: string | null;
+    facilitatorScript?: string | null;
   };
   onSubmit: (formData: FormData) => Promise<void>;
 }
@@ -216,6 +218,36 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
             defaultValue={initialData?.sortOrder ?? 0}
             min={0}
           />
+        </div>
+      </div>
+
+      {/* Preview Video & Facilitator Script */}
+      <div className="rounded-lg border p-4 space-y-4">
+        <h3 className="font-medium">Preview Video (Sofia Hart)</h3>
+        <div className="space-y-2">
+          <Label htmlFor="previewVideoUrl">Preview Video URL</Label>
+          <Input
+            id="previewVideoUrl"
+            name="previewVideoUrl"
+            defaultValue={initialData?.previewVideoUrl || ""}
+            placeholder="https://www.youtube.com/watch?v=... or Vimeo URL"
+          />
+          <p className="text-xs text-muted-foreground">
+            Short intro video shown on the course page before purchase
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="facilitatorScript">Facilitator Script</Label>
+          <Textarea
+            id="facilitatorScript"
+            name="facilitatorScript"
+            defaultValue={initialData?.facilitatorScript || ""}
+            placeholder="Script for Sofia Hart to introduce this course..."
+            rows={4}
+          />
+          <p className="text-xs text-muted-foreground">
+            Not shown publicly — used to produce the preview video
+          </p>
         </div>
       </div>
 

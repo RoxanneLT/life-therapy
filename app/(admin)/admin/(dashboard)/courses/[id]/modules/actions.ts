@@ -9,7 +9,10 @@ import { requireRole } from "@/lib/auth";
 export async function createModule(courseId: string, formData: FormData) {
   await requireRole("super_admin", "editor");
   const raw = Object.fromEntries(formData.entries());
-  const parsed = moduleSchema.parse(raw);
+  const parsed = moduleSchema.parse({
+    ...raw,
+    isStandalonePublished: raw.isStandalonePublished === "true",
+  });
 
   // Auto-set sortOrder to end of list if not specified
   if (!raw.sortOrder) {
@@ -32,7 +35,10 @@ export async function updateModule(
 ) {
   await requireRole("super_admin", "editor");
   const raw = Object.fromEntries(formData.entries());
-  const parsed = moduleSchema.parse(raw);
+  const parsed = moduleSchema.parse({
+    ...raw,
+    isStandalonePublished: raw.isStandalonePublished === "true",
+  });
 
   await prisma.module.update({
     where: { id: moduleId },

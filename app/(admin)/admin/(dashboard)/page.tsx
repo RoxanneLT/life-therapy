@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, GraduationCap, Quote, CalendarDays, UserCheck, ShoppingCart, Gift } from "lucide-react";
+import { FileText, GraduationCap, Quote, CalendarDays, UserCheck, ShoppingCart, Gift, BookOpen } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 
@@ -18,6 +18,7 @@ export default async function AdminDashboard() {
     studentCount,
     revenue,
     pendingGifts,
+    shortCourseSales,
   ] = await Promise.all([
     prisma.page.count(),
     prisma.course.count(),
@@ -34,6 +35,7 @@ export default async function AdminDashboard() {
       _sum: { totalCents: true },
     }),
     prisma.gift.count({ where: { status: "pending" } }),
+    prisma.moduleAccess.count(),
   ]);
 
   const stats = [
@@ -72,6 +74,12 @@ export default async function AdminDashboard() {
       value: courseCount,
       icon: GraduationCap,
       href: "/admin/courses",
+    },
+    {
+      label: "Short Course Sales",
+      value: shortCourseSales,
+      icon: BookOpen,
+      href: "/admin/students",
     },
     {
       label: "Testimonials",

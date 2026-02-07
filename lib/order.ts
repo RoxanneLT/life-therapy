@@ -53,9 +53,8 @@ export async function processCheckoutCompleted(orderId: string) {
       const cartItem = await prisma.cartItem.findFirst({
         where: {
           courseId: item.courseId,
-          bundleId: item.bundleId,
-          creditPackId: item.creditPackId,
           hybridPackageId: item.hybridPackageId,
+          moduleId: item.moduleId,
           isGift: true,
           cart: { studentId: order.studentId },
         },
@@ -69,9 +68,8 @@ export async function processCheckoutCompleted(orderId: string) {
           {
             id: item.id,
             courseId: item.courseId,
-            bundleId: item.bundleId,
-            creditPackId: item.creditPackId,
             hybridPackageId: item.hybridPackageId,
+            moduleId: item.moduleId,
             description: item.description,
           },
           {
@@ -104,66 +102,35 @@ export async function processCheckoutCompleted(orderId: string) {
       });
     }
 
-    if (item.bundleId) {
-      // Expand bundle: enroll in all courses within the bundle
-      const bundleCourses = await prisma.bundleCourse.findMany({
-        where: { bundleId: item.bundleId },
+    if (item.moduleId) {
+      // Grant standalone module access
+      const mod = await prisma.module.findUnique({
+        where: { id: item.moduleId },
         select: { courseId: true },
       });
-
-      for (const bc of bundleCourses) {
-        await prisma.enrollment.upsert({
+      if (mod) {
+        await prisma.moduleAccess.upsert({
           where: {
-            studentId_courseId: {
+            studentId_moduleId: {
               studentId: order.studentId,
-              courseId: bc.courseId,
+              moduleId: item.moduleId,
             },
           },
           create: {
             studentId: order.studentId,
-            courseId: bc.courseId,
+            moduleId: item.moduleId,
+            courseId: mod.courseId,
+            orderId: order.id,
+            pricePaid: item.totalCents,
             source: "purchase",
-            orderId: order.id,
           },
-          update: {},
-        });
-      }
-    }
-
-    if (item.creditPackId) {
-      // Add session credits
-      const pack = await prisma.sessionCreditPack.findUnique({
-        where: { id: item.creditPackId },
-      });
-      if (pack) {
-        // Upsert credit balance
-        const balance = await prisma.sessionCreditBalance.upsert({
-          where: { studentId: order.studentId },
-          create: {
-            studentId: order.studentId,
-            balance: pack.credits * item.quantity,
-          },
-          update: {
-            balance: { increment: pack.credits * item.quantity },
-          },
-        });
-
-        // Record transaction
-        await prisma.sessionCreditTransaction.create({
-          data: {
-            studentId: order.studentId,
-            type: "purchase",
-            amount: pack.credits * item.quantity,
-            balanceAfter: balance.balance,
-            description: `Purchased ${pack.name}`,
-            orderId: order.id,
-          },
+          update: {}, // Already has access — no-op
         });
       }
     }
 
     if (item.hybridPackageId) {
-      // Hybrid package: enroll in included courses + add credits
+      // Package: enroll in included courses + add credits
       const pkg = await prisma.hybridPackage.findUnique({
         where: { id: item.hybridPackageId },
         include: { courses: { select: { courseId: true } } },

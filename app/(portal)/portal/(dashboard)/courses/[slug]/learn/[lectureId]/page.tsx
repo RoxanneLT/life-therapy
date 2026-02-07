@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
+import { checkLectureAccess, filterLecturesByContext } from "@/lib/access";
 import { notFound } from "next/navigation";
 import { LecturePlayerClient } from "./lecture-player-client";
 
@@ -24,6 +25,7 @@ export default async function LecturePlayerPage({
         questions: { orderBy: { sortOrder: "asc" } },
         module: {
           select: {
+            id: true,
             courseId: true,
             course: { select: { slug: true } },
           },
@@ -33,16 +35,9 @@ export default async function LecturePlayerPage({
 
     if (!quiz || quiz.module.course.slug !== slug) notFound();
 
-    // Verify enrollment
-    const enrollment = await prisma.enrollment.findUnique({
-      where: {
-        studentId_courseId: {
-          studentId: student.id,
-          courseId: quiz.module.courseId,
-        },
-      },
-    });
-    if (!enrollment) notFound();
+    // Verify access (enrollment OR module access)
+    const access = await checkLectureAccess(student.id, quiz.module.id, quiz.module.courseId);
+    if (access.type === "none") notFound();
 
     // Get best attempt
     const bestAttempt = await prisma.quizAttempt.findFirst({
@@ -52,7 +47,7 @@ export default async function LecturePlayerPage({
     });
 
     // Get sidebar data
-    const sidebarData = await getSidebarData(slug, student.id);
+    const sidebarData = await getSidebarData(slug, student.id, access.type);
 
     return (
       <LecturePlayerClient
@@ -66,7 +61,10 @@ export default async function LecturePlayerPage({
           passingScore: quiz.passingScore,
           questions: quiz.questions.map((q) => ({
             id: q.id,
-            questionType: q.questionType as "multiple_choice" | "true_false" | "reflection",
+            questionType: q.questionType as
+              | "multiple_choice"
+              | "true_false"
+              | "reflection",
             questionText: q.questionText,
             options: q.options as { label: string; value: string }[] | null,
             explanation: q.explanation,
@@ -83,6 +81,7 @@ export default async function LecturePlayerPage({
     include: {
       module: {
         select: {
+          id: true,
           courseId: true,
           course: { select: { slug: true } },
         },
@@ -97,16 +96,9 @@ export default async function LecturePlayerPage({
 
   if (!lecture || lecture.module.course.slug !== slug) notFound();
 
-  // Verify enrollment
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      studentId_courseId: {
-        studentId: student.id,
-        courseId: lecture.module.courseId,
-      },
-    },
-  });
-  if (!enrollment) notFound();
+  // Verify access (enrollment OR module access)
+  const access = await checkLectureAccess(student.id, lecture.module.id, lecture.module.courseId);
+  if (access.type === "none") notFound();
 
   // Get progress for this lecture
   const progress = await prisma.lectureProgress.findUnique({
@@ -115,11 +107,11 @@ export default async function LecturePlayerPage({
     },
   });
 
-  // Get sidebar data
-  const sidebarData = await getSidebarData(slug, student.id);
+  // Get sidebar data (filtered by access type)
+  const sidebarData = await getSidebarData(slug, student.id, access.type);
 
-  // Find next lecture
-  const nextLecture = await getNextLecture(slug, lectureId);
+  // Find next lecture (within visible lectures only)
+  const nextLecture = getNextLectureFromSidebar(sidebarData, lectureId);
 
   return (
     <LecturePlayerClient
@@ -145,7 +137,11 @@ export default async function LecturePlayerPage({
   );
 }
 
-async function getSidebarData(courseSlug: string, studentId: string) {
+async function getSidebarData(
+  courseSlug: string,
+  studentId: string,
+  accessType: "course" | "module"
+) {
   const course = await prisma.course.findUnique({
     where: { slug: courseSlug },
     include: {
@@ -159,6 +155,7 @@ async function getSidebarData(courseSlug: string, studentId: string) {
               title: true,
               lectureType: true,
               durationSeconds: true,
+              context: true,
             },
           },
           quiz: { select: { id: true, title: true } },
@@ -169,7 +166,24 @@ async function getSidebarData(courseSlug: string, studentId: string) {
 
   if (!course) return [];
 
-  const allLectureIds = course.modules.flatMap((m) =>
+  // For module access, only show modules the student owns
+  let visibleModules = course.modules;
+  if (accessType === "module") {
+    const ownedModules = await prisma.moduleAccess.findMany({
+      where: { studentId, courseId: course.id },
+      select: { moduleId: true },
+    });
+    const ownedModuleIds = new Set(ownedModules.map((m) => m.moduleId));
+    visibleModules = course.modules.filter((m) => ownedModuleIds.has(m.id));
+  }
+
+  // Filter lectures by context
+  const filteredModules = visibleModules.map((mod) => ({
+    ...mod,
+    lectures: filterLecturesByContext(mod.lectures, accessType),
+  }));
+
+  const allLectureIds = filteredModules.flatMap((m) =>
     m.lectures.map((l) => l.id)
   );
 
@@ -187,7 +201,7 @@ async function getSidebarData(courseSlug: string, studentId: string) {
   const completedIds = new Set(completedProgress.map((p) => p.lectureId));
 
   // Get quiz pass status
-  const quizIds = course.modules
+  const quizIds = filteredModules
     .filter((m) => m.quiz)
     .map((m) => m.quiz!.id);
 
@@ -204,7 +218,7 @@ async function getSidebarData(courseSlug: string, studentId: string) {
       : [];
   const passedQuizIds = new Set(quizAttempts.map((a) => a.quizId));
 
-  return course.modules.map((mod) => ({
+  return filteredModules.map((mod) => ({
     id: mod.id,
     title: mod.title,
     lectures: mod.lectures.map((l) => ({
@@ -224,35 +238,14 @@ async function getSidebarData(courseSlug: string, studentId: string) {
   }));
 }
 
-async function getNextLecture(
-  courseSlug: string,
+function getNextLectureFromSidebar(
+  sidebarModules: { lectures: { id: string; title: string }[] }[],
   currentLectureId: string
-): Promise<{ id: string; title: string } | null> {
-  const course = await prisma.course.findUnique({
-    where: { slug: courseSlug },
-    include: {
-      modules: {
-        orderBy: { sortOrder: "asc" },
-        include: {
-          lectures: {
-            orderBy: { sortOrder: "asc" },
-            select: { id: true, title: true },
-          },
-        },
-      },
-    },
-  });
-
-  if (!course) return null;
-
-  const allLectures = course.modules.flatMap((m) => m.lectures);
-  const currentIndex = allLectures.findIndex(
-    (l) => l.id === currentLectureId
-  );
-
+): { id: string; title: string } | null {
+  const allLectures = sidebarModules.flatMap((m) => m.lectures);
+  const currentIndex = allLectures.findIndex((l) => l.id === currentLectureId);
   if (currentIndex === -1 || currentIndex === allLectures.length - 1) {
     return null;
   }
-
   return allLectures[currentIndex + 1];
 }

@@ -40,7 +40,7 @@ export function CartItemRow({
         ) : (
           <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-md bg-muted">
             <span className="text-xs text-muted-foreground">
-              {product.type === "credit_pack" ? "Credits" : "Course"}
+              {product.type === "package" ? "Package" : "Course"}
             </span>
           </div>
         )}

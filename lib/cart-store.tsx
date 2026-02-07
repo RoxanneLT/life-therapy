@@ -12,9 +12,8 @@ import {
 export interface CartItemLocal {
   id: string;
   courseId?: string;
-  bundleId?: string;
-  creditPackId?: string;
   hybridPackageId?: string;
+  moduleId?: string;
   quantity: number;
   isGift: boolean;
   giftRecipientName?: string;
@@ -74,9 +73,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             !i.isGift &&
             !item.isGift &&
             i.courseId === item.courseId &&
-            i.bundleId === item.bundleId &&
-            i.creditPackId === item.creditPackId &&
-            i.hybridPackageId === item.hybridPackageId
+            i.hybridPackageId === item.hybridPackageId &&
+            i.moduleId === item.moduleId
         );
         if (existing) return prev;
         return [

@@ -21,12 +21,12 @@ export async function getCartProducts(items: CartItemLocal[]) {
 export async function applyCoupon(
   code: string,
   courseIds: string[],
-  bundleIds: string[],
+  packageIds: string[],
   subtotalCents: number
 ) {
   const result = await validateCoupon(
     code,
-    { courseIds, bundleIds },
+    { courseIds, packageIds },
     subtotalCents
   );
 

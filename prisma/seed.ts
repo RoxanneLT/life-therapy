@@ -299,7 +299,7 @@ async function main() {
       },
       {
         pageId: packagesPage.id,
-        sectionType: "bundle_grid",
+        sectionType: "package_grid",
         sortOrder: 1,
       },
       {
@@ -585,71 +585,67 @@ async function main() {
     });
   }
 
-  // ── Bundles ──────────────────────────────────────────────
+  // ── Packages ─────────────────────────────────────────────
   const allCourses = await prisma.course.findMany();
   const courseBySlug = (slug: string) => allCourses.find((c) => c.slug === slug)!;
 
-  const bundlesData = [
+  const packagesData = [
     {
       title: "The Complete Confidence Journey",
       slug: "complete-confidence-journey",
       description: "Comprehensive confidence transformation from the ground up. Includes Foundations of Self-Esteem, Confidence from Within, and Quit Your Imposter Syndrome.",
-      bestFor: "Anyone wanting comprehensive confidence transformation from the ground up",
-      price: 89900,
+
+      priceCents: 89900,
       courses: ["foundations-of-self-esteem", "confidence-from-within", "quit-your-imposter-syndrome"],
     },
     {
       title: "The Sensitive Soul",
       slug: "the-sensitive-soul",
       description: "Self-worth, energy management, and boundary skills for highly sensitive people. Includes Foundations of Self-Esteem, The Empowered Empath, and The People-Pleasing Cure.",
-      bestFor: "Highly sensitive people who need self-worth, energy management, and boundary skills",
-      price: 89900,
+      priceCents: 89900,
       courses: ["foundations-of-self-esteem", "the-empowered-empath", "the-people-pleasing-cure"],
     },
     {
       title: "Mental Wellness Complete",
       slug: "mental-wellness-complete",
       description: "For anyone dealing with anxiety, overwhelm, and difficulty setting limits. Includes Stress to Strength and The People-Pleasing Cure.",
-      bestFor: "Anyone dealing with anxiety, overwhelm, and difficulty setting limits",
-      price: 64900,
+      priceCents: 64900,
       courses: ["stress-to-strength", "the-people-pleasing-cure"],
     },
     {
       title: "The Career Accelerator",
       slug: "the-career-accelerator",
       description: "For professionals wanting to advance with confidence. Includes Quit Your Imposter Syndrome and Executive Presence.",
-      bestFor: "Professionals wanting to advance with confidence",
-      price: 64900,
+      priceCents: 64900,
       courses: ["quit-your-imposter-syndrome", "executive-presence"],
     },
     {
       title: "Relationship & Family",
       slug: "relationship-and-family",
       description: "Strengthen all family relationships. Includes Love Reset (with New Parents Add-On) and Thriving Through Teen Years.",
-      bestFor: "Families wanting to strengthen all relationships",
-      price: 64900,
+      priceCents: 64900,
       courses: ["love-reset", "thriving-through-teen-years"],
     },
   ];
 
-  for (const bundleData of bundlesData) {
-    const { courses: courseSlugs, ...bundleFields } = bundleData;
-    const bundle = await prisma.bundle.upsert({
-      where: { slug: bundleFields.slug },
+  for (const pkgData of packagesData) {
+    const { courses: courseSlugs, ...pkgFields } = pkgData;
+    const pkg = await prisma.hybridPackage.upsert({
+      where: { slug: pkgFields.slug },
       update: {},
-      create: { ...bundleFields, isPublished: true },
+      create: { ...pkgFields, isPublished: true },
     });
 
-    // Link courses to bundle
+    // Link courses to package
     for (let i = 0; i < courseSlugs.length; i++) {
       const course = courseBySlug(courseSlugs[i]);
       if (course) {
-        await prisma.bundleCourse.upsert({
+        await prisma.hybridPackageCourse.upsert({
           where: {
-            bundleId_courseId: { bundleId: bundle.id, courseId: course.id },
+            hybridPackageId_courseId: { hybridPackageId: pkg.id, courseId: course.id },
           },
           update: {},
-          create: { bundleId: bundle.id, courseId: course.id, sortOrder: i },
+          create: { hybridPackageId: pkg.id, courseId: course.id, sortOrder: i },
         });
       }
     }
@@ -752,7 +748,7 @@ async function main() {
   console.log("Seed complete!");
   console.log(`  Pages: ${pages.length}`);
   console.log(`  Courses: ${coursesData.length}`);
-  console.log(`  Bundles: ${bundlesData.length}`);
+  console.log(`  Packages: ${packagesData.length}`);
   console.log(`  Testimonials: ${testimonialsData.length}`);
   console.log("\nNote: Create an admin user in Supabase Auth, then run:");
   console.log('  INSERT INTO admin_users (id, "supabaseUserId", email, name, role)');

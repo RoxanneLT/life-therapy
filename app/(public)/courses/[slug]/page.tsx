@@ -15,6 +15,8 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { PreviewVideoPlayer } from "@/components/public/preview-video-player";
+import { getRelatedCourses } from "@/lib/recommendations";
 
 export const revalidate = 60;
 
@@ -40,15 +42,32 @@ export default async function CourseDetailPage({
   const { slug } = await params;
   const course = await prisma.course.findUnique({
     where: { slug },
+    include: {
+      modules: {
+        where: { isStandalonePublished: true },
+        select: {
+          id: true,
+          standaloneTitle: true,
+          title: true,
+          standaloneSlug: true,
+          standalonePrice: true,
+          standaloneImageUrl: true,
+          standaloneCategory: true,
+        },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
   });
 
   if (!course || !course.isPublished) {
     notFound();
   }
 
+  const relatedCourses = await getRelatedCourses(course.id, 3);
+
   return (
     <>
-      {/* Hero */}
+      {/* Hero — two-column: info left, preview video / image right */}
       <section className="bg-brand-50 px-4 py-16 dark:bg-brand-950/30">
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
           <div>
@@ -104,19 +123,23 @@ export default async function CourseDetailPage({
             </div>
           </div>
 
-          {/* Course image */}
-          {course.imageUrl && (
-            <div className="overflow-hidden rounded-xl">
-              <Image
-                src={course.imageUrl}
-                alt={course.title}
-                width={600}
-                height={400}
-                sizes="(max-width: 768px) 100vw, 66vw"
-                className="aspect-video w-full object-cover"
-              />
-            </div>
-          )}
+          {/* Right: preview video or course image */}
+          <div>
+            {course.previewVideoUrl ? (
+              <PreviewVideoPlayer videoUrl={course.previewVideoUrl} />
+            ) : course.imageUrl ? (
+              <div className="overflow-hidden rounded-xl">
+                <Image
+                  src={course.imageUrl}
+                  alt={course.title}
+                  width={600}
+                  height={400}
+                  sizes="(max-width: 768px) 100vw, 66vw"
+                  className="aspect-video w-full object-cover"
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -161,6 +184,83 @@ export default async function CourseDetailPage({
           </div>
         </div>
       </section>
+
+      {/* Available as Short Courses */}
+      {course.modules.length > 0 && (
+        <section className="px-4 py-16">
+          <div className="mx-auto max-w-3xl">
+            <h2 className="font-heading text-2xl font-bold uppercase tracking-wide text-brand-700">
+              Available as Short Courses
+            </h2>
+            <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
+            <p className="mt-4 text-sm text-muted-foreground">
+              Not ready for the full course? Start with an individual module.
+            </p>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {course.modules.map((mod) => (
+                <Link
+                  key={mod.id}
+                  href={`/courses/short/${mod.standaloneSlug}`}
+                  className="group flex items-center gap-4 rounded-lg border p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/50"
+                >
+                  <div className="flex-1">
+                    <h3 className="font-medium group-hover:text-brand-600">
+                      {mod.standaloneTitle || mod.title}
+                    </h3>
+                    {mod.standaloneCategory && (
+                      <Badge variant="outline" className="mt-1 text-xs">
+                        {mod.standaloneCategory.replaceAll("_", " ")}
+                      </Badge>
+                    )}
+                  </div>
+                  {mod.standalonePrice != null && (
+                    <span className="font-semibold text-brand-600">
+                      {formatPrice(mod.standalonePrice)}
+                    </span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Related Courses */}
+      {relatedCourses.length > 0 && (
+        <section className="px-4 py-16">
+          <div className="mx-auto max-w-3xl">
+            <h2 className="font-heading text-2xl font-bold uppercase tracking-wide text-brand-700">
+              Related Courses
+            </h2>
+            <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {relatedCourses.map((rc) => (
+                <Link
+                  key={rc.id}
+                  href={`/courses/${rc.slug}`}
+                  className="group rounded-lg border p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/50"
+                >
+                  {rc.imageUrl && (
+                    <Image
+                      src={rc.imageUrl}
+                      alt={rc.title}
+                      width={300}
+                      height={170}
+                      className="mb-3 aspect-video w-full rounded object-cover"
+                    />
+                  )}
+                  <h3 className="font-medium group-hover:text-brand-600">
+                    {rc.title}
+                  </h3>
+                  <span className="mt-1 block text-sm font-semibold text-brand-600">
+                    {formatPrice(rc.price)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section className="bg-brand-500 px-4 py-16 text-white">

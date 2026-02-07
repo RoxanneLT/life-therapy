@@ -2,11 +2,13 @@ export const dynamic = "force-dynamic";
 
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
+import { checkCourseAccess, filterLecturesByContext } from "@/lib/access";
 import { notFound, redirect } from "next/navigation";
 
 /**
  * /portal/courses/[slug]/learn
  * Redirects to the first incomplete lecture or the first lecture.
+ * Supports both full course enrollments and module-only access.
  */
 export default async function LearnPage({
   params,
@@ -24,7 +26,7 @@ export default async function LearnPage({
         include: {
           lectures: {
             orderBy: { sortOrder: "asc" },
-            select: { id: true },
+            select: { id: true, context: true },
           },
         },
       },
@@ -33,15 +35,20 @@ export default async function LearnPage({
 
   if (!course) notFound();
 
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      studentId_courseId: { studentId: student.id, courseId: course.id },
-    },
-  });
-  if (!enrollment) notFound();
+  const access = await checkCourseAccess(student.id, course.id);
+  if (access.type === "none") notFound();
 
-  const allLectureIds = course.modules.flatMap((m) =>
-    m.lectures.map((l) => l.id)
+  const isModuleOnly = access.type === "partial";
+  const accessedModuleIds = isModuleOnly ? new Set(access.moduleIds) : null;
+
+  // Filter modules and lectures by access type
+  const visibleModules = isModuleOnly
+    ? course.modules.filter((m) => accessedModuleIds!.has(m.id))
+    : course.modules;
+
+  const contextType = isModuleOnly ? "module" : "course";
+  const allLectureIds = visibleModules.flatMap((m) =>
+    filterLecturesByContext(m.lectures, contextType).map((l) => l.id)
   );
 
   if (allLectureIds.length === 0) {

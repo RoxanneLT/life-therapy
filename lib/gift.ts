@@ -13,9 +13,8 @@ export async function createGiftFromOrderItem(
   item: {
     id: string;
     courseId: string | null;
-    bundleId: string | null;
-    creditPackId: string | null;
     hybridPackageId: string | null;
+    moduleId: string | null;
     description: string;
   },
   giftDetails: {
@@ -25,15 +24,9 @@ export async function createGiftFromOrderItem(
     deliveryDate?: Date | null;
   }
 ) {
-  // Determine credit amount if it's a credit pack or hybrid package gift
+  // Determine credit amount if it's a package with credits
   let creditAmount: number | null = null;
-  if (item.creditPackId) {
-    const pack = await prisma.sessionCreditPack.findUnique({
-      where: { id: item.creditPackId },
-      select: { credits: true },
-    });
-    creditAmount = pack?.credits || null;
-  } else if (item.hybridPackageId) {
+  if (item.hybridPackageId) {
     const pkg = await prisma.hybridPackage.findUnique({
       where: { id: item.hybridPackageId },
       select: { credits: true },
@@ -50,9 +43,8 @@ export async function createGiftFromOrderItem(
       message: giftDetails.message || null,
       deliveryDate: giftDetails.deliveryDate || null,
       courseId: item.courseId,
-      bundleId: item.bundleId,
-      creditPackId: item.creditPackId,
       hybridPackageId: item.hybridPackageId,
+      moduleId: item.moduleId,
       creditAmount,
       status: giftDetails.deliveryDate ? "pending" : "delivered",
     },
@@ -81,15 +73,20 @@ export async function sendGiftEmail(giftId: string) {
     include: {
       buyer: { select: { firstName: true, lastName: true } },
       course: { select: { title: true } },
-      bundle: { select: { title: true } },
       hybridPackage: { select: { title: true } },
+      module: { select: { standaloneTitle: true, title: true } },
     },
   });
 
   if (!gift) return;
 
+  const mod = gift.module as { standaloneTitle: string | null; title: string } | null;
   const itemTitle =
-    gift.course?.title || gift.bundle?.title || gift.hybridPackage?.title || "Session Credits";
+    gift.course?.title ||
+    gift.hybridPackage?.title ||
+    mod?.standaloneTitle ||
+    mod?.title ||
+    "Session Credits";
   const buyerName = `${gift.buyer.firstName} ${gift.buyer.lastName}`;
   const redeemUrl = `https://life-therapy.co.za/gift/redeem?token=${gift.redeemToken}`;
 
@@ -152,13 +149,6 @@ export async function redeemGift(
     where: { redeemToken: token },
     include: {
       course: { select: { id: true, title: true } },
-      bundle: {
-        select: {
-          id: true,
-          title: true,
-          bundleCourses: { select: { courseId: true } },
-        },
-      },
       hybridPackage: {
         select: {
           id: true,
@@ -167,6 +157,7 @@ export async function redeemGift(
           courses: { select: { courseId: true } },
         },
       },
+      module: { select: { id: true, courseId: true, standalonePrice: true } },
     },
   });
 
@@ -232,24 +223,23 @@ export async function redeemGift(
     });
   }
 
-  if (gift.bundleId && gift.bundle) {
-    for (const bc of gift.bundle.bundleCourses) {
-      await prisma.enrollment.upsert({
-        where: {
-          studentId_courseId: {
-            studentId,
-            courseId: bc.courseId,
-          },
-        },
-        create: {
+  if (gift.moduleId && gift.module) {
+    await prisma.moduleAccess.upsert({
+      where: {
+        studentId_moduleId: {
           studentId,
-          courseId: bc.courseId,
-          source: "gift",
-          giftId: gift.id,
+          moduleId: gift.moduleId,
         },
-        update: {},
-      });
-    }
+      },
+      create: {
+        studentId,
+        moduleId: gift.moduleId,
+        courseId: gift.module.courseId,
+        pricePaid: gift.module.standalonePrice || 0,
+        source: "gift",
+      },
+      update: {},
+    });
   }
 
   if (gift.hybridPackageId && gift.hybridPackage) {

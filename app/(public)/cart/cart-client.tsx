@@ -67,11 +67,11 @@ export function CartPageClient() {
     const courseIds = items
       .filter((i) => i.courseId)
       .map((i) => i.courseId!);
-    const bundleIds = items
-      .filter((i) => i.bundleId)
-      .map((i) => i.bundleId!);
+    const packageIds = items
+      .filter((i) => i.hybridPackageId)
+      .map((i) => i.hybridPackageId!);
 
-    const result = await applyCoupon(code, courseIds, bundleIds, subtotalCents);
+    const result = await applyCoupon(code, courseIds, packageIds, subtotalCents);
 
     if (result.valid) {
       setCoupon({ code: result.code, discountCents: result.discountCents });

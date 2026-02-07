@@ -21,6 +21,12 @@ const LECTURE_TYPES = [
   { value: "quiz", label: "Quiz" },
 ];
 
+const CONTEXT_OPTIONS = [
+  { value: "both", label: "Both (Course & Standalone)" },
+  { value: "course_only", label: "Course Only" },
+  { value: "standalone_only", label: "Standalone Only" },
+];
+
 interface LectureFormProps {
   initialData?: {
     id: string;
@@ -31,6 +37,7 @@ interface LectureFormProps {
     worksheetUrl?: string | null;
     durationSeconds?: number | null;
     isPreview: boolean;
+    context: string;
     sortOrder: number;
   };
   onSubmit: (formData: FormData) => Promise<void>;
@@ -41,6 +48,7 @@ export function LectureForm({ initialData, onSubmit }: LectureFormProps) {
     initialData?.lectureType || "video"
   );
   const [isPreview, setIsPreview] = useState(initialData?.isPreview ?? false);
+  const [context, setContext] = useState(initialData?.context || "both");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,6 +57,7 @@ export function LectureForm({ initialData, onSubmit }: LectureFormProps) {
     const formData = new FormData(e.currentTarget);
     formData.set("lectureType", lectureType);
     formData.set("isPreview", String(isPreview));
+    formData.set("context", context);
     await onSubmit(formData);
     setSubmitting(false);
   }
@@ -120,7 +129,7 @@ export function LectureForm({ initialData, onSubmit }: LectureFormProps) {
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="durationSeconds">Duration (seconds)</Label>
           <Input
@@ -132,6 +141,27 @@ export function LectureForm({ initialData, onSubmit }: LectureFormProps) {
             placeholder="e.g. 600"
           />
         </div>
+        <div className="space-y-2">
+          <Label>Context</Label>
+          <Select value={context} onValueChange={setContext}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CONTEXT_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Controls whether this lecture appears in the full course, standalone short course, or both
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="sortOrder">Sort Order</Label>
           <Input

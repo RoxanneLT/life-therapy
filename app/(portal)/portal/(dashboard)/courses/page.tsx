@@ -9,35 +9,64 @@ import Link from "next/link";
 export default async function MyCoursesPage() {
   const { student } = await requirePasswordChanged();
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { studentId: student.id },
-    include: {
-      course: {
-        include: {
-          modules: {
-            include: { lectures: { select: { id: true } } },
+  const [enrollments, moduleAccessRecords] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { studentId: student.id },
+      include: {
+        course: {
+          include: {
+            modules: {
+              include: {
+                lectures: {
+                  where: { context: { not: "standalone_only" } },
+                  select: { id: true },
+                },
+              },
+            },
           },
         },
       },
-    },
-    orderBy: { enrolledAt: "desc" },
-  });
+      orderBy: { enrolledAt: "desc" },
+    }),
+    prisma.moduleAccess.findMany({
+      where: { studentId: student.id },
+      include: {
+        module: {
+          include: {
+            course: { select: { slug: true, title: true } },
+            lectures: {
+              where: { context: { not: "course_only" } },
+              select: { id: true },
+            },
+          },
+        },
+      },
+      orderBy: { grantedAt: "desc" },
+    }),
+  ]);
+
+  // Filter out module access for courses where student has full enrollment
+  const enrolledCourseIds = new Set(enrollments.map((e) => e.course.id));
+  const standaloneAccess = moduleAccessRecords.filter(
+    (ma) => !enrolledCourseIds.has(ma.module.courseId)
+  );
 
   // Get completed lecture counts per enrollment
-  const enriched = await Promise.all(
+  const enrichedCourses = await Promise.all(
     enrollments.map(async (enrollment) => {
       const allLectureIds = enrollment.course.modules.flatMap((m) =>
         m.lectures.map((l) => l.id)
       );
-      const completedLectures = allLectureIds.length > 0
-        ? await prisma.lectureProgress.count({
-            where: {
-              studentId: student.id,
-              lectureId: { in: allLectureIds },
-              completed: true,
-            },
-          })
-        : 0;
+      const completedLectures =
+        allLectureIds.length > 0
+          ? await prisma.lectureProgress.count({
+              where: {
+                studentId: student.id,
+                lectureId: { in: allLectureIds },
+                completed: true,
+              },
+            })
+          : 0;
 
       return {
         enrollment,
@@ -47,7 +76,39 @@ export default async function MyCoursesPage() {
     })
   );
 
-  if (enrollments.length === 0) {
+  // Get completed lecture counts per module access
+  const enrichedModules = await Promise.all(
+    standaloneAccess.map(async (ma) => {
+      const lectureIds = ma.module.lectures.map((l) => l.id);
+      const completedLectures =
+        lectureIds.length > 0
+          ? await prisma.lectureProgress.count({
+              where: {
+                studentId: student.id,
+                lectureId: { in: lectureIds },
+                completed: true,
+              },
+            })
+          : 0;
+
+      const totalLectures = lectureIds.length;
+      const progressPercent =
+        totalLectures > 0
+          ? Math.round((completedLectures / totalLectures) * 100)
+          : 0;
+
+      return {
+        moduleAccess: ma,
+        totalLectures,
+        completedLectures,
+        progressPercent,
+      };
+    })
+  );
+
+  const hasContent = enrollments.length > 0 || standaloneAccess.length > 0;
+
+  if (!hasContent) {
     return (
       <div className="space-y-6">
         <h1 className="font-heading text-2xl font-bold">My Courses</h1>
@@ -73,21 +134,56 @@ export default async function MyCoursesPage() {
   return (
     <div className="space-y-6">
       <h1 className="font-heading text-2xl font-bold">My Courses</h1>
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {enriched.map(({ enrollment, totalLectures, completedLectures }) => (
-          <CourseCard
-            key={enrollment.id}
-            slug={enrollment.course.slug}
-            title={enrollment.course.title}
-            subtitle={enrollment.course.subtitle}
-            imageUrl={enrollment.course.imageUrl}
-            progressPercent={enrollment.progressPercent}
-            completedAt={enrollment.completedAt}
-            totalLectures={totalLectures}
-            completedLectures={completedLectures}
-          />
-        ))}
-      </div>
+
+      {enrichedCourses.length > 0 && (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {enrichedCourses.map(
+            ({ enrollment, totalLectures, completedLectures }) => (
+              <CourseCard
+                key={enrollment.id}
+                slug={enrollment.course.slug}
+                title={enrollment.course.title}
+                subtitle={enrollment.course.subtitle}
+                imageUrl={enrollment.course.imageUrl}
+                progressPercent={enrollment.progressPercent}
+                completedAt={enrollment.completedAt}
+                totalLectures={totalLectures}
+                completedLectures={completedLectures}
+              />
+            )
+          )}
+        </div>
+      )}
+
+      {enrichedModules.length > 0 && (
+        <>
+          <h2 className="font-heading text-lg font-semibold">
+            My Short Courses
+          </h2>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {enrichedModules.map(
+              ({
+                moduleAccess: ma,
+                totalLectures,
+                completedLectures,
+                progressPercent,
+              }) => (
+                <CourseCard
+                  key={ma.id}
+                  slug={`${ma.module.course.slug}?module=${ma.module.id}`}
+                  title={ma.module.standaloneTitle || ma.module.title}
+                  subtitle={`Part of ${ma.module.course.title}`}
+                  imageUrl={ma.module.standaloneImageUrl}
+                  progressPercent={progressPercent}
+                  completedAt={null}
+                  totalLectures={totalLectures}
+                  completedLectures={completedLectures}
+                />
+              )
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

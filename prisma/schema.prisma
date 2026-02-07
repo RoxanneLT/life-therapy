@@ -68,9 +68,11 @@ model Course {
   isPublished      Boolean        @default(false)
   isFeatured       Boolean        @default(false)
   sortOrder        Int            @default(0)
+  previewVideoUrl  String?        // Sofia Hart intro video (YouTube/Vimeo/direct URL)
+  facilitatorScript String?       @db.Text  // Script for Sofia Hart to introduce this course
+  relatedCourseIds Json?          // Admin cross-sell overrides (array of course IDs)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
-  bundleCourses    BundleCourse[]
   // LMS relations
   modules              Module[]
   enrollments          Enrollment[]
@@ -78,43 +80,9 @@ model Course {
   orderItems           OrderItem[]
   gifts                Gift[]
   hybridPackageCourses HybridPackageCourse[]
+  moduleAccess         ModuleAccess[]
 
   @@map("courses")
-}
-
-// ============================================================
-// Course bundles
-// ============================================================
-model Bundle {
-  id            String         @id @default(cuid())
-  title         String
-  slug          String         @unique
-  description   String?        @db.Text
-  bestFor       String?
-  imageUrl      String?
-  price         Int            @default(0)  // ZAR cents
-  isPublished   Boolean        @default(false)
-  sortOrder     Int            @default(0)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  bundleCourses BundleCourse[]
-  // E-commerce relations
-  orderItems    OrderItem[]
-  gifts         Gift[]
-
-  @@map("bundles")
-}
-
-model BundleCourse {
-  id        String @id @default(cuid())
-  bundleId  String
-  courseId   String
-  sortOrder Int    @default(0)
-  bundle    Bundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
-  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-
-  @@unique([bundleId, courseId])
-  @@map("bundle_courses")
 }
 
 // ============================================================
@@ -344,6 +312,7 @@ model Student {
   updatedAt          DateTime  @updatedAt
 
   enrollments          Enrollment[]
+  moduleAccess         ModuleAccess[]
   lectureProgress      LectureProgress[]
   quizAttempts         QuizAttempt[]
   certificates         Certificate[]
@@ -368,11 +337,25 @@ model Module {
   title       String
   description String?  @db.Text
   sortOrder   Int      @default(0)
+  // Standalone selling fields (short courses)
+  standaloneSlug         String?  @unique
+  standaloneTitle        String?
+  standaloneDescription  String?  @db.Text
+  standaloneImageUrl     String?
+  standalonePrice        Int?     // ZAR cents
+  isStandalonePublished  Boolean  @default(false)
+  standaloneCategory     String?
+  // Preview video & facilitator
+  previewVideoUrl        String?           // Sofia Hart intro video for this module
+  facilitatorScript      String?  @db.Text // Script for Sofia Hart to introduce this module
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  lectures    Lecture[]
-  quiz        Quiz?
+  lectures     Lecture[]
+  quiz         Quiz?
+  moduleAccess ModuleAccess[]
+  gifts        Gift[]
+  orderItems   OrderItem[]
 
   @@index([courseId])
   @@map("modules")
@@ -392,6 +375,7 @@ model Lecture {
   worksheetUrl    String?
   durationSeconds Int?
   isPreview       Boolean     @default(false)
+  context         String      @default("both") // "both" | "course_only" | "standalone_only"
   sortOrder       Int         @default(0)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -477,6 +461,28 @@ model Enrollment {
   @@map("enrollments")
 }
 
+// ============================================================
+// Module Access (standalone short course purchases)
+// ============================================================
+model ModuleAccess {
+  id        String           @id @default(cuid())
+  studentId String
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  moduleId  String
+  module    Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  courseId   String
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  orderId   String?
+  pricePaid Int              @default(0) // ZAR cents — for upgrade credit calculation
+  source    EnrollmentSource @default(purchase)
+  grantedAt DateTime         @default(now())
+
+  @@unique([studentId, moduleId])
+  @@index([studentId])
+  @@index([moduleId])
+  @@map("module_access")
+}
+
 model LectureProgress {
   id            String    @id @default(cuid())
   studentId     String
@@ -557,11 +563,10 @@ model OrderItem {
   order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   courseId         String?
   course          Course?        @relation(fields: [courseId], references: [id])
-  bundleId        String?
-  bundle          Bundle?        @relation(fields: [bundleId], references: [id])
-  creditPackId    String?
   hybridPackageId String?
   hybridPackage   HybridPackage? @relation(fields: [hybridPackageId], references: [id])
+  moduleId        String?
+  module          Module?        @relation(fields: [moduleId], references: [id])
   description     String
   unitPriceCents  Int
   quantity        Int            @default(1)
@@ -592,11 +597,10 @@ model Gift {
   status         GiftStatus @default(pending)
   courseId        String?
   course         Course?    @relation(fields: [courseId], references: [id])
-  bundleId       String?
-  bundle         Bundle?    @relation(fields: [bundleId], references: [id])
-  creditPackId    String?
   hybridPackageId String?
   hybridPackage   HybridPackage? @relation(fields: [hybridPackageId], references: [id])
+  moduleId        String?
+  module          Module?    @relation(fields: [moduleId], references: [id])
   creditAmount    Int?
   emailSentAt     DateTime?
   redeemedAt      DateTime?
@@ -639,19 +643,6 @@ model SessionCreditTransaction {
   @@map("session_credit_transactions")
 }
 
-model SessionCreditPack {
-  id          String   @id @default(cuid())
-  name        String
-  credits     Int
-  priceCents  Int
-  isPublished Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("session_credit_packs")
-}
-
 // ============================================================
 // Coupons
 // ============================================================
@@ -662,7 +653,7 @@ model Coupon {
   value          Int
   appliesToAll   Boolean    @default(true)
   courseIds      Json?
-  bundleIds      Json?
+  packageIds    Json?
   maxUses        Int?
   usedCount      Int        @default(0)
   maxUsesPerUser Int        @default(1)
@@ -697,9 +688,8 @@ model CartItem {
   cartId             String
   cart               Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
   courseId            String?
-  bundleId           String?
-  creditPackId       String?
   hybridPackageId    String?
+  moduleId           String?
   quantity           Int       @default(1)
   isGift             Boolean   @default(false)
   giftRecipientName  String?

@@ -7,15 +7,15 @@ import { CheckCircle2, Package } from "lucide-react";
 import Link from "next/link";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
 
-interface BundleGridSectionProps {
+interface PackageGridSectionProps {
   section: PageSection;
 }
 
-export async function BundleGridSection({ section }: BundleGridSectionProps) {
-  const bundles = await prisma.bundle.findMany({
+export async function PackageGridSection({ section }: PackageGridSectionProps) {
+  const packages = await prisma.hybridPackage.findMany({
     where: { isPublished: true },
     include: {
-      bundleCourses: {
+      courses: {
         include: { course: true },
         orderBy: { sortOrder: "asc" },
       },
@@ -23,13 +23,13 @@ export async function BundleGridSection({ section }: BundleGridSectionProps) {
     orderBy: { sortOrder: "asc" },
   });
 
-  const bundlesWithSavings = bundles.map((bundle) => {
-    const individualTotal = bundle.bundleCourses.reduce(
-      (sum, bc) => sum + bc.course.price,
+  const packagesWithSavings = packages.map((pkg) => {
+    const individualTotal = pkg.courses.reduce(
+      (sum, pc) => sum + pc.course.price,
       0
     );
-    const savings = individualTotal - bundle.price;
-    return { ...bundle, individualTotal, savings };
+    const savings = individualTotal > 0 ? individualTotal - pkg.priceCents : 0;
+    return { ...pkg, individualTotal, savings };
   });
 
   return (
@@ -49,75 +49,77 @@ export async function BundleGridSection({ section }: BundleGridSectionProps) {
           </p>
         )}
 
-        {bundles.length === 0 ? (
+        {packages.length === 0 ? (
           <div className="py-16 text-center text-muted-foreground">
-            Bundles coming soon.
+            Packages coming soon.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            {bundlesWithSavings.map((bundle) => (
-              <Card key={bundle.id} className="overflow-hidden">
+            {packagesWithSavings.map((pkg) => (
+              <Card key={pkg.id} className="overflow-hidden">
                 <CardContent className="pt-6">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
                         <Package className="h-5 w-5 text-brand-500" />
                         <h3 className="font-heading text-xl font-semibold">
-                          {bundle.title}
+                          {pkg.title}
                         </h3>
                       </div>
-                      {bundle.bestFor && (
+                      {pkg.credits > 0 && (
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Best for: {bundle.bestFor}
+                          Includes {pkg.credits} session credit{pkg.credits !== 1 && "s"}
                         </p>
                       )}
                     </div>
-                    {bundle.savings > 0 && (
+                    {pkg.savings > 0 && (
                       <Badge className="bg-terracotta-500 text-white">
-                        Save {formatPrice(bundle.savings)}
+                        Save {formatPrice(pkg.savings)}
                       </Badge>
                     )}
                   </div>
 
-                  {bundle.description && (
+                  {pkg.description && (
                     <p className="mt-3 text-sm text-muted-foreground">
-                      {bundle.description}
+                      {pkg.description}
                     </p>
                   )}
 
-                  <div className="mt-4 space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Includes {bundle.bundleCourses.length} courses:
-                    </p>
-                    {bundle.bundleCourses.map((bc) => (
-                      <div
-                        key={bc.id}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-brand-500" />
-                        <Link
-                          href={`/courses/${bc.course.slug}`}
-                          className="hover:text-brand-600 hover:underline"
+                  {pkg.courses.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Includes {pkg.courses.length} course{pkg.courses.length !== 1 && "s"}:
+                      </p>
+                      {pkg.courses.map((pc) => (
+                        <div
+                          key={pc.id}
+                          className="flex items-center gap-2 text-sm"
                         >
-                          {bc.course.title}
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
+                          <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                          <Link
+                            href={`/courses/${pc.course.slug}`}
+                            className="hover:text-brand-600 hover:underline"
+                          >
+                            {pc.course.title}
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="mt-6 flex items-end justify-between border-t pt-4">
                     <div>
-                      {bundle.savings > 0 && (
+                      {pkg.savings > 0 && (
                         <p className="text-sm text-muted-foreground line-through">
-                          {formatPrice(bundle.individualTotal)}
+                          {formatPrice(pkg.individualTotal)}
                         </p>
                       )}
                       <p className="text-2xl font-bold text-brand-600">
-                        {formatPrice(bundle.price)}
+                        {formatPrice(pkg.priceCents)}
                       </p>
                     </div>
                     <AddToCartButton
-                      bundleId={bundle.id}
+                      hybridPackageId={pkg.id}
                       label="Add to Cart"
                     />
                   </div>

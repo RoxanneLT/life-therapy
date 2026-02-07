@@ -32,7 +32,7 @@ export default async function GiftsPage() {
     include: {
       buyer: { select: { firstName: true, lastName: true } },
       course: { select: { title: true } },
-      bundle: { select: { title: true } },
+      hybridPackage: { select: { title: true } },
     },
     take: 100,
   });
@@ -69,7 +69,7 @@ export default async function GiftsPage() {
               {gifts.map((g) => {
                 const itemTitle =
                   g.course?.title ||
-                  g.bundle?.title ||
+                  g.hybridPackage?.title ||
                   (g.creditAmount
                     ? `${g.creditAmount} Credits`
                     : "Gift");

@@ -35,9 +35,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Duplicate purchase prevention: filter out courses the student already owns
+    // Duplicate purchase prevention: courses and modules
     const nonGiftCourseIds = resolved
       .filter((r) => r.product.type === "course" && !r.isGift)
+      .map((r) => r.product.id);
+    const nonGiftModuleIds = resolved
+      .filter((r) => r.product.type === "module" && !r.isGift)
       .map((r) => r.product.id);
 
     if (nonGiftCourseIds.length > 0) {
@@ -61,6 +64,27 @@ export async function POST(request: Request) {
       }
     }
 
+    if (nonGiftModuleIds.length > 0) {
+      const existingAccess = await prisma.moduleAccess.findMany({
+        where: {
+          studentId: auth.student.id,
+          moduleId: { in: nonGiftModuleIds },
+        },
+        select: { moduleId: true },
+      });
+
+      if (existingAccess.length > 0) {
+        const ownedIds = new Set(existingAccess.map((a) => a.moduleId));
+        const ownedTitles = resolved
+          .filter((r) => ownedIds.has(r.product.id))
+          .map((r) => r.product.title);
+        return NextResponse.json(
+          { error: `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Calculate subtotal from server-verified prices
     const subtotalCents = resolved.reduce(
       (sum, r) => sum + r.product.priceCents * r.quantity,
@@ -74,13 +98,13 @@ export async function POST(request: Request) {
       const courseIds = resolved
         .filter((r) => r.product.type === "course")
         .map((r) => r.product.id);
-      const bundleIds = resolved
-        .filter((r) => r.product.type === "bundle")
+      const packageIds = resolved
+        .filter((r) => r.product.type === "package")
         .map((r) => r.product.id);
 
       const couponResult = await validateCoupon(
         couponCode,
-        { courseIds, bundleIds },
+        { courseIds, packageIds },
         subtotalCents
       );
       if (couponResult.valid) {
@@ -111,9 +135,8 @@ export async function POST(request: Request) {
           create: {
             cartId: cart.id,
             courseId: r.product.type === "course" ? r.product.id : null,
-            bundleId: r.product.type === "bundle" ? r.product.id : null,
-            creditPackId: r.product.type === "credit_pack" ? r.product.id : null,
             hybridPackageId: r.product.type === "package" ? r.product.id : null,
+            moduleId: r.product.type === "module" ? r.product.id : null,
             isGift: true,
             giftRecipientName: r.giftRecipientName || null,
             giftRecipientEmail: r.giftRecipientEmail || null,
@@ -148,11 +171,9 @@ export async function POST(request: Request) {
         items: {
           create: resolved.map((r) => ({
             courseId: r.product.type === "course" ? r.product.id : null,
-            bundleId: r.product.type === "bundle" ? r.product.id : null,
-            creditPackId:
-              r.product.type === "credit_pack" ? r.product.id : null,
             hybridPackageId:
               r.product.type === "package" ? r.product.id : null,
+            moduleId: r.product.type === "module" ? r.product.id : null,
             description: r.product.title,
             unitPriceCents: r.product.priceCents,
             quantity: r.quantity,

@@ -10,7 +10,7 @@ import { FaqSection } from "./sections/faq-section";
 import { PricingSection } from "./sections/pricing-section";
 import { StepsSection } from "./sections/steps-section";
 import { CourseCatalog } from "./sections/course-catalog";
-import { BundleGridSection } from "./sections/bundle-grid-section";
+import { PackageGridSection } from "./sections/package-grid-section";
 
 type SectionComponent = React.ComponentType<{
   section: PageSection;
@@ -29,7 +29,8 @@ const sectionComponents: Record<string, SectionComponent> = {
   pricing: PricingSection,
   steps: StepsSection,
   course_catalog: CourseCatalog as SectionComponent,
-  bundle_grid: BundleGridSection,
+  bundle_grid: PackageGridSection,
+  package_grid: PackageGridSection,
 };
 
 interface SectionRendererProps {

@@ -34,7 +34,7 @@ export default async function OrderDetailPage({
       items: {
         include: {
           course: { select: { title: true } },
-          bundle: { select: { title: true } },
+          hybridPackage: { select: { title: true } },
         },
       },
       coupon: { select: { code: true, type: true, value: true } },
@@ -126,11 +126,7 @@ export default async function OrderDetailPage({
                     {item.description}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {item.courseId
-                      ? "Course"
-                      : item.bundleId
-                        ? "Bundle"
-                        : "Credits"}
+                    {item.courseId ? "Course" : "Package"}
                   </TableCell>
                   <TableCell className="text-center">{item.quantity}</TableCell>
                   <TableCell className="text-right">

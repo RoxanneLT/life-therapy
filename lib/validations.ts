@@ -43,6 +43,9 @@ export const courseSchema = z.object({
   isPublished: z.boolean().default(false),
   isFeatured: z.boolean().default(false),
   sortOrder: z.coerce.number().int().default(0),
+  previewVideoUrl: z.string().optional().or(z.literal("")),
+  facilitatorScript: z.string().optional(),
+  relatedCourseIds: z.any().optional(),
 });
 
 export const testimonialSchema = z.object({
@@ -132,6 +135,17 @@ export const moduleSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   sortOrder: z.coerce.number().int().min(0).default(0),
+  // Standalone selling fields (short courses)
+  standaloneSlug: z.string().optional().transform((v) => v || undefined),
+  standaloneTitle: z.string().optional().transform((v) => v || undefined),
+  standaloneDescription: z.string().optional(),
+  standaloneImageUrl: z.string().optional().transform((v) => v || undefined),
+  standalonePrice: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  isStandalonePublished: z.boolean().default(false),
+  standaloneCategory: z.string().optional().transform((v) => v || undefined),
+  // Preview video & facilitator
+  previewVideoUrl: z.string().optional().transform((v) => v || undefined),
+  facilitatorScript: z.string().optional(),
 });
 
 export const lectureSchema = z.object({
@@ -142,6 +156,7 @@ export const lectureSchema = z.object({
   worksheetUrl: z.string().optional().or(z.literal("")),
   durationSeconds: z.coerce.number().int().min(0).optional(),
   isPreview: z.boolean().default(false),
+  context: z.enum(["both", "course_only", "standalone_only"]).default("both"),
   sortOrder: z.coerce.number().int().min(0).default(0),
 });
 
@@ -162,21 +177,13 @@ export const couponSchema = z.object({
   value: z.coerce.number().int().min(1, "Value must be at least 1"),
   appliesToAll: z.boolean().default(true),
   courseIds: z.any().optional(),
-  bundleIds: z.any().optional(),
+  packageIds: z.any().optional(),
   maxUses: z.coerce.number().int().min(1).optional().or(z.literal("")),
   maxUsesPerUser: z.coerce.number().int().min(1).default(1),
   minOrderCents: z.coerce.number().int().min(0).optional().or(z.literal("")),
   startsAt: z.string().optional(),
   expiresAt: z.string().optional().or(z.literal("")),
   isActive: z.boolean().default(true),
-});
-
-export const creditPackSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  credits: z.coerce.number().int().min(1, "Must offer at least 1 credit"),
-  priceCents: z.coerce.number().int().min(0),
-  isPublished: z.boolean().default(true),
-  sortOrder: z.coerce.number().int().default(0),
 });
 
 export const packageSchema = z.object({
@@ -221,7 +228,6 @@ export type ModuleInput = z.infer<typeof moduleSchema>;
 export type LectureInput = z.infer<typeof lectureSchema>;
 export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
 export type CouponInput = z.infer<typeof couponSchema>;
-export type CreditPackInput = z.infer<typeof creditPackSchema>;
 export type PackageInput = z.infer<typeof packageSchema>;
 export type StudentRegisterInput = z.infer<typeof studentRegisterSchema>;
 export type StudentLoginInput = z.infer<typeof studentLoginSchema>;

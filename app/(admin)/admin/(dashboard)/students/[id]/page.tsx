@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ArrowLeft, GraduationCap, ShoppingCart, Coins } from "lucide-react";
-import { grantCreditsAction } from "./actions";
+import { grantCreditsAction, grantModuleAccessAction } from "./actions";
 
 export default async function StudentDetailPage({
   params,
@@ -47,6 +47,14 @@ export default async function StudentDetailPage({
       },
       certificates: {
         include: { course: { select: { title: true } } },
+      },
+      moduleAccess: {
+        include: {
+          module: {
+            select: { standaloneTitle: true, title: true, course: { select: { title: true } } },
+          },
+        },
+        orderBy: { grantedAt: "desc" },
       },
     },
   });
@@ -204,6 +212,72 @@ export default async function StudentDetailPage({
               </TableBody>
             </Table>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Module Access (Short Courses) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Module Access (Short Courses)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {student.moduleAccess.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No module access.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Module</TableHead>
+                  <TableHead>Course</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Paid</TableHead>
+                  <TableHead>Granted</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {student.moduleAccess.map((ma) => (
+                  <TableRow key={ma.id}>
+                    <TableCell className="font-medium">
+                      {ma.module.standaloneTitle || ma.module.title}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {ma.module.course.title}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {ma.source}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{formatPrice(ma.pricePaid)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(ma.grantedAt), "d MMM yyyy")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {/* Grant module access form */}
+          <form action={grantModuleAccessAction} className="mt-4 flex items-end gap-3 border-t pt-4">
+            <input type="hidden" name="studentId" value={student.id} />
+            <div className="flex-1">
+              <label htmlFor="moduleId" className="text-xs text-muted-foreground">
+                Module ID
+              </label>
+              <input
+                id="moduleId"
+                name="moduleId"
+                type="text"
+                placeholder="Paste module ID"
+                required
+                className="mt-1 block w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+            <Button type="submit" size="sm">
+              Grant Access
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

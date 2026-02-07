@@ -2,12 +2,19 @@ export const dynamic = "force-dynamic";
 
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
+import {
+  checkCourseAccess,
+  calculateUpgradePrice,
+  filterLecturesByContext,
+} from "@/lib/access";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/portal/progress-bar";
+import { formatPrice } from "@/lib/utils";
+import { UpgradeButton } from "@/components/portal/upgrade-button";
 import {
   PlayCircle,
   FileText,
@@ -20,10 +27,13 @@ import {
 
 export default async function CourseOverviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ module?: string }>;
 }) {
   const { slug } = await params;
+  const { module: moduleIdParam } = await searchParams;
   const { student } = await requirePasswordChanged();
 
   const course = await prisma.course.findUnique({
@@ -39,6 +49,7 @@ export default async function CourseOverviewPage({
               title: true,
               lectureType: true,
               durationSeconds: true,
+              context: true,
             },
           },
           quiz: { select: { id: true, title: true } },
@@ -49,59 +60,145 @@ export default async function CourseOverviewPage({
 
   if (!course) notFound();
 
-  // Verify enrollment
-  const enrollment = await prisma.enrollment.findUnique({
-    where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
-  });
+  // Determine access type
+  const access = await checkCourseAccess(student.id, course.id);
+  if (access.type === "none") notFound();
 
-  if (!enrollment) notFound();
+  const isModuleOnly = access.type === "partial";
+  const accessedModuleIds = isModuleOnly ? new Set(access.moduleIds) : null;
+
+  // For module-only access with a module param, scope to that module
+  const targetModuleId = isModuleOnly
+    ? moduleIdParam || access.moduleIds?.[0]
+    : null;
+
+  // Filter modules based on access type
+  const visibleModules = isModuleOnly
+    ? course.modules.filter((m) => accessedModuleIds!.has(m.id))
+    : course.modules;
+
+  // Filter lectures by context
+  const contextType = isModuleOnly ? "module" : "course";
+  const modulesWithFilteredLectures = visibleModules.map((mod) => ({
+    ...mod,
+    lectures: filterLecturesByContext(mod.lectures, contextType),
+  }));
+
+  // Enrollment data (only for full access)
+  const enrollment = !isModuleOnly
+    ? await prisma.enrollment.findUnique({
+        where: {
+          studentId_courseId: {
+            studentId: student.id,
+            courseId: course.id,
+          },
+        },
+      })
+    : null;
 
   // Get progress
-  const allLectureIds = course.modules.flatMap((m) =>
+  const allLectureIds = modulesWithFilteredLectures.flatMap((m) =>
     m.lectures.map((l) => l.id)
   );
-  const completedProgress = allLectureIds.length > 0
-    ? await prisma.lectureProgress.findMany({
-        where: {
-          studentId: student.id,
-          lectureId: { in: allLectureIds },
-          completed: true,
-        },
-        select: { lectureId: true },
-      })
-    : [];
+  const completedProgress =
+    allLectureIds.length > 0
+      ? await prisma.lectureProgress.findMany({
+          where: {
+            studentId: student.id,
+            lectureId: { in: allLectureIds },
+            completed: true,
+          },
+          select: { lectureId: true },
+        })
+      : [];
   const completedIds = new Set(completedProgress.map((p) => p.lectureId));
 
+  // Calculate progress
+  const progressPercent = isModuleOnly
+    ? allLectureIds.length > 0
+      ? Math.round((completedIds.size / allLectureIds.length) * 100)
+      : 0
+    : enrollment?.progressPercent ?? 0;
+
   // Find the first incomplete lecture for "Continue" button
-  const firstIncomplete = course.modules
+  const firstIncomplete = modulesWithFilteredLectures
     .flatMap((m) => m.lectures)
     .find((l) => !completedIds.has(l.id));
 
-  const certificate = await prisma.certificate.findUnique({
-    where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
-  });
+  const certificate = !isModuleOnly
+    ? await prisma.certificate.findUnique({
+        where: {
+          studentId_courseId: {
+            studentId: student.id,
+            courseId: course.id,
+          },
+        },
+      })
+    : null;
 
-  const totalDuration = course.modules
+  const totalDuration = modulesWithFilteredLectures
     .flatMap((m) => m.lectures)
     .reduce((sum, l) => sum + (l.durationSeconds || 0), 0);
 
+  // For module-only: get upgrade pricing
+  let upgradeInfo: { upgradePrice: number; fullPrice: number } | null = null;
+  if (isModuleOnly) {
+    const info = await calculateUpgradePrice(student.id, course.id);
+    if (info.upgradePrice > 0) {
+      upgradeInfo = {
+        upgradePrice: info.upgradePrice,
+        fullPrice: info.fullPrice,
+      };
+    }
+  }
+
+  // Display title for module-only
+  const targetModule = targetModuleId
+    ? visibleModules.find((m) => m.id === targetModuleId)
+    : null;
+  const displayTitle = isModuleOnly && targetModule
+    ? targetModule.standaloneTitle || targetModule.title
+    : course.title;
+
+  const displayImage = isModuleOnly && targetModule?.standaloneImageUrl
+    ? targetModule.standaloneImageUrl
+    : course.imageUrl;
+
   return (
     <div className="space-y-6">
+      {/* Upgrade banner for module-only access */}
+      {upgradeInfo && (
+        <div className="rounded-lg border border-brand-200 bg-brand-50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium text-brand-800">
+                Upgrade to the full course
+              </p>
+              <p className="text-sm text-brand-600">
+                Get all modules for {formatPrice(upgradeInfo.fullPrice)} — you
+                only pay {formatPrice(upgradeInfo.upgradePrice)} more
+              </p>
+            </div>
+            <UpgradeButton courseId={course.id} />
+          </div>
+        </div>
+      )}
+
       {/* Hero section */}
       <div className="flex flex-col gap-6 md:flex-row">
-        {course.imageUrl && (
+        {displayImage && (
           <div className="relative aspect-video w-full overflow-hidden rounded-lg md:w-80">
             <Image
-              src={course.imageUrl}
-              alt={course.title}
+              src={displayImage}
+              alt={displayTitle}
               fill
               className="object-cover"
             />
           </div>
         )}
         <div className="flex-1">
-          <h1 className="font-heading text-2xl font-bold">{course.title}</h1>
-          {course.subtitle && (
+          <h1 className="font-heading text-2xl font-bold">{displayTitle}</h1>
+          {!isModuleOnly && course.subtitle && (
             <p className="mt-1 text-muted-foreground">{course.subtitle}</p>
           )}
 
@@ -117,18 +214,16 @@ export default async function CourseOverviewPage({
                 {Math.round((totalDuration % 3600) / 60)}m
               </span>
             )}
-            <span className="flex items-center gap-1">
-              <BookOpen className="h-4 w-4" />
-              {course.modules.length} modules
-            </span>
+            {!isModuleOnly && (
+              <span className="flex items-center gap-1">
+                <BookOpen className="h-4 w-4" />
+                {course.modules.length} modules
+              </span>
+            )}
           </div>
 
           <div className="mt-4">
-            <ProgressBar
-              value={enrollment.progressPercent}
-              showLabel
-              size="md"
-            />
+            <ProgressBar value={progressPercent} showLabel size="md" />
           </div>
 
           <div className="mt-4 flex gap-3">
@@ -141,7 +236,7 @@ export default async function CourseOverviewPage({
                 }
               >
                 <PlayCircle className="mr-2 h-4 w-4" />
-                {enrollment.progressPercent > 0 ? "Continue Learning" : "Start Course"}
+                {progressPercent > 0 ? "Continue Learning" : "Start Course"}
               </Link>
             </Button>
             {certificate && (
@@ -158,8 +253,10 @@ export default async function CourseOverviewPage({
 
       {/* Course content */}
       <div className="space-y-4">
-        <h2 className="font-heading text-lg font-semibold">Course Content</h2>
-        {course.modules.map((mod, modIdx) => {
+        <h2 className="font-heading text-lg font-semibold">
+          {isModuleOnly ? "Module Content" : "Course Content"}
+        </h2>
+        {modulesWithFilteredLectures.map((mod, modIdx) => {
           const modLectureIds = mod.lectures.map((l) => l.id);
           const modCompleted = modLectureIds.filter((id) =>
             completedIds.has(id)
@@ -170,7 +267,9 @@ export default async function CourseOverviewPage({
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-sm">
                   <span>
-                    Module {modIdx + 1}: {mod.title}
+                    {isModuleOnly
+                      ? mod.title
+                      : `Module ${modIdx + 1}: ${mod.title}`}
                   </span>
                   <span className="text-xs font-normal text-muted-foreground">
                     {modCompleted}/{mod.lectures.length} complete

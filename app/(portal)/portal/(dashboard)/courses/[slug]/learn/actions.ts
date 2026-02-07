@@ -2,11 +2,13 @@
 
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
+import { checkLectureAccess } from "@/lib/access";
 import { recalculateProgress } from "@/lib/progress";
 import { revalidatePath } from "next/cache";
 
 /**
  * Mark a lecture as complete and recalculate progress.
+ * Supports both full course enrollment and module-only access.
  */
 export async function markLectureCompleteAction(
   lectureId: string,
@@ -14,23 +16,20 @@ export async function markLectureCompleteAction(
 ) {
   const { student } = await getAuthenticatedStudent();
 
-  // Get lecture's course
+  // Get lecture's module and course
   const lecture = await prisma.lecture.findUnique({
     where: { id: lectureId },
-    include: { module: { select: { courseId: true } } },
+    include: { module: { select: { id: true, courseId: true } } },
   });
   if (!lecture) return { error: "Lecture not found" };
 
-  // Verify enrollment
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      studentId_courseId: {
-        studentId: student.id,
-        courseId: lecture.module.courseId,
-      },
-    },
-  });
-  if (!enrollment) return { error: "Not enrolled" };
+  // Verify access (enrollment OR module access)
+  const access = await checkLectureAccess(
+    student.id,
+    lecture.module.id,
+    lecture.module.courseId
+  );
+  if (access.type === "none") return { error: "No access" };
 
   // Upsert lecture progress
   await prisma.lectureProgress.upsert({
@@ -49,11 +48,11 @@ export async function markLectureCompleteAction(
     },
   });
 
-  // Recalculate
-  const progress = await recalculateProgress(
-    student.id,
-    lecture.module.courseId
-  );
+  // Recalculate progress only for full course enrollments
+  let progress = { progressPercent: 0, completed: false };
+  if (access.type === "course") {
+    progress = await recalculateProgress(student.id, lecture.module.courseId);
+  }
 
   revalidatePath(`/portal/courses/${courseSlug}`);
   revalidatePath(`/portal/courses/${courseSlug}/learn`);
@@ -103,21 +102,18 @@ export async function submitQuizAction(
     where: { id: quizId },
     include: {
       questions: { orderBy: { sortOrder: "asc" } },
-      module: { select: { courseId: true } },
+      module: { select: { id: true, courseId: true } },
     },
   });
   if (!quiz) return { error: "Quiz not found" };
 
-  // Verify enrollment
-  const enrollment = await prisma.enrollment.findUnique({
-    where: {
-      studentId_courseId: {
-        studentId: student.id,
-        courseId: quiz.module.courseId,
-      },
-    },
-  });
-  if (!enrollment) return { error: "Not enrolled" };
+  // Verify access (enrollment OR module access)
+  const access = await checkLectureAccess(
+    student.id,
+    quiz.module.id,
+    quiz.module.courseId
+  );
+  if (access.type === "none") return { error: "No access" };
 
   // Grade
   let correct = 0;
@@ -131,7 +127,6 @@ export async function submitQuizAction(
     const studentAnswer = answers[question.id] || "";
 
     if (question.questionType === "reflection") {
-      // Reflections are always "correct" (participation-based)
       correct++;
       feedback.push({
         questionId: question.id,
@@ -139,7 +134,6 @@ export async function submitQuizAction(
         explanation: question.explanation || undefined,
       });
     } else {
-      // multiple_choice or true_false — check against options
       const options = question.options as
         | { label: string; value: string; correct?: boolean }[]
         | null;

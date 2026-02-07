@@ -3,7 +3,7 @@ import type { CartItemLocal } from "./cart-store";
 
 export interface CartProductInfo {
   id: string;
-  type: "course" | "bundle" | "credit_pack" | "package";
+  type: "course" | "package" | "module";
   title: string;
   priceCents: number;
   imageUrl?: string | null;
@@ -18,15 +18,12 @@ export async function resolveCartItems(
   items: CartItemLocal[]
 ): Promise<(CartItemLocal & { product: CartProductInfo })[]> {
   const courseIds = items.filter((i) => i.courseId).map((i) => i.courseId!);
-  const bundleIds = items.filter((i) => i.bundleId).map((i) => i.bundleId!);
-  const creditPackIds = items
-    .filter((i) => i.creditPackId)
-    .map((i) => i.creditPackId!);
   const packageIds = items
     .filter((i) => i.hybridPackageId)
     .map((i) => i.hybridPackageId!);
+  const moduleIds = items.filter((i) => i.moduleId).map((i) => i.moduleId!);
 
-  const [courses, bundles, creditPacks, packages] = await Promise.all([
+  const [courses, packages, modules] = await Promise.all([
     courseIds.length
       ? prisma.course.findMany({
           where: { id: { in: courseIds }, isPublished: true },
@@ -37,24 +34,6 @@ export async function resolveCartItems(
             imageUrl: true,
             slug: true,
           },
-        })
-      : [],
-    bundleIds.length
-      ? prisma.bundle.findMany({
-          where: { id: { in: bundleIds }, isPublished: true },
-          select: {
-            id: true,
-            title: true,
-            price: true,
-            imageUrl: true,
-            slug: true,
-          },
-        })
-      : [],
-    creditPackIds.length
-      ? prisma.sessionCreditPack.findMany({
-          where: { id: { in: creditPackIds }, isPublished: true },
-          select: { id: true, name: true, priceCents: true, credits: true },
         })
       : [],
     packageIds.length
@@ -69,12 +48,24 @@ export async function resolveCartItems(
           },
         })
       : [],
+    moduleIds.length
+      ? prisma.module.findMany({
+          where: { id: { in: moduleIds }, isStandalonePublished: true },
+          select: {
+            id: true,
+            standaloneTitle: true,
+            title: true,
+            standalonePrice: true,
+            standaloneImageUrl: true,
+            standaloneSlug: true,
+          },
+        })
+      : [],
   ]);
 
   const courseMap = new Map(courses.map((c) => [c.id, c]));
-  const bundleMap = new Map(bundles.map((b) => [b.id, b]));
-  const creditPackMap = new Map(creditPacks.map((p) => [p.id, p]));
   const packageMap = new Map(packages.map((p) => [p.id, p]));
+  const moduleMap = new Map(modules.map((m) => [m.id, m]));
 
   const resolved: (CartItemLocal & { product: CartProductInfo })[] = [];
 
@@ -93,28 +84,6 @@ export async function resolveCartItems(
           slug: c.slug,
         };
       }
-    } else if (item.bundleId) {
-      const b = bundleMap.get(item.bundleId);
-      if (b) {
-        product = {
-          id: b.id,
-          type: "bundle",
-          title: b.title,
-          priceCents: b.price,
-          imageUrl: b.imageUrl,
-          slug: b.slug,
-        };
-      }
-    } else if (item.creditPackId) {
-      const p = creditPackMap.get(item.creditPackId);
-      if (p) {
-        product = {
-          id: p.id,
-          type: "credit_pack",
-          title: `${p.name} (${p.credits} credits)`,
-          priceCents: p.priceCents,
-        };
-      }
     } else if (item.hybridPackageId) {
       const p = packageMap.get(item.hybridPackageId);
       if (p) {
@@ -125,6 +94,18 @@ export async function resolveCartItems(
           priceCents: p.priceCents,
           imageUrl: p.imageUrl,
           slug: p.slug,
+        };
+      }
+    } else if (item.moduleId) {
+      const m = moduleMap.get(item.moduleId);
+      if (m && m.standalonePrice) {
+        product = {
+          id: m.id,
+          type: "module",
+          title: m.standaloneTitle || m.title,
+          priceCents: m.standalonePrice,
+          imageUrl: m.standaloneImageUrl,
+          slug: m.standaloneSlug || undefined,
         };
       }
     }
@@ -142,7 +123,7 @@ export async function resolveCartItems(
  */
 export async function validateCoupon(
   code: string,
-  itemProductIds: { courseIds: string[]; bundleIds: string[] },
+  itemProductIds: { courseIds: string[]; packageIds: string[] },
   subtotalCents: number
 ) {
   const coupon = await prisma.coupon.findUnique({
@@ -169,10 +150,10 @@ export async function validateCoupon(
   // Check if coupon applies to specific products
   if (!coupon.appliesToAll) {
     const allowedCourseIds = (coupon.courseIds as string[]) || [];
-    const allowedBundleIds = (coupon.bundleIds as string[]) || [];
+    const allowedPackageIds = (coupon.packageIds as string[]) || [];
     const hasMatch =
       itemProductIds.courseIds.some((id) => allowedCourseIds.includes(id)) ||
-      itemProductIds.bundleIds.some((id) => allowedBundleIds.includes(id));
+      itemProductIds.packageIds.some((id) => allowedPackageIds.includes(id));
     if (!hasMatch)
       return {
         valid: false as const,
@@ -223,9 +204,8 @@ export async function mergeCartToDb(
     const exists = cart.items.some(
       (db) =>
         db.courseId === (local.courseId || null) &&
-        db.bundleId === (local.bundleId || null) &&
-        db.creditPackId === (local.creditPackId || null) &&
         db.hybridPackageId === (local.hybridPackageId || null) &&
+        db.moduleId === (local.moduleId || null) &&
         !db.isGift &&
         !local.isGift
     );
@@ -234,9 +214,8 @@ export async function mergeCartToDb(
         data: {
           cartId: cart.id,
           courseId: local.courseId || null,
-          bundleId: local.bundleId || null,
-          creditPackId: local.creditPackId || null,
           hybridPackageId: local.hybridPackageId || null,
+          moduleId: local.moduleId || null,
           quantity: local.quantity,
           isGift: local.isGift,
           giftRecipientName: local.giftRecipientName || null,

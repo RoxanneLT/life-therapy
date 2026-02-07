@@ -9,18 +9,22 @@ import Link from "next/link";
 export default async function PortalDashboardPage() {
   const { student } = await requirePasswordChanged();
 
-  const [enrollmentCount, certificateCount, creditBalance] = await Promise.all([
-    prisma.enrollment.count({ where: { studentId: student.id } }),
-    prisma.certificate.count({ where: { studentId: student.id } }),
-    prisma.sessionCreditBalance.findUnique({
-      where: { studentId: student.id },
-    }),
-  ]);
+  const [enrollmentCount, moduleAccessCount, certificateCount, creditBalance] =
+    await Promise.all([
+      prisma.enrollment.count({ where: { studentId: student.id } }),
+      prisma.moduleAccess.count({ where: { studentId: student.id } }),
+      prisma.certificate.count({ where: { studentId: student.id } }),
+      prisma.sessionCreditBalance.findUnique({
+        where: { studentId: student.id },
+      }),
+    ]);
+
+  const totalCourseCount = enrollmentCount + moduleAccessCount;
 
   const stats = [
     {
       label: "My Courses",
-      value: enrollmentCount,
+      value: totalCourseCount,
       icon: GraduationCap,
       href: "/portal/courses",
     },
@@ -67,7 +71,7 @@ export default async function PortalDashboardPage() {
         ))}
       </div>
 
-      {enrollmentCount === 0 && (
+      {totalCourseCount === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center py-12 text-center">
             <GraduationCap className="mb-4 h-12 w-12 text-muted-foreground" />

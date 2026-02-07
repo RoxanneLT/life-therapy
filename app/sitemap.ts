@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://life-therapy.co.za";
 
@@ -16,10 +18,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   // Dynamic course pages
-  const courses = await prisma.course.findMany({
-    where: { isPublished: true },
-    select: { slug: true, updatedAt: true },
-  });
+  const [courses, standaloneModules] = await Promise.all([
+    prisma.course.findMany({
+      where: { isPublished: true },
+      select: { slug: true, updatedAt: true },
+    }),
+    prisma.module.findMany({
+      where: { isStandalonePublished: true, standaloneSlug: { not: null } },
+      select: { standaloneSlug: true, updatedAt: true },
+    }),
+  ]);
 
   const coursePages: MetadataRoute.Sitemap = courses.map((course) => ({
     url: `${baseUrl}/courses/${course.slug}`,
@@ -28,5 +36,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...coursePages];
+  const shortCoursePages: MetadataRoute.Sitemap = standaloneModules.map((m) => ({
+    url: `${baseUrl}/courses/short/${m.standaloneSlug}`,
+    lastModified: m.updatedAt,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  return [...staticPages, ...coursePages, ...shortCoursePages];
 }

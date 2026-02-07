@@ -24,7 +24,7 @@ const SECTION_TYPES = [
   { value: "testimonial_carousel", label: "Testimonials" },
   { value: "course_grid", label: "Course Grid" },
   { value: "course_catalog", label: "Course Catalog (full page)" },
-  { value: "bundle_grid", label: "Bundle Grid" },
+  { value: "package_grid", label: "Package Grid" },
   { value: "features", label: "Features / Cards" },
   { value: "pricing", label: "Pricing Cards" },
   { value: "steps", label: "Steps / How It Works" },
