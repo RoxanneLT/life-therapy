@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { SessionTypeStep } from "./session-type-step";
-import { DatePickerStep } from "./date-picker-step";
-import { TimeSlotStep } from "./time-slot-step";
+import { DateTimeStep } from "./date-time-step";
 import { BookingFormStep } from "./booking-form-step";
 import { BookingReviewStep } from "./booking-review-step";
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
@@ -23,8 +22,7 @@ export interface BookingData {
 
 const STEPS = [
   "Choose Session",
-  "Select Date",
-  "Select Time",
+  "Date & Time",
   "Your Details",
   "Confirm",
 ] as const;
@@ -65,13 +63,8 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
     }
   }, [searchParams, data.sessionType]);
 
-  function goNext() {
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  }
-
   function goBack() {
     if (step === 1 && preselected) {
-      // Going back from date picker when pre-selected — reset to step 0
       setPreselected(false);
     }
     setStep((s) => Math.max(s - 1, 0));
@@ -80,7 +73,7 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
   function selectSessionType(config: SessionTypeConfig) {
     setData((d) => ({ ...d, sessionType: config, date: null, slot: null }));
     setPreselected(false);
-    goNext();
+    setStep(1);
   }
 
   function changeSessionType() {
@@ -89,14 +82,9 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
     setStep(0);
   }
 
-  function selectDate(date: string) {
-    setData((d) => ({ ...d, date, slot: null }));
-    goNext();
-  }
-
-  function selectSlot(slot: TimeSlot) {
-    setData((d) => ({ ...d, slot }));
-    goNext();
+  function selectDateTime(date: string, slot: TimeSlot) {
+    setData((d) => ({ ...d, date, slot }));
+    setStep(2);
   }
 
   function updateClientInfo(info: {
@@ -106,7 +94,7 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
     clientNotes: string;
   }) {
     setData((d) => ({ ...d, ...info }));
-    goNext();
+    setStep(3);
   }
 
   return (
@@ -167,28 +155,20 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
       {/* Step content */}
       {step === 0 && <SessionTypeStep onSelect={selectSessionType} />}
       {step === 1 && data.sessionType && (
-        <DatePickerStep
+        <DateTimeStep
           sessionType={data.sessionType}
-          onSelect={selectDate}
+          onSelect={selectDateTime}
           onBack={goBack}
         />
       )}
-      {step === 2 && data.sessionType && data.date && (
-        <TimeSlotStep
-          sessionType={data.sessionType}
-          date={data.date}
-          onSelect={selectSlot}
-          onBack={goBack}
-        />
-      )}
-      {step === 3 && (
+      {step === 2 && (
         <BookingFormStep
           initialData={data}
           onSubmit={updateClientInfo}
           onBack={goBack}
         />
       )}
-      {step === 4 && data.sessionType && data.date && data.slot && (
+      {step === 3 && data.sessionType && data.date && data.slot && (
         <BookingReviewStep data={data} onBack={goBack} creditBalance={creditBalance} />
       )}
     </section>
