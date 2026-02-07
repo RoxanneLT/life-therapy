@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
 import {
+  ArrowLeft,
   BookOpen,
   Clock,
   BarChart3,
@@ -69,6 +70,15 @@ export default async function CourseDetailPage({
     <>
       {/* Hero — two-column: info left, preview video / image right */}
       <section className="bg-brand-50 px-4 py-16 dark:bg-brand-950/30">
+        <div className="mx-auto max-w-6xl">
+          <Link
+            href="/courses"
+            className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand-600 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Courses
+          </Link>
+        </div>
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
           <div>
             <div className="mb-4 flex items-center gap-2">

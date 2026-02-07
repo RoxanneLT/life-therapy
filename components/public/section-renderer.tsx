@@ -15,6 +15,7 @@ import { PackageGridSection } from "./sections/package-grid-section";
 type SectionComponent = React.ComponentType<{
   section: PageSection;
   activeCategory?: string;
+  viewMode?: string;
 }>;
 
 const sectionComponents: Record<string, SectionComponent> = {
@@ -36,11 +37,13 @@ const sectionComponents: Record<string, SectionComponent> = {
 interface SectionRendererProps {
   sections: PageSection[];
   activeCategory?: string;
+  viewMode?: string;
 }
 
 export function SectionRenderer({
   sections,
   activeCategory,
+  viewMode,
 }: SectionRendererProps) {
   return (
     <>
@@ -55,7 +58,7 @@ export function SectionRenderer({
               key={section.id}
               section={section}
               {...(section.sectionType === "course_catalog"
-                ? { activeCategory }
+                ? { activeCategory, viewMode }
                 : {})}
             />
           );

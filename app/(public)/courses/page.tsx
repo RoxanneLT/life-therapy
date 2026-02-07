@@ -16,10 +16,11 @@ export const revalidate = 60;
 export default async function CoursesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; view?: string }>;
 }) {
   const params = await searchParams;
   const activeCategory = params.category || "all";
+  const viewMode = params.view || "grid";
 
   const page = await prisma.page.findUnique({
     where: { slug: "courses" },
@@ -34,6 +35,7 @@ export default async function CoursesPage({
     <SectionRenderer
       sections={page.sections}
       activeCategory={activeCategory}
+      viewMode={viewMode}
     />
   );
 }
