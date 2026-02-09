@@ -8,6 +8,7 @@ interface UpsertContactData {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  gender?: string;
   source: ContactSource;
   consentGiven?: boolean;
   consentMethod?: string;
@@ -29,6 +30,7 @@ export async function upsertContact(data: UpsertContactData) {
       firstName: data.firstName || null,
       lastName: data.lastName || null,
       phone: data.phone || null,
+      gender: data.gender || null,
       source: data.source,
       consentGiven: data.consentGiven ?? false,
       consentDate: data.consentGiven ? new Date() : null,
@@ -45,6 +47,9 @@ export async function upsertContact(data: UpsertContactData) {
         : undefined,
       phone: data.phone
         ? { set: data.phone }
+        : undefined,
+      gender: data.gender
+        ? { set: data.gender }
         : undefined,
       // Link student if not already linked
       studentId: data.studentId

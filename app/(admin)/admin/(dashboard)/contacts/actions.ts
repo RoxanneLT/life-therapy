@@ -81,7 +81,7 @@ export async function deleteContactAction(formData: FormData) {
 
 export async function importContactsAction(
   rows: { email: string; firstName?: string; lastName?: string; phone?: string; gender?: string }[],
-  options: { consentGiven: boolean; tags: string[] }
+  options: { consentGiven: boolean; skipDrip: boolean; tags: string[] }
 ) {
   await requireRole("super_admin", "marketing");
 
@@ -104,15 +104,18 @@ export async function importContactsAction(
         firstName: row.firstName?.trim() || undefined,
         lastName: row.lastName?.trim() || undefined,
         phone: row.phone?.trim() || undefined,
+        gender: row.gender?.trim().toLowerCase() || undefined,
         source: "import",
         consentGiven: options.consentGiven,
-        consentMethod: options.consentGiven ? "csv_import" : undefined,
+        consentMethod: options.consentGiven
+          ? "legitimate_interest_existing_client"
+          : undefined,
       });
 
       // Apply tags if provided
-      if (options.tags.length > 0) {
-        const contact = await prisma.contact.findUnique({ where: { email } });
-        if (contact) {
+      const contact = await prisma.contact.findUnique({ where: { email } });
+      if (contact) {
+        if (options.tags.length > 0) {
           const existingTags = (contact.tags as string[]) || [];
           const mergedTags = [...new Set([...existingTags, ...options.tags])];
           await prisma.contact.update({
@@ -120,14 +123,22 @@ export async function importContactsAction(
             data: { tags: mergedTags },
           });
         }
-      }
 
-      // Set gender if provided (upsertContact doesn't handle gender)
-      if (row.gender) {
-        await prisma.contact.update({
-          where: { email },
-          data: { gender: row.gender.trim().toLowerCase() },
-        });
+        // Skip drip sequence: create a completed dripProgress record
+        if (options.skipDrip) {
+          await prisma.dripProgress.upsert({
+            where: { contactId: contact.id },
+            create: {
+              contactId: contact.id,
+              currentPhase: "newsletter",
+              currentStep: 0,
+              completedAt: new Date(),
+            },
+            update: {
+              completedAt: new Date(),
+            },
+          });
+        }
       }
 
       if (existing) {

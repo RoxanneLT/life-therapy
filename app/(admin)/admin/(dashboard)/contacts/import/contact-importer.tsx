@@ -68,6 +68,7 @@ export function ContactImporter() {
   const [rows, setRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<number, string>>({});
   const [consentGiven, setConsentGiven] = useState(false);
+  const [skipDrip, setSkipDrip] = useState(false);
   const [tags, setTags] = useState("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ created: number; updated: number; skipped: number; total: number } | null>(null);
@@ -135,7 +136,7 @@ export function ContactImporter() {
       const tagsList = tags.split(",").map((t) => t.trim()).filter(Boolean);
       const res = await importContactsAction(
         mappedRows as { email: string; firstName?: string; lastName?: string; phone?: string; gender?: string }[],
-        { consentGiven, tags: tagsList }
+        { consentGiven, skipDrip, tags: tagsList }
       );
 
       setResult(res);
@@ -262,6 +263,19 @@ export function ContactImporter() {
               />
               <Label htmlFor="consentGiven" className="text-sm font-normal">
                 Mark all imported contacts as consented (only if they previously opted in)
+              </Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="skipDrip"
+                checked={skipDrip}
+                onChange={(e) => setSkipDrip(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="skipDrip" className="text-sm font-normal">
+                Skip drip sequence (existing clients — campaign only)
               </Label>
             </div>
 
