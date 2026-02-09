@@ -103,6 +103,9 @@ export async function POST(request: Request) {
             to: fullOrder.student.email,
             subject,
             html,
+            templateKey: "order_confirmation",
+            studentId: fullOrder.studentId,
+            metadata: { orderId: fullOrder.id, orderNumber: fullOrder.orderNumber },
           }).catch((err) =>
             console.error("Failed to send order confirmation:", err)
           );

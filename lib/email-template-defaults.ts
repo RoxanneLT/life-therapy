@@ -183,6 +183,13 @@ const defaults: Record<string, TemplateDefault> = {
 <p>{{recipientName}} has been sent an email with instructions to redeem their gift.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
+  password_changed: {
+    subject: "Your Life-Therapy password has been changed",
+    bodyHtml: `<p>Hi {{firstName}},</p>
+<p>Your password has been successfully changed.</p>
+<p>If you did not make this change, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
 };
 
 export default defaults;

@@ -8,6 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
+import { upsertContact } from "@/lib/contacts";
 
 export async function registerStudent(formData: FormData) {
   const headersList = await headers();
@@ -54,7 +55,7 @@ export async function registerStudent(formData: FormData) {
   }
 
   // Create Student record
-  await prisma.student.create({
+  const student = await prisma.student.create({
     data: {
       supabaseUserId: authData.user.id,
       email,
@@ -63,13 +64,24 @@ export async function registerStudent(formData: FormData) {
     },
   });
 
+  // Sync to Contact list (non-blocking)
+  upsertContact({
+    email,
+    firstName,
+    lastName,
+    source: "student",
+    consentGiven: true,
+    consentMethod: "registration",
+    studentId: student.id,
+  }).catch((err) => console.error("Failed to sync contact:", err));
+
   // Send welcome email (non-blocking)
   const baseUrl = await getBaseUrl();
   renderEmail("account_created", {
     firstName,
     loginUrl: `${baseUrl}/portal`,
   }, baseUrl).then(({ subject, html }) =>
-    sendEmail({ to: email, subject, html })
+    sendEmail({ to: email, subject, html, templateKey: "account_created" })
   ).catch((err) =>
     console.error("Failed to send welcome email:", err)
   );

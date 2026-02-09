@@ -30,7 +30,7 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
       time: `${booking.startTime} – ${booking.endTime} (SAST)`,
       bookUrl: "https://life-therapy.co.za/book",
     });
-    await sendEmail({ to: booking.clientEmail, ...email }).catch(console.error);
+    await sendEmail({ to: booking.clientEmail, ...email, templateKey: "booking_cancellation", metadata: { bookingId: id } }).catch(console.error);
   }
 
   revalidatePath("/admin/bookings");

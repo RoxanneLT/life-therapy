@@ -86,10 +86,6 @@ export const siteSettingsSchema = z.object({
   metaDescription: z.string().optional(),
   ogImageUrl: z.string().optional(),
   googleAnalyticsId: z.string().optional(),
-  // Newsletter (Mailchimp)
-  mailchimpApiKey: z.string().optional(),
-  mailchimpAudienceId: z.string().optional(),
-  mailchimpServer: z.string().optional(),
   // Email (SMTP)
   smtpHost: z.string().optional(),
   smtpPort: z.coerce.number().int().optional().or(z.literal("")),

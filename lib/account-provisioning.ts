@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
+import { upsertContact } from "@/lib/contacts";
 
 /**
  * Find an existing student by email or auto-create one.
@@ -48,13 +49,24 @@ export async function findOrCreateStudent(
     },
   });
 
+  // Sync to Contact list (non-blocking)
+  upsertContact({
+    email,
+    firstName,
+    lastName,
+    source: "student",
+    consentGiven: true,
+    consentMethod: "registration",
+    studentId: student.id,
+  }).catch((err) => console.error("Failed to sync contact:", err));
+
   // Send provisioned account email (non-blocking)
   renderEmail("account_provisioned", {
     firstName,
     tempPassword,
     loginUrl: "https://life-therapy.co.za/portal/login",
   }).then(({ subject, html }) =>
-    sendEmail({ to: email, subject, html })
+    sendEmail({ to: email, subject, html, templateKey: "account_provisioned", studentId: student.id })
   ).catch((err) =>
     console.error("Failed to send provisioned account email:", err)
   );

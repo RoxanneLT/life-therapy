@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
+import { sendEmail } from "@/lib/email";
+import { renderEmail } from "@/lib/email-render";
 
 export async function changeStudentPassword(formData: FormData) {
   const { user, student } = await getAuthenticatedStudent();
@@ -31,6 +33,13 @@ export async function changeStudentPassword(formData: FormData) {
     where: { id: student.id },
     data: { mustChangePassword: false },
   });
+
+  // Send confirmation email (non-blocking)
+  renderEmail("password_changed", { firstName: student.firstName })
+    .then(({ subject, html }) =>
+      sendEmail({ to: student.email, subject, html, templateKey: "password_changed", studentId: student.id })
+    )
+    .catch((err) => console.error("Failed to send password change email:", err));
 
   return { success: true };
 }

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       startTime: booking.startTime,
       teamsButton,
     });
-    const result = await sendEmail({ to: booking.clientEmail, ...email });
+    const result = await sendEmail({ to: booking.clientEmail, ...email, templateKey: "booking_reminder", metadata: { bookingId: booking.id } });
 
     if (result.success) {
       await prisma.booking.update({

@@ -18,6 +18,8 @@ import {
   Package,
   FileDown,
   Mail,
+  Send,
+  Contact,
 } from "lucide-react";
 import Image from "next/image";
 import type { AdminRole } from "@/lib/generated/prisma/client";
@@ -68,6 +70,8 @@ const navGroups: NavGroup[] = [
   {
     label: "Communication",
     items: [
+      { href: "/admin/contacts", label: "Contacts", icon: Contact, roles: ["super_admin", "marketing"] },
+      { href: "/admin/campaigns", label: "Campaigns", icon: Send, roles: ["super_admin", "marketing"] },
       { href: "/admin/email-templates", label: "Email Templates", icon: Mail, roles: ["super_admin"] },
     ],
   },

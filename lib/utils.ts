@@ -20,6 +20,16 @@ export function formatPrice(cents: number, currency = "ZAR"): string {
   }).format(cents / 100);
 }
 
+/** Escape HTML special characters to prevent XSS in email templates. */
+export function escapeHtml(str: string): string {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

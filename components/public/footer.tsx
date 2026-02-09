@@ -24,7 +24,6 @@ interface PublicFooterProps {
   readonly locationText: string;
   readonly socialLinks: { platform: string; url: string }[];
   readonly copyrightText: string;
-  readonly mailchimpConfigured: boolean;
 }
 
 export function PublicFooter({
@@ -37,7 +36,6 @@ export function PublicFooter({
   locationText,
   socialLinks,
   copyrightText,
-  mailchimpConfigured,
 }: PublicFooterProps) {
   const [name, setName] = useState("");
   const [emailInput, setEmailInput] = useState("");
@@ -46,11 +44,6 @@ export function PublicFooter({
 
   async function handleSubscribe(e: React.FormEvent) {
     e.preventDefault();
-
-    if (!mailchimpConfigured) {
-      setSubmitted(true);
-      return;
-    }
 
     setSubscribing(true);
     try {

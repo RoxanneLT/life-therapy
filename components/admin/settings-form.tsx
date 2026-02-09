@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,11 +107,6 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [ogImageUrl, setOgImageUrl] = useState(initialSettings.ogImageUrl || "");
   const [googleAnalyticsId, setGoogleAnalyticsId] = useState(initialSettings.googleAnalyticsId || "");
 
-  // Newsletter
-  const [mailchimpApiKey, setMailchimpApiKey] = useState(initialSettings.mailchimpApiKey || "");
-  const [mailchimpAudienceId, setMailchimpAudienceId] = useState(initialSettings.mailchimpAudienceId || "");
-  const [mailchimpServer, setMailchimpServer] = useState(initialSettings.mailchimpServer || "");
-
   // SMTP
   const [smtpHost, setSmtpHost] = useState(initialSettings.smtpHost || "");
   const [smtpPort, setSmtpPort] = useState(initialSettings.smtpPort?.toString() || "");
@@ -163,9 +159,6 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       formData.set("metaDescription", metaDescription);
       formData.set("ogImageUrl", ogImageUrl);
       formData.set("googleAnalyticsId", googleAnalyticsId);
-      formData.set("mailchimpApiKey", mailchimpApiKey);
-      formData.set("mailchimpAudienceId", mailchimpAudienceId);
-      formData.set("mailchimpServer", mailchimpServer);
       formData.set("smtpHost", smtpHost);
       formData.set("smtpPort", smtpPort);
       formData.set("smtpUser", smtpUser);
@@ -478,28 +471,19 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           {activeSection === "newsletter" && (
             <Card>
               <CardHeader>
-                <CardTitle>Newsletter (Mailchimp)</CardTitle>
-                <CardDescription>Connect Mailchimp to enable the footer newsletter signup form</CardDescription>
+                <CardTitle>Newsletter</CardTitle>
+                <CardDescription>Newsletter subscriptions are stored locally in the database.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="mailchimpApiKey">API Key</Label>
-                  <Input id="mailchimpApiKey" type="password" value={mailchimpApiKey} onChange={(e) => setMailchimpApiKey(e.target.value)} placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-us21" />
-                  <p className="text-xs text-muted-foreground">
-                    Found in Mailchimp &rarr; Account &rarr; Extras &rarr; API keys.
-                  </p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="mailchimpAudienceId">Audience (List) ID</Label>
-                    <Input id="mailchimpAudienceId" value={mailchimpAudienceId} onChange={(e) => setMailchimpAudienceId(e.target.value)} placeholder="abc1234567" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mailchimpServer">Server Prefix</Label>
-                    <Input id="mailchimpServer" value={mailchimpServer} onChange={(e) => setMailchimpServer(e.target.value)} placeholder="us21" />
-                    <p className="text-xs text-muted-foreground">The part after the dash in your API key.</p>
-                  </div>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  The footer newsletter form saves subscribers directly to the Contacts database. You can manage contacts, import subscribers, and send campaigns from the admin panel.
+                </p>
+                <Link
+                  href="/admin/contacts"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-brand-600 hover:underline"
+                >
+                  Manage Contacts &rarr;
+                </Link>
               </CardContent>
             </Card>
           )}

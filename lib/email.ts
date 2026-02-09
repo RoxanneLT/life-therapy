@@ -1,4 +1,6 @@
 import { getSiteSettings } from "@/lib/settings";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import nodemailer from "nodemailer";
 
 interface SendEmailOptions {
@@ -6,6 +8,9 @@ interface SendEmailOptions {
   subject: string;
   html: string;
   replyTo?: string;
+  templateKey?: string;
+  studentId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export async function sendEmail({
@@ -13,6 +18,9 @@ export async function sendEmail({
   subject,
   html,
   replyTo,
+  templateKey,
+  studentId,
+  metadata,
 }: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
   const settings = await getSiteSettings();
 
@@ -23,6 +31,7 @@ export async function sendEmail({
     !settings.smtpPass
   ) {
     console.error("SMTP not configured — email not sent:", subject);
+    await logEmail({ to, subject, templateKey, studentId, metadata, status: "failed", error: "SMTP not configured" });
     return { success: false, error: "SMTP not configured" };
   }
 
@@ -36,17 +45,55 @@ export async function sendEmail({
     },
   });
 
+  const MAX_RETRIES = 2;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await transporter.sendMail({
+        from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || settings.smtpUser}>`,
+        to,
+        subject,
+        html,
+        ...(replyTo ? { replyTo } : {}),
+      });
+      await logEmail({ to, subject, templateKey, studentId, metadata, status: "sent" });
+      return { success: true };
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+  }
+
+  console.error("Failed to send email after retries:", lastError);
+  await logEmail({ to, subject, templateKey, studentId, metadata, status: "failed", error: String(lastError) });
+  return { success: false, error: String(lastError) };
+}
+
+async function logEmail(params: {
+  to: string;
+  subject: string;
+  templateKey?: string;
+  studentId?: string;
+  metadata?: Record<string, unknown>;
+  status: string;
+  error?: string;
+}) {
   try {
-    await transporter.sendMail({
-      from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || settings.smtpUser}>`,
-      to,
-      subject,
-      html,
-      ...(replyTo ? { replyTo } : {}),
+    await prisma.emailLog.create({
+      data: {
+        to: params.to,
+        subject: params.subject,
+        templateKey: params.templateKey || null,
+        studentId: params.studentId || null,
+        metadata: params.metadata as Prisma.InputJsonValue ?? undefined,
+        status: params.status,
+        error: params.error || null,
+      },
     });
-    return { success: true };
-  } catch (error) {
-    console.error("Failed to send email:", error);
-    return { success: false, error: String(error) };
+  } catch (err) {
+    console.error("Failed to log email:", err);
   }
 }

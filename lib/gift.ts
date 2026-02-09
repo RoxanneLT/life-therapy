@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { findOrCreateStudent } from "@/lib/account-provisioning";
+import { escapeHtml } from "@/lib/utils";
 
 /**
  * Create a Gift record for a gift order item.
@@ -99,8 +100,8 @@ export async function sendGiftEmail(giftId: string) {
 
   const messageBlock = gift.message
     ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 16px; margin: 16px 0; font-style: italic; color: #92400e;">
-        &ldquo;${gift.message}&rdquo;
-        <p style="margin: 8px 0 0; font-style: normal; font-size: 13px; color: #a16207;">&mdash; ${buyerName}</p>
+        &ldquo;${escapeHtml(gift.message)}&rdquo;
+        <p style="margin: 8px 0 0; font-style: normal; font-size: 13px; color: #a16207;">&mdash; ${escapeHtml(buyerName)}</p>
       </div>`
     : "";
 
@@ -116,6 +117,8 @@ export async function sendGiftEmail(giftId: string) {
     to: gift.recipientEmail,
     subject,
     html,
+    templateKey: "gift_received",
+    metadata: { giftId },
   });
 
   // Mark as delivered and record send time
@@ -142,6 +145,9 @@ export async function sendGiftEmail(giftId: string) {
         to: buyerStudent.email,
         subject: notification.subject,
         html: notification.html,
+        templateKey: "gift_delivered_buyer",
+        studentId: gift.buyerId,
+        metadata: { giftId },
       })
     ).catch((err) =>
       console.error("Failed to send gift delivery notification to buyer:", err)

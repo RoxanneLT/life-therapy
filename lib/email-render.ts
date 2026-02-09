@@ -94,6 +94,9 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     recipientName: "Sarah",
     itemTitle: "Understanding Self-Esteem (Full Course)",
   },
+  password_changed: {
+    firstName: "Jane",
+  },
 };
 
 // Title mapping for baseTemplate wrapper
@@ -108,6 +111,7 @@ const TEMPLATE_TITLES: Record<string, string> = {
   course_completed: "Course Completed!",
   gift_received: "You've Received a Gift!",
   gift_delivered_buyer: "Gift Delivered!",
+  password_changed: "Password Changed",
 };
 
 /**
@@ -130,8 +134,13 @@ function replacePlaceholders(
 export async function renderEmail(
   key: string,
   variables: Record<string, string>,
-  baseUrl = DEFAULT_BASE_URL
+  baseUrl = DEFAULT_BASE_URL,
+  unsubscribeToken?: string
 ): Promise<{ subject: string; html: string }> {
+  const unsubscribeUrl = unsubscribeToken
+    ? `${baseUrl}/api/unsubscribe?token=${unsubscribeToken}`
+    : undefined;
+
   try {
     const template = await prisma.emailTemplate.findUnique({
       where: { key },
@@ -141,7 +150,7 @@ export async function renderEmail(
       const subject = replacePlaceholders(template.subject, variables);
       const bodyHtml = replacePlaceholders(template.bodyHtml, variables);
       const title = TEMPLATE_TITLES[key] || template.name;
-      const html = baseTemplate(title, bodyHtml, baseUrl);
+      const html = baseTemplate(title, bodyHtml, baseUrl, unsubscribeUrl);
       return { subject, html };
     }
   } catch {
@@ -149,7 +158,7 @@ export async function renderEmail(
   }
 
   // Fallback: use hardcoded templates
-  return renderFallback(key, variables, baseUrl);
+  return renderFallback(key, variables, baseUrl, unsubscribeUrl);
 }
 
 /**
@@ -197,17 +206,17 @@ export function getSampleData(key: string): Record<string, string> {
 function renderFallback(
   key: string,
   variables: Record<string, string>,
-  baseUrl = DEFAULT_BASE_URL
+  baseUrl = DEFAULT_BASE_URL,
+  unsubscribeUrl?: string
 ): { subject: string; html: string } {
   switch (key) {
     case "booking_confirmation":
-      // This fallback can't replicate the full booking object, so return a simple version
       return {
         subject: `Booking Confirmed: ${variables.sessionType || "Session"} on ${variables.date || ""}`,
         html: baseTemplate(
           "Your Session is Confirmed!",
           `<p>Hi ${variables.clientName || ""},</p><p>Your session has been confirmed.</p>`,
-          baseUrl
+          baseUrl, unsubscribeUrl
         ),
       };
     case "account_created":
@@ -247,13 +256,25 @@ function renderFallback(
         redeemUrl: variables.redeemUrl || "",
         baseUrl,
       });
+    case "password_changed":
+      return {
+        subject: "Your Life-Therapy password has been changed",
+        html: baseTemplate(
+          "Password Changed",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>Your password has been successfully changed.</p>
+          <p>If you did not make this change, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
     default:
       return {
         subject: `Email: ${key}`,
         html: baseTemplate(
           key,
           "<p>Template not found.</p>",
-          baseUrl
+          baseUrl, unsubscribeUrl
         ),
       };
   }

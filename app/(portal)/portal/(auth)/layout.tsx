@@ -30,7 +30,6 @@ export default async function PortalAuthLayout({
         locationText={settings.locationText || ""}
         socialLinks={socialLinks}
         copyrightText={settings.copyrightText || ""}
-        mailchimpConfigured={!!(settings.mailchimpApiKey && settings.mailchimpAudienceId && settings.mailchimpServer)}
       />
     </>
   );

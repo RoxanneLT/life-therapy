@@ -68,7 +68,7 @@ export async function recalculateProgress(
         certificateNumber: certNumber,
         portalUrl: `${baseUrl}/portal/certificates`,
       }, baseUrl).then(({ subject, html }) =>
-        sendEmail({ to: student.email, subject, html })
+        sendEmail({ to: student.email, subject, html, templateKey: "course_completed", studentId, metadata: { courseId } })
       ).catch((err) =>
         console.error("Failed to send course completion email:", err)
       );

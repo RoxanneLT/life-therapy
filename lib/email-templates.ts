@@ -1,13 +1,16 @@
 import { getSessionTypeConfig } from "./booking-config";
-import { formatPrice } from "./utils";
+import { formatPrice, escapeHtml } from "./utils";
 import { format } from "date-fns";
 import type { Currency } from "./region";
 import type { Booking, Order, OrderItem, Student } from "@/lib/generated/prisma/client";
 
 const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 
-export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE_URL): string {
+export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE_URL, unsubscribeUrl?: string): string {
   const domain = baseUrl.replace(/^https?:\/\//, "");
+  const unsubLine = unsubscribeUrl
+    ? `<p style="margin: 8px 0 0;"><a href="${unsubscribeUrl}" style="color: #9ca3af; text-decoration: underline;">Unsubscribe from marketing emails</a></p>`
+    : "";
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; background-color: #f9fafb;">
@@ -25,6 +28,7 @@ export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE
     <div style="border-top: 1px solid #e5e7eb; padding: 20px 24px; font-size: 12px; color: #6b7280; text-align: center;">
       <p style="margin: 0 0 4px;"><a href="${baseUrl}" style="color: #8BA889; text-decoration: none; font-weight: 600;">${domain}</a></p>
       <p style="margin: 0;">hello@life-therapy.co.za &middot; +27 71 017 0353</p>
+      ${unsubLine}
     </div>
   </div>
 </body></html>`;
@@ -112,10 +116,10 @@ export function bookingNotificationEmail(booking: Booking, baseUrl = DEFAULT_BAS
       <p style="margin: 4px 0;"><strong>Duration:</strong> ${config.durationMinutes} min</p>
     </div>
     <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
-      <p style="margin: 4px 0;"><strong>Client:</strong> ${booking.clientName}</p>
-      <p style="margin: 4px 0;"><strong>Email:</strong> ${booking.clientEmail}</p>
-      ${booking.clientPhone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${booking.clientPhone}</p>` : ""}
-      ${booking.clientNotes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${booking.clientNotes}</p>` : ""}
+      <p style="margin: 4px 0;"><strong>Client:</strong> ${escapeHtml(booking.clientName)}</p>
+      <p style="margin: 4px 0;"><strong>Email:</strong> ${escapeHtml(booking.clientEmail)}</p>
+      ${booking.clientPhone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${escapeHtml(booking.clientPhone)}</p>` : ""}
+      ${booking.clientNotes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${escapeHtml(booking.clientNotes)}</p>` : ""}
     </div>
     ${booking.teamsMeetingUrl ? `<p><strong>Teams link:</strong> <a href="${booking.teamsMeetingUrl}">${booking.teamsMeetingUrl}</a></p>` : ""}
   `;
@@ -410,8 +414,8 @@ export function giftReceivedEmail(params: {
 } {
   const messageBlock = params.message
     ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 16px; margin: 16px 0; font-style: italic; color: #92400e;">
-        &ldquo;${params.message}&rdquo;
-        <p style="margin: 8px 0 0; font-style: normal; font-size: 13px; color: #a16207;">&mdash; ${params.buyerName}</p>
+        &ldquo;${escapeHtml(params.message)}&rdquo;
+        <p style="margin: 8px 0 0; font-style: normal; font-size: 13px; color: #a16207;">&mdash; ${escapeHtml(params.buyerName)}</p>
       </div>`
     : "";
 

@@ -9,7 +9,7 @@ import { getAvailableSlots } from "@/lib/availability";
 import { createCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, escapeHtml } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Currency } from "@/lib/region";
 import { getSiteSettings } from "@/lib/settings";
@@ -21,6 +21,7 @@ import { getBalance, deductCredit } from "@/lib/credits";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SessionType } from "@/lib/generated/prisma/client";
+import { upsertContact } from "@/lib/contacts";
 
 function formatMinutesToTime(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -134,6 +135,18 @@ export async function createBooking(formData: FormData) {
     );
   }
 
+  // Sync booking client to Contact list (non-blocking)
+  const nameParts = parsed.clientName.trim().split(/\s+/);
+  upsertContact({
+    email: parsed.clientEmail,
+    firstName: nameParts[0],
+    lastName: nameParts.slice(1).join(" ") || undefined,
+    phone: parsed.clientPhone || undefined,
+    source: "booking",
+    consentGiven: true,
+    consentMethod: "booking_form",
+  }).catch((err) => console.error("Failed to sync booking contact:", err));
+
   // Send emails (don't block redirect on failure)
   const baseUrl = await getBaseUrl();
   const dateStr = format(new Date(booking.date), "EEEE, d MMMM yyyy");
@@ -164,10 +177,10 @@ export async function createBooking(formData: FormData) {
   }, baseUrl);
 
   const clientDetails = [
-    `<p style="margin: 4px 0;"><strong>Client:</strong> ${booking.clientName}</p>`,
-    `<p style="margin: 4px 0;"><strong>Email:</strong> ${booking.clientEmail}</p>`,
-    booking.clientPhone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${booking.clientPhone}</p>` : "",
-    booking.clientNotes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${booking.clientNotes}</p>` : "",
+    `<p style="margin: 4px 0;"><strong>Client:</strong> ${escapeHtml(booking.clientName)}</p>`,
+    `<p style="margin: 4px 0;"><strong>Email:</strong> ${escapeHtml(booking.clientEmail)}</p>`,
+    booking.clientPhone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${escapeHtml(booking.clientPhone)}</p>` : "",
+    booking.clientNotes ? `<p style="margin: 4px 0;"><strong>Notes:</strong> ${escapeHtml(booking.clientNotes)}</p>` : "",
   ].join("");
 
   const teamsLink = booking.teamsMeetingUrl
@@ -185,10 +198,12 @@ export async function createBooking(formData: FormData) {
   }, baseUrl);
 
   await Promise.allSettled([
-    sendEmail({ to: booking.clientEmail, ...confirmEmail }),
+    sendEmail({ to: booking.clientEmail, ...confirmEmail, templateKey: "booking_confirmation", metadata: { bookingId: booking.id } }),
     sendEmail({
       to: settings.email || "hello@life-therapy.co.za",
       ...notifyEmail,
+      templateKey: "booking_notification",
+      metadata: { bookingId: booking.id },
     }),
   ]);
 
