@@ -1,14 +1,18 @@
 "use client";
 
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
+import { formatPrice } from "@/lib/utils";
+import type { Currency } from "@/lib/region";
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock } from "lucide-react";
 
 interface SessionTypeStepProps {
   readonly onSelect: (config: SessionTypeConfig) => void;
+  readonly sessionPrices: Record<string, number>;
+  readonly currency: Currency;
 }
 
-export function SessionTypeStep({ onSelect }: SessionTypeStepProps) {
+export function SessionTypeStep({ onSelect, sessionPrices, currency }: SessionTypeStepProps) {
   return (
     <div className="space-y-4">
       <div className="text-center">
@@ -37,7 +41,9 @@ export function SessionTypeStep({ onSelect }: SessionTypeStepProps) {
                   {config.durationMinutes} min
                 </span>
                 <span className="font-semibold text-brand-700">
-                  {config.priceLabel}
+                  {config.isFree
+                    ? "Free"
+                    : formatPrice(sessionPrices[config.type] ?? 0, currency)}
                 </span>
               </div>
             </CardContent>

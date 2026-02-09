@@ -8,6 +8,8 @@ import { CartProvider } from "@/lib/cart-store";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getSiteSettings } from "@/lib/settings";
+import { RegionProvider } from "@/lib/region-store";
+import { getRegion, getCurrency } from "@/lib/get-region";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -29,6 +31,13 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${settings.siteName || "Life-Therapy"}`,
     },
     description,
+    alternates: {
+      languages: {
+        "en-ZA": "https://life-therapy.co.za",
+        "en": "https://life-therapy.online",
+        "x-default": "https://life-therapy.online",
+      },
+    },
     openGraph: {
       title,
       description,
@@ -43,15 +52,19 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const settings = await getSiteSettings();
+  const region = getRegion();
+  const currency = getCurrency();
 
   return (
     <html lang="en" className={poppins.variable} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider>
-          <CartProvider>
-            {children}
-            <Toaster position="top-right" />
-          </CartProvider>
+          <RegionProvider region={region} currency={currency}>
+            <CartProvider>
+              {children}
+              <Toaster position="top-right" />
+            </CartProvider>
+          </RegionProvider>
         </ThemeProvider>
         {settings.googleAnalyticsId && (
           <GoogleAnalytics gaId={settings.googleAnalyticsId} />

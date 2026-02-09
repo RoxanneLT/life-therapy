@@ -9,6 +9,7 @@ import { CouponInput } from "@/components/public/cart/coupon-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
+import { useRegion } from "@/lib/region-store";
 import { ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -19,6 +20,7 @@ interface AppliedCoupon {
 
 export function CartPageClient() {
   const { items, removeItem, updateItem, clearCart } = useCart();
+  const { currency } = useRegion();
   const [products, setProducts] = useState<
     Map<string, CartProductInfo>
   >(new Map());
@@ -71,7 +73,7 @@ export function CartPageClient() {
       .filter((i) => i.hybridPackageId)
       .map((i) => i.hybridPackageId!);
 
-    const result = await applyCoupon(code, courseIds, packageIds, subtotalCents);
+    const result = await applyCoupon(code, courseIds, packageIds, subtotalCents, currency);
 
     if (result.valid) {
       setCoupon({ code: result.code, discountCents: result.discountCents });
@@ -211,18 +213,18 @@ export function CartPageClient() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span>{formatPrice(subtotalCents)}</span>
+                    <span>{formatPrice(subtotalCents, currency)}</span>
                   </div>
                   {discountCents > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Discount</span>
-                      <span>-{formatPrice(discountCents)}</span>
+                      <span>-{formatPrice(discountCents, currency)}</span>
                     </div>
                   )}
                   <div className="border-t pt-2">
                     <div className="flex justify-between text-base font-semibold">
                       <span>Total</span>
-                      <span>{formatPrice(totalCents)}</span>
+                      <span>{formatPrice(totalCents, currency)}</span>
                     </div>
                   </div>
                 </div>

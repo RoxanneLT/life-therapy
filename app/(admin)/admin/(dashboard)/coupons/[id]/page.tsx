@@ -71,7 +71,7 @@ export default async function EditCouponPage({
                 </select>
               </div>
               <div>
-                <Label htmlFor="value">Value</Label>
+                <Label htmlFor="value">Value (ZAR cents / %)</Label>
                 <Input
                   id="value"
                   name="value"
@@ -81,6 +81,50 @@ export default async function EditCouponPage({
                   required
                   className="mt-1"
                 />
+              </div>
+            </div>
+
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Multi-currency values (fixed amount only, leave blank to use ZAR value)
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="valueUsd" className="text-xs">USD (cents)</Label>
+                  <Input
+                    id="valueUsd"
+                    name="valueUsd"
+                    type="number"
+                    min="0"
+                    defaultValue={coupon.valueUsd ?? ""}
+                    placeholder="e.g. 500"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="valueEur" className="text-xs">EUR (cents)</Label>
+                  <Input
+                    id="valueEur"
+                    name="valueEur"
+                    type="number"
+                    min="0"
+                    defaultValue={coupon.valueEur ?? ""}
+                    placeholder="e.g. 450"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="valueGbp" className="text-xs">GBP (cents)</Label>
+                  <Input
+                    id="valueGbp"
+                    name="valueGbp"
+                    type="number"
+                    min="0"
+                    defaultValue={coupon.valueGbp ?? ""}
+                    placeholder="e.g. 400"
+                    className="mt-1"
+                  />
+                </div>
               </div>
             </div>
 

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/portal/progress-bar";
 import { formatPrice } from "@/lib/utils";
+import { getCurrency } from "@/lib/get-region";
 import { UpgradeButton } from "@/components/portal/upgrade-button";
 import {
   PlayCircle,
@@ -35,6 +36,7 @@ export default async function CourseOverviewPage({
   const { slug } = await params;
   const { module: moduleIdParam } = await searchParams;
   const { student } = await requirePasswordChanged();
+  const currency = getCurrency();
 
   const course = await prisma.course.findUnique({
     where: { slug },
@@ -175,8 +177,8 @@ export default async function CourseOverviewPage({
                 Upgrade to the full course
               </p>
               <p className="text-sm text-brand-600">
-                Get all modules for {formatPrice(upgradeInfo.fullPrice)} — you
-                only pay {formatPrice(upgradeInfo.upgradePrice)} more
+                Get all modules for {formatPrice(upgradeInfo.fullPrice, currency)} — you
+                only pay {formatPrice(upgradeInfo.upgradePrice, currency)} more
               </p>
             </div>
             <UpgradeButton courseId={course.id} />

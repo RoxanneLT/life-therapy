@@ -6,7 +6,8 @@ import { studentRegisterSchema } from "@/lib/validations";
 import { headers } from "next/headers";
 import { rateLimit } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
-import { accountCreatedEmail } from "@/lib/email-templates";
+import { renderEmail } from "@/lib/email-render";
+import { getBaseUrl } from "@/lib/get-region";
 
 export async function registerStudent(formData: FormData) {
   const headersList = headers();
@@ -63,11 +64,13 @@ export async function registerStudent(formData: FormData) {
   });
 
   // Send welcome email (non-blocking)
-  const { subject, html } = accountCreatedEmail({
+  const baseUrl = getBaseUrl();
+  renderEmail("account_created", {
     firstName,
-    loginUrl: "https://life-therapy.co.za/portal",
-  });
-  sendEmail({ to: email, subject, html }).catch((err) =>
+    loginUrl: `${baseUrl}/portal`,
+  }, baseUrl).then(({ subject, html }) =>
+    sendEmail({ to: email, subject, html })
+  ).catch((err) =>
     console.error("Failed to send welcome email:", err)
   );
 

@@ -36,6 +36,9 @@ export const courseSchema = z.object({
   description: z.string().optional(),
   imageUrl: z.string().optional(),
   price: z.coerce.number().int().min(0).default(0),
+  priceUsd: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  priceEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  priceGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
   category: z.string().optional(),
   modulesCount: z.coerce.number().int().min(0).default(0),
   hours: z.string().optional(),
@@ -97,6 +100,15 @@ export const siteSettingsSchema = z.object({
   // Footer
   copyrightText: z.string().optional(),
   footerTagline: z.string().optional(),
+  // Session Pricing (all currencies)
+  sessionPriceIndividualZar: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceIndividualUsd: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceIndividualEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceIndividualGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceCouplesZar: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceCouplesUsd: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceCouplesEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  sessionPriceCouplesGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
 });
 
 export const bookingFormSchema = z.object({
@@ -141,6 +153,9 @@ export const moduleSchema = z.object({
   standaloneDescription: z.string().optional(),
   standaloneImageUrl: z.string().optional().transform((v) => v || undefined),
   standalonePrice: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  standalonePriceUsd: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  standalonePriceEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  standalonePriceGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
   isStandalonePublished: z.boolean().default(false),
   standaloneCategory: z.string().optional().transform((v) => v || undefined),
   // Preview video & facilitator
@@ -192,8 +207,29 @@ export const packageSchema = z.object({
   description: z.string().optional(),
   imageUrl: z.string().optional(),
   priceCents: z.coerce.number().int().min(0, "Price is required"),
+  priceCentsUsd: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  priceCentsEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  priceCentsGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
   credits: z.coerce.number().int().min(0).default(0),
-  documentUrl: z.string().optional().or(z.literal("")),
+  courseSlots: z.coerce.number().int().min(0).default(0),
+  digitalProductSlots: z.coerce.number().int().min(0).default(0),
+  isPublished: z.boolean().default(false),
+  sortOrder: z.coerce.number().int().default(0),
+});
+
+export const digitalProductSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  slug: z.string().min(1, "Slug is required"),
+  description: z.string().optional(),
+  imageUrl: z.string().optional(),
+  fileUrl: z.string().min(1, "File is required"),
+  fileName: z.string().optional(),
+  fileSizeBytes: z.coerce.number().int().optional(),
+  priceCents: z.coerce.number().int().min(0, "Price is required"),
+  priceCentsUsd: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  priceCentsEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  priceCentsGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
+  category: z.string().optional().transform((v) => v || undefined),
   isPublished: z.boolean().default(false),
   sortOrder: z.coerce.number().int().default(0),
 });
@@ -229,5 +265,6 @@ export type LectureInput = z.infer<typeof lectureSchema>;
 export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
 export type CouponInput = z.infer<typeof couponSchema>;
 export type PackageInput = z.infer<typeof packageSchema>;
+export type DigitalProductInput = z.infer<typeof digitalProductSchema>;
 export type StudentRegisterInput = z.infer<typeof studentRegisterSchema>;
 export type StudentLoginInput = z.infer<typeof studentLoginSchema>;

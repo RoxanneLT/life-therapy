@@ -35,6 +35,9 @@ interface ModuleFormProps {
     standaloneDescription?: string | null;
     standaloneImageUrl?: string | null;
     standalonePrice?: number | null;
+    standalonePriceUsd?: number | null;
+    standalonePriceEur?: number | null;
+    standalonePriceGbp?: number | null;
     isStandalonePublished: boolean;
     standaloneCategory?: string | null;
     previewVideoUrl?: string | null;
@@ -191,7 +194,7 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="standalonePrice">Price (ZAR cents)</Label>
                 <Input
@@ -200,9 +203,44 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
                   type="number"
                   defaultValue={initialData?.standalonePrice ?? ""}
                   min={0}
-                  placeholder="e.g. 14900 = R149"
+                  placeholder="e.g. 6900 = R69"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="standalonePriceUsd">Price (USD cents)</Label>
+                <Input
+                  id="standalonePriceUsd"
+                  name="standalonePriceUsd"
+                  type="number"
+                  defaultValue={initialData?.standalonePriceUsd ?? ""}
+                  min={0}
+                  placeholder="e.g. 499 = $4.99"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="standalonePriceEur">Price (EUR cents)</Label>
+                <Input
+                  id="standalonePriceEur"
+                  name="standalonePriceEur"
+                  type="number"
+                  defaultValue={initialData?.standalonePriceEur ?? ""}
+                  min={0}
+                  placeholder="e.g. 449 = €4.49"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="standalonePriceGbp">Price (GBP cents)</Label>
+                <Input
+                  id="standalonePriceGbp"
+                  name="standalonePriceGbp"
+                  type="number"
+                  defaultValue={initialData?.standalonePriceGbp ?? ""}
+                  min={0}
+                  placeholder="e.g. 399 = £3.99"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Category</Label>
                 <Select

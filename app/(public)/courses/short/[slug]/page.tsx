@@ -3,11 +3,12 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { formatPrice } from "@/lib/utils";
+import { getCurrency } from "@/lib/get-region";
+import { getModulePrice, getCoursePrice } from "@/lib/pricing";
 import { Badge } from "@/components/ui/badge";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
 import { PreviewVideoPlayer } from "@/components/public/preview-video-player";
 import { ArrowLeft, BookOpen } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -36,6 +37,7 @@ export default async function ShortCourseDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const currency = getCurrency();
   const mod = await prisma.module.findUnique({
     where: { standaloneSlug: slug },
     include: {
@@ -45,6 +47,9 @@ export default async function ShortCourseDetailPage({
           title: true,
           slug: true,
           price: true,
+          priceUsd: true,
+          priceEur: true,
+          priceGbp: true,
         },
       },
       lectures: {
@@ -62,17 +67,12 @@ export default async function ShortCourseDetailPage({
   const title = mod.standaloneTitle || mod.title;
   const description = mod.standaloneDescription || mod.description;
   const imageUrl = mod.standaloneImageUrl;
-  const price = mod.standalonePrice || 0;
+  const price = getModulePrice(mod, currency);
 
-  // Calculate savings vs full course
-  const fullCoursePrice = mod.course.price;
-  const savingsPercent =
-    fullCoursePrice > 0
-      ? Math.round(((fullCoursePrice - price) / fullCoursePrice) * 100)
-      : 0;
+  const fullCoursePrice = getCoursePrice(mod.course, currency);
 
-  // Other standalone modules from the same course
-  const relatedModules = await prisma.module.findMany({
+  // All standalone modules from the same course (for savings calc + display)
+  const allSiblingModules = await prisma.module.findMany({
     where: {
       courseId: mod.courseId,
       isStandalonePublished: true,
@@ -84,83 +84,93 @@ export default async function ShortCourseDetailPage({
       title: true,
       standaloneSlug: true,
       standalonePrice: true,
+      standalonePriceUsd: true,
+      standalonePriceEur: true,
+      standalonePriceGbp: true,
     },
     orderBy: { sortOrder: "asc" },
-    take: 4,
   });
+
+  // Show up to 4 in the "Other Short Courses" section
+  const relatedModules = allSiblingModules.slice(0, 4);
+
+  // Calculate savings: buying all standalone modules individually vs full course
+  const allModulesTotal =
+    price + allSiblingModules.reduce((sum, rm) => sum + getModulePrice(rm, currency), 0);
+  const savingsPercent =
+    allModulesTotal > fullCoursePrice && allModulesTotal > 0
+      ? Math.round(((allModulesTotal - fullCoursePrice) / allModulesTotal) * 100)
+      : 0;
 
   return (
     <>
-      {/* Hero — two-column: info left, preview video right */}
-      <section className="bg-brand-50 px-4 py-16 dark:bg-brand-950/30">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/courses"
-            className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand-600 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Courses
-          </Link>
-        </div>
-        <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
-          {/* Left: info */}
-          <div>
-            <div className="mb-4 flex items-center gap-2">
-              <Badge variant="secondary">Short Course</Badge>
-              {mod.standaloneCategory && (
-                <Badge variant="outline">
-                  {mod.standaloneCategory.replaceAll("_", " ")}
-                </Badge>
-              )}
-            </div>
-            <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-brand-700 lg:text-4xl">
-              {title}
-            </h1>
-            {description && (
-              <p className="mt-3 text-lg text-muted-foreground">
-                {description}
-              </p>
-            )}
-
-            <div className="mt-6 flex flex-wrap gap-6 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-terracotta-500" />
-                <span>
-                  {mod.lectures.length} Lecture
-                  {mod.lectures.length !== 1 && "s"}
-                </span>
-              </div>
-            </div>
-
-            {/* Price + CTA */}
-            <div className="mt-8 flex items-center gap-4">
-              <span className="text-3xl font-bold text-brand-600">
-                {formatPrice(price)}
-              </span>
-              <AddToCartButton
-                moduleId={mod.id}
-                size="lg"
-                label="Add to Cart"
-              />
-            </div>
+      {/* Hero — branded background, preview video right */}
+      <section
+        className="relative bg-cover bg-center px-4 py-16"
+        style={{
+          backgroundImage: `url(${imageUrl || "/images/LT_grayBG.png"})`,
+        }}
+      >
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative z-10">
+          <div className="mx-auto max-w-6xl">
+            <Link
+              href="/courses"
+              className="mb-6 inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Courses
+            </Link>
           </div>
+          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
+            {/* Left: info */}
+            <div>
+              <div className="mb-4 flex items-center gap-2">
+                <Badge className="bg-white/20 text-white hover:bg-white/30">Short Course</Badge>
+                {mod.standaloneCategory && (
+                  <Badge variant="outline" className="border-white/40 text-white">
+                    {mod.standaloneCategory.replaceAll("_", " ")}
+                  </Badge>
+                )}
+              </div>
+              <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-white lg:text-4xl">
+                {title}
+              </h1>
+              {description && (
+                <p className="mt-3 text-lg text-white/80">
+                  {description}
+                </p>
+              )}
 
-          {/* Right: preview video or image */}
-          <div>
-            {mod.previewVideoUrl ? (
-              <PreviewVideoPlayer videoUrl={mod.previewVideoUrl} />
-            ) : imageUrl ? (
-              <div className="overflow-hidden rounded-xl">
-                <Image
-                  src={imageUrl}
-                  alt={title}
-                  width={600}
-                  height={400}
-                  sizes="(max-width: 768px) 100vw, 66vw"
-                  className="aspect-video w-full object-cover"
+              <div className="mt-6 flex flex-wrap gap-6 text-sm text-white/70">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-terracotta-400" />
+                  <span>
+                    {mod.lectures.length} Lecture
+                    {mod.lectures.length !== 1 && "s"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Price + CTA */}
+              <div className="mt-8 flex items-center gap-4">
+                <span className="text-3xl font-bold text-white">
+                  {formatPrice(price, currency)}
+                </span>
+                <AddToCartButton
+                  moduleId={mod.id}
+                  size="lg"
+                  label="Add to Cart"
                 />
               </div>
-            ) : null}
+            </div>
+
+            {/* Right: preview video only */}
+            {mod.previewVideoUrl && (
+              <div>
+                <PreviewVideoPlayer videoUrl={mod.previewVideoUrl} />
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -242,7 +252,7 @@ export default async function ShortCourseDetailPage({
                   </span>
                   {rm.standalonePrice != null && (
                     <span className="font-semibold text-brand-600">
-                      {formatPrice(rm.standalonePrice)}
+                      {formatPrice(getModulePrice(rm, currency), currency)}
                     </span>
                   )}
                 </Link>
@@ -266,13 +276,13 @@ export default async function ShortCourseDetailPage({
               moduleId={mod.id}
               size="lg"
               variant="secondary"
-              label={`Add to Cart — ${formatPrice(price)}`}
+              label={`Add to Cart — ${formatPrice(price, currency)}`}
             />
             <Link
               href={`/courses/${mod.course.slug}`}
               className="inline-flex items-center justify-center rounded-md border border-white px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
             >
-              View Full Course — {formatPrice(fullCoursePrice)}
+              View Full Course — {formatPrice(fullCoursePrice, currency)}
             </Link>
           </div>
         </div>

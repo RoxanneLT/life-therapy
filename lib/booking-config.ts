@@ -5,8 +5,8 @@ export interface SessionTypeConfig {
   label: string;
   description: string;
   durationMinutes: number;
-  priceZarCents: number;
-  priceLabel: string;
+  /** Whether this session type is free (no payment required). */
+  isFree: boolean;
 }
 
 export const SESSION_TYPES: SessionTypeConfig[] = [
@@ -16,8 +16,7 @@ export const SESSION_TYPES: SessionTypeConfig[] = [
     description:
       "A no-obligation 30-minute introductory call to discuss your needs and how I can help.",
     durationMinutes: 30,
-    priceZarCents: 0,
-    priceLabel: "Free",
+    isFree: true,
   },
   {
     type: "individual",
@@ -25,8 +24,7 @@ export const SESSION_TYPES: SessionTypeConfig[] = [
     description:
       "A full 60-minute coaching or counselling session tailored to you.",
     durationMinutes: 60,
-    priceZarCents: 85000,
-    priceLabel: "R850",
+    isFree: false,
   },
   {
     type: "couples",
@@ -34,8 +32,7 @@ export const SESSION_TYPES: SessionTypeConfig[] = [
     description:
       "A 60-minute couples coaching or counselling session for you and your partner.",
     durationMinutes: 60,
-    priceZarCents: 120000,
-    priceLabel: "R1,200",
+    isFree: false,
   },
 ];
 

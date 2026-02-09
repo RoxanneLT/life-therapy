@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
 import { getOptionalStudent } from "@/lib/student-auth";
+import { getCurrency } from "@/lib/get-region";
+import { getSessionPrice } from "@/lib/pricing";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { BookingWidget } from "@/components/public/booking/booking-widget";
 import { notFound } from "next/navigation";
@@ -37,6 +39,14 @@ export default async function BookPage() {
     creditBalance = bal?.balance ?? 0;
   }
 
+  // Compute session prices in the user's currency
+  const currency = getCurrency();
+  const sessionPrices: Record<string, number> = {
+    free_consultation: 0,
+    individual: getSessionPrice("individual", currency, settings),
+    couples: getSessionPrice("couples", currency, settings),
+  };
+
   // Split sections by type for controlled layout order
   const heroSections = page.sections.filter((s) => s.sectionType === "hero");
   const stepsSections = page.sections.filter((s) => s.sectionType === "steps");
@@ -61,7 +71,7 @@ export default async function BookPage() {
       {/* Booking widget with anchor for auto-scroll */}
       {settings.bookingEnabled && (
         <div id="booking">
-          <BookingWidget creditBalance={creditBalance} />
+          <BookingWidget creditBalance={creditBalance} sessionPrices={sessionPrices} currency={currency} />
         </div>
       )}
 

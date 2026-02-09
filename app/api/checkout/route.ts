@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/stripe";
 import { resolveCartItems, validateCoupon } from "@/lib/cart";
 import { createOrderNumber } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
+import { getCurrency, getBaseUrl } from "@/lib/get-region";
 import type { CartItemLocal } from "@/lib/cart-store";
 
 /**
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
     }
 
     // Resolve cart items to real products with server-verified prices
-    const resolved = await resolveCartItems(items);
+    const currency = getCurrency();
+    const resolved = await resolveCartItems(items, currency);
     if (resolved.length === 0) {
       return NextResponse.json(
         { error: "No valid items in cart" },
@@ -35,12 +37,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Duplicate purchase prevention: courses and modules
+    // Duplicate purchase prevention: courses, modules, and digital products
     const nonGiftCourseIds = resolved
       .filter((r) => r.product.type === "course" && !r.isGift)
       .map((r) => r.product.id);
     const nonGiftModuleIds = resolved
       .filter((r) => r.product.type === "module" && !r.isGift)
+      .map((r) => r.product.id);
+    const nonGiftDpIds = resolved
+      .filter((r) => r.product.type === "digital_product" && !r.isGift)
       .map((r) => r.product.id);
 
     if (nonGiftCourseIds.length > 0) {
@@ -85,6 +90,27 @@ export async function POST(request: Request) {
       }
     }
 
+    if (nonGiftDpIds.length > 0) {
+      const existingDpAccess = await prisma.digitalProductAccess.findMany({
+        where: {
+          studentId: auth.student.id,
+          digitalProductId: { in: nonGiftDpIds },
+        },
+        select: { digitalProductId: true },
+      });
+
+      if (existingDpAccess.length > 0) {
+        const ownedIds = new Set(existingDpAccess.map((a) => a.digitalProductId));
+        const ownedTitles = resolved
+          .filter((r) => ownedIds.has(r.product.id))
+          .map((r) => r.product.title);
+        return NextResponse.json(
+          { error: `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Calculate subtotal from server-verified prices
     const subtotalCents = resolved.reduce(
       (sum, r) => sum + r.product.priceCents * r.quantity,
@@ -105,7 +131,8 @@ export async function POST(request: Request) {
       const couponResult = await validateCoupon(
         couponCode,
         { courseIds, packageIds },
-        subtotalCents
+        subtotalCents,
+        currency
       );
       if (couponResult.valid) {
         discountCents = couponResult.coupon.discountCents;
@@ -137,6 +164,8 @@ export async function POST(request: Request) {
             courseId: r.product.type === "course" ? r.product.id : null,
             hybridPackageId: r.product.type === "package" ? r.product.id : null,
             moduleId: r.product.type === "module" ? r.product.id : null,
+            digitalProductId: r.product.type === "digital_product" ? r.product.id : null,
+            packageSelections: r.packageSelections || undefined,
             isGift: true,
             giftRecipientName: r.giftRecipientName || null,
             giftRecipientEmail: r.giftRecipientEmail || null,
@@ -174,6 +203,9 @@ export async function POST(request: Request) {
             hybridPackageId:
               r.product.type === "package" ? r.product.id : null,
             moduleId: r.product.type === "module" ? r.product.id : null,
+            digitalProductId:
+              r.product.type === "digital_product" ? r.product.id : null,
+            packageSelections: r.packageSelections || undefined,
             description: r.product.title,
             unitPriceCents: r.product.priceCents,
             quantity: r.quantity,
@@ -186,11 +218,12 @@ export async function POST(request: Request) {
 
     // Create Stripe Checkout Session
     const stripe = getStripe();
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://life-therapy.co.za";
+    const baseUrl = getBaseUrl();
+    const stripeCurrency = currency.toLowerCase();
 
     const lineItems = resolved.map((r) => ({
       price_data: {
-        currency: "zar",
+        currency: stripeCurrency,
         product_data: {
           name: r.product.title,
           ...(r.product.imageUrl
@@ -207,7 +240,7 @@ export async function POST(request: Request) {
     if (discountCents > 0 && couponCode) {
       const stripeCoupon = await stripe.coupons.create({
         amount_off: discountCents,
-        currency: "zar",
+        currency: stripeCurrency,
         duration: "once",
         name: couponCode.toUpperCase(),
       });

@@ -22,12 +22,14 @@ export async function applyCoupon(
   code: string,
   courseIds: string[],
   packageIds: string[],
-  subtotalCents: number
+  subtotalCents: number,
+  currency: string = "ZAR"
 ) {
   const result = await validateCoupon(
     code,
     { courseIds, packageIds },
-    subtotalCents
+    subtotalCents,
+    currency
   );
 
   if (!result.valid) {

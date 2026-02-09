@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
-import { accountProvisionedEmail } from "@/lib/email-templates";
+import { renderEmail } from "@/lib/email-render";
 
 /**
  * Find an existing student by email or auto-create one.
@@ -49,12 +49,13 @@ export async function findOrCreateStudent(
   });
 
   // Send provisioned account email (non-blocking)
-  const { subject, html } = accountProvisionedEmail({
+  renderEmail("account_provisioned", {
     firstName,
     tempPassword,
     loginUrl: "https://life-therapy.co.za/portal/login",
-  });
-  sendEmail({ to: email, subject, html }).catch((err) =>
+  }).then(({ subject, html }) =>
+    sendEmail({ to: email, subject, html })
+  ).catch((err) =>
     console.error("Failed to send provisioned account email:", err)
   );
 

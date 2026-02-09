@@ -8,6 +8,8 @@ interface AddToCartButtonProps {
   courseId?: string;
   hybridPackageId?: string;
   moduleId?: string;
+  digitalProductId?: string;
+  packageSelections?: { courseIds: string[]; digitalProductIds: string[] };
   size?: "default" | "sm" | "lg";
   variant?: "default" | "secondary" | "outline";
   label?: string;
@@ -18,6 +20,8 @@ export function AddToCartButton({
   courseId,
   hybridPackageId,
   moduleId,
+  digitalProductId,
+  packageSelections,
   size = "default",
   variant = "default",
   label = "Add to Cart",
@@ -29,7 +33,8 @@ export function AddToCartButton({
     (i) =>
       (courseId && i.courseId === courseId) ||
       (hybridPackageId && i.hybridPackageId === hybridPackageId) ||
-      (moduleId && i.moduleId === moduleId)
+      (moduleId && i.moduleId === moduleId) ||
+      (digitalProductId && i.digitalProductId === digitalProductId)
   );
 
   if (isInCart) {
@@ -51,6 +56,8 @@ export function AddToCartButton({
           courseId,
           hybridPackageId,
           moduleId,
+          digitalProductId,
+          packageSelections,
           isGift: false,
         })
       }

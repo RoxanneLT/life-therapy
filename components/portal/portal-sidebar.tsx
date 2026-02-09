@@ -8,6 +8,7 @@ import {
   Award,
   Coins,
   CalendarDays,
+  FileDown,
   Settings,
 } from "lucide-react";
 import Image from "next/image";
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/portal", label: "My Courses", icon: GraduationCap },
   { href: "/portal/certificates", label: "Certificates", icon: Award },
   { href: "/portal/credits", label: "Session Credits", icon: Coins },
+  { href: "/portal/downloads", label: "My Downloads", icon: FileDown },
   { href: "/portal/book", label: "Book a Session", icon: CalendarDays },
   { href: "/portal/settings", label: "Settings", icon: Settings },
 ];

@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
+import { getCurrency } from "@/lib/get-region";
+import { getCoursePrice, getModulePrice } from "@/lib/pricing";
 import Link from "next/link";
 import Image from "next/image";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
@@ -62,6 +64,8 @@ export async function CourseCatalog({
     categoryFilter = c;
   }
 
+  const currency = getCurrency();
+
   const categoryWhere =
     categoryFilter !== "all" ? { category: categoryFilter } : {};
 
@@ -95,7 +99,7 @@ export async function CourseCatalog({
       imageUrl: c.imageUrl,
       category: c.category,
       level: c.level,
-      price: c.price,
+      price: getCoursePrice(c, currency),
       slug: c.slug,
       modulesCount: c.modulesCount,
       hours: c.hours,
@@ -110,7 +114,7 @@ export async function CourseCatalog({
       imageUrl: m.standaloneImageUrl,
       category: m.standaloneCategory,
       level: null,
-      price: m.standalonePrice || 0,
+      price: getModulePrice(m, currency),
       slug: `short/${m.standaloneSlug}`,
       moduleId: m.id,
       hasPreviewVideo: !!m.previewVideoUrl,
@@ -268,52 +272,54 @@ export async function CourseCatalog({
                     key={`${item.type}-${item.id}`}
                     className="overflow-hidden"
                   >
-                    {item.imageUrl && (
-                      <div className="relative">
+                    <div className="relative aspect-video bg-brand-800">
+                      {item.imageUrl && (
                         <Image
                           src={item.imageUrl}
                           alt={item.title}
                           width={400}
                           height={225}
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                          className="aspect-video w-full object-cover"
+                          className="absolute inset-0 h-full w-full object-cover"
                         />
-                        {item.hasPreviewVideo && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
-                              <svg
-                                className="ml-1 h-5 w-5 text-brand-600"
-                                fill="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path d="M8 5v14l11-7z" />
-                              </svg>
-                            </div>
+                      )}
+                      {item.hasPreviewVideo && (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+                            <svg
+                              className="ml-1 h-5 w-5 text-brand-600"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
                           </div>
-                        )}
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent px-4 pb-3 pt-10">
+                        <div className="mb-1.5 flex items-center gap-2">
+                          <Badge
+                            variant={
+                              item.type === "short" ? "secondary" : "outline"
+                            }
+                            className="border-white/40 bg-white/10 text-xs text-white"
+                          >
+                            {item.type === "short"
+                              ? "Short Course"
+                              : "Full Course"}
+                          </Badge>
+                          {item.category && (
+                            <span className="text-xs text-white/80">
+                              {item.category.replaceAll("_", " ")}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-heading text-lg font-semibold text-white">
+                          {item.title}
+                        </h3>
                       </div>
-                    )}
-                    <CardContent className={item.imageUrl ? "pt-4" : "pt-6"}>
-                      <div className="mb-2 flex items-center gap-2">
-                        <Badge
-                          variant={
-                            item.type === "short" ? "secondary" : "outline"
-                          }
-                          className="text-xs"
-                        >
-                          {item.type === "short"
-                            ? "Short Course"
-                            : "Full Course"}
-                        </Badge>
-                        {item.category && (
-                          <span className="text-xs text-muted-foreground">
-                            {item.category.replaceAll("_", " ")}
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="font-heading text-lg font-semibold">
-                        {item.title}
-                      </h3>
+                    </div>
+                    <CardContent className="pt-3">
                       {item.subtitle && (
                         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                           {item.subtitle}
@@ -328,7 +334,7 @@ export async function CourseCatalog({
                           {item.hours && <span> | {item.hours}</span>}
                         </div>
                         <span className="font-semibold text-brand-600">
-                          {formatPrice(item.price)}
+                          {formatPrice(item.price, currency)}
                         </span>
                       </div>
                       <div className="mt-4 flex gap-2">
@@ -358,8 +364,8 @@ export async function CourseCatalog({
                     className="overflow-hidden"
                   >
                     <div className="flex flex-col sm:flex-row">
-                      {item.imageUrl && (
-                        <div className="relative sm:w-48 md:w-56 shrink-0">
+                      <div className="relative sm:w-48 md:w-56 shrink-0">
+                        {item.imageUrl && (
                           <Image
                             src={item.imageUrl}
                             alt={item.title}
@@ -368,21 +374,26 @@ export async function CourseCatalog({
                             sizes="(max-width: 640px) 100vw, 224px"
                             className="aspect-video w-full object-cover sm:h-full sm:aspect-auto"
                           />
-                          {item.hasPreviewVideo && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg">
-                                <svg
-                                  className="ml-0.5 h-4 w-4 text-brand-600"
-                                  fill="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path d="M8 5v14l11-7z" />
-                                </svg>
-                              </div>
+                        )}
+                        {item.hasPreviewVideo && (
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg">
+                              <svg
+                                className="ml-0.5 h-4 w-4 text-brand-600"
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
                             </div>
-                          )}
+                          </div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent px-3 pb-2 pt-8 sm:px-2 sm:pb-2 sm:pt-6">
+                          <h3 className="font-heading text-base font-semibold text-white sm:text-sm">
+                            {item.title}
+                          </h3>
                         </div>
-                      )}
+                      </div>
                       <CardContent className="flex flex-1 flex-col justify-between p-4 sm:py-4">
                         <div>
                           <div className="mb-1.5 flex items-center gap-2">
@@ -402,9 +413,6 @@ export async function CourseCatalog({
                               </span>
                             )}
                           </div>
-                          <h3 className="font-heading text-lg font-semibold">
-                            {item.title}
-                          </h3>
                           {item.subtitle && (
                             <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                               {item.subtitle}
@@ -421,7 +429,7 @@ export async function CourseCatalog({
                               {item.hours && <span> | {item.hours}</span>}
                             </div>
                             <span className="text-lg font-semibold text-brand-600">
-                              {formatPrice(item.price)}
+                              {formatPrice(item.price, currency)}
                             </span>
                           </div>
                           <div className="flex shrink-0 gap-2">

@@ -10,6 +10,7 @@ import { Menu, User } from "lucide-react";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CartBadge } from "@/components/public/cart/cart-badge";
+import { CurrencySelector } from "@/components/public/currency-selector";
 
 interface NavLink {
   href: string;
@@ -62,6 +63,7 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
               <Link href="/book">Book a Session</Link>
             </Button>
           )}
+          <CurrencySelector />
           <ThemeToggle />
           <CartBadge />
           <Button variant="outline" size="sm" className="gap-1.5" asChild>
@@ -74,6 +76,7 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
 
         {/* Mobile menu */}
         <div className="flex items-center gap-1 md:hidden">
+          <CurrencySelector />
           <CartBadge />
           <ThemeToggle />
           <Sheet open={open} onOpenChange={setOpen}>

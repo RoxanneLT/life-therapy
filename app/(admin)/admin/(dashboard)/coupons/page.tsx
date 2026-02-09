@@ -85,7 +85,19 @@ export default async function CouponsPage() {
                     <TableCell className="text-sm">
                       {c.type === "percentage"
                         ? `${c.value}%`
-                        : `R${(c.value / 100).toFixed(0)}`}
+                        : (
+                          <span title={[
+                            `ZAR: R${(c.value / 100).toFixed(0)}`,
+                            c.valueUsd != null ? `USD: $${(c.valueUsd / 100).toFixed(0)}` : null,
+                            c.valueEur != null ? `EUR: €${(c.valueEur / 100).toFixed(0)}` : null,
+                            c.valueGbp != null ? `GBP: £${(c.valueGbp / 100).toFixed(0)}` : null,
+                          ].filter(Boolean).join(", ")}>
+                            R{(c.value / 100).toFixed(0)}
+                            {(c.valueUsd != null || c.valueEur != null || c.valueGbp != null) && (
+                              <span className="ml-1 text-xs text-muted-foreground">+3</span>
+                            )}
+                          </span>
+                        )}
                     </TableCell>
                     <TableCell className="text-center text-sm">
                       {c.usedCount}

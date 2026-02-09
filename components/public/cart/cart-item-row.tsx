@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Trash2, Gift } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { useRegion } from "@/lib/region-store";
 import type { CartProductInfo } from "@/lib/cart";
 import type { CartItemLocal } from "@/lib/cart-store";
 import { GiftForm } from "./gift-form";
@@ -23,6 +24,7 @@ export function CartItemRow({
   onToggleGift,
   onUpdateGift,
 }: CartItemRowProps) {
+  const { currency } = useRegion();
   return (
     <div className="rounded-lg border p-4">
       <div className="flex gap-4">
@@ -78,7 +80,7 @@ export function CartItemRow({
 
         {/* Price */}
         <div className="text-right font-semibold">
-          {formatPrice(product.priceCents)}
+          {formatPrice(product.priceCents, currency)}
         </div>
       </div>
 

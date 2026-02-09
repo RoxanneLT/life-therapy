@@ -2,7 +2,10 @@ import { getStripe } from "@/lib/stripe";
 import { processCheckoutCompleted } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { orderConfirmationEmail } from "@/lib/email-templates";
+import { renderEmail } from "@/lib/email-render";
+import { formatPrice } from "@/lib/utils";
+import { format } from "date-fns";
+import type { Currency } from "@/lib/region";
 
 /**
  * POST /api/webhooks/stripe
@@ -65,7 +68,37 @@ export async function POST(request: Request) {
         });
 
         if (fullOrder) {
-          const { subject, html } = orderConfirmationEmail(fullOrder);
+          const currency = (fullOrder.currency || "ZAR") as Currency;
+          const fmt = (cents: number) => formatPrice(cents, currency);
+
+          const orderItemsTable = fullOrder.items
+            .map(
+              (item) => `<tr>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
+                <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right;">${fmt(item.totalCents)}</td>
+              </tr>`
+            )
+            .join("");
+
+          const discountRow =
+            fullOrder.discountCents > 0
+              ? `<tr>
+                  <td colspan="2" style="padding: 4px 0; text-align: right; color: #16a34a;">Discount</td>
+                  <td style="padding: 4px 0; text-align: right; color: #16a34a;">-${fmt(fullOrder.discountCents)}</td>
+                </tr>`
+              : "";
+
+          const { subject, html } = await renderEmail("order_confirmation", {
+            firstName: fullOrder.student.firstName,
+            orderNumber: fullOrder.orderNumber,
+            orderDate: format(new Date(fullOrder.createdAt), "d MMMM yyyy"),
+            orderItemsTable,
+            subtotal: fmt(fullOrder.subtotalCents),
+            discountRow,
+            total: fmt(fullOrder.totalCents),
+            portalUrl: "https://life-therapy.co.za/portal",
+          });
           await sendEmail({
             to: fullOrder.student.email,
             subject,

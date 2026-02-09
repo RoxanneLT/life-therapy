@@ -1,14 +1,19 @@
 import { getSessionTypeConfig } from "./booking-config";
+import { formatPrice } from "./utils";
 import { format } from "date-fns";
+import type { Currency } from "./region";
 import type { Booking, Order, OrderItem, Student } from "@/lib/generated/prisma/client";
 
-function baseTemplate(title: string, body: string): string {
+const DEFAULT_BASE_URL = "https://life-therapy.co.za";
+
+export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE_URL): string {
+  const domain = baseUrl.replace(/^https?:\/\//, "");
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="font-family: 'Poppins', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; background-color: #f9fafb;">
   <div style="background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
     <div style="background: #fff; padding: 24px 24px 16px; text-align: center;">
-      <img src="https://life-therapy.co.za/logo.png" alt="Life-Therapy" style="max-width: 180px; height: auto;" />
+      <img src="${baseUrl}/logo.png" alt="Life-Therapy" style="max-width: 180px; height: auto;" />
     </div>
     <div style="background: linear-gradient(135deg, #8BA889 0%, #7a9a78 100%); padding: 14px 24px; text-align: center;">
       <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 13px; letter-spacing: 0.5px;">Personal Development &amp; Life Coaching</p>
@@ -18,7 +23,7 @@ function baseTemplate(title: string, body: string): string {
       ${body}
     </div>
     <div style="border-top: 1px solid #e5e7eb; padding: 20px 24px; font-size: 12px; color: #6b7280; text-align: center;">
-      <p style="margin: 0 0 4px;"><a href="https://life-therapy.co.za" style="color: #8BA889; text-decoration: none; font-weight: 600;">life-therapy.co.za</a></p>
+      <p style="margin: 0 0 4px;"><a href="${baseUrl}" style="color: #8BA889; text-decoration: none; font-weight: 600;">${domain}</a></p>
       <p style="margin: 0;">hello@life-therapy.co.za &middot; +27 71 017 0353</p>
     </div>
   </div>
@@ -35,7 +40,8 @@ function formatTimeRange(booking: Booking): string {
 
 export function bookingConfirmationEmail(
   booking: Booking,
-  confirmationToken: string
+  confirmationToken: string,
+  baseUrl = DEFAULT_BASE_URL
 ): {
   subject: string;
   html: string;
@@ -43,7 +49,8 @@ export function bookingConfirmationEmail(
   const config = getSessionTypeConfig(booking.sessionType);
   const dateStr = formatBookingDate(booking);
   const timeStr = formatTimeRange(booking);
-  const confirmationUrl = `https://life-therapy.co.za/book/confirmation?token=${confirmationToken}`;
+  const confirmationUrl = `${baseUrl}/book/confirmation?token=${confirmationToken}`;
+  const bookingCurrency = (booking.priceCurrency || "ZAR") as Currency;
 
   const teamsSection = booking.teamsMeetingUrl
     ? `<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;">
@@ -54,7 +61,7 @@ export function bookingConfirmationEmail(
 
   const priceSection =
     booking.priceZarCents > 0
-      ? `<p style="margin: 8px 0;"><strong>Session fee:</strong> R${(booking.priceZarCents / 100).toLocaleString()} (payment details will be sent separately)</p>`
+      ? `<p style="margin: 8px 0;"><strong>Session fee:</strong> ${formatPrice(booking.priceZarCents, bookingCurrency)} (payment details will be sent separately)</p>`
       : "";
 
   const body = `
@@ -84,11 +91,11 @@ export function bookingConfirmationEmail(
 
   return {
     subject: `Booking Confirmed: ${config.label} on ${dateStr}`,
-    html: baseTemplate("Your Session is Confirmed!", body),
+    html: baseTemplate("Your Session is Confirmed!", body, baseUrl),
   };
 }
 
-export function bookingNotificationEmail(booking: Booking): {
+export function bookingNotificationEmail(booking: Booking, baseUrl = DEFAULT_BASE_URL): {
   subject: string;
   html: string;
 } {
@@ -115,11 +122,11 @@ export function bookingNotificationEmail(booking: Booking): {
 
   return {
     subject: `New Booking: ${config.label} — ${booking.clientName} (${dateStr})`,
-    html: baseTemplate("New Booking Received", body),
+    html: baseTemplate("New Booking Received", body, baseUrl),
   };
 }
 
-export function bookingReminderEmail(booking: Booking): {
+export function bookingReminderEmail(booking: Booking, baseUrl = DEFAULT_BASE_URL): {
   subject: string;
   html: string;
 } {
@@ -148,11 +155,11 @@ export function bookingReminderEmail(booking: Booking): {
 
   return {
     subject: `Reminder: Your session is tomorrow at ${booking.startTime}`,
-    html: baseTemplate("Session Reminder", body),
+    html: baseTemplate("Session Reminder", body, baseUrl),
   };
 }
 
-export function bookingCancellationEmail(booking: Booking): {
+export function bookingCancellationEmail(booking: Booking, baseUrl = DEFAULT_BASE_URL): {
   subject: string;
   html: string;
 } {
@@ -170,14 +177,14 @@ export function bookingCancellationEmail(booking: Booking): {
     </div>
     <p>If you&rsquo;d like to rebook, you can schedule a new session below.</p>
     <div style="text-align: center; margin: 24px 0;">
-      <a href="https://life-therapy.co.za/book" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">Book a New Session</a>
+      <a href="${baseUrl}/book" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">Book a New Session</a>
     </div>
     <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
   `;
 
   return {
     subject: `Session Cancelled: ${config.label} on ${dateStr}`,
-    html: baseTemplate("Session Cancelled", body),
+    html: baseTemplate("Session Cancelled", body, baseUrl),
   };
 }
 
@@ -185,23 +192,23 @@ export function bookingCancellationEmail(booking: Booking): {
 // E-Commerce Email Templates
 // ============================================================
 
-function formatZAR(cents: number): string {
-  return `R${(cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`;
-}
-
 export function orderConfirmationEmail(
-  order: Order & { items: OrderItem[]; student: Student }
+  order: Order & { items: OrderItem[]; student: Student },
+  currency: Currency = "ZAR",
+  baseUrl = DEFAULT_BASE_URL
 ): {
   subject: string;
   html: string;
 } {
+  const fmt = (cents: number) => formatPrice(cents, currency);
+
   const itemRows = order.items
     .map(
       (item) => `
       <tr>
         <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
         <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatZAR(item.totalCents)}</td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right;">${fmt(item.totalCents)}</td>
       </tr>`
     )
     .join("");
@@ -210,7 +217,7 @@ export function orderConfirmationEmail(
     order.discountCents > 0
       ? `<tr>
           <td colspan="2" style="padding: 4px 0; text-align: right; color: #16a34a;">Discount</td>
-          <td style="padding: 4px 0; text-align: right; color: #16a34a;">-${formatZAR(order.discountCents)}</td>
+          <td style="padding: 4px 0; text-align: right; color: #16a34a;">-${fmt(order.discountCents)}</td>
         </tr>`
       : "";
 
@@ -237,18 +244,18 @@ export function orderConfirmationEmail(
       <tfoot>
         <tr>
           <td colspan="2" style="padding: 4px 0; text-align: right;">Subtotal</td>
-          <td style="padding: 4px 0; text-align: right;">${formatZAR(order.subtotalCents)}</td>
+          <td style="padding: 4px 0; text-align: right;">${fmt(order.subtotalCents)}</td>
         </tr>
         ${discountRow}
         <tr>
           <td colspan="2" style="padding: 8px 0; text-align: right; font-weight: 700; font-size: 16px; border-top: 2px solid #333;">Total Paid</td>
-          <td style="padding: 8px 0; text-align: right; font-weight: 700; font-size: 16px; border-top: 2px solid #333;">${formatZAR(order.totalCents)}</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 700; font-size: 16px; border-top: 2px solid #333;">${fmt(order.totalCents)}</td>
         </tr>
       </tfoot>
     </table>
 
     <div style="text-align: center; margin: 24px 0;">
-      <a href="https://life-therapy.co.za/portal" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">Go to My Courses</a>
+      <a href="${baseUrl}/portal" style="display: inline-block; background: #8BA889; color: #fff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600;">Go to My Courses</a>
     </div>
 
     <p>If you have any questions, feel free to reply to this email.</p>
@@ -257,13 +264,14 @@ export function orderConfirmationEmail(
 
   return {
     subject: `Order Confirmed: ${order.orderNumber}`,
-    html: baseTemplate("Order Confirmation", body),
+    html: baseTemplate("Order Confirmation", body, baseUrl),
   };
 }
 
 export function accountCreatedEmail(params: {
   firstName: string;
   loginUrl: string;
+  baseUrl?: string;
 }): {
   subject: string;
   html: string;
@@ -289,7 +297,7 @@ export function accountCreatedEmail(params: {
 
   return {
     subject: "Welcome to Life-Therapy!",
-    html: baseTemplate("Welcome to Life-Therapy!", body),
+    html: baseTemplate("Welcome to Life-Therapy!", body, params.baseUrl),
   };
 }
 
@@ -297,6 +305,7 @@ export function accountProvisionedEmail(params: {
   firstName: string;
   tempPassword: string;
   loginUrl: string;
+  baseUrl?: string;
 }): {
   subject: string;
   html: string;
@@ -320,7 +329,7 @@ export function accountProvisionedEmail(params: {
 
   return {
     subject: "Your Life-Therapy Account",
-    html: baseTemplate("Your Account is Ready", body),
+    html: baseTemplate("Your Account is Ready", body, params.baseUrl),
   };
 }
 
@@ -329,6 +338,7 @@ export function courseCompletedEmail(params: {
   courseTitle: string;
   certificateNumber: string;
   portalUrl: string;
+  baseUrl?: string;
 }): {
   subject: string;
   html: string;
@@ -354,7 +364,7 @@ export function courseCompletedEmail(params: {
 
   return {
     subject: `Congratulations! You completed ${params.courseTitle}`,
-    html: baseTemplate("Course Completed!", body),
+    html: baseTemplate("Course Completed!", body, params.baseUrl),
   };
 }
 
@@ -362,6 +372,7 @@ export function giftDeliveredToBuyerEmail(params: {
   buyerName: string;
   recipientName: string;
   itemTitle: string;
+  baseUrl?: string;
 }): {
   subject: string;
   html: string;
@@ -382,7 +393,7 @@ export function giftDeliveredToBuyerEmail(params: {
 
   return {
     subject: `Your gift for ${params.recipientName} has been delivered!`,
-    html: baseTemplate("Gift Delivered!", body),
+    html: baseTemplate("Gift Delivered!", body, params.baseUrl),
   };
 }
 
@@ -392,6 +403,7 @@ export function giftReceivedEmail(params: {
   itemTitle: string;
   message?: string | null;
   redeemUrl: string;
+  baseUrl?: string;
 }): {
   subject: string;
   html: string;
@@ -426,6 +438,6 @@ export function giftReceivedEmail(params: {
 
   return {
     subject: `🎁 ${params.buyerName} sent you a gift from Life-Therapy!`,
-    html: baseTemplate("You've Received a Gift!", body),
+    html: baseTemplate("You've Received a Gift!", body, params.baseUrl),
   };
 }

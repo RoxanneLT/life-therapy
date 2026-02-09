@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
+import { getBaseUrl } from "@/lib/get-region";
 
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://life-therapy.co.za";
+  const baseUrl = getBaseUrl();
 
   // Static pages
   const staticPages: MetadataRoute.Sitemap = [

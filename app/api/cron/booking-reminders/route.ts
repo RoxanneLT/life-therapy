@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { bookingReminderEmail } from "@/lib/email-templates";
-import { addDays } from "date-fns";
+import { renderEmail } from "@/lib/email-render";
+import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
+import { addDays, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import { TIMEZONE } from "@/lib/booking-config";
 
 export async function GET(request: NextRequest) {
   // Verify Vercel cron secret
@@ -30,7 +30,18 @@ export async function GET(request: NextRequest) {
 
   let sent = 0;
   for (const booking of bookings) {
-    const email = bookingReminderEmail(booking);
+    const config = getSessionTypeConfig(booking.sessionType);
+    const teamsButton = booking.teamsMeetingUrl
+      ? `<div style="text-align: center; margin: 24px 0;"><a href="${booking.teamsMeetingUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Join Microsoft Teams Meeting</a></div>`
+      : "";
+    const email = await renderEmail("booking_reminder", {
+      clientName: booking.clientName,
+      sessionType: config.label,
+      date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
+      time: `${booking.startTime} – ${booking.endTime} (SAST)`,
+      startTime: booking.startTime,
+      teamsButton,
+    });
     const result = await sendEmail({ to: booking.clientEmail, ...email });
 
     if (result.success) {

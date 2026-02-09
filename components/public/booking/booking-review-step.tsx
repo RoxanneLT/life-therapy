@@ -12,6 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Loader2, CalendarDays, Clock, User, Mail, Coins } from "lucide-react";
 import { toast } from "sonner";
 import { format, parse } from "date-fns";
+import { formatPrice } from "@/lib/utils";
+import type { Currency } from "@/lib/region";
 import { createBooking } from "@/app/(public)/book/actions";
 import type { BookingData } from "./booking-widget";
 
@@ -19,9 +21,11 @@ interface BookingReviewStepProps {
   readonly data: BookingData;
   readonly onBack: () => void;
   readonly creditBalance?: number;
+  readonly sessionPrices: Record<string, number>;
+  readonly currency: Currency;
 }
 
-export function BookingReviewStep({ data, onBack, creditBalance = 0 }: BookingReviewStepProps) {
+export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPrices, currency }: BookingReviewStepProps) {
   const [submitting, setSubmitting] = useState(false);
   const [useCredit, setUseCredit] = useState(false);
 
@@ -29,7 +33,9 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0 }: BookingRe
   const dateLabel = format(dateObj, "EEEE, d MMMM yyyy");
 
   // Credits can only be used on paid sessions (not free consultations)
-  const canUseCredit = creditBalance > 0 && data.sessionType!.priceZarCents > 0;
+  const priceCents = sessionPrices[data.sessionType!.type] ?? 0;
+  const priceLabel = data.sessionType!.isFree ? "Free" : formatPrice(priceCents, currency);
+  const canUseCredit = creditBalance > 0 && !data.sessionType!.isFree;
 
   async function handleConfirm() {
     setSubmitting(true);
@@ -140,16 +146,16 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0 }: BookingRe
               {useCredit ? (
                 <span className="flex items-center gap-1">
                   <span className="text-muted-foreground line-through">
-                    {data.sessionType!.priceLabel}
+                    {priceLabel}
                   </span>
                   <span className="text-green-600">1 Credit</span>
                 </span>
               ) : (
-                data.sessionType!.priceLabel
+                priceLabel
               )}
             </span>
           </div>
-          {!useCredit && data.sessionType!.priceZarCents > 0 && (
+          {!useCredit && !data.sessionType!.isFree && (
             <p className="text-xs text-muted-foreground">
               Payment details will be sent to you after booking.
             </p>

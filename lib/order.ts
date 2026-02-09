@@ -70,6 +70,8 @@ export async function processCheckoutCompleted(orderId: string) {
             courseId: item.courseId,
             hybridPackageId: item.hybridPackageId,
             moduleId: item.moduleId,
+            digitalProductId: item.digitalProductId,
+            packageSelections: item.packageSelections,
             description: item.description,
           },
           {
@@ -129,30 +131,76 @@ export async function processCheckoutCompleted(orderId: string) {
       }
     }
 
+    if (item.digitalProductId) {
+      // Grant digital product access
+      await prisma.digitalProductAccess.upsert({
+        where: {
+          studentId_digitalProductId: {
+            studentId: order.studentId,
+            digitalProductId: item.digitalProductId,
+          },
+        },
+        create: {
+          studentId: order.studentId,
+          digitalProductId: item.digitalProductId,
+          source: "purchase",
+          orderId: order.id,
+        },
+        update: {},
+      });
+    }
+
     if (item.hybridPackageId) {
-      // Package: enroll in included courses + add credits
+      // Pick-your-own package: enroll in selected courses/products + add credits
       const pkg = await prisma.hybridPackage.findUnique({
         where: { id: item.hybridPackageId },
-        include: { courses: { select: { courseId: true } } },
       });
       if (pkg) {
-        // Enroll in all included courses
-        for (const pc of pkg.courses) {
-          await prisma.enrollment.upsert({
-            where: {
-              studentId_courseId: {
-                studentId: order.studentId,
-                courseId: pc.courseId,
+        const selections = item.packageSelections as {
+          courseIds?: string[];
+          digitalProductIds?: string[];
+        } | null;
+
+        // Enroll in selected courses
+        if (selections?.courseIds) {
+          for (const courseId of selections.courseIds) {
+            await prisma.enrollment.upsert({
+              where: {
+                studentId_courseId: {
+                  studentId: order.studentId,
+                  courseId,
+                },
               },
-            },
-            create: {
-              studentId: order.studentId,
-              courseId: pc.courseId,
-              source: "purchase",
-              orderId: order.id,
-            },
-            update: {},
-          });
+              create: {
+                studentId: order.studentId,
+                courseId,
+                source: "purchase",
+                orderId: order.id,
+              },
+              update: {},
+            });
+          }
+        }
+
+        // Grant access to selected digital products
+        if (selections?.digitalProductIds) {
+          for (const dpId of selections.digitalProductIds) {
+            await prisma.digitalProductAccess.upsert({
+              where: {
+                studentId_digitalProductId: {
+                  studentId: order.studentId,
+                  digitalProductId: dpId,
+                },
+              },
+              create: {
+                studentId: order.studentId,
+                digitalProductId: dpId,
+                source: "purchase",
+                orderId: order.id,
+              },
+              update: {},
+            });
+          }
         }
 
         // Add session credits if included

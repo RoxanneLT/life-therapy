@@ -1,7 +1,8 @@
 import { prisma } from "./prisma";
 import crypto from "crypto";
 import { sendEmail } from "./email";
-import { courseCompletedEmail } from "./email-templates";
+import { renderEmail } from "./email-render";
+import { getBaseUrl } from "./get-region";
 
 /**
  * Recalculates and updates the progress percentage for an enrollment.
@@ -59,13 +60,16 @@ export async function recalculateProgress(
     ]);
 
     if (student && course) {
-      const { subject, html } = courseCompletedEmail({
+      let baseUrl: string;
+      try { baseUrl = getBaseUrl(); } catch { baseUrl = "https://life-therapy.co.za"; }
+      renderEmail("course_completed", {
         firstName: student.firstName,
         courseTitle: course.title,
         certificateNumber: certNumber,
-        portalUrl: "https://life-therapy.co.za/portal/certificates",
-      });
-      sendEmail({ to: student.email, subject, html }).catch((err) =>
+        portalUrl: `${baseUrl}/portal/certificates`,
+      }, baseUrl).then(({ subject, html }) =>
+        sendEmail({ to: student.email, subject, html })
+      ).catch((err) =>
         console.error("Failed to send course completion email:", err)
       );
     }

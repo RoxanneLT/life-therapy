@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
+import type { Currency } from "@/lib/region";
 import { format } from "date-fns";
 import { updateBookingStatus, updateBookingNotes, deleteBooking } from "../actions";
 import {
@@ -161,7 +162,7 @@ export default async function BookingDetailPage({ params }: Props) {
               <span className="font-medium">
                 {booking.priceZarCents === 0
                   ? "Free"
-                  : formatPrice(booking.priceZarCents)}
+                  : formatPrice(booking.priceZarCents, (booking.priceCurrency || "ZAR") as Currency)}
               </span>
             </div>
             <Separator />

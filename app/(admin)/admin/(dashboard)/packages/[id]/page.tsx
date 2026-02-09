@@ -17,37 +17,11 @@ export default async function EditPackagePage({
   await requireRole("super_admin");
   const { id } = await params;
 
-  const [pkg, courses] = await Promise.all([
-    prisma.hybridPackage.findUnique({
-      where: { id },
-      include: {
-        courses: {
-          orderBy: { sortOrder: "asc" },
-          select: { courseId: true },
-        },
-      },
-    }),
-    prisma.course.findMany({
-      orderBy: { title: "asc" },
-      select: { id: true, title: true },
-    }),
-  ]);
+  const pkg = await prisma.hybridPackage.findUnique({
+    where: { id },
+  });
 
   if (!pkg) notFound();
-
-  const initialData = {
-    id: pkg.id,
-    title: pkg.title,
-    slug: pkg.slug,
-    description: pkg.description,
-    imageUrl: pkg.imageUrl,
-    priceCents: pkg.priceCents,
-    credits: pkg.credits,
-    documentUrl: pkg.documentUrl,
-    isPublished: pkg.isPublished,
-    sortOrder: pkg.sortOrder,
-    courseIds: pkg.courses.map((c) => c.courseId),
-  };
 
   async function handleSubmit(formData: FormData) {
     "use server";
@@ -78,8 +52,7 @@ export default async function EditPackagePage({
         </form>
       </div>
       <PackageForm
-        courses={courses}
-        initialData={initialData}
+        initialData={pkg}
         onSubmit={handleSubmit}
       />
     </div>

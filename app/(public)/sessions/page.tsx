@@ -4,14 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import type { PageSection } from "@/lib/generated/prisma/client";
+import { getCurrency } from "@/lib/get-region";
+import { getSiteSettings } from "@/lib/settings";
+import { getSessionPrice } from "@/lib/pricing";
+import { formatPrice } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "1:1 Online Sessions",
   description:
     "Personalised online life coaching and counselling sessions with Roxanne Bouwer. Secure video calls from anywhere in the world.",
 };
-
-export const revalidate = 60;
 
 export default async function SessionsPage() {
   const page = await prisma.page.findUnique({
@@ -23,5 +26,34 @@ export default async function SessionsPage() {
     notFound();
   }
 
-  return <SectionRenderer sections={page.sections} />;
+  const currency = getCurrency();
+  const settings = await getSiteSettings();
+
+  // Inject dynamic session prices into any pricing sections
+  const sections = page.sections.map((section) => {
+    if (section.sectionType !== "pricing") return section;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const config = (section.config as any) || {};
+    const items = (config.items || []).map((item: { title?: string; price?: string }) => {
+      const title = (item.title || "").toLowerCase();
+
+      if (title.includes("free") || title.includes("consultation")) {
+        return { ...item, price: "Free" };
+      }
+      if (title.includes("couples")) {
+        const cents = getSessionPrice("couples", currency, settings);
+        return { ...item, price: formatPrice(cents, currency) };
+      }
+      if (title.includes("individual")) {
+        const cents = getSessionPrice("individual", currency, settings);
+        return { ...item, price: formatPrice(cents, currency) };
+      }
+      return item;
+    });
+
+    return { ...section, config: { ...config, items } } as PageSection;
+  });
+
+  return <SectionRenderer sections={sections} />;
 }

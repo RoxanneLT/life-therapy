@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/stripe";
 import { calculateUpgradePrice } from "@/lib/access";
 import { createOrderNumber } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
+import { getCurrency, getBaseUrl } from "@/lib/get-region";
 
 /**
  * POST /api/upgrade
@@ -94,8 +95,8 @@ export async function POST(request: Request) {
 
     // Create Stripe session
     const stripe = getStripe();
-    const baseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL || "https://life-therapy.co.za";
+    const currency = getCurrency();
+    const baseUrl = getBaseUrl();
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
       line_items: [
         {
           price_data: {
-            currency: "zar",
+            currency: currency.toLowerCase(),
             product_data: {
               name: `${course.title} (Upgrade)`,
               ...(course.imageUrl ? { images: [course.imageUrl] } : {}),

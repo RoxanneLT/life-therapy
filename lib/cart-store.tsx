@@ -14,6 +14,8 @@ export interface CartItemLocal {
   courseId?: string;
   hybridPackageId?: string;
   moduleId?: string;
+  digitalProductId?: string;
+  packageSelections?: { courseIds: string[]; digitalProductIds: string[] };
   quantity: number;
   isGift: boolean;
   giftRecipientName?: string;
@@ -74,7 +76,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             !item.isGift &&
             i.courseId === item.courseId &&
             i.hybridPackageId === item.hybridPackageId &&
-            i.moduleId === item.moduleId
+            i.moduleId === item.moduleId &&
+            i.digitalProductId === item.digitalProductId
         );
         if (existing) return prev;
         return [

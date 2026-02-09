@@ -5,7 +5,9 @@ import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { cancelCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
-import { bookingCancellationEmail } from "@/lib/email-templates";
+import { renderEmail } from "@/lib/email-render";
+import { getSessionTypeConfig } from "@/lib/booking-config";
+import { format } from "date-fns";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
@@ -20,7 +22,14 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
     if (booking.graphEventId) {
       await cancelCalendarEvent(booking.graphEventId).catch(console.error);
     }
-    const email = bookingCancellationEmail(booking);
+    const config = getSessionTypeConfig(booking.sessionType);
+    const email = await renderEmail("booking_cancellation", {
+      clientName: booking.clientName,
+      sessionType: config.label,
+      date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
+      time: `${booking.startTime} – ${booking.endTime} (SAST)`,
+      bookUrl: "https://life-therapy.co.za/book",
+    });
     await sendEmail({ to: booking.clientEmail, ...email }).catch(console.error);
   }
 

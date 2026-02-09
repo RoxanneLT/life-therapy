@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, Package, Loader2 } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { getCurrency } from "@/lib/get-region";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -20,6 +21,7 @@ export default async function CheckoutSuccessPage({
 }) {
   const params = await searchParams;
   const sessionId = params.session_id;
+  const currency = getCurrency();
 
   if (!sessionId) {
     return (
@@ -104,7 +106,7 @@ export default async function CheckoutSuccessPage({
                     <span>{item.description}</span>
                   </div>
                   <span className="font-medium">
-                    {formatPrice(item.totalCents)}
+                    {formatPrice(item.totalCents, currency)}
                   </span>
                 </div>
               ))}
@@ -113,12 +115,12 @@ export default async function CheckoutSuccessPage({
               {order.discountCents > 0 && (
                 <div className="flex justify-between text-sm text-green-600">
                   <span>Discount</span>
-                  <span>-{formatPrice(order.discountCents)}</span>
+                  <span>-{formatPrice(order.discountCents, currency)}</span>
                 </div>
               )}
               <div className="flex justify-between font-semibold">
                 <span>Total</span>
-                <span>{formatPrice(order.totalCents)}</span>
+                <span>{formatPrice(order.totalCents, currency)}</span>
               </div>
             </div>
           </CardContent>

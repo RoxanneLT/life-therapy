@@ -36,6 +36,9 @@ interface CourseFormProps {
     description?: string | null;
     imageUrl?: string | null;
     price: number;
+    priceUsd?: number | null;
+    priceEur?: number | null;
+    priceGbp?: number | null;
     category?: string | null;
     modulesCount: number;
     hours?: string | null;
@@ -146,7 +149,7 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
         <ImageUpload value={imageUrl} onChange={setImageUrl} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor="price">Price (ZAR cents)</Label>
           <Input
@@ -157,6 +160,42 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
             min={0}
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="priceUsd">Price (USD cents)</Label>
+          <Input
+            id="priceUsd"
+            name="priceUsd"
+            type="number"
+            defaultValue={initialData?.priceUsd ?? ""}
+            min={0}
+            placeholder="e.g. 2499 = $24.99"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="priceEur">Price (EUR cents)</Label>
+          <Input
+            id="priceEur"
+            name="priceEur"
+            type="number"
+            defaultValue={initialData?.priceEur ?? ""}
+            min={0}
+            placeholder="e.g. 2299 = €22.99"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="priceGbp">Price (GBP cents)</Label>
+          <Input
+            id="priceGbp"
+            name="priceGbp"
+            type="number"
+            defaultValue={initialData?.priceGbp ?? ""}
+            min={0}
+            placeholder="e.g. 1999 = £19.99"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label>Category</Label>
           <Select value={category} onValueChange={setCategory}>

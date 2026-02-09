@@ -60,6 +60,15 @@ export async function updateSettings(formData: FormData) {
     stripeWebhookSecret: toNullable(raw.stripeWebhookSecret),
     copyrightText: toNullable(raw.copyrightText),
     footerTagline: toNullable(raw.footerTagline),
+    // Session Pricing (all currencies)
+    sessionPriceIndividualZar: raw.sessionPriceIndividualZar ? Number.parseInt(raw.sessionPriceIndividualZar as string, 10) || null : null,
+    sessionPriceIndividualUsd: raw.sessionPriceIndividualUsd ? Number.parseInt(raw.sessionPriceIndividualUsd as string, 10) || null : null,
+    sessionPriceIndividualEur: raw.sessionPriceIndividualEur ? Number.parseInt(raw.sessionPriceIndividualEur as string, 10) || null : null,
+    sessionPriceIndividualGbp: raw.sessionPriceIndividualGbp ? Number.parseInt(raw.sessionPriceIndividualGbp as string, 10) || null : null,
+    sessionPriceCouplesZar: raw.sessionPriceCouplesZar ? Number.parseInt(raw.sessionPriceCouplesZar as string, 10) || null : null,
+    sessionPriceCouplesUsd: raw.sessionPriceCouplesUsd ? Number.parseInt(raw.sessionPriceCouplesUsd as string, 10) || null : null,
+    sessionPriceCouplesEur: raw.sessionPriceCouplesEur ? Number.parseInt(raw.sessionPriceCouplesEur as string, 10) || null : null,
+    sessionPriceCouplesGbp: raw.sessionPriceCouplesGbp ? Number.parseInt(raw.sessionPriceCouplesGbp as string, 10) || null : null,
   };
 
   // Upsert: update existing or create new

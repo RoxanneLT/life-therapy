@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
-import { giftReceivedEmail, giftDeliveredToBuyerEmail } from "@/lib/email-templates";
+import { renderEmail } from "@/lib/email-render";
 import { findOrCreateStudent } from "@/lib/account-provisioning";
 
 /**
@@ -15,6 +15,8 @@ export async function createGiftFromOrderItem(
     courseId: string | null;
     hybridPackageId: string | null;
     moduleId: string | null;
+    digitalProductId: string | null;
+    packageSelections: unknown;
     description: string;
   },
   giftDetails: {
@@ -45,6 +47,8 @@ export async function createGiftFromOrderItem(
       courseId: item.courseId,
       hybridPackageId: item.hybridPackageId,
       moduleId: item.moduleId,
+      digitalProductId: item.digitalProductId,
+      packageSelections: item.packageSelections || undefined,
       creditAmount,
       status: giftDetails.deliveryDate ? "pending" : "delivered",
     },
@@ -75,26 +79,36 @@ export async function sendGiftEmail(giftId: string) {
       course: { select: { title: true } },
       hybridPackage: { select: { title: true } },
       module: { select: { standaloneTitle: true, title: true } },
+      digitalProduct: { select: { title: true } },
     },
   });
 
   if (!gift) return;
 
   const mod = gift.module as { standaloneTitle: string | null; title: string } | null;
+  const dp = gift.digitalProduct as { title: string } | null;
   const itemTitle =
     gift.course?.title ||
     gift.hybridPackage?.title ||
     mod?.standaloneTitle ||
     mod?.title ||
+    dp?.title ||
     "Session Credits";
   const buyerName = `${gift.buyer.firstName} ${gift.buyer.lastName}`;
   const redeemUrl = `https://life-therapy.co.za/gift/redeem?token=${gift.redeemToken}`;
 
-  const { subject, html } = giftReceivedEmail({
+  const messageBlock = gift.message
+    ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 16px; margin: 16px 0; font-style: italic; color: #92400e;">
+        &ldquo;${gift.message}&rdquo;
+        <p style="margin: 8px 0 0; font-style: normal; font-size: 13px; color: #a16207;">&mdash; ${buyerName}</p>
+      </div>`
+    : "";
+
+  const { subject, html } = await renderEmail("gift_received", {
     recipientName: gift.recipientName,
     buyerName,
     itemTitle,
-    message: gift.message,
+    messageBlock,
     redeemUrl,
   });
 
@@ -119,16 +133,17 @@ export async function sendGiftEmail(giftId: string) {
     select: { email: true },
   });
   if (buyerStudent) {
-    const notification = giftDeliveredToBuyerEmail({
-      buyerName: buyerName,
+    renderEmail("gift_delivered_buyer", {
+      buyerName,
       recipientName: gift.recipientName,
       itemTitle,
-    });
-    sendEmail({
-      to: buyerStudent.email,
-      subject: notification.subject,
-      html: notification.html,
-    }).catch((err) =>
+    }).then((notification) =>
+      sendEmail({
+        to: buyerStudent.email,
+        subject: notification.subject,
+        html: notification.html,
+      })
+    ).catch((err) =>
       console.error("Failed to send gift delivery notification to buyer:", err)
     );
   }
@@ -150,12 +165,7 @@ export async function redeemGift(
     include: {
       course: { select: { id: true, title: true } },
       hybridPackage: {
-        select: {
-          id: true,
-          title: true,
-          credits: true,
-          courses: { select: { courseId: true } },
-        },
+        select: { id: true, title: true, credits: true },
       },
       module: { select: { id: true, courseId: true, standalonePrice: true } },
     },
@@ -242,24 +252,64 @@ export async function redeemGift(
     });
   }
 
-  if (gift.hybridPackageId && gift.hybridPackage) {
-    // Enroll in all included courses
-    for (const pc of gift.hybridPackage.courses) {
-      await prisma.enrollment.upsert({
-        where: {
-          studentId_courseId: {
-            studentId,
-            courseId: pc.courseId,
-          },
-        },
-        create: {
+  if (gift.digitalProductId) {
+    await prisma.digitalProductAccess.upsert({
+      where: {
+        studentId_digitalProductId: {
           studentId,
-          courseId: pc.courseId,
-          source: "gift",
-          giftId: gift.id,
+          digitalProductId: gift.digitalProductId,
         },
-        update: {},
-      });
+      },
+      create: {
+        studentId,
+        digitalProductId: gift.digitalProductId,
+        source: "gift",
+      },
+      update: {},
+    });
+  }
+
+  if (gift.hybridPackageId && gift.hybridPackage) {
+    // Pick-your-own package: use selections stored on gift
+    const selections = gift.packageSelections as {
+      courseIds?: string[];
+      digitalProductIds?: string[];
+    } | null;
+
+    if (selections?.courseIds) {
+      for (const courseId of selections.courseIds) {
+        await prisma.enrollment.upsert({
+          where: {
+            studentId_courseId: { studentId, courseId },
+          },
+          create: {
+            studentId,
+            courseId,
+            source: "gift",
+            giftId: gift.id,
+          },
+          update: {},
+        });
+      }
+    }
+
+    if (selections?.digitalProductIds) {
+      for (const dpId of selections.digitalProductIds) {
+        await prisma.digitalProductAccess.upsert({
+          where: {
+            studentId_digitalProductId: {
+              studentId,
+              digitalProductId: dpId,
+            },
+          },
+          create: {
+            studentId,
+            digitalProductId: dpId,
+            source: "gift",
+          },
+          update: {},
+        });
+      }
     }
   }
 

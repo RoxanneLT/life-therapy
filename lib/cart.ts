@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { getCoursePrice, getModulePrice, getPackagePrice, getDigitalProductPrice } from "./pricing";
+import { getCurrency } from "./get-region";
+import type { Currency } from "./region";
 import type { CartItemLocal } from "./cart-store";
 
 export interface CartProductInfo {
   id: string;
-  type: "course" | "package" | "module";
+  type: "course" | "package" | "module" | "digital_product";
   title: string;
   priceCents: number;
   imageUrl?: string | null;
@@ -15,15 +18,20 @@ export interface CartProductInfo {
  * Only returns valid, published items.
  */
 export async function resolveCartItems(
-  items: CartItemLocal[]
+  items: CartItemLocal[],
+  currency?: Currency
 ): Promise<(CartItemLocal & { product: CartProductInfo })[]> {
+  const cur = currency || getCurrency();
   const courseIds = items.filter((i) => i.courseId).map((i) => i.courseId!);
   const packageIds = items
     .filter((i) => i.hybridPackageId)
     .map((i) => i.hybridPackageId!);
   const moduleIds = items.filter((i) => i.moduleId).map((i) => i.moduleId!);
+  const digitalProductIds = items
+    .filter((i) => i.digitalProductId)
+    .map((i) => i.digitalProductId!);
 
-  const [courses, packages, modules] = await Promise.all([
+  const [courses, packages, modules, digitalProducts] = await Promise.all([
     courseIds.length
       ? prisma.course.findMany({
           where: { id: { in: courseIds }, isPublished: true },
@@ -31,6 +39,9 @@ export async function resolveCartItems(
             id: true,
             title: true,
             price: true,
+            priceUsd: true,
+            priceEur: true,
+            priceGbp: true,
             imageUrl: true,
             slug: true,
           },
@@ -43,6 +54,9 @@ export async function resolveCartItems(
             id: true,
             title: true,
             priceCents: true,
+            priceCentsUsd: true,
+            priceCentsEur: true,
+            priceCentsGbp: true,
             imageUrl: true,
             slug: true,
           },
@@ -56,8 +70,26 @@ export async function resolveCartItems(
             standaloneTitle: true,
             title: true,
             standalonePrice: true,
+            standalonePriceUsd: true,
+            standalonePriceEur: true,
+            standalonePriceGbp: true,
             standaloneImageUrl: true,
             standaloneSlug: true,
+          },
+        })
+      : [],
+    digitalProductIds.length
+      ? prisma.digitalProduct.findMany({
+          where: { id: { in: digitalProductIds }, isPublished: true },
+          select: {
+            id: true,
+            title: true,
+            priceCents: true,
+            priceCentsUsd: true,
+            priceCentsEur: true,
+            priceCentsGbp: true,
+            imageUrl: true,
+            slug: true,
           },
         })
       : [],
@@ -66,6 +98,7 @@ export async function resolveCartItems(
   const courseMap = new Map(courses.map((c) => [c.id, c]));
   const packageMap = new Map(packages.map((p) => [p.id, p]));
   const moduleMap = new Map(modules.map((m) => [m.id, m]));
+  const dpMap = new Map(digitalProducts.map((d) => [d.id, d]));
 
   const resolved: (CartItemLocal & { product: CartProductInfo })[] = [];
 
@@ -79,7 +112,7 @@ export async function resolveCartItems(
           id: c.id,
           type: "course",
           title: c.title,
-          priceCents: c.price,
+          priceCents: getCoursePrice(c, cur),
           imageUrl: c.imageUrl,
           slug: c.slug,
         };
@@ -91,7 +124,7 @@ export async function resolveCartItems(
           id: p.id,
           type: "package",
           title: p.title,
-          priceCents: p.priceCents,
+          priceCents: getPackagePrice(p, cur),
           imageUrl: p.imageUrl,
           slug: p.slug,
         };
@@ -103,9 +136,21 @@ export async function resolveCartItems(
           id: m.id,
           type: "module",
           title: m.standaloneTitle || m.title,
-          priceCents: m.standalonePrice,
+          priceCents: getModulePrice(m, cur),
           imageUrl: m.standaloneImageUrl,
           slug: m.standaloneSlug || undefined,
+        };
+      }
+    } else if (item.digitalProductId) {
+      const d = dpMap.get(item.digitalProductId);
+      if (d) {
+        product = {
+          id: d.id,
+          type: "digital_product",
+          title: d.title,
+          priceCents: getDigitalProductPrice(d, cur),
+          imageUrl: d.imageUrl,
+          slug: d.slug,
         };
       }
     }
@@ -124,7 +169,8 @@ export async function resolveCartItems(
 export async function validateCoupon(
   code: string,
   itemProductIds: { courseIds: string[]; packageIds: string[] },
-  subtotalCents: number
+  subtotalCents: number,
+  currency: string = "ZAR"
 ) {
   const coupon = await prisma.coupon.findUnique({
     where: { code: code.toUpperCase() },
@@ -165,7 +211,12 @@ export async function validateCoupon(
   if (coupon.type === "percentage") {
     discountCents = Math.round((subtotalCents * coupon.value) / 100);
   } else {
-    discountCents = coupon.value;
+    // Pick currency-specific fixed amount
+    const upper = currency.toUpperCase();
+    if (upper === "USD" && coupon.valueUsd != null) discountCents = coupon.valueUsd;
+    else if (upper === "EUR" && coupon.valueEur != null) discountCents = coupon.valueEur;
+    else if (upper === "GBP" && coupon.valueGbp != null) discountCents = coupon.valueGbp;
+    else discountCents = coupon.value; // ZAR fallback
   }
   discountCents = Math.min(discountCents, subtotalCents);
 
@@ -206,6 +257,7 @@ export async function mergeCartToDb(
         db.courseId === (local.courseId || null) &&
         db.hybridPackageId === (local.hybridPackageId || null) &&
         db.moduleId === (local.moduleId || null) &&
+        db.digitalProductId === (local.digitalProductId || null) &&
         !db.isGift &&
         !local.isGift
     );
@@ -216,6 +268,8 @@ export async function mergeCartToDb(
           courseId: local.courseId || null,
           hybridPackageId: local.hybridPackageId || null,
           moduleId: local.moduleId || null,
+          digitalProductId: local.digitalProductId || null,
+          packageSelections: local.packageSelections || undefined,
           quantity: local.quantity,
           isGift: local.isGift,
           giftRecipientName: local.giftRecipientName || null,

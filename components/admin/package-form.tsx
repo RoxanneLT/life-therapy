@@ -6,18 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
-interface CourseOption {
-  id: string;
-  title: string;
-}
-
 interface PackageFormProps {
-  courses: CourseOption[];
   initialData?: {
     id: string;
     title: string;
@@ -25,23 +18,23 @@ interface PackageFormProps {
     description?: string | null;
     imageUrl?: string | null;
     priceCents: number;
+    priceCentsUsd?: number | null;
+    priceCentsEur?: number | null;
+    priceCentsGbp?: number | null;
     credits: number;
-    documentUrl?: string | null;
+    courseSlots: number;
+    digitalProductSlots: number;
     isPublished: boolean;
     sortOrder: number;
-    courseIds: string[];
   };
   onSubmit: (formData: FormData) => Promise<void>;
 }
 
-export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps) {
+export function PackageForm({ initialData, onSubmit }: PackageFormProps) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");
   const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || "");
   const [isPublished, setIsPublished] = useState(initialData?.isPublished ?? false);
-  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>(
-    initialData?.courseIds || []
-  );
   const [submitting, setSubmitting] = useState(false);
 
   function handleTitleChange(value: string) {
@@ -51,14 +44,6 @@ export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps
     }
   }
 
-  function toggleCourse(courseId: string) {
-    setSelectedCourseIds((prev) =>
-      prev.includes(courseId)
-        ? prev.filter((id) => id !== courseId)
-        : [...prev, courseId]
-    );
-  }
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
@@ -66,11 +51,6 @@ export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps
     formData.set("slug", slug);
     formData.set("imageUrl", imageUrl);
     formData.set("isPublished", String(isPublished));
-    // Remove any existing courseIds then append selected ones
-    formData.delete("courseIds");
-    for (const id of selectedCourseIds) {
-      formData.append("courseIds", id);
-    }
     await onSubmit(formData);
     setSubmitting(false);
   }
@@ -106,7 +86,7 @@ export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps
           id="description"
           name="description"
           defaultValue={initialData?.description || ""}
-          placeholder="What does this package include?"
+          placeholder="Describe what this package offers..."
           rows={4}
         />
       </div>
@@ -116,7 +96,7 @@ export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps
         <ImageUpload value={imageUrl} onChange={setImageUrl} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor="priceCents">Price (ZAR cents)</Label>
           <Input
@@ -129,16 +109,83 @@ export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="credits">Session Credits</Label>
+          <Label htmlFor="priceCentsUsd">Price (USD cents)</Label>
           <Input
-            id="credits"
-            name="credits"
+            id="priceCentsUsd"
+            name="priceCentsUsd"
             type="number"
-            defaultValue={initialData?.credits ?? 0}
+            defaultValue={initialData?.priceCentsUsd ?? ""}
             min={0}
+            placeholder="e.g. 4999 = $49.99"
           />
-          <p className="text-xs text-muted-foreground">0 = no credits included</p>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="priceCentsEur">Price (EUR cents)</Label>
+          <Input
+            id="priceCentsEur"
+            name="priceCentsEur"
+            type="number"
+            defaultValue={initialData?.priceCentsEur ?? ""}
+            min={0}
+            placeholder="e.g. 4499 = €44.99"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="priceCentsGbp">Price (GBP cents)</Label>
+          <Input
+            id="priceCentsGbp"
+            name="priceCentsGbp"
+            type="number"
+            defaultValue={initialData?.priceCentsGbp ?? ""}
+            min={0}
+            placeholder="e.g. 3999 = £39.99"
+          />
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-muted/30 p-4">
+        <h3 className="mb-3 text-sm font-semibold">Bundle Contents</h3>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Define how many items the customer can pick. They choose from the published catalog at purchase time.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="courseSlots">Course Slots</Label>
+            <Input
+              id="courseSlots"
+              name="courseSlots"
+              type="number"
+              defaultValue={initialData?.courseSlots ?? 0}
+              min={0}
+            />
+            <p className="text-xs text-muted-foreground">Full courses the customer picks</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="digitalProductSlots">Digital Product Slots</Label>
+            <Input
+              id="digitalProductSlots"
+              name="digitalProductSlots"
+              type="number"
+              defaultValue={initialData?.digitalProductSlots ?? 0}
+              min={0}
+            />
+            <p className="text-xs text-muted-foreground">Digital products the customer picks</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="credits">Session Credits</Label>
+            <Input
+              id="credits"
+              name="credits"
+              type="number"
+              defaultValue={initialData?.credits ?? 0}
+              min={0}
+            />
+            <p className="text-xs text-muted-foreground">Auto-granted on purchase</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="sortOrder">Sort Order</Label>
           <Input
@@ -150,42 +197,6 @@ export function PackageForm({ courses, initialData, onSubmit }: PackageFormProps
           />
         </div>
       </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="documentUrl">Document URL (optional)</Label>
-        <Input
-          id="documentUrl"
-          name="documentUrl"
-          defaultValue={initialData?.documentUrl || ""}
-          placeholder="https://... link to downloadable document"
-        />
-        <p className="text-xs text-muted-foreground">
-          For digital document packages — a file that gets sent on purchase.
-        </p>
-      </div>
-
-      {courses.length > 0 && (
-        <div className="space-y-3">
-          <Label>Included Courses</Label>
-          <div className="rounded-md border p-4 space-y-2">
-            {courses.map((course) => (
-              <label
-                key={course.id}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <Checkbox
-                  checked={selectedCourseIds.includes(course.id)}
-                  onCheckedChange={() => toggleCourse(course.id)}
-                />
-                <span className="text-sm">{course.title}</span>
-              </label>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Select courses to include in this package. Students get enrolled in all selected courses on purchase.
-          </p>
-        </div>
-      )}
 
       <div className="flex items-center gap-2">
         <Switch checked={isPublished} onCheckedChange={setIsPublished} />

@@ -7,7 +7,9 @@ import { DateTimeStep } from "./date-time-step";
 import { BookingFormStep } from "./booking-form-step";
 import { BookingReviewStep } from "./booking-review-step";
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
+import { formatPrice } from "@/lib/utils";
 import type { TimeSlot } from "@/lib/availability";
+import type { Currency } from "@/lib/region";
 import { Clock } from "lucide-react";
 
 export interface BookingData {
@@ -29,9 +31,11 @@ const STEPS = [
 
 interface BookingWidgetProps {
   readonly creditBalance?: number;
+  readonly sessionPrices: Record<string, number>;
+  readonly currency: Currency;
 }
 
-export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
+export function BookingWidget({ creditBalance = 0, sessionPrices, currency }: BookingWidgetProps) {
   const searchParams = useSearchParams();
   const widgetRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState(0);
@@ -111,7 +115,9 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
               {data.sessionType.durationMinutes} min
             </span>
             <span className="text-muted-foreground">
-              {data.sessionType.priceLabel}
+              {data.sessionType.isFree
+                ? "Free"
+                : formatPrice(sessionPrices[data.sessionType.type] ?? 0, currency)}
             </span>
           </div>
           <button
@@ -153,7 +159,7 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
       </div>
 
       {/* Step content */}
-      {step === 0 && <SessionTypeStep onSelect={selectSessionType} />}
+      {step === 0 && <SessionTypeStep onSelect={selectSessionType} sessionPrices={sessionPrices} currency={currency} />}
       {step === 1 && data.sessionType && (
         <DateTimeStep
           sessionType={data.sessionType}
@@ -169,7 +175,7 @@ export function BookingWidget({ creditBalance = 0 }: BookingWidgetProps) {
         />
       )}
       {step === 3 && data.sessionType && data.date && data.slot && (
-        <BookingReviewStep data={data} onBack={goBack} creditBalance={creditBalance} />
+        <BookingReviewStep data={data} onBack={goBack} creditBalance={creditBalance} sessionPrices={sessionPrices} currency={currency} />
       )}
     </section>
   );

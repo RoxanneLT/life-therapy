@@ -1,6 +1,10 @@
 import type { MetadataRoute } from "next";
+import { getBaseUrl } from "@/lib/get-region";
+
+export const dynamic = "force-dynamic";
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = getBaseUrl();
   return {
     rules: [
       {
@@ -9,6 +13,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin/", "/api/"],
       },
     ],
-    sitemap: "https://life-therapy.co.za/sitemap.xml",
+    sitemap: `${baseUrl}/sitemap.xml`,
   };
 }

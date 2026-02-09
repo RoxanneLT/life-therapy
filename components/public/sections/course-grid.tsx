@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
+import { getCurrency } from "@/lib/get-region";
+import { getCoursePrice } from "@/lib/pricing";
 import Link from "next/link";
 import Image from "next/image";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
@@ -13,6 +15,7 @@ interface CourseGridProps {
 }
 
 export async function CourseGrid({ section }: CourseGridProps) {
+  const currency = getCurrency();
   const config = (section.config as Record<string, unknown>) || {};
   const featuredOnly = config.featuredOnly === true;
   const maxCount = (config.maxCount as number) || 6;
@@ -47,32 +50,36 @@ export async function CourseGrid({ section }: CourseGridProps) {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {courses.map((course) => (
             <Card key={course.id} className="overflow-hidden">
-              {course.imageUrl && (
-                <Image
-                  src={course.imageUrl}
-                  alt={course.title}
-                  width={400}
-                  height={225}
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="aspect-video w-full object-cover"
-                />
-              )}
-              <CardContent className={course.imageUrl ? "pt-4" : "pt-6"}>
-                <div className="mb-2 flex items-center gap-2">
-                  {course.category && (
-                    <Badge variant="outline" className="text-xs">
-                      {course.category.replaceAll("_", " ")}
-                    </Badge>
-                  )}
-                  {course.level && (
-                    <span className="text-xs text-muted-foreground">
-                      {course.level}
-                    </span>
-                  )}
+              <div className="relative aspect-video bg-brand-800">
+                {course.imageUrl && (
+                  <Image
+                    src={course.imageUrl}
+                    alt={course.title}
+                    width={400}
+                    height={225}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent px-4 pb-3 pt-10">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    {course.category && (
+                      <Badge variant="outline" className="border-white/40 bg-white/10 text-xs text-white">
+                        {course.category.replaceAll("_", " ")}
+                      </Badge>
+                    )}
+                    {course.level && (
+                      <span className="text-xs text-white/80">
+                        {course.level}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-heading text-lg font-semibold text-white">
+                    {course.title}
+                  </h3>
                 </div>
-                <h3 className="font-heading text-lg font-semibold">
-                  {course.title}
-                </h3>
+              </div>
+              <CardContent className="pt-3">
                 {course.subtitle && (
                   <p className="mt-1 text-sm text-muted-foreground">
                     {course.subtitle}
@@ -86,7 +93,7 @@ export async function CourseGrid({ section }: CourseGridProps) {
                     {course.hours && <span> | {course.hours}</span>}
                   </div>
                   <span className="font-semibold text-brand-600">
-                    {formatPrice(course.price)}
+                    {formatPrice(getCoursePrice(course, currency), currency)}
                   </span>
                 </div>
                 <div className="mt-4 flex gap-2">

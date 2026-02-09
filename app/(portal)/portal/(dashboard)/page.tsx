@@ -3,13 +3,13 @@ export const dynamic = "force-dynamic";
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, Award, Coins } from "lucide-react";
+import { GraduationCap, Award, Coins, FileDown } from "lucide-react";
 import Link from "next/link";
 
 export default async function PortalDashboardPage() {
   const { student } = await requirePasswordChanged();
 
-  const [enrollmentCount, moduleAccessCount, certificateCount, creditBalance] =
+  const [enrollmentCount, moduleAccessCount, certificateCount, creditBalance, downloadCount] =
     await Promise.all([
       prisma.enrollment.count({ where: { studentId: student.id } }),
       prisma.moduleAccess.count({ where: { studentId: student.id } }),
@@ -17,6 +17,7 @@ export default async function PortalDashboardPage() {
       prisma.sessionCreditBalance.findUnique({
         where: { studentId: student.id },
       }),
+      prisma.digitalProductAccess.count({ where: { studentId: student.id } }),
     ]);
 
   const totalCourseCount = enrollmentCount + moduleAccessCount;
@@ -40,6 +41,12 @@ export default async function PortalDashboardPage() {
       icon: Coins,
       href: "/portal/credits",
     },
+    {
+      label: "Downloads",
+      value: downloadCount,
+      icon: FileDown,
+      href: "/portal/downloads",
+    },
   ];
 
   return (
@@ -53,7 +60,7 @@ export default async function PortalDashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <Card className="transition-shadow hover:shadow-md">

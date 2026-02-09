@@ -431,6 +431,7 @@ async function main() {
       subtitle: "Build your self-worth from the ground up",
       shortDescription: "The starting point for everyone wanting to build genuine self-worth.",
       description: "Build your self-worth from the ground up. This foundational course walks you through understanding self-esteem, challenging negative self-talk, setting goals, building assertiveness, cultivating resilience, and creating lasting change.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "self_esteem",
       modulesCount: 9,
@@ -446,6 +447,7 @@ async function main() {
       subtitle: "Silence your inner critic & build self-belief",
       shortDescription: "Silence your inner critic, end self-sabotage, and build authentic confidence.",
       description: "Go beyond surface-level confidence. Learn to silence your inner critic, overcome self-sabotage, and build authentic, lasting confidence that comes from within.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "self_esteem",
       modulesCount: 10,
@@ -461,6 +463,7 @@ async function main() {
       subtitle: "Own your achievements and stop feeling like a fraud",
       shortDescription: "Own your achievements and stop feeling like a fraud.",
       description: "Learn to recognise imposter patterns, reframe your thinking, own your achievements, and step into your success with confidence.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "self_esteem",
       modulesCount: 8,
@@ -476,6 +479,7 @@ async function main() {
       subtitle: "Your guide to anxiety management & resilience",
       shortDescription: "Manage anxiety, regulate your nervous system, and build resilience.",
       description: "A comprehensive guide to managing anxiety, regulating your nervous system, building resilience, and transforming stress into a source of strength.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "mental_wellness",
       modulesCount: 10,
@@ -491,6 +495,7 @@ async function main() {
       subtitle: "Set boundaries without guilt",
       shortDescription: "Set boundaries without guilt and stop putting everyone else first.",
       description: "Break free from people-pleasing patterns. Learn to set healthy boundaries, say no without guilt, and prioritise your own needs while maintaining meaningful relationships.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "mental_wellness",
       modulesCount: 8,
@@ -506,6 +511,7 @@ async function main() {
       subtitle: "Transform sensitivity into your greatest strength",
       shortDescription: "Transform sensitivity into your greatest strength.",
       description: "Discover how to harness your sensitivity as a superpower. Learn energy management, emotional regulation, and how to thrive as a highly sensitive person.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "mental_wellness",
       modulesCount: 8,
@@ -521,6 +527,7 @@ async function main() {
       subtitle: "Rekindle connection & rediscover your partner",
       shortDescription: "Rekindle connection and rediscover your partner. Includes New Parents add-on.",
       description: "Whether you want to strengthen an already good relationship or rebuild after drifting apart, this course guides couples through communication, trust, intimacy, and reconnection. Includes a bonus New Parents module.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "relationships",
       modulesCount: 11,
@@ -536,6 +543,7 @@ async function main() {
       subtitle: "A young person's guide to confidence",
       shortDescription: "A young person's guide to confidence and wellbeing.",
       description: "Designed for teenagers (13-18), this course helps young people build self-confidence, manage anxiety, navigate peer pressure, and develop healthy self-image.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "specialised",
       modulesCount: 8,
@@ -551,6 +559,7 @@ async function main() {
       subtitle: "Lead with confidence, negotiate your worth",
       shortDescription: "Lead with confidence, negotiate your worth, command the room.",
       description: "Develop the executive presence that sets leaders apart. Build authentic authority, master high-stakes communication, negotiate your worth, and lead with confidence.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "specialised",
       modulesCount: 8,
@@ -566,6 +575,7 @@ async function main() {
       subtitle: "Make peace with your body and reclaim your confidence",
       shortDescription: "Make peace with your body and reclaim your confidence.",
       description: "Move beyond body positivity to body neutrality. Learn to detach your self-worth from appearance, develop a healthier relationship with your body, and reclaim your confidence.",
+      imageUrl: "/images/LT_grayBG.png",
       price: 38900,
       category: "specialised",
       modulesCount: 8,
@@ -586,69 +596,51 @@ async function main() {
   }
 
   // ── Packages ─────────────────────────────────────────────
-  const allCourses = await prisma.course.findMany();
-  const courseBySlug = (slug: string) => allCourses.find((c) => c.slug === slug)!;
-
   const packagesData = [
     {
-      title: "The Complete Confidence Journey",
-      slug: "complete-confidence-journey",
-      description: "Comprehensive confidence transformation from the ground up. Includes Foundations of Self-Esteem, Confidence from Within, and Quit Your Imposter Syndrome.",
-
-      priceCents: 89900,
-      courses: ["foundations-of-self-esteem", "confidence-from-within", "quit-your-imposter-syndrome"],
+      title: "Starter Bundle",
+      slug: "starter-bundle",
+      description: "Pick 1 course and 1 digital product — the perfect way to begin your journey.",
+      imageUrl: "/images/LT_greenBG.png",
+      priceCents: 49900,
+      priceCentsUsd: 2999,
+      courseSlots: 1,
+      digitalProductSlots: 1,
+      credits: 0,
+      sortOrder: 0,
     },
     {
-      title: "The Sensitive Soul",
-      slug: "the-sensitive-soul",
-      description: "Self-worth, energy management, and boundary skills for highly sensitive people. Includes Foundations of Self-Esteem, The Empowered Empath, and The People-Pleasing Cure.",
-      priceCents: 89900,
-      courses: ["foundations-of-self-esteem", "the-empowered-empath", "the-people-pleasing-cure"],
+      title: "Growth Bundle",
+      slug: "growth-bundle",
+      description: "Pick 2 courses and 2 digital products, plus 2 session credits for personalised support.",
+      imageUrl: "/images/LT_greenBG.png",
+      priceCents: 149900,
+      priceCentsUsd: 8999,
+      courseSlots: 2,
+      digitalProductSlots: 2,
+      credits: 2,
+      sortOrder: 1,
     },
     {
-      title: "Mental Wellness Complete",
-      slug: "mental-wellness-complete",
-      description: "For anyone dealing with anxiety, overwhelm, and difficulty setting limits. Includes Stress to Strength and The People-Pleasing Cure.",
-      priceCents: 64900,
-      courses: ["stress-to-strength", "the-people-pleasing-cure"],
-    },
-    {
-      title: "The Career Accelerator",
-      slug: "the-career-accelerator",
-      description: "For professionals wanting to advance with confidence. Includes Quit Your Imposter Syndrome and Executive Presence.",
-      priceCents: 64900,
-      courses: ["quit-your-imposter-syndrome", "executive-presence"],
-    },
-    {
-      title: "Relationship & Family",
-      slug: "relationship-and-family",
-      description: "Strengthen all family relationships. Includes Love Reset (with New Parents Add-On) and Thriving Through Teen Years.",
-      priceCents: 64900,
-      courses: ["love-reset", "thriving-through-teen-years"],
+      title: "Ultimate Bundle",
+      slug: "ultimate-bundle",
+      description: "The full transformation: pick 3 courses and 3 digital products, plus 5 session credits.",
+      imageUrl: "/images/LT_greenBG.png",
+      priceCents: 299900,
+      priceCentsUsd: 17999,
+      courseSlots: 3,
+      digitalProductSlots: 3,
+      credits: 5,
+      sortOrder: 2,
     },
   ];
 
   for (const pkgData of packagesData) {
-    const { courses: courseSlugs, ...pkgFields } = pkgData;
-    const pkg = await prisma.hybridPackage.upsert({
-      where: { slug: pkgFields.slug },
+    await prisma.hybridPackage.upsert({
+      where: { slug: pkgData.slug },
       update: {},
-      create: { ...pkgFields, isPublished: true },
+      create: { ...pkgData, isPublished: true },
     });
-
-    // Link courses to package
-    for (let i = 0; i < courseSlugs.length; i++) {
-      const course = courseBySlug(courseSlugs[i]);
-      if (course) {
-        await prisma.hybridPackageCourse.upsert({
-          where: {
-            hybridPackageId_courseId: { hybridPackageId: pkg.id, courseId: course.id },
-          },
-          update: {},
-          create: { hybridPackageId: pkg.id, courseId: course.id, sortOrder: i },
-        });
-      }
-    }
   }
 
   // ── Testimonials ─────────────────────────────────────────

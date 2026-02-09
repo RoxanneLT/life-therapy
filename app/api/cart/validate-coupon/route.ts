@@ -8,7 +8,7 @@ import { validateCoupon } from "@/lib/cart";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { code, courseIds, packageIds, subtotalCents } = body;
+    const { code, courseIds, packageIds, subtotalCents, currency } = body;
 
     if (!code || typeof code !== "string") {
       return NextResponse.json(
@@ -23,7 +23,8 @@ export async function POST(request: Request) {
         courseIds: courseIds || [],
         packageIds: packageIds || [],
       },
-      subtotalCents || 0
+      subtotalCents || 0,
+      currency || "ZAR"
     );
 
     return NextResponse.json(result);

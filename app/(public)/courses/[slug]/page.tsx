@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { formatPrice } from "@/lib/utils";
+import { getCurrency } from "@/lib/get-region";
+import { getCoursePrice, getModulePrice } from "@/lib/pricing";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
@@ -41,6 +43,7 @@ export default async function CourseDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const currency = getCurrency();
   const course = await prisma.course.findUnique({
     where: { slug },
     include: {
@@ -52,6 +55,9 @@ export default async function CourseDetailPage({
           title: true,
           standaloneSlug: true,
           standalonePrice: true,
+          standalonePriceUsd: true,
+          standalonePriceEur: true,
+          standalonePriceGbp: true,
           standaloneImageUrl: true,
           standaloneCategory: true,
         },
@@ -64,91 +70,88 @@ export default async function CourseDetailPage({
     notFound();
   }
 
-  const relatedCourses = await getRelatedCourses(course.id, 3);
+  const relatedCourses = await getRelatedCourses(course.id, 3, currency);
 
   return (
     <>
-      {/* Hero — two-column: info left, preview video / image right */}
-      <section className="bg-brand-50 px-4 py-16 dark:bg-brand-950/30">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/courses"
-            className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brand-600 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Courses
-          </Link>
-        </div>
-        <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
-          <div>
-            <div className="mb-4 flex items-center gap-2">
-              {course.category && (
-                <Badge variant="outline">
-                  {course.category.replaceAll("_", " ")}
-                </Badge>
-              )}
-              {course.level && (
-                <Badge variant="secondary">{course.level}</Badge>
-              )}
-            </div>
-            <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-brand-700 lg:text-4xl">
-              {course.title}
-            </h1>
-            {course.subtitle && (
-              <p className="mt-3 text-lg text-muted-foreground">
-                {course.subtitle}
-              </p>
-            )}
-
-            {/* Stats */}
-            <div className="mt-6 flex flex-wrap gap-6 text-sm text-muted-foreground">
-              {course.modulesCount > 0 && (
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-terracotta-500" />
-                  <span>{course.modulesCount} Modules</span>
-                </div>
-              )}
-              {course.hours && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-terracotta-500" />
-                  <span>{course.hours}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-terracotta-500" />
-                <span>{course.level || "All Levels"}</span>
-              </div>
-            </div>
-
-            {/* Price + CTA */}
-            <div className="mt-8 flex items-center gap-4">
-              <span className="text-3xl font-bold text-brand-600">
-                {formatPrice(course.price)}
-              </span>
-              <AddToCartButton
-                courseId={course.id}
-                size="lg"
-                label="Add to Cart"
-              />
-            </div>
+      {/* Hero — branded background, preview video right */}
+      <section
+        className="relative bg-cover bg-center px-4 py-16"
+        style={{
+          backgroundImage: `url(${course.imageUrl || "/images/LT_grayBG.png"})`,
+        }}
+      >
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative z-10">
+          <div className="mx-auto max-w-6xl">
+            <Link
+              href="/courses"
+              className="mb-6 inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Courses
+            </Link>
           </div>
+          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center">
+            <div>
+              <div className="mb-4 flex items-center gap-2">
+                {course.category && (
+                  <Badge variant="outline" className="border-white/40 text-white">
+                    {course.category.replaceAll("_", " ")}
+                  </Badge>
+                )}
+                {course.level && (
+                  <Badge className="bg-white/20 text-white hover:bg-white/30">{course.level}</Badge>
+                )}
+              </div>
+              <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-white lg:text-4xl">
+                {course.title}
+              </h1>
+              {course.subtitle && (
+                <p className="mt-3 text-lg text-white/80">
+                  {course.subtitle}
+                </p>
+              )}
 
-          {/* Right: preview video or course image */}
-          <div>
-            {course.previewVideoUrl ? (
-              <PreviewVideoPlayer videoUrl={course.previewVideoUrl} />
-            ) : course.imageUrl ? (
-              <div className="overflow-hidden rounded-xl">
-                <Image
-                  src={course.imageUrl}
-                  alt={course.title}
-                  width={600}
-                  height={400}
-                  sizes="(max-width: 768px) 100vw, 66vw"
-                  className="aspect-video w-full object-cover"
+              {/* Stats */}
+              <div className="mt-6 flex flex-wrap gap-6 text-sm text-white/70">
+                {course.modulesCount > 0 && (
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-terracotta-400" />
+                    <span>{course.modulesCount} Modules</span>
+                  </div>
+                )}
+                {course.hours && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-terracotta-400" />
+                    <span>{course.hours}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-terracotta-400" />
+                  <span>{course.level || "All Levels"}</span>
+                </div>
+              </div>
+
+              {/* Price + CTA */}
+              <div className="mt-8 flex items-center gap-4">
+                <span className="text-3xl font-bold text-white">
+                  {formatPrice(getCoursePrice(course, currency), currency)}
+                </span>
+                <AddToCartButton
+                  courseId={course.id}
+                  size="lg"
+                  label="Add to Cart"
                 />
               </div>
-            ) : null}
+            </div>
+
+            {/* Right: preview video only */}
+            {course.previewVideoUrl && (
+              <div>
+                <PreviewVideoPlayer videoUrl={course.previewVideoUrl} />
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -225,7 +228,7 @@ export default async function CourseDetailPage({
                   </div>
                   {mod.standalonePrice != null && (
                     <span className="font-semibold text-brand-600">
-                      {formatPrice(mod.standalonePrice)}
+                      {formatPrice(getModulePrice(mod, currency), currency)}
                     </span>
                   )}
                 </Link>
@@ -263,7 +266,7 @@ export default async function CourseDetailPage({
                     {rc.title}
                   </h3>
                   <span className="mt-1 block text-sm font-semibold text-brand-600">
-                    {formatPrice(rc.price)}
+                    {formatPrice(rc.price, currency)}
                   </span>
                 </Link>
               ))}
@@ -286,7 +289,7 @@ export default async function CourseDetailPage({
               courseId={course.id}
               size="lg"
               variant="secondary"
-              label={`Add to Cart — ${formatPrice(course.price)}`}
+              label={`Add to Cart — ${formatPrice(getCoursePrice(course, currency), currency)}`}
             />
             <Button
               size="lg"

@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/table";
 import { Plus, Pencil, Package } from "lucide-react";
 
-function getPackageType(pkg: { credits: number; documentUrl: string | null; _count: { courses: number } }) {
+function getPackageContents(pkg: { credits: number; courseSlots: number; digitalProductSlots: number }) {
   const parts: string[] = [];
-  if (pkg._count.courses > 0) parts.push("Courses");
-  if (pkg.credits > 0) parts.push("Credits");
-  if (pkg.documentUrl) parts.push("Document");
+  if (pkg.courseSlots > 0) parts.push(`${pkg.courseSlots} Course${pkg.courseSlots !== 1 ? "s" : ""}`);
+  if (pkg.digitalProductSlots > 0) parts.push(`${pkg.digitalProductSlots} Product${pkg.digitalProductSlots !== 1 ? "s" : ""}`);
+  if (pkg.credits > 0) parts.push(`${pkg.credits} Credit${pkg.credits !== 1 ? "s" : ""}`);
   return parts.length > 0 ? parts.join(" + ") : "Empty";
 }
 
@@ -29,9 +29,6 @@ export default async function AdminPackagesPage() {
 
   const packages = await prisma.hybridPackage.findMany({
     orderBy: { sortOrder: "asc" },
-    include: {
-      _count: { select: { courses: true } },
-    },
   });
 
   return (
@@ -40,7 +37,7 @@ export default async function AdminPackagesPage() {
         <div>
           <h1 className="font-heading text-2xl font-bold">Packages</h1>
           <p className="text-sm text-muted-foreground">
-            Course bundles, credit packs, hybrid packages & digital documents.
+            Pick-your-own bundles with courses, digital products & session credits.
           </p>
         </div>
         <Button asChild>
@@ -57,10 +54,8 @@ export default async function AdminPackagesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Contents</TableHead>
                 <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-center">Credits</TableHead>
-                <TableHead className="text-center">Courses</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-20">Actions</TableHead>
               </TableRow>
@@ -71,17 +66,11 @@ export default async function AdminPackagesPage() {
                   <TableCell className="font-medium">{pkg.title}</TableCell>
                   <TableCell>
                     <span className="text-xs text-muted-foreground">
-                      {getPackageType(pkg)}
+                      {getPackageContents(pkg)}
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
                     {formatPrice(pkg.priceCents)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {pkg.credits > 0 ? pkg.credits : "—"}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {pkg._count.courses > 0 ? pkg._count.courses : "—"}
                   </TableCell>
                   <TableCell>
                     <Badge variant={pkg.isPublished ? "default" : "secondary"}>

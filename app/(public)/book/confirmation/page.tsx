@@ -3,7 +3,9 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
+import { formatPrice } from "@/lib/utils";
 import { format } from "date-fns";
+import type { Currency } from "@/lib/region";
 import {
   Card,
   CardContent,
@@ -90,7 +92,7 @@ export default async function BookingConfirmationPage({
             <span>
               {booking.priceZarCents === 0
                 ? "Free"
-                : `R${(booking.priceZarCents / 100).toLocaleString()}`}
+                : formatPrice(booking.priceZarCents, (booking.priceCurrency || "ZAR") as Currency)}
             </span>
           </div>
           {booking.priceZarCents > 0 && (

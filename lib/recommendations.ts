@@ -1,4 +1,6 @@
 import { prisma } from "./prisma";
+import { getCoursePrice, getModulePrice } from "./pricing";
+import type { Currency } from "./region";
 
 interface RecommendedItem {
   id: string;
@@ -16,13 +18,27 @@ interface RecommendedItem {
  */
 export async function getRelatedShortCourses(
   moduleId: string,
-  limit = 3
+  limit = 3,
+  currency: Currency = "ZAR"
 ): Promise<RecommendedItem[]> {
   const currentModule = await prisma.module.findUnique({
     where: { id: moduleId },
     select: { courseId: true, standaloneCategory: true },
   });
   if (!currentModule) return [];
+
+  const moduleSelect = {
+    id: true,
+    standaloneTitle: true,
+    title: true,
+    standaloneSlug: true,
+    standaloneImageUrl: true,
+    standalonePrice: true,
+    standalonePriceUsd: true,
+    standalonePriceEur: true,
+    standalonePriceGbp: true,
+    standaloneCategory: true,
+  };
 
   // Same course modules (different from current)
   const siblingModules = await prisma.module.findMany({
@@ -32,15 +48,7 @@ export async function getRelatedShortCourses(
       id: { not: moduleId },
       standaloneSlug: { not: null },
     },
-    select: {
-      id: true,
-      standaloneTitle: true,
-      title: true,
-      standaloneSlug: true,
-      standaloneImageUrl: true,
-      standalonePrice: true,
-      standaloneCategory: true,
-    },
+    select: moduleSelect,
     orderBy: { sortOrder: "asc" },
     take: limit,
   });
@@ -51,7 +59,7 @@ export async function getRelatedShortCourses(
     title: m.standaloneTitle || m.title,
     slug: `short/${m.standaloneSlug}`,
     imageUrl: m.standaloneImageUrl,
-    price: m.standalonePrice || 0,
+    price: getModulePrice(m, currency),
     category: m.standaloneCategory,
   }));
 
@@ -64,15 +72,7 @@ export async function getRelatedShortCourses(
         id: { notIn: [moduleId, ...results.map((r) => r.id)] },
         standaloneSlug: { not: null },
       },
-      select: {
-        id: true,
-        standaloneTitle: true,
-        title: true,
-        standaloneSlug: true,
-        standaloneImageUrl: true,
-        standalonePrice: true,
-        standaloneCategory: true,
-      },
+      select: moduleSelect,
       take: limit - results.length,
     });
 
@@ -83,7 +83,7 @@ export async function getRelatedShortCourses(
         title: m.standaloneTitle || m.title,
         slug: `short/${m.standaloneSlug}`,
         imageUrl: m.standaloneImageUrl,
-        price: m.standalonePrice || 0,
+        price: getModulePrice(m, currency),
         category: m.standaloneCategory,
       }))
     );
@@ -98,13 +98,26 @@ export async function getRelatedShortCourses(
  */
 export async function getRelatedCourses(
   courseId: string,
-  limit = 3
+  limit = 3,
+  currency: Currency = "ZAR"
 ): Promise<RecommendedItem[]> {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     select: { category: true, relatedCourseIds: true },
   });
   if (!course) return [];
+
+  const courseSelect = {
+    id: true,
+    title: true,
+    slug: true,
+    imageUrl: true,
+    price: true,
+    priceUsd: true,
+    priceEur: true,
+    priceGbp: true,
+    category: true,
+  };
 
   const results: RecommendedItem[] = [];
 
@@ -119,14 +132,7 @@ export async function getRelatedCourses(
         id: { in: overrideIds },
         isPublished: true,
       },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        imageUrl: true,
-        price: true,
-        category: true,
-      },
+      select: courseSelect,
       take: limit,
     });
 
@@ -137,7 +143,7 @@ export async function getRelatedCourses(
         title: c.title,
         slug: c.slug,
         imageUrl: c.imageUrl,
-        price: c.price,
+        price: getCoursePrice(c, currency),
         category: c.category,
       }))
     );
@@ -151,14 +157,7 @@ export async function getRelatedCourses(
         category: course.category,
         id: { notIn: [courseId, ...results.map((r) => r.id)] },
       },
-      select: {
-        id: true,
-        title: true,
-        slug: true,
-        imageUrl: true,
-        price: true,
-        category: true,
-      },
+      select: courseSelect,
       take: limit - results.length,
     });
 
@@ -169,7 +168,7 @@ export async function getRelatedCourses(
         title: c.title,
         slug: c.slug,
         imageUrl: c.imageUrl,
-        price: c.price,
+        price: getCoursePrice(c, currency),
         category: c.category,
       }))
     );
