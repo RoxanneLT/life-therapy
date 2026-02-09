@@ -5,15 +5,16 @@ import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Timer, Pencil, UserPlus, Newspaper } from "lucide-react";
+import { Timer, Pencil, UserPlus, Newspaper, Plus } from "lucide-react";
 import Link from "next/link";
+import { DeleteDripEmailButton } from "./delete-button";
 
 const TYPE_META: Record<
   string,
-  { label: string; icon: React.ComponentType<{ className?: string }>; count: number }
+  { label: string; icon: React.ComponentType<{ className?: string }> }
 > = {
-  onboarding: { label: "Onboarding Sequence", icon: UserPlus, count: 12 },
-  newsletter: { label: "Newsletter Sequence", icon: Newspaper, count: 24 },
+  onboarding: { label: "Onboarding Sequence", icon: UserPlus },
+  newsletter: { label: "Newsletter Sequence", icon: Newspaper },
 };
 
 export default async function DripEmailsPage() {
@@ -37,12 +38,14 @@ export default async function DripEmailsPage() {
     emails: dripEmails.filter((e) => e.type === type),
   }));
 
+  const totalEmails = dripEmails.length;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-heading text-2xl font-bold">Drip Email Sequence</h1>
         <p className="text-sm text-muted-foreground">
-          36-email automated nurture sequence. Contacts receive one email per scheduled day.
+          {totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.
         </p>
       </div>
 
@@ -70,8 +73,22 @@ export default async function DripEmailsPage() {
             <Timer className="mb-4 h-12 w-12 text-muted-foreground" />
             <h3 className="font-heading text-lg font-semibold">No drip emails found</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Run the migration SQL to seed the 36 drip emails.
+              Run the migration SQL to seed the drip emails, or add new ones below.
             </p>
+            <div className="mt-4 flex gap-2">
+              <Button size="sm" asChild>
+                <Link href="/admin/drip-emails/new?type=onboarding">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Onboarding Email
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/admin/drip-emails/new?type=newsletter">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Newsletter Email
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -80,14 +97,22 @@ export default async function DripEmailsPage() {
             const Icon = group.meta.icon;
             return (
               <div key={group.type}>
-                <div className="mb-3 flex items-center gap-2">
-                  <Icon className="h-5 w-5 text-brand-500" />
-                  <h2 className="font-heading text-lg font-semibold">
-                    {group.meta.label}
-                  </h2>
-                  <Badge variant="outline" className="ml-1">
-                    {group.emails.length} / {group.meta.count}
-                  </Badge>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-5 w-5 text-brand-500" />
+                    <h2 className="font-heading text-lg font-semibold">
+                      {group.meta.label}
+                    </h2>
+                    <Badge variant="outline" className="ml-1">
+                      {group.emails.length} emails
+                    </Badge>
+                  </div>
+                  <Button size="sm" variant="outline" className="gap-2" asChild>
+                    <Link href={`/admin/drip-emails/new?type=${group.type}`}>
+                      <Plus className="h-4 w-4" />
+                      Add Email
+                    </Link>
+                  </Button>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {group.emails.map((email) => (
@@ -114,12 +139,15 @@ export default async function DripEmailsPage() {
                         <p className="mb-3 text-sm font-medium line-clamp-2">
                           {email.subject}
                         </p>
-                        <Button size="sm" variant="outline" className="gap-2" asChild>
-                          <Link href={`/admin/drip-emails/${email.id}`}>
-                            <Pencil className="h-3.5 w-3.5" />
-                            Edit
-                          </Link>
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="gap-2" asChild>
+                            <Link href={`/admin/drip-emails/${email.id}`}>
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </Link>
+                          </Button>
+                          <DeleteDripEmailButton id={email.id} step={email.step + 1} />
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

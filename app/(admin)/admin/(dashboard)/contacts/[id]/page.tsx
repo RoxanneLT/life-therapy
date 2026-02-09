@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { getDripPhaseCounts } from "@/lib/drip-emails";
 import {
   updateContactAction,
   deleteContactAction,
@@ -63,9 +64,8 @@ export default async function ContactDetailPage({
       select: { subject: true },
     });
   }
-  const ONBOARDING_TOTAL = 12;
-  const NEWSLETTER_TOTAL = 24;
-  const dripTotalSteps = drip?.currentPhase === "newsletter" ? NEWSLETTER_TOTAL : ONBOARDING_TOTAL;
+  const phaseCounts = await getDripPhaseCounts();
+  const dripTotalSteps = drip?.currentPhase === "newsletter" ? phaseCounts.newsletter : phaseCounts.onboarding;
   const dripProgressPct = drip
     ? drip.completedAt
       ? 100

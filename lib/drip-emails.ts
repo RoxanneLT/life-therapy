@@ -5,8 +5,15 @@ import { baseTemplate } from "@/lib/email-templates";
 const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 1000;
-const ONBOARDING_STEPS = 12; // steps 0-11
-const NEWSLETTER_STEPS = 24; // steps 0-23
+
+/** Get the total number of emails in each drip phase from DB */
+export async function getDripPhaseCounts(): Promise<{ onboarding: number; newsletter: number }> {
+  const [onboarding, newsletter] = await Promise.all([
+    prisma.dripEmail.count({ where: { type: "onboarding" } }),
+    prisma.dripEmail.count({ where: { type: "newsletter" } }),
+  ]);
+  return { onboarding, newsletter };
+}
 
 function replacePlaceholders(
   template: string,
@@ -43,6 +50,9 @@ interface DripResult {
  */
 export async function processDripEmails(): Promise<DripResult> {
   const result: DripResult = { processed: 0, sent: 0, skipped: 0, failed: 0 };
+
+  // Get dynamic phase counts from DB
+  const phaseCounts = await getDripPhaseCounts();
 
   // Get all eligible contacts with their drip progress
   const contacts = await prisma.contact.findMany({
@@ -91,7 +101,7 @@ export async function processDripEmails(): Promise<DripResult> {
     const batch = candidates.slice(i, i + BATCH_SIZE);
 
     const results = await Promise.allSettled(
-      batch.map((candidate) => processSingleContact(candidate))
+      batch.map((candidate) => processSingleContact(candidate, phaseCounts))
     );
 
     for (const res of results) {
@@ -115,7 +125,8 @@ export async function processDripEmails(): Promise<DripResult> {
 }
 
 async function processSingleContact(
-  candidate: DripCandidate
+  candidate: DripCandidate,
+  phaseCounts: { onboarding: number; newsletter: number }
 ): Promise<"sent" | "skipped" | "failed"> {
   const { currentPhase, currentStep, daysSinceSignup } = candidate;
 
@@ -144,7 +155,7 @@ async function processSingleContact(
 
   if (alreadySent) {
     // Already sent — advance progress without resending
-    await advanceProgress(candidate);
+    await advanceProgress(candidate, phaseCounts);
     return "skipped";
   }
 
@@ -186,23 +197,26 @@ async function processSingleContact(
   }
 
   // Advance progress
-  await advanceProgress(candidate);
+  await advanceProgress(candidate, phaseCounts);
   return "sent";
 }
 
-async function advanceProgress(candidate: DripCandidate): Promise<void> {
+async function advanceProgress(
+  candidate: DripCandidate,
+  phaseCounts: { onboarding: number; newsletter: number }
+): Promise<void> {
   const { currentPhase, currentStep, contactId, progressId } = candidate;
 
   let nextPhase: "onboarding" | "newsletter" = currentPhase;
   let nextStep = currentStep + 1;
   let completedAt: Date | null = null;
 
-  // Phase transition logic
-  if (currentPhase === "onboarding" && nextStep >= ONBOARDING_STEPS) {
+  // Phase transition logic (using dynamic counts from DB)
+  if (currentPhase === "onboarding" && nextStep >= phaseCounts.onboarding) {
     // Move to newsletter phase
     nextPhase = "newsletter";
     nextStep = 0;
-  } else if (currentPhase === "newsletter" && nextStep >= NEWSLETTER_STEPS) {
+  } else if (currentPhase === "newsletter" && nextStep >= phaseCounts.newsletter) {
     // Completed all emails
     completedAt = new Date();
   }

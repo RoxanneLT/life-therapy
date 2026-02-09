@@ -3,8 +3,10 @@
 import { requireRole, getAuthenticatedAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
+import type { DripEmailType } from "@/lib/generated/prisma/client";
 
 const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 
@@ -142,4 +144,99 @@ export async function getDripEmailPreviewHtml(
 ): Promise<string> {
   await requireRole("super_admin", "marketing");
   return buildPreviewBody(bodyHtml, subject, ctaText, ctaUrl);
+}
+
+export async function createDripEmailAction(formData: FormData) {
+  await requireRole("super_admin", "marketing");
+
+  const type = formData.get("type") as DripEmailType;
+  const insertAfter = Number.parseInt(formData.get("insertAfter") as string, 10); // -1 = at beginning
+  const dayOffset = Number.parseInt(formData.get("dayOffset") as string, 10);
+  const subject = (formData.get("subject") as string).trim();
+  const previewText = (formData.get("previewText") as string)?.trim() || null;
+  const bodyHtml = (formData.get("bodyHtml") as string).trim();
+  const ctaText = (formData.get("ctaText") as string)?.trim() || null;
+  const ctaUrl = (formData.get("ctaUrl") as string)?.trim() || null;
+
+  if (!type || !subject || !bodyHtml || Number.isNaN(dayOffset)) {
+    throw new Error("Type, subject, body, and day offset are required");
+  }
+
+  const newStep = insertAfter + 1;
+
+  // Shift all subsequent steps up by 1
+  const toShift = await prisma.dripEmail.findMany({
+    where: { type, step: { gte: newStep } },
+    orderBy: { step: "desc" },
+  });
+
+  for (const email of toShift) {
+    await prisma.dripEmail.update({
+      where: { id: email.id },
+      data: { step: email.step + 1 },
+    });
+  }
+
+  // Shift DripProgress for contacts at or past the new step
+  await prisma.dripProgress.updateMany({
+    where: { currentPhase: type, currentStep: { gte: newStep }, completedAt: null },
+    data: { currentStep: { increment: 1 } },
+  });
+
+  // Create the new email
+  const created = await prisma.dripEmail.create({
+    data: { type, step: newStep, dayOffset, subject, previewText, bodyHtml, ctaText, ctaUrl },
+  });
+
+  revalidatePath("/admin/drip-emails");
+  redirect(`/admin/drip-emails/${created.id}`);
+}
+
+export async function deleteDripEmailAction(id: string) {
+  await requireRole("super_admin", "marketing");
+
+  const dripEmail = await prisma.dripEmail.findUnique({ where: { id } });
+  if (!dripEmail) throw new Error("Drip email not found");
+
+  const { type, step } = dripEmail;
+
+  // Delete the email
+  await prisma.dripEmail.delete({ where: { id } });
+
+  // Shift all subsequent steps down by 1
+  const toShift = await prisma.dripEmail.findMany({
+    where: { type, step: { gt: step } },
+    orderBy: { step: "asc" },
+  });
+
+  for (const email of toShift) {
+    await prisma.dripEmail.update({
+      where: { id: email.id },
+      data: { step: email.step - 1 },
+    });
+  }
+
+  // Adjust DripProgress for contacts past the deleted step
+  await prisma.dripProgress.updateMany({
+    where: { currentPhase: type, currentStep: { gt: step }, completedAt: null },
+    data: { currentStep: { decrement: 1 } },
+  });
+
+  revalidatePath("/admin/drip-emails");
+}
+
+export async function updateDripEmailDayOffsetAction(id: string, dayOffset: number) {
+  await requireRole("super_admin", "marketing");
+
+  if (Number.isNaN(dayOffset) || dayOffset < 0) {
+    throw new Error("Day offset must be a non-negative number");
+  }
+
+  await prisma.dripEmail.update({
+    where: { id },
+    data: { dayOffset },
+  });
+
+  revalidatePath("/admin/drip-emails");
+  revalidatePath(`/admin/drip-emails/${id}`);
 }

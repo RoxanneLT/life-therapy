@@ -14,6 +14,7 @@ import {
   resetDripEmailAction,
   sendTestDripEmailAction,
   getDripEmailPreviewHtml,
+  updateDripEmailDayOffsetAction,
 } from "../actions";
 
 interface DripEmailEditorProps {
@@ -45,6 +46,7 @@ export function DripEmailEditor({
   isActive: initialIsActive,
   initialPreviewHtml,
 }: DripEmailEditorProps) {
+  const [currentDayOffset, setCurrentDayOffset] = useState(dayOffset);
   const [subject, setSubject] = useState(initialSubject);
   const [previewText, setPreviewText] = useState(initialPreviewText || "");
   const [bodyHtml, setBodyHtml] = useState(initialBodyHtml);
@@ -158,7 +160,7 @@ export function DripEmailEditor({
             {typeLabel} #{step + 1}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Day {dayOffset} &middot; {typeLabel} Step {step + 1}
+            Day {currentDayOffset} &middot; {typeLabel} Step {step + 1}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -238,6 +240,40 @@ export function DripEmailEditor({
                   checked={isActive}
                   onCheckedChange={setIsActive}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dayOffset">Day Offset</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="dayOffset"
+                    type="number"
+                    min={0}
+                    value={currentDayOffset}
+                    onChange={(e) => setCurrentDayOffset(Number.parseInt(e.target.value, 10) || 0)}
+                    className="w-24"
+                  />
+                  <span className="text-xs text-muted-foreground">days after signup</span>
+                  {currentDayOffset !== dayOffset && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={() => {
+                        startTransition(async () => {
+                          try {
+                            await updateDripEmailDayOffsetAction(id, currentDayOffset);
+                            setSaveMessage("Day offset updated!");
+                            setTimeout(() => setSaveMessage(""), 3000);
+                          } catch (err) {
+                            setSaveMessage(`Error: ${err instanceof Error ? err.message : "Failed"}`);
+                          }
+                        });
+                      }}
+                    >
+                      Update
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="subject">Subject Line</Label>
