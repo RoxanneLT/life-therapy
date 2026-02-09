@@ -73,6 +73,7 @@ export async function getCampaignRecipients(filters?: {
   const where: Record<string, unknown> = {
     consentGiven: true,
     emailOptOut: false,
+    emailPaused: false,
   };
 
   if (filters?.source) {

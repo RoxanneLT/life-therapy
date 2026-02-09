@@ -17,7 +17,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Edit, Trash2, Users, CheckCircle, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Edit,
+  Trash2,
+  Users,
+  CheckCircle,
+  XCircle,
+  Mail,
+  ListOrdered,
+  Calendar,
+  Eye,
+  MousePointer,
+} from "lucide-react";
 import { format } from "date-fns";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
@@ -25,6 +37,17 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "des
   sending: "default",
   sent: "secondary",
   failed: "destructive",
+  scheduled: "default",
+  active: "default",
+  completed: "secondary",
+  paused: "outline",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  scheduled: "bg-blue-100 text-blue-800 hover:bg-blue-100",
+  active: "bg-green-100 text-green-800 hover:bg-green-100",
+  completed: "bg-teal-100 text-teal-800 hover:bg-teal-100",
+  paused: "bg-amber-100 text-amber-800 hover:bg-amber-100",
 };
 
 export default async function CampaignDetailPage({
@@ -35,20 +58,67 @@ export default async function CampaignDetailPage({
   await requireRole("super_admin", "marketing");
   const { id } = await params;
 
-  const campaign = await prisma.campaign.findUnique({ where: { id } });
+  const campaign = await prisma.campaign.findUnique({
+    where: { id },
+    include: {
+      emails: { orderBy: { step: "asc" } },
+      _count: { select: { progress: true } },
+    },
+  });
   if (!campaign) notFound();
 
-  // Get delivery logs for sent campaigns
-  const emailLogs = campaign.status === "sent" || campaign.status === "failed"
+  // Get completed progress count for multi-step
+  const completedContacts = campaign.isMultiStep
+    ? await prisma.campaignProgress.count({
+        where: { campaignId: id, completedAt: { not: null } },
+      })
+    : 0;
+
+  // Get email logs for tracking stats
+  const emailLogs = ["sent", "failed", "completed", "active", "paused"].includes(campaign.status)
     ? await prisma.emailLog.findMany({
-        where: {
-          templateKey: "campaign_broadcast",
-          metadata: { path: ["campaignId"], equals: id },
-        },
+        where: campaign.isMultiStep
+          ? { templateKey: { startsWith: `campaign_${id}_` } }
+          : {
+              templateKey: "campaign_broadcast",
+              metadata: { path: ["campaignId"], equals: id },
+            },
         orderBy: { sentAt: "desc" },
-        take: 100,
+        take: 200,
       })
     : [];
+
+  // Aggregate tracking stats
+  const totalSentLogs = emailLogs.filter((l) => l.status === "sent").length;
+  const totalOpened = emailLogs.filter((l) => l.openedAt).length;
+  const totalClicked = emailLogs.filter((l) => l.clickedAt).length;
+  const openRate = totalSentLogs > 0 ? Math.round((totalOpened / totalSentLogs) * 100) : 0;
+  const clickRate = totalSentLogs > 0 ? Math.round((totalClicked / totalSentLogs) * 100) : 0;
+
+  // Per-step stats for multi-step campaigns
+  const stepStats = campaign.isMultiStep
+    ? campaign.emails.map((email) => {
+        const stepLogs = emailLogs.filter((l) => l.templateKey === `campaign_${id}_${email.step}`);
+        const stepSent = stepLogs.filter((l) => l.status === "sent").length;
+        const stepOpened = stepLogs.filter((l) => l.openedAt).length;
+        const stepClicked = stepLogs.filter((l) => l.clickedAt).length;
+        return {
+          step: email.step,
+          dayOffset: email.dayOffset,
+          subject: email.subject,
+          sent: stepSent,
+          failed: stepLogs.filter((l) => l.status === "failed").length,
+          opened: stepOpened,
+          clicked: stepClicked,
+          openRate: stepSent > 0 ? Math.round((stepOpened / stepSent) * 100) : 0,
+          clickRate: stepSent > 0 ? Math.round((stepClicked / stepSent) * 100) : 0,
+        };
+      })
+    : [];
+
+  const showActions = ["draft", "scheduled", "active", "paused"].includes(campaign.status);
+  const canEdit = campaign.status === "draft";
+  const statusColor = STATUS_COLORS[campaign.status];
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -64,33 +134,49 @@ export default async function CampaignDetailPage({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="font-heading text-2xl font-bold">{campaign.name}</h1>
-            <Badge variant={STATUS_VARIANTS[campaign.status] || "outline"}>
+            <Badge
+              variant={STATUS_VARIANTS[campaign.status] || "outline"}
+              className={statusColor || ""}
+            >
               {campaign.status}
             </Badge>
+            <Badge variant="outline">
+              {campaign.isMultiStep ? (
+                <>
+                  <ListOrdered className="mr-1 h-3 w-3" />
+                  {campaign.emails.length} steps
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-1 h-3 w-3" />
+                  Broadcast
+                </>
+              )}
+            </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{campaign.subject}</p>
+          {!campaign.isMultiStep && campaign.subject && (
+            <p className="mt-1 text-sm text-muted-foreground">{campaign.subject}</p>
+          )}
         </div>
-        {campaign.status === "draft" && (
-          <div className="flex gap-2">
-            <Link href={`/admin/campaigns/${id}/edit`}>
-              <Button variant="outline" size="sm">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            </Link>
-          </div>
+        {canEdit && (
+          <Link href={`/admin/campaigns/${id}/edit`}>
+            <Button variant="outline" size="sm">
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
         )}
       </div>
 
       <div className="grid gap-6">
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* Stats cards */}
+        <div className="grid gap-4 sm:grid-cols-5">
           <Card>
             <CardContent className="flex items-center gap-3 pt-6">
               <Users className="h-8 w-8 text-muted-foreground" />
               <div>
                 <p className="text-2xl font-bold">{campaign.totalRecipients}</p>
-                <p className="text-sm text-muted-foreground">Recipients</p>
+                <p className="text-xs text-muted-foreground">Recipients</p>
               </div>
             </CardContent>
           </Card>
@@ -99,7 +185,7 @@ export default async function CampaignDetailPage({
               <CheckCircle className="h-8 w-8 text-green-500" />
               <div>
                 <p className="text-2xl font-bold">{campaign.sentCount}</p>
-                <p className="text-sm text-muted-foreground">Sent</p>
+                <p className="text-xs text-muted-foreground">Sent</p>
               </div>
             </CardContent>
           </Card>
@@ -108,31 +194,189 @@ export default async function CampaignDetailPage({
               <XCircle className="h-8 w-8 text-red-500" />
               <div>
                 <p className="text-2xl font-bold">{campaign.failedCount}</p>
-                <p className="text-sm text-muted-foreground">Failed</p>
+                <p className="text-xs text-muted-foreground">Failed</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-3 pt-6">
+              <Eye className="h-8 w-8 text-blue-500" />
+              <div>
+                <p className="text-2xl font-bold">{openRate}%</p>
+                <p className="text-xs text-muted-foreground">Open Rate</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-3 pt-6">
+              <MousePointer className="h-8 w-8 text-purple-500" />
+              <div>
+                <p className="text-2xl font-bold">{clickRate}%</p>
+                <p className="text-xs text-muted-foreground">Click Rate</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Actions (send test / send campaign) for draft */}
-        {campaign.status === "draft" && (
-          <CampaignActions campaignId={campaign.id} />
+        {/* Multi-step: completed contacts */}
+        {campaign.isMultiStep && campaign.status !== "draft" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 text-sm">
+                <span>
+                  <strong>{completedContacts}</strong> / {campaign._count.progress} contacts completed all steps
+                </span>
+                {campaign._count.progress > 0 && (
+                  <span className="text-muted-foreground">
+                    ({Math.round((completedContacts / campaign._count.progress) * 100)}%)
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Preview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Email Preview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <iframe
-              srcDoc={wrapPreview(campaign.bodyHtml)}
-              className="h-[500px] w-full rounded border"
-              sandbox=""
-              title="Campaign Preview"
-            />
-          </CardContent>
-        </Card>
+        {/* Schedule info for multi-step */}
+        {campaign.isMultiStep && (campaign.startDate || campaign.activatedAt || campaign.completedAt) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                <Calendar className="mr-2 inline h-4 w-4" />
+                Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 text-sm sm:grid-cols-3">
+                {campaign.startDate && (
+                  <div>
+                    <span className="text-muted-foreground">Start Date: </span>
+                    <span className="font-medium">
+                      {format(new Date(campaign.startDate), "d MMM yyyy")}
+                    </span>
+                  </div>
+                )}
+                {campaign.activatedAt && (
+                  <div>
+                    <span className="text-muted-foreground">Activated: </span>
+                    <span className="font-medium">
+                      {format(new Date(campaign.activatedAt), "d MMM yyyy HH:mm")}
+                    </span>
+                  </div>
+                )}
+                {campaign.completedAt && (
+                  <div>
+                    <span className="text-muted-foreground">Completed: </span>
+                    <span className="font-medium">
+                      {format(new Date(campaign.completedAt), "d MMM yyyy HH:mm")}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Actions */}
+        {showActions && (
+          <CampaignActions
+            campaignId={campaign.id}
+            status={campaign.status}
+            isMultiStep={campaign.isMultiStep}
+            startDate={campaign.startDate?.toISOString() || null}
+            stepCount={campaign.emails.length}
+          />
+        )}
+
+        {/* Multi-step: Step progress table */}
+        {campaign.isMultiStep && campaign.emails.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Email Steps</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[60px]">Step</TableHead>
+                    <TableHead className="w-[60px]">Day</TableHead>
+                    <TableHead>Subject</TableHead>
+                    <TableHead className="w-[70px] text-right">Sent</TableHead>
+                    <TableHead className="w-[70px] text-right">Failed</TableHead>
+                    <TableHead className="w-[70px] text-right">Opens</TableHead>
+                    <TableHead className="w-[70px] text-right">Clicks</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {campaign.status === "draft"
+                    ? campaign.emails.map((email) => (
+                        <TableRow key={email.id}>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {email.step + 1}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {email.dayOffset}
+                          </TableCell>
+                          <TableCell className="max-w-[300px] truncate">
+                            {email.subject}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">—</TableCell>
+                          <TableCell className="text-right text-muted-foreground">—</TableCell>
+                          <TableCell className="text-right text-muted-foreground">—</TableCell>
+                          <TableCell className="text-right text-muted-foreground">—</TableCell>
+                        </TableRow>
+                      ))
+                    : stepStats.map((stat) => (
+                        <TableRow key={stat.step}>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {stat.step + 1}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {stat.dayOffset}
+                          </TableCell>
+                          <TableCell className="max-w-[300px] truncate">
+                            {stat.subject}
+                          </TableCell>
+                          <TableCell className="text-right">{stat.sent}</TableCell>
+                          <TableCell className="text-right text-red-600">
+                            {stat.failed || "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {stat.sent > 0 ? `${stat.openRate}%` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {stat.sent > 0 ? `${stat.clickRate}%` : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Single-email: Preview */}
+        {!campaign.isMultiStep && campaign.bodyHtml && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Email Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <iframe
+                srcDoc={wrapPreview(campaign.bodyHtml)}
+                className="h-[500px] w-full rounded border"
+                sandbox=""
+                title="Campaign Preview"
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters used */}
         {(campaign.filterSource || campaign.filterTags) && (
@@ -163,19 +407,23 @@ export default async function CampaignDetailPage({
           </Card>
         )}
 
-        {/* Delivery Log */}
+        {/* Delivery Log (first 100) */}
         {emailLogs.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Delivery Log</CardTitle>
+              <CardTitle className="text-base">
+                Delivery Log ({emailLogs.length}{emailLogs.length >= 200 ? "+" : ""})
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Email</TableHead>
+                    {campaign.isMultiStep && <TableHead>Step</TableHead>}
                     <TableHead>Status</TableHead>
-                    <TableHead>Error</TableHead>
+                    <TableHead>Opened</TableHead>
+                    <TableHead>Clicked</TableHead>
                     <TableHead>Sent At</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -183,16 +431,38 @@ export default async function CampaignDetailPage({
                   {emailLogs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="text-muted-foreground">{log.to}</TableCell>
+                      {campaign.isMultiStep && (
+                        <TableCell>
+                          {log.templateKey?.split("_").pop() === undefined
+                            ? "—"
+                            : `Step ${Number(log.templateKey?.split("_").pop()) + 1}`}
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Badge variant={log.status === "sent" ? "secondary" : "destructive"}>
                           {log.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                        {log.error || "—"}
+                      <TableCell>
+                        {log.openedAt ? (
+                          <span className="text-green-600" title={format(new Date(log.openedAt), "d MMM HH:mm")}>
+                            Yes ({log.opensCount})
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">No</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {log.clickedAt ? (
+                          <span className="text-blue-600" title={format(new Date(log.clickedAt), "d MMM HH:mm")}>
+                            Yes ({log.clicksCount})
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">No</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {format(new Date(log.sentAt), "HH:mm:ss")}
+                        {format(new Date(log.sentAt), "d MMM HH:mm")}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -203,7 +473,7 @@ export default async function CampaignDetailPage({
         )}
 
         {/* Delete (only drafts) */}
-        {campaign.status === "draft" && (
+        {canEdit && (
           <Card className="border-destructive/30">
             <CardContent className="flex items-center justify-between pt-6">
               <div>
@@ -227,8 +497,8 @@ export default async function CampaignDetailPage({
 
 function wrapPreview(body: string): string {
   const previewBody = body
-    .replace(/\{\{firstName\}\}/g, "Jane")
-    .replace(/\{\{unsubscribeUrl\}\}/g, "#");
+    .replaceAll("{{firstName}}", "Jane")
+    .replaceAll("{{unsubscribeUrl}}", "#");
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>

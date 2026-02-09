@@ -59,6 +59,7 @@ export async function processDripEmails(): Promise<DripResult> {
     where: {
       consentGiven: true,
       emailOptOut: false,
+      emailPaused: false,
     },
     include: {
       dripProgress: true,
@@ -159,6 +160,20 @@ async function processSingleContact(
     return "skipped";
   }
 
+  // Auto-pause cold contacts: check last 5 tracked emails
+  const isCold = await checkContactEngagement(candidate.contactId);
+  if (isCold) {
+    await prisma.contact.update({
+      where: { id: candidate.contactId },
+      data: {
+        emailPaused: true,
+        emailPausedAt: new Date(),
+        emailPauseReason: "5_consecutive_unopened",
+      },
+    });
+    return "skipped";
+  }
+
   // Build and send the email
   const unsubscribeUrl = `${DEFAULT_BASE_URL}/api/unsubscribe?token=${candidate.unsubscribeToken}`;
   const variables: Record<string, string> = {
@@ -199,6 +214,29 @@ async function processSingleContact(
   // Advance progress
   await advanceProgress(candidate, phaseCounts);
   return "sent";
+}
+
+/**
+ * Check if a contact is "cold" — 5 consecutive tracked emails with no opens.
+ * Returns true if the contact should be auto-paused.
+ */
+async function checkContactEngagement(contactId: string): Promise<boolean> {
+  const recentEmails = await prisma.emailLog.findMany({
+    where: {
+      status: "sent",
+      trackingId: { not: null },
+      metadata: { path: ["contactId"], equals: contactId },
+    },
+    orderBy: { sentAt: "desc" },
+    take: 5,
+    select: { openedAt: true },
+  });
+
+  // Only check if we have 5+ tracked emails
+  if (recentEmails.length < 5) return false;
+
+  // If all 5 are unopened → cold
+  return recentEmails.every((e) => !e.openedAt);
 }
 
 async function advanceProgress(

@@ -13,7 +13,10 @@ export default async function EditCampaignPage({
   await requireRole("super_admin", "marketing");
   const { id } = await params;
 
-  const campaign = await prisma.campaign.findUnique({ where: { id } });
+  const campaign = await prisma.campaign.findUnique({
+    where: { id },
+    include: { emails: { orderBy: { step: "asc" } } },
+  });
   if (!campaign) notFound();
 
   if (campaign.status !== "draft") {

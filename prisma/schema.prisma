@@ -315,8 +315,12 @@ enum ContactSource {
 
 enum CampaignStatus {
   draft
+  scheduled
+  active
   sending
   sent
+  completed
+  paused
   failed
 }
 
@@ -848,16 +852,21 @@ model EmailTemplate {
 // Email Delivery Log
 // ============================================================
 model EmailLog {
-  id           String   @id @default(cuid())
-  templateKey  String?  // e.g. "booking_confirmation"
+  id           String    @id @default(cuid())
+  templateKey  String?   // e.g. "booking_confirmation"
   to           String
   subject      String
-  status       String   // "sent" | "failed"
-  error        String?  @db.Text
+  status       String    // "sent" | "failed"
+  error        String?   @db.Text
   studentId    String?
-  student      Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  metadata     Json?    // Extra context: bookingId, orderId, giftId, etc.
-  sentAt       DateTime @default(now())
+  student      Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  metadata     Json?     // Extra context: bookingId, orderId, giftId, etc.
+  sentAt       DateTime  @default(now())
+  trackingId   String?   @unique // Unique token for open/click tracking
+  openedAt     DateTime? // First open timestamp
+  opensCount   Int       @default(0)
+  clickedAt    DateTime? // First click timestamp
+  clicksCount  Int       @default(0)
 
   @@index([to])
   @@index([templateKey])
@@ -870,28 +879,33 @@ model EmailLog {
 // Contact Management (unified mailing list)
 // ============================================================
 model Contact {
-  id               String        @id @default(cuid())
-  email            String        @unique
+  id               String             @id @default(cuid())
+  email            String             @unique
   firstName        String?
   lastName         String?
   phone            String?
   gender           String?
-  source           ContactSource @default(newsletter)
+  source           ContactSource      @default(newsletter)
   tags             Json?
-  consentGiven     Boolean       @default(false)
+  consentGiven     Boolean            @default(false)
   consentDate      DateTime?
   consentMethod    String?
-  emailOptOut      Boolean       @default(false)
-  unsubscribeToken String        @unique @default(cuid())
-  studentId        String?       @unique
-  student          Student?      @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  notes            String?       @db.Text
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  emailOptOut      Boolean            @default(false)
+  emailPaused      Boolean            @default(false)
+  emailPausedAt    DateTime?
+  emailPauseReason String?
+  unsubscribeToken String             @unique @default(cuid())
+  studentId        String?            @unique
+  student          Student?           @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  notes            String?            @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
   dripProgress     DripProgress?
+  campaignProgress CampaignProgress[]
 
   @@index([source])
   @@index([emailOptOut])
+  @@index([emailPaused])
   @@map("contacts")
 }
 
@@ -899,23 +913,69 @@ model Contact {
 // Campaigns (email broadcasts)
 // ============================================================
 model Campaign {
-  id              String         @id @default(cuid())
+  id              String             @id @default(cuid())
   name            String
-  subject         String
-  bodyHtml        String         @db.Text
-  status          CampaignStatus @default(draft)
+  subject         String?            // Legacy single-email campaigns
+  bodyHtml        String?            @db.Text
+  status          CampaignStatus     @default(draft)
+  isMultiStep     Boolean            @default(false)
   filterSource    String?
   filterTags      Json?
-  totalRecipients Int            @default(0)
-  sentCount       Int            @default(0)
-  failedCount     Int            @default(0)
-  sentAt          DateTime?
+  totalRecipients Int                @default(0)
+  sentCount       Int                @default(0)
+  failedCount     Int                @default(0)
+  sentAt          DateTime?          // Legacy: when single-send completed
   sentById        String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  startDate       DateTime?          // When cron should activate
+  activatedAt     DateTime?          // When cron flipped to active
+  completedAt     DateTime?          // When all steps finished
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  emails          CampaignEmail[]
+  progress        CampaignProgress[]
 
   @@index([status])
+  @@index([startDate])
   @@map("campaigns")
+}
+
+model CampaignEmail {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  step        Int
+  dayOffset   Int
+  subject     String
+  previewText String?
+  bodyHtml    String   @db.Text
+  ctaText     String?
+  ctaUrl      String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([campaignId, step])
+  @@index([campaignId])
+  @@map("campaign_emails")
+}
+
+model CampaignProgress {
+  id          String    @id @default(cuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  currentStep Int       @default(0)
+  lastSentAt  DateTime?
+  completedAt DateTime?
+  isPaused    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId, completedAt])
+  @@index([contactId])
+  @@map("campaign_progress")
 }
 
 // ============================================================

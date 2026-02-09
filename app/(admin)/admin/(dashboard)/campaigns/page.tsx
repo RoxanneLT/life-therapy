@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Send } from "lucide-react";
+import { Plus, Send, ListOrdered, Mail } from "lucide-react";
 import { format } from "date-fns";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
@@ -21,6 +21,17 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "des
   sending: "default",
   sent: "secondary",
   failed: "destructive",
+  scheduled: "default",
+  active: "default",
+  completed: "secondary",
+  paused: "outline",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  scheduled: "bg-blue-100 text-blue-800 hover:bg-blue-100",
+  active: "bg-green-100 text-green-800 hover:bg-green-100",
+  completed: "bg-teal-100 text-teal-800 hover:bg-teal-100",
+  paused: "bg-amber-100 text-amber-800 hover:bg-amber-100",
 };
 
 export default async function CampaignsPage() {
@@ -28,6 +39,7 @@ export default async function CampaignsPage() {
 
   const campaigns = await prisma.campaign.findMany({
     orderBy: { createdAt: "desc" },
+    include: { _count: { select: { emails: true } } },
     take: 100,
   });
 
@@ -37,7 +49,7 @@ export default async function CampaignsPage() {
         <div>
           <h1 className="font-heading text-2xl font-bold">Campaigns</h1>
           <p className="text-sm text-muted-foreground">
-            {campaigns.length} campaign{campaigns.length !== 1 ? "s" : ""}
+            {campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}
           </p>
         </div>
         <Link href="/admin/campaigns/new">
@@ -60,45 +72,70 @@ export default async function CampaignsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Subject</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Start Date</TableHead>
                 <TableHead className="text-right">Recipients</TableHead>
                 <TableHead className="text-right">Sent / Failed</TableHead>
-                <TableHead>Sent At</TableHead>
+                <TableHead>Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {campaigns.map((campaign) => (
-                <TableRow key={campaign.id}>
-                  <TableCell>
-                    <Link
-                      href={`/admin/campaigns/${campaign.id}`}
-                      className="font-medium text-foreground hover:underline"
-                    >
-                      {campaign.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                    {campaign.subject}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={STATUS_VARIANTS[campaign.status] || "outline"}>
-                      {campaign.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{campaign.totalRecipients}</TableCell>
-                  <TableCell className="text-right">
-                    {campaign.sentCount > 0 || campaign.failedCount > 0
-                      ? `${campaign.sentCount} / ${campaign.failedCount}`
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {campaign.sentAt
-                      ? format(new Date(campaign.sentAt), "d MMM yyyy HH:mm")
-                      : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {campaigns.map((campaign) => {
+                const statusColor = STATUS_COLORS[campaign.status];
+                return (
+                  <TableRow key={campaign.id}>
+                    <TableCell>
+                      <Link
+                        href={`/admin/campaigns/${campaign.id}`}
+                        className="font-medium text-foreground hover:underline"
+                      >
+                        {campaign.name}
+                      </Link>
+                      {!campaign.isMultiStep && campaign.subject && (
+                        <p className="max-w-[200px] truncate text-xs text-muted-foreground">
+                          {campaign.subject}
+                        </p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {campaign.isMultiStep ? (
+                        <Badge variant="outline" className="text-xs">
+                          <ListOrdered className="mr-1 h-3 w-3" />
+                          {campaign._count.emails} steps
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          <Mail className="mr-1 h-3 w-3" />
+                          Broadcast
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={STATUS_VARIANTS[campaign.status] || "outline"}
+                        className={statusColor || ""}
+                      >
+                        {campaign.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {campaign.startDate
+                        ? format(new Date(campaign.startDate), "d MMM yyyy")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">{campaign.totalRecipients}</TableCell>
+                    <TableCell className="text-right">
+                      {campaign.sentCount > 0 || campaign.failedCount > 0
+                        ? `${campaign.sentCount} / ${campaign.failedCount}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {format(new Date(campaign.createdAt), "d MMM yyyy")}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

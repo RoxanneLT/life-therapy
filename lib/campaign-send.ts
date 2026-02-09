@@ -33,9 +33,21 @@ export async function sendCampaign(campaignId: string): Promise<{
     throw new Error("Campaign not found");
   }
 
+  if (campaign.isMultiStep) {
+    throw new Error("Multi-step campaigns must be scheduled, not sent directly. Use the Schedule action.");
+  }
+
   if (campaign.status !== "draft") {
     throw new Error(`Campaign is already ${campaign.status}`);
   }
+
+  if (!campaign.subject || !campaign.bodyHtml) {
+    throw new Error("Single-email campaigns require a subject and body");
+  }
+
+  // Narrowed after null check above
+  const campaignSubject = campaign.subject;
+  const campaignBody = campaign.bodyHtml;
 
   // Set status to sending
   await prisma.campaign.update({
@@ -72,8 +84,8 @@ export async function sendCampaign(campaignId: string): Promise<{
             unsubscribeUrl,
           };
 
-          const bodyHtml = replacePlaceholders(campaign.bodyHtml, variables);
-          const subject = replacePlaceholders(campaign.subject, variables);
+          const bodyHtml = replacePlaceholders(campaignBody, variables);
+          const subject = replacePlaceholders(campaignSubject, variables);
           const html = baseTemplate(campaign.name, bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
 
           return sendEmail({

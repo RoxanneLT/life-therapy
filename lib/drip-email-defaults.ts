@@ -237,7 +237,7 @@ ${p('<em>P.S. If you haven\u2019t explored our courses or digital products yet, 
   },
 
   // ============================================================
-  // NEWSLETTER SEQUENCE (24 emails, Days 44-366)
+  // NEWSLETTER YEAR 1 (24 emails, Days 44-366)
   // ============================================================
 
   newsletter_0: {
@@ -671,6 +671,434 @@ ${p("You\u2019ve built the foundation. Now let\u2019s build on it.")}
 ${p("Here\u2019s to your next chapter.")}
 <p style="margin: 24px 0 0; line-height: 1.6;">With warmth, gratitude, and excitement for what\u2019s ahead,<br><strong>Roxanne</strong></p>
 ${p('<em>P.S. If you know someone who would benefit from these emails, forward this to them. They can sign up for their own free Self-Esteem Snapshot and join the community at <a href="/" style="color: #8BA889; font-weight: 600;">life-therapy.co.za</a>.</em>')}`,
+  },
+
+  // ============================================================
+  // NEWSLETTER YEAR 2 (24 emails, Days 380-702)
+  // ============================================================
+
+  newsletter_24: {
+    subject: "The Identity Crisis Nobody Warns You About",
+    previewText: "Who are you when you stop being who everyone expected?",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Here\u2019s something nobody tells you about personal growth: it can trigger an identity crisis.")}
+${p("You\u2019ve spent months \u2014 maybe years \u2014 working on yourself. Challenging old patterns, setting boundaries, building confidence. And then one day you wake up and think: <strong>I don\u2019t recognise myself anymore.</strong>")}
+${p("The people-pleaser who used to say yes to everything? She\u2019s saying no now. The person who avoided conflict at all costs? They\u2019re having difficult conversations. The one who dimmed their light to make others comfortable? They\u2019re taking up space.")}
+${p("This is disorienting. Because if you\u2019re not the person you used to be... who are you?")}
+${p("Here\u2019s what I want you to understand: <strong>this confusion is not a sign that something\u2019s gone wrong. It\u2019s a sign that something\u2019s gone right.</strong>")}
+${p("You\u2019re in the space between identities. The old one no longer fits, and the new one hasn\u2019t fully formed yet. It\u2019s like a caterpillar in the chrysalis \u2014 what happens inside isn\u2019t beautiful. It\u2019s dissolution. The caterpillar literally breaks down before it becomes a butterfly.")}
+${p("So if you\u2019re feeling lost, confused, or like you don\u2019t quite know who you are right now \u2014 good. That means the transformation is working.")}
+${p("You\u2019re not lost. You\u2019re becoming.")}
+${sig}`,
+  },
+
+  newsletter_25: {
+    subject: "Grieving the Person You Used to Be",
+    previewText: "Growth comes with an unexpected loss nobody talks about...",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("I want to talk about something that surprised me when I first encountered it, both in my own life and in my clients\u2019 journeys: <strong>grief</strong>.")}
+${p("Not grief from a death or a breakup. Grief for the person you used to be.")}
+${p("When you grow, you leave things behind. The coping mechanisms that kept you safe but kept you small. The relationships that worked when you were a different person. The version of yourself that didn\u2019t know better, didn\u2019t ask for more, didn\u2019t believe she deserved it.")}
+${p("And even though you CHOSE to grow, even though the old patterns weren\u2019t serving you, there can be a genuine sadness in letting them go. Because they were familiar. They were yours. And in their own dysfunctional way, they protected you.")}
+${p("It\u2019s okay to grieve the person you used to be while also being grateful you\u2019re no longer her.")}
+${p("It\u2019s okay to feel sad about losing friendships that couldn\u2019t survive your growth, even if you know those friendships needed to change.")}
+${p("It\u2019s okay to miss the simplicity of not knowing \u2014 because once you see your patterns, you can\u2019t unsee them.")}
+${p("This isn\u2019t weakness. It\u2019s wholeness. You\u2019re honouring ALL of your experience, not just the triumphant parts.")}
+${p("Give yourself permission to grieve. And then keep going. The best version of you is still unfolding.")}
+${sig}`,
+  },
+
+  newsletter_26: {
+    subject: "When Your Growth Makes Others Uncomfortable",
+    previewText: "Not everyone will celebrate your transformation...",
+    ctaText: "Explore Our Relationship & Boundaries Resources",
+    ctaUrl: "/courses?category=relationships",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Here\u2019s an uncomfortable truth about personal growth: <strong>not everyone in your life will be happy about it.</strong>")}
+${p("You\u2019ll start setting boundaries, and someone will call you selfish.<br>You\u2019ll start speaking up, and someone will say you\u2019ve changed.<br>You\u2019ll stop over-giving, and someone will feel cheated.<br>You\u2019ll pursue something new, and someone will question your judgement.")}
+${p("This isn\u2019t because your growth is wrong. It\u2019s because your growth disrupts the system. Every relationship has an unspoken contract \u2014 roles each person plays, patterns each person follows. When you change your role, the system wobbles. And wobbling feels threatening.")}
+${p("<strong>Some people will adjust.</strong> They\u2019ll respect the new you, even if it takes time. These are your people.")}
+${p("<strong>Some people won\u2019t adjust.</strong> They\u2019ll try to pull you back into the old dynamic \u2014 through guilt, criticism, withdrawal, or passive aggression. This isn\u2019t necessarily malicious. They\u2019re afraid of what your change means for them.")}
+${p("<strong>And some people will leave.</strong> Or you\u2019ll need to let them go. This is the hardest part.")}
+${p("Here\u2019s what I\u2019ve learned: the right people will meet you where you are. They might need time. They might fumble. But they\u2019ll try. The people who can\u2019t tolerate your growth aren\u2019t bad people \u2014 they\u2019re just people who needed you to stay small. And that\u2019s not your job anymore.")}
+${p("<strong>Your growth is not up for negotiation.</strong> Surround yourself with people who water your growth, not people who pull at your roots.")}
+${sig}`,
+  },
+
+  newsletter_27: {
+    subject: "The Connection Between Money and Self-Worth",
+    previewText: "What you charge, accept, and settle for says more than you think...",
+    ctaText: "Explore \u2018Negotiating Your Worth\u2019 Short Course",
+    ctaUrl: "/courses/short/negotiating-your-worth",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("This one might be uncomfortable. But I think you\u2019re ready for it.")}
+${p("<strong>Your relationship with money is a mirror of your relationship with yourself.</strong>")}
+${p("When you undercharge for your work, you\u2019re saying: <em>I don\u2019t believe my contribution is worth more.</em><br>When you accept a salary below your market value, you\u2019re saying: <em>I should be grateful for what I get.</em><br>When you feel guilty spending on yourself, you\u2019re saying: <em>my needs are less important than everyone else\u2019s.</em><br>When you avoid looking at your finances, you\u2019re saying: <em>I don\u2019t trust myself to handle this.</em>")}
+${p("I\u2019m not talking about greed or materialism. I\u2019m talking about the belief that you deserve fair compensation, that you\u2019re allowed to have financial security, and that spending on your own wellbeing isn\u2019t selfish.")}
+${p("Money is just energy \u2014 an exchange of value. And if you don\u2019t believe you\u2019re valuable, that belief will show up in every financial decision you make.")}
+${p("<strong>Three questions to sit with:</strong>")}
+<ol style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
+<li>If I truly believed my time was valuable, what would I stop doing for free?</li>
+<li>What financial decision have I been avoiding because I don\u2019t feel \u201Cworth\u201D the investment?</li>
+<li>When I imagine asking for more \u2014 a raise, a higher rate, a better deal \u2014 what emotion comes up first?</li>
+</ol>
+${p("Your answers will tell you a lot. Not about money. About self-worth.")}
+${sig}`,
+  },
+  newsletter_28: {
+    subject: "What Your Anger Is Actually Telling You",
+    previewText: "Anger isn\u2019t the problem. It\u2019s the messenger...",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Most of us were taught that anger is bad. Dangerous. Something to suppress, control, or apologise for.")}
+${p("But anger is one of the most useful emotions you have \u2014 if you learn to listen to it instead of being controlled by it.")}
+${p("<strong>Anger is almost always a secondary emotion.</strong> Underneath it, there\u2019s always something more vulnerable:")}
+${p("Anger about being dismissed \u2192 underneath: <em>I need to feel valued.</em><br>Anger about being taken for granted \u2192 underneath: <em>I need reciprocity.</em><br>Anger about being controlled \u2192 underneath: <em>I need autonomy.</em><br>Anger about being lied to \u2192 underneath: <em>I need safety and trust.</em><br>Anger about injustice \u2192 underneath: <em>I need fairness and respect.</em>")}
+${p('When you get angry, instead of asking \u201CWhy am I so angry?\u201D (which often leads to shame), try asking <strong>\u201CWhat need isn\u2019t being met right now?\u201D</strong>')}
+${p("That question transforms anger from a problem into information. And information is power.")}
+${p("The other thing about anger: if you\u2019ve been a people-pleaser or a fawn-responder, you may have spent years suppressing your anger entirely. In that case, the return of anger during your growth journey is actually <strong>healthy</strong>. It means you\u2019re starting to believe your needs matter enough to feel something when they\u2019re violated.")}
+${p("Anger isn\u2019t the enemy. Unexamined anger is.")}
+${sig}`,
+  },
+
+  newsletter_29: {
+    subject: "The Art of Receiving (Not Just Giving)",
+    previewText: "Why accepting help, compliments, and love is harder than it should be...",
+    ctaText: "Get the 30-Day Self-Worth Challenge",
+    ctaUrl: "/products/30-day-self-worth-challenge",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Can I ask you something personal?")}
+${p("When was the last time someone offered you help \u2014 and you actually accepted it? Without deflecting. Without immediately offering something back. Without feeling guilty.")}
+${p("If you\u2019re like most of my clients, receiving is harder than giving. And not because you\u2019re modest. Because somewhere along the way, you learned that your role is to give, to help, to be the strong one. Receiving feels vulnerable. It means admitting you need something. It means letting someone see you without your armour.")}
+${p("Here\u2019s the thing: <strong>blocking yourself from receiving is actually a form of control.</strong> When you refuse help, deflect compliments, or insist on doing everything yourself, you\u2019re maintaining the illusion that you don\u2019t need anything from anyone. And that feels safe. But it\u2019s also incredibly lonely.")}
+${p("<strong>Try this exercise this week:</strong>")}
+${p("The next time someone compliments you, just say \u201CThank you.\u201D Full stop. No \u201COh, this old thing?\u201D No \u201CYou\u2019re so sweet but...\u201D No redirecting the compliment back to them. Just: thank you.")}
+${p("The next time someone offers help, say yes. Even if you could do it yourself. <em>Especially</em> if you could do it yourself.")}
+${p("Notice what happens in your body when you receive. Discomfort? Guilt? A strange urge to immediately give something back? That\u2019s your worthiness wound showing itself. And recognising it is the first step toward healing it.")}
+${p("You are allowed to receive. You are worthy of receiving. Practise it.")}
+${sig}`,
+  },
+
+  newsletter_30: {
+    subject: "Reparenting: Giving Yourself What You Didn\u2019t Get",
+    previewText: "You can\u2019t change your childhood. But you can change what happens next...",
+    ctaText: "Explore Our Self-Esteem Courses",
+    ctaUrl: "/courses?category=self_esteem",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("I want to introduce you to a concept that might sound strange at first but could be one of the most transformative practices you ever try: <strong>reparenting</strong>.")}
+${p("Reparenting doesn\u2019t mean blaming your parents. It\u2019s not about resentment or pointing fingers. It\u2019s about recognising that every child has emotional needs \u2014 safety, validation, unconditional love, consistency, emotional attunement \u2014 and that most of us didn\u2019t get all of them met. Not because our parents were terrible, but because they were human.")}
+${p("The needs that went unmet don\u2019t disappear. They follow us into adulthood as patterns:")}
+${p("If you didn\u2019t get validation, you might seek constant external approval.<br>If you didn\u2019t get consistency, you might struggle with trust or anxiety.<br>If you didn\u2019t get emotional safety, you might avoid vulnerability.<br>If you didn\u2019t get unconditional love, you might believe love must be earned through performance.")}
+${p("<strong>Reparenting means becoming the adult your inner child needed.</strong> It means:")}
+<ul style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
+<li>Speaking to yourself with the kindness you deserved as a child</li>
+<li>Following through on promises to yourself (because someone didn\u2019t follow through for you)</li>
+<li>Creating safety in your own life \u2014 routines, boundaries, stability</li>
+<li>Validating your own feelings instead of waiting for someone else to</li>
+<li>Comforting yourself the way a loving parent would</li>
+</ul>
+${p("This isn\u2019t self-indulgence. It\u2019s self-repair. And it\u2019s never too late to give yourself what you needed.")}
+${sig}`,
+  },
+
+  newsletter_31: {
+    subject: "When Healing Feels Like Falling Apart",
+    previewText: "The breaking down IS the breakthrough...",
+    ctaText: "Book a Free Consultation",
+    ctaUrl: "/book?type=free_consultation",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("I want to be honest about something that personal development content rarely admits: <strong>healing can feel terrible.</strong>")}
+${p("There are stretches \u2014 sometimes days, sometimes weeks \u2014 where you feel worse than before you started. Where the awareness you\u2019ve gained makes everything more painful, not less. Where you wonder if ignorance really was bliss.")}
+${p("If you\u2019re in that place right now, hear me: <strong>you\u2019re not going backwards.</strong>")}
+${p("Think of it like renovating a house. Before the beautiful kitchen appears, you have to demolish the old one. There\u2019s a phase where the entire room is rubble, dust is everywhere, and the house looks worse than when you started. But nobody looks at a renovation in progress and thinks \u201CThis was a mistake.\u201D They know the mess is temporary and necessary.")}
+${p("Your healing is the same. The old structures \u2014 the beliefs, the patterns, the coping mechanisms \u2014 have to be dismantled before new ones can be built. And dismantling is messy.")}
+${p("<strong>What to do when healing feels like falling apart:</strong>")}
+${p("<strong>Lower the expectations.</strong> You don\u2019t need to be \u201Cthriving\u201D right now. You need to be surviving with kindness.")}
+${p("<strong>Tell someone.</strong> Don\u2019t isolate. Say \u201CI\u2019m in a hard phase\u201D to someone you trust. You don\u2019t need to explain it all \u2014 just let someone know.")}
+${p("<strong>Return to the basics.</strong> Sleep, water, food, movement, one kind thing for yourself. When everything feels complicated, simplify.")}
+${p("<strong>Remember why you started.</strong> You started this work because you deserved better than what you were tolerating. That hasn\u2019t changed.")}
+${p("The falling apart is not the failure. It\u2019s the renovation in progress.")}
+${sig}`,
+  },
+  newsletter_32: {
+    subject: "Your Attachment Style Is Running the Show",
+    previewText: "Understanding this one thing can change every relationship you have...",
+    ctaText: "Explore Our Relationship Courses",
+    ctaUrl: "/courses?category=relationships",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("If there\u2019s one concept from psychology that I wish everyone understood, it\u2019s <strong>attachment theory</strong>.")}
+${p("Your attachment style \u2014 formed in the first few years of your life \u2014 shapes how you show up in every close relationship you have. It\u2019s the invisible operating system running your love life, your friendships, and even your relationship with yourself.")}
+${p("<strong>There are four main styles:</strong>")}
+${p("<strong>Secure:</strong> You\u2019re comfortable with intimacy and independence. You can ask for what you need without anxiety, and you don\u2019t panic when your partner needs space. This is the gold standard, and only about 50\u201360% of people have it.")}
+${p("<strong>Anxious:</strong> You crave closeness but worry about rejection. You might over-analyse texts, need frequent reassurance, or feel panicked when someone pulls away. Underneath is a fear: <em>if I\u2019m not vigilant, I\u2019ll be abandoned.</em>")}
+${p("<strong>Avoidant:</strong> You value independence highly and feel uncomfortable with too much closeness. You might pull away when things get serious, have difficulty expressing emotions, or feel suffocated by needy partners. Underneath is a fear: <em>if I let someone in, I\u2019ll lose myself.</em>")}
+${p("<strong>Disorganised:</strong> A push-pull pattern \u2014 you want closeness but are afraid of it simultaneously. Often rooted in early experiences where the source of comfort was also the source of fear.")}
+${p("The good news? <strong>Attachment styles aren\u2019t permanent.</strong> With awareness and intentional practice, you can move toward secure attachment at any age. It starts with understanding your pattern.")}
+${p("Which one resonated? And more importantly \u2014 how is it showing up in your relationships right now?")}
+${sig}`,
+  },
+
+  newsletter_33: {
+    subject: "The Loneliness of Growth (And What to Do About It)",
+    previewText: "What nobody tells you about becoming the new you...",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Growth can be lonely.")}
+${p("Not because you\u2019re alone \u2014 but because you\u2019re changing at a pace that not everyone in your life can match. You\u2019re reading, reflecting, shifting, evolving. And some of the people around you are exactly where they were when you started.")}
+${p("This creates a quiet kind of loneliness. You can\u2019t talk about your inner critic work at Friday drinks. You can\u2019t explain why you\u2019re suddenly uncomfortable with the dynamics that used to feel normal. You feel like you\u2019re speaking a language nobody else in the room understands.")}
+${p("<strong>Three things that help:</strong>")}
+${p("<strong>1. Find your people.</strong> Not everyone needs to understand your journey. But you need at least one or two people who do. This might be a therapist, a coach, an online community, or a friend who\u2019s on their own growth path. Seek them out intentionally.")}
+${p("<strong>2. Stop expecting understanding from people who aren\u2019t on this path.</strong> This isn\u2019t judgement \u2014 it\u2019s acceptance. Your partner doesn\u2019t need to read the same books as you. Your friends don\u2019t need to be in therapy. You can love people deeply while accepting that this part of your life might not be shared with them.")}
+${p("<strong>3. Use the loneliness as information.</strong> If you\u2019re feeling isolated, that\u2019s a signal to invest in community. Not to stop growing so you can fit back in.")}
+${p("You\u2019re not outgrowing the world. You\u2019re growing into a bigger version of it. And the right people are out there, doing the same work, feeling the same loneliness. Find each other.")}
+${sig}`,
+  },
+
+  newsletter_34: {
+    subject: "How to Trust Again After Being Let Down",
+    previewText: "Trust isn\u2019t about the other person. It\u2019s about you...",
+    ctaText: "Explore \u2018Building Self-Trust\u2019 Short Course",
+    ctaUrl: "/courses/short/building-self-trust",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("After betrayal \u2014 whether it\u2019s a broken promise, infidelity, a friend who let you down, or a parent who wasn\u2019t there \u2014 the hardest thing isn\u2019t forgiving the other person. It\u2019s trusting again.")}
+${p("Because trust, once broken, doesn\u2019t just affect that one relationship. It spreads. You start scanning everyone for signs of untrustworthiness. You keep people at arm\u2019s length. You test before you commit. And you tell yourself this is wisdom, when actually it\u2019s a wound.")}
+${p("Here\u2019s what I\u2019ve learned from sitting with this in hundreds of sessions:")}
+${p("<strong>Rebuilding trust isn\u2019t about finding someone trustworthy. It\u2019s about rebuilding trust in yourself</strong> \u2014 specifically, trust in your ability to handle it if something goes wrong again.")}
+${p('The real fear isn\u2019t \u201Cwhat if they hurt me?\u201D It\u2019s <strong>\u201Cwhat if they hurt me and I can\u2019t survive it?\u201D</strong>')}
+${p("But look at your track record. You HAVE survived it. You\u2019re reading this email. You\u2019re still here. You\u2019ve already proven you can handle disappointment, heartbreak, and betrayal. It was terrible. But you made it.")}
+${p("When you trust yourself to handle whatever comes, you can afford to be open again. Not naively. Not without boundaries. But openly. Because you know that even in the worst case, you\u2019ll be okay.")}
+${p("Trust yourself first. The rest follows.")}
+${sig}`,
+  },
+
+  newsletter_35: {
+    subject: "18-Month Check-In: Look at Who You\u2019re Becoming",
+    previewText: "It\u2019s time to see how far you\u2019ve really come...",
+    ctaText: "Retake Your Free Self-Esteem Snapshot",
+    ctaUrl: "/free/self-esteem-snapshot",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Eighteen months. You\u2019ve been part of this community for a year and a half.")}
+${p("I want you to try something specific today. Go back to wherever you keep notes \u2014 a journal, your phone, old emails \u2014 and find something you wrote about yourself 12\u201318 months ago. A worry, a goal, a frustration. Look at it with fresh eyes.")}
+${p("<strong>Now answer these questions:</strong>")}
+<ul style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
+<li>Is that worry still consuming you the way it was? Or has it shrunk?</li>
+<li>Have you achieved (or moved toward) that goal, even partially?</li>
+<li>Is that frustration still relevant, or has your life shifted around it?</li>
+</ul>
+${p("Most people, when they do this exercise, are surprised. Not because everything is perfect \u2014 but because the things that felt monumental then have shifted in ways they didn\u2019t notice.")}
+${p("Growth is like watching a child develop. When you see them every day, you don\u2019t notice the changes. But compare a photo from 18 months ago to today, and the difference is striking.")}
+${p("You are not the same person who first opened my emails. You\u2019re more aware. More boundaried. More compassionate with yourself. More capable of sitting with discomfort. More willing to choose yourself.")}
+${p("<strong>These aren\u2019t small things. These are everything.</strong>")}
+<p style="margin: 24px 0 0; line-height: 1.6;">With pride and warmth,<br><strong>Roxanne</strong></p>`,
+  },
+  newsletter_36: {
+    subject: "The Difference Between Being Alone and Being Lonely",
+    previewText: "One is chosen. The other is suffered. Learn to tell them apart...",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("In a world that equates being alone with being lonely, I want to make a case for <strong>solitude</strong>.")}
+${p("<strong>Being alone</strong> is a state. It means you\u2019re by yourself. It\u2019s neutral.<br><strong>Being lonely</strong> is an emotion. It means you feel disconnected. It can happen in a room full of people.")}
+${p("You can be alone without being lonely. And you can be deeply lonely while surrounded by others.")}
+${p("The difference? <strong>The quality of your relationship with yourself.</strong>")}
+${p("When you genuinely enjoy your own company \u2014 when silence feels peaceful rather than empty, when a solo evening feels like a gift rather than punishment \u2014 you\u2019ve built something that many people spend their entire lives trying to find in someone else.")}
+${p("This doesn\u2019t mean you don\u2019t need people. Humans are wired for connection. But there\u2019s a difference between choosing connection from wholeness and seeking connection from desperation. One builds healthy relationships. The other builds codependent ones.")}
+${p("<strong>A practice for this week:</strong> spend 30 minutes alone doing something you genuinely enjoy. Not scrolling. Not watching something. Something active \u2014 cooking, walking, drawing, reading, sitting in a coffee shop watching the world go by. And while you\u2019re doing it, notice: does this feel uncomfortable? Or does it feel like coming home?")}
+${p("If it feels uncomfortable, that\u2019s okay. It\u2019s a muscle you haven\u2019t used enough. Keep practising.")}
+${sig}`,
+  },
+
+  newsletter_37: {
+    subject: "Your Worth Is Not Your Output",
+    previewText: "Busy doesn\u2019t mean valuable. Rest doesn\u2019t mean lazy...",
+    ctaText: "Get the Daily Affirmations & Reflection Planner",
+    ctaUrl: "/products/daily-affirmations-planner",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("We live in a culture that worships productivity. Your worth is measured by how busy you are, how much you accomplish, how little sleep you need, how many plates you\u2019re spinning.")}
+${p("And most of us have internalised this so deeply that we feel guilty for resting. We feel lazy for having a slow day. We feel worthless when we\u2019re not producing something.")}
+${p("Let me say something clearly: <strong>your value as a human being has nothing to do with your output.</strong>")}
+${p("You are not more worthy when you\u2019re busy and less worthy when you\u2019re resting.<br>You are not more valuable when you\u2019re productive and less valuable when you\u2019re still.<br>Your contribution to the world is not measured in tasks completed, emails sent, or hours worked.")}
+${p("<strong>Your worth is inherent.</strong> It exists whether you accomplish everything on your to-do list or nothing at all.")}
+${p("This is one of the hardest beliefs to truly internalise, because the opposite message is everywhere. It\u2019s in the \u201Crise and grind\u201D culture, the guilt we feel on weekends, the anxiety when we have nothing planned.")}
+${p("Here\u2019s a question to sit with: <strong>if you did absolutely nothing productive for an entire day</strong> \u2014 no work, no chores, no \u201Cuseful\u201D activity \u2014 how would you feel about yourself? The answer reveals how much of your self-worth is tied to your output.")}
+${p("You are enough, even when you\u2019re still.")}
+${sig}`,
+  },
+
+  newsletter_38: {
+    subject: "The Conversations You Need to Have With Your Parents",
+    previewText: "This isn\u2019t about blame. It\u2019s about understanding...",
+    ctaText: "Book a Free Consultation",
+    ctaUrl: "/book?type=free_consultation",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("This is the email I\u2019ve been hesitant to write, because it touches something raw for almost everyone: <strong>your relationship with your parents</strong>.")}
+${p("Here\u2019s what I want to say carefully: this is not about blame. Your parents were shaped by their own childhoods, their own wounds, their own limitations. Understanding the impact of your upbringing is not the same as condemning the people who raised you.")}
+${p("But understanding IS necessary. Because until you see clearly how your childhood shaped your beliefs about yourself, you\u2019ll keep running the same programmes without knowing why.")}
+${p("<strong>Some conversations are with your parents. Some are with yourself about your parents.</strong> Here\u2019s how to tell the difference:")}
+${p("<strong>Have the conversation WITH your parents if:</strong> they\u2019re emotionally safe, capable of hearing feedback without becoming defensive or punishing, and you have a specific, concrete request (not just \u201CI need you to acknowledge you hurt me\u201D).")}
+${p("<strong>Have the conversation WITH YOURSELF if:</strong> your parents aren\u2019t emotionally safe, aren\u2019t living, or aren\u2019t capable of the conversation you need. Write a letter you never send. Process it in therapy. Journal it out. The healing doesn\u2019t require their participation.")}
+${p("The goal is never to get an apology. Apologies are wonderful when they come, but waiting for one gives someone else the key to your healing. The goal is YOUR understanding, YOUR processing, YOUR freedom from patterns that started before you were old enough to choose them.")}
+${p("This is deep work. If it resonates, please don\u2019t do it alone. A therapist or coach can hold space for this in ways that a journal can\u2019t.")}
+${sig}`,
+  },
+
+  newsletter_39: {
+    subject: "Finding Purpose When You\u2019ve Outgrown Your Old One",
+    previewText: "What happens when the life you built no longer fits the person you\u2019ve become...",
+    ctaText: "Get the Values Discovery Workbook",
+    ctaUrl: "/products/values-discovery-workbook",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Have you ever achieved a goal, reached a destination, or built a life that you wanted \u2014 only to realise it doesn\u2019t feel like you anymore?")}
+${p("This is one of the most disorienting experiences of growth. You didn\u2019t fail. You succeeded at something that was right for who you WERE. But you\u2019ve changed. And now the life that fits the old you feels like wearing someone else\u2019s clothes.")}
+${p("Maybe it\u2019s your career. You worked hard to get here, and it\u2019s good, and it\u2019s safe, and you\u2019re grateful. But something in you is whispering: <em>is this it?</em>")}
+${p("Maybe it\u2019s your lifestyle. The things that used to excite you feel empty. The goals that used to drive you feel arbitrary. The people-pleasing ambitions that fuelled your twenties feel hollow in your thirties or forties.")}
+${p("<strong>This isn\u2019t a crisis. It\u2019s an invitation.</strong>")}
+${p("Not everyone gets this moment. Many people never grow enough to outgrow their old purpose. The fact that you\u2019re here means you\u2019ve evolved beyond what you thought you wanted and are ready for what you actually need.")}
+${p("Finding new purpose doesn\u2019t require dramatic life changes. It starts with two questions:")}
+<ol style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
+<li><strong>What makes me feel most alive?</strong> Not \u201Csuccessful\u201D or \u201Cuseful\u201D \u2014 alive.</li>
+<li><strong>What would I regret NOT trying?</strong></li>
+</ol>
+${p("Your new purpose won\u2019t look like anyone else\u2019s. It doesn\u2019t have to be grand. It just has to be yours.")}
+${sig}`,
+  },
+
+  newsletter_40: {
+    subject: "How to Stop Absorbing Other People\u2019s Stress",
+    previewText: "Advanced emotional boundaries for sensitive people...",
+    ctaText: "Explore \u2018The Empowered Empath\u2019 Course",
+    ctaUrl: "/courses/the-empowered-empath",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("By now, you probably know what your boundaries are. You might even be decent at communicating them. But there\u2019s a subtler boundary challenge that doesn\u2019t get talked about enough: <strong>emotional absorption</strong>.")}
+${p("This is when someone else\u2019s stress becomes YOUR stress. When your partner has a bad day and suddenly you\u2019re anxious. When a colleague is overwhelmed and you leave the meeting feeling drained. When a friend vents for an hour and you carry the weight of their problems for days.")}
+${p("This isn\u2019t weakness. It\u2019s actually a sign of deep empathy. But empathy without boundaries is a recipe for burnout.")}
+${p("<strong>Three advanced practices for emotional boundaries:</strong>")}
+${p('<strong>1. The mental \u201Creturn to sender.\u201D</strong> When you notice you\u2019re carrying someone else\u2019s emotional weight, visualise gently handing it back. Not with resentment \u2014 with respect. \u201CThis is yours. I can care about you without carrying this for you.\u201D')}
+${p('<strong>2. The post-interaction check-in.</strong> After intense conversations, take 60 seconds to ask: \u201CWhat\u2019s mine and what\u2019s theirs?\u201D Literally name it. \u201CThe sadness about their job loss is theirs. The tightness in my chest is mine \u2014 probably my own fear about security.\u201D Separating them is the skill.')}
+${p("<strong>3. The 24-hour rule.</strong> After someone dumps heavy emotions on you, give yourself 24 hours before taking any action. Don\u2019t immediately try to fix their problem, send the rescue text, or start worrying on their behalf. Wait. Often, the urgency you feel is absorbed urgency, not real urgency.")}
+${p("You can be compassionate without being a sponge. That\u2019s not cold \u2014 it\u2019s sustainable.")}
+${sig}`,
+  },
+
+  newsletter_41: {
+    subject: "The Power of Letting People Be Wrong About You",
+    previewText: "Freedom starts when you stop correcting everyone\u2019s perception...",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("One of the most liberating things you can learn is this: <strong>you don\u2019t have to correct everyone\u2019s perception of you.</strong>")}
+${p("Someone thinks you\u2019re too quiet? Let them.<br>Someone thinks you\u2019re too much? Let them.<br>Someone misinterprets your boundaries as coldness? Let them.<br>Someone doesn\u2019t see your value? Let them.")}
+${p("This is incredibly hard for anyone who grew up believing their worth depended on being understood, liked, or approved of. The instinct to explain, justify, and manage how others see you is deeply ingrained.")}
+${p("But here\u2019s the truth: you will exhaust yourself trying to control perceptions that aren\u2019t yours to control. People see you through the lens of their own experiences, wounds, and projections. Someone who is uncomfortable with your confidence is telling you about THEIR relationship with confidence, not about you.")}
+${p("This doesn\u2019t mean feedback doesn\u2019t matter. It does \u2014 from people who know you, love you, and have earned the right to speak into your life. Listen to those people.")}
+${p("But the casual opinions, the assumptions, the snap judgements from people who don\u2019t know your story? <strong>Let them be wrong about you.</strong> It\u2019s not your job to educate every person who misreads you.")}
+${p("Save your energy for the people who see you clearly. And for the most important audience of all: yourself.")}
+${sig}`,
+  },
+
+  newsletter_42: {
+    subject: "Building a Life You Don\u2019t Need a Holiday From",
+    previewText: "What if the goal isn\u2019t escape? What if it\u2019s redesign?",
+    ctaText: "Get the Weekly Self-Care & Growth Tracker",
+    ctaUrl: "/products/weekly-self-care-growth-tracker",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p('There\u2019s a phrase I come back to often: <strong>\u201CBuild a life you don\u2019t need a vacation from.\u201D</strong>')}
+${p("It\u2019s aspirational, I know. Bills exist. Responsibilities exist. Not everyone has the luxury of redesigning their entire life. I\u2019m not naive about that.")}
+${p("But the sentiment contains something important: if you\u2019re constantly counting the days until your next escape, that\u2019s not a scheduling problem. It\u2019s a design problem.")}
+${p("Most people optimise for survival, not for living. They build careers around security, not fulfilment. They fill their schedules with obligations, not energy. They maintain relationships out of duty, not joy.")}
+${p("And then they wonder why they\u2019re exhausted, resentful, and constantly dreaming about being somewhere else.")}
+${p("What if you approached your life like an architect? Not demolishing everything and starting over, but making <strong>intentional design choices</strong>:")}
+${p("<strong>Audit your week.</strong> What percentage of your time is spent on things that drain you vs. things that fill you? What\u2019s the ratio?")}
+${p("<strong>Identify one thing you could remove.</strong> Not something dramatic \u2014 one commitment, one habit, one \u201Cshould\u201D that consistently depletes you.")}
+${p("<strong>Add one thing that makes you come alive.</strong> Even 20 minutes a week of something that genuinely lights you up changes the texture of your entire life.")}
+${p("You can\u2019t overhaul everything overnight. But you can make one design decision this week. And then another next week. And slowly, the life you\u2019re living starts looking more like the life you want.")}
+${sig}`,
+  },
+
+  newsletter_43: {
+    subject: "When the Relationship You Need to Fix Is With Yourself",
+    previewText: "Every external pattern starts with an internal one...",
+    ctaText: "Explore Our Complete Confidence Journey Bundle",
+    ctaUrl: "/packages",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("Almost two years into this journey, and I want to come back to where we started: <strong>your relationship with yourself</strong>.")}
+${p("Because here\u2019s what I\u2019ve observed in my practice, over and over: every relationship problem is, at its root, a self-relationship problem.")}
+${p("The person who can\u2019t trust their partner? Usually can\u2019t trust themselves.<br>The person who keeps choosing unavailable people? Usually believes they don\u2019t deserve availability.<br>The person who explodes over small things? Usually has unexpressed needs piling up.<br>The person who can\u2019t let anyone in? Usually has let themselves down so many times they\u2019ve stopped trying.")}
+${p("I\u2019m not saying this to blame you for your relationship challenges. I\u2019m saying it to <strong>empower</strong> you. Because if the pattern starts with you, that means the solution does too. You don\u2019t need the other person to change first. You don\u2019t need to find the \u201Cright\u201D person. You need to become the right person <em>for yourself</em>.")}
+${p("<strong>What does a healthy self-relationship look like?</strong>")}
+<ul style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
+<li>You keep promises to yourself as seriously as you keep promises to others</li>
+<li>You speak to yourself the way you\u2019d speak to someone you love</li>
+<li>You trust your own judgement, even when others disagree</li>
+<li>You meet your own needs instead of outsourcing them to partners, friends, or children</li>
+<li>You enjoy your own company</li>
+</ul>
+${p("How many of these can you honestly say are true for you today versus two years ago? The shift, even if it\u2019s small, is everything.")}
+${sig}`,
+  },
+
+  newsletter_44: {
+    subject: "The Courage to Be Disliked",
+    previewText: "What happens when you choose authenticity over approval...",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p('There\u2019s a Japanese philosophy book called <strong>\u201CThe Courage to Be Disliked.\u201D</strong> I won\u2019t summarise it all here, but the core idea has stayed with me for years:')}
+${p("<strong>The freedom to live your life on your own terms requires the courage to be disliked.</strong>")}
+${p("Not the desire to be disliked. Not indifference to how you affect others. But the willingness to accept that some people won\u2019t like your choices, your boundaries, your authenticity \u2014 and that this is an acceptable cost.")}
+${p("For most of us, being disliked feels dangerous. It feels like being rejected, excluded, unsafe. And in childhood, it WAS unsafe. A child who is disliked by their caregiver is a child in danger. So we learned to perform, to accommodate, to shapeshift into whatever was required to maintain connection.")}
+${p("But you\u2019re not a child anymore. And the people in your life are not your survival source. You can survive someone\u2019s disapproval. You\u2019ve been doing it your whole life without realising it.")}
+${p("The choice isn\u2019t between being liked and being yourself. The choice is between being liked by everyone (impossible and exhausting) and being liked by the right people (sustainable and fulfilling).")}
+${p("The right people will like the real you. The wrong people will like the performance. And the performance has to end eventually \u2014 because it\u2019s killing you slowly.")}
+${p("Choose authenticity. Accept that it comes with a cost. And trust that the freedom on the other side is worth it.")}
+${sig}`,
+  },
+
+  newsletter_45: {
+    subject: "What You Practise Grows Stronger",
+    previewText: "Your brain is rewiring itself right now. Here\u2019s how to help it...",
+    ctaText: "Explore Our Self-Esteem Starter Kit",
+    ctaUrl: "/products/self-esteem-starter-kit",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("I want to give you a piece of neuroscience that might change how you see your entire growth journey:")}
+${p("<strong>Neurons that fire together wire together.</strong>")}
+${p("This means that every thought pattern you repeat strengthens the neural pathway for that thought. Every time you tell yourself \u201CI\u2019m not good enough,\u201D that pathway gets a little stronger. And every time you catch that thought and replace it with something more balanced, THAT pathway gets a little stronger.")}
+${p("Your brain is not fixed. It\u2019s plastic \u2014 constantly rewiring based on what you practise. This is called <strong>neuroplasticity</strong>, and it\u2019s the scientific basis for everything we\u2019ve been working on.")}
+${p("<strong>What you practise grows stronger.</strong> So what have you been practising?")}
+${p("If you\u2019ve been doing the exercises, the journaling, the boundary-setting, the self-compassion work \u2014 you have literally been rewiring your brain. The neural pathways for self-criticism are weakening. The pathways for self-trust are strengthening. It\u2019s happening at a biological level, whether you feel it or not.")}
+${p("This is why <strong>consistency matters more than intensity</strong>. Five minutes of intentional self-talk daily does more for your neural wiring than a weekend workshop every six months. The brain responds to repetition, not events.")}
+${p("So when growth feels slow, when you wonder if anything\u2019s changing, remember: your brain is quietly rewiring itself every single day. You can\u2019t see it. You can\u2019t feel it happening. But it\u2019s happening.")}
+${p("Keep practising. It\u2019s working.")}
+${sig}`,
+  },
+
+  newsletter_46: {
+    subject: "Two Years of Growth \u2014 A Love Letter to You",
+    previewText: "You showed up. Again and again. And it changed everything...",
+    ctaText: "Retake Your Free Self-Esteem Snapshot \u2014 Compare Your Growth",
+    ctaUrl: "/free/self-esteem-snapshot",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("<strong>Two years.</strong>")}
+${p("That\u2019s how long you\u2019ve been opening these emails, thinking about these ideas, and doing this work. Two years of showing up for yourself \u2014 sometimes with enthusiasm, sometimes with exhaustion, sometimes with doubt, but always with willingness.")}
+${p("<strong>I want to tell you what I see:</strong>")}
+${p("I see someone who chose to look inward when it would have been easier to stay on the surface.<br>I see someone who sat with uncomfortable truths about themselves and didn\u2019t run.<br>I see someone who set boundaries that cost them comfort but gained them self-respect.<br>I see someone who fell back into old patterns and got back up again \u2014 every single time.<br>I see someone who went from wondering if they\u2019re enough to quietly knowing they are.")}
+${p("You might not see all of this in yourself yet. Growth is slow and close, like watching your own hair grow. But from where I stand \u2014 having walked alongside thousands of people on this path \u2014 I can tell you: <strong>you\u2019re not where you started. Not even close.</strong>")}
+${p("Two years ago, you downloaded a free self-assessment from a stranger on the internet. Today, you have a vocabulary for your patterns, tools for your difficult moments, and a relationship with yourself that is fundamentally different from the one you started with.")}
+${p("That\u2019s not nothing. That\u2019s everything.")}
+${p("I\u2019m proud of you. And I hope, today, you\u2019re proud of yourself too.")}
+<p style="margin: 24px 0 0; line-height: 1.6;">With deep warmth and genuine admiration,<br><strong>Roxanne</strong></p>`,
+  },
+
+  newsletter_47: {
+    subject: "What Comes After? Your Next Chapter Starts Now",
+    previewText: "This isn\u2019t an ending. It\u2019s a launch pad...",
+    ctaText: "Share Life-Therapy With Someone Who Needs It",
+    ctaUrl: "/",
+    bodyHtml: `${p("Hi {{firstName}},")}
+${p("This is the last email in your two-year sequence. But it\u2019s not goodbye.")}
+${p("Here\u2019s what I believe about where you are right now: you don\u2019t need me the way you might have two years ago. And that\u2019s exactly how it should be.")}
+${p("The goal of every good teacher, therapist, or coach is to make themselves unnecessary. Not because you don\u2019t need support \u2014 everyone does. But because you\u2019ve built something internal that carries you now. You have your own compass.")}
+${p("<strong>So what comes next?</strong>")}
+${p("<strong>Keep practising.</strong> The tools you\u2019ve learned aren\u2019t a course you completed. They\u2019re a practice you maintain. Five minutes of morning reflection. The thought record when the inner critic gets loud. The boundary when someone crosses a line. The self-compassion when you stumble. These are lifelong practices, not one-time fixes.")}
+${p("<strong>Deepen where it matters.</strong> If there\u2019s an area that still feels stuck \u2014 relationships, career confidence, body image, people-pleasing \u2014 go deeper there. We have courses and resources for exactly this. You\u2019ve built the foundation. Now you can go specific.")}
+${p("<strong>Pay it forward.</strong> You know things now that someone in your life needs to hear. Not as a coach or a therapist \u2014 just as a human who\u2019s done the work. Share what you\u2019ve learned. Recommend a resource. Be the person who says \u201CI\u2019ve been there\u201D to someone who thinks they\u2019re the only one.")}
+${p("<strong>Stay connected.</strong> You\u2019ll continue to hear from me \u2014 new courses, new resources, new insights. And my door is always open for a conversation if you need one.")}
+${p("Thank you for trusting me with your journey. It has been one of the great privileges of my work.")}
+${p("You came here looking for something. I hope you found it. And I hope you found that it was inside you all along.")}
+<p style="margin: 24px 0 0; line-height: 1.6;">With love, gratitude, and belief in your next chapter,<br><strong>Roxanne</strong></p>
+${p('<em>P.S. If you know someone who\u2019s at the beginning of their journey, send them to <a href="/" style="color: #8BA889; font-weight: 600;">life-therapy.co.za</a>. Their free Self-Esteem Snapshot might be the first step that changes everything. Just like it was for you.</em>')}`,
   },
 };
 
