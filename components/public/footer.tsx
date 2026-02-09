@@ -114,7 +114,7 @@ export function PublicFooter({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="border-white/30 bg-white/10 text-white placeholder:text-white/60 focus-visible:ring-white"
+                  className="border-white/30 bg-white/10 text-white placeholder:text-white/70 focus-visible:ring-white"
                 />
                 <Input
                   type="email"
@@ -122,7 +122,7 @@ export function PublicFooter({
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   required
-                  className="border-white/30 bg-white/10 text-white placeholder:text-white/60 focus-visible:ring-white"
+                  className="border-white/30 bg-white/10 text-white placeholder:text-white/70 focus-visible:ring-white"
                 />
                 <Button
                   type="submit"

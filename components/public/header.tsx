@@ -81,7 +81,7 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
           <ThemeToggle />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Toggle menu">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>

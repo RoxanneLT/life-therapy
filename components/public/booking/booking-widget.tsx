@@ -139,6 +139,7 @@ export function BookingWidget({ creditBalance = 0, sessionPrices, currency }: Bo
             <div key={label} className="flex flex-1 items-center">
               <div className="flex flex-col items-center">
                 <div
+                  aria-label={`Step ${i + 1}: ${label}`}
                   className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
                     i <= step
                       ? "bg-brand-600 text-white"

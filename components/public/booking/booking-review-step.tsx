@@ -114,6 +114,9 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPric
             <>
               <button
                 type="button"
+                role="switch"
+                aria-checked={useCredit}
+                aria-label="Use session credit"
                 onClick={() => setUseCredit(!useCredit)}
                 className="flex w-full items-center justify-between rounded-md border p-3 text-sm transition-colors hover:bg-muted"
               >

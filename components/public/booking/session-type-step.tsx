@@ -25,8 +25,16 @@ export function SessionTypeStep({ onSelect, sessionPrices, currency }: SessionTy
         {SESSION_TYPES.map((config) => (
           <Card
             key={config.type}
+            role="button"
+            tabIndex={0}
             className="cursor-pointer transition-all hover:shadow-md hover:border-brand-300"
             onClick={() => onSelect(config)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(config);
+              }
+            }}
           >
             <CardContent className="flex flex-col items-center p-6 text-center">
               <h3 className="font-heading text-lg font-semibold">

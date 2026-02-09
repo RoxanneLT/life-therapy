@@ -238,6 +238,7 @@ export async function CourseCatalog({
               <div className="flex overflow-hidden rounded-md border">
                 <Link
                   href={viewUrl("grid")}
+                  aria-label="Grid view"
                   className={`inline-flex items-center justify-center px-2.5 py-1.5 transition-colors ${
                     isGrid
                       ? "bg-brand-600 text-white"
@@ -248,6 +249,7 @@ export async function CourseCatalog({
                 </Link>
                 <Link
                   href={viewUrl("list")}
+                  aria-label="List view"
                   className={`inline-flex items-center justify-center px-2.5 py-1.5 transition-colors ${
                     !isGrid
                       ? "bg-brand-600 text-white"

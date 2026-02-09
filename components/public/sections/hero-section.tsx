@@ -1,6 +1,7 @@
 import type { PageSection } from "@/lib/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 
 interface HeroSectionProps {
   section: PageSection;
@@ -11,18 +12,24 @@ export function HeroSection({ section }: HeroSectionProps) {
 
   return (
     <section
-      className="relative flex min-h-[400px] items-center bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-20"
-      style={
-        section.imageUrl
-          ? {
-              backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url(${section.imageUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }
-          : undefined
-      }
+      className={`relative flex min-h-[400px] items-center px-4 py-20 ${
+        section.imageUrl ? "" : "bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100"
+      }`}
     >
-      <div className="mx-auto w-full max-w-6xl">
+      {section.imageUrl && (
+        <>
+          <Image
+            src={section.imageUrl}
+            alt=""
+            fill
+            priority
+            className="object-cover"
+            sizes="100vw"
+          />
+          <div className="absolute inset-0 bg-black/30" />
+        </>
+      )}
+      <div className="relative mx-auto w-full max-w-6xl">
         <h1
           className={`font-heading text-3xl font-bold uppercase tracking-wide leading-tight sm:text-4xl lg:text-6xl ${
             section.imageUrl ? "text-white" : "text-foreground"

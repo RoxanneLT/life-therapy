@@ -75,12 +75,15 @@ export default async function CourseDetailPage({
   return (
     <>
       {/* Hero — branded background, preview video right */}
-      <section
-        className="relative bg-cover bg-center px-4 py-16"
-        style={{
-          backgroundImage: `url(${course.imageUrl || "/images/LT_grayBG.png"})`,
-        }}
-      >
+      <section className="relative px-4 py-16">
+        <Image
+          src={course.imageUrl || "/images/LT_grayBG.png"}
+          alt=""
+          fill
+          priority
+          className="object-cover"
+          sizes="100vw"
+        />
         <div className="absolute inset-0 bg-black/40" />
         <div className="relative z-10">
           <div className="mx-auto max-w-6xl">
