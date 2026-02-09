@@ -161,3 +161,45 @@ export async function getContactCountAction(filters?: {
 
   return prisma.contact.count({ where });
 }
+
+export async function pauseDripAction(formData: FormData) {
+  await requireRole("super_admin", "marketing");
+
+  const contactId = formData.get("contactId") as string;
+  if (!contactId) throw new Error("Contact ID is required");
+
+  await prisma.dripProgress.update({
+    where: { contactId },
+    data: { isPaused: true },
+  });
+
+  revalidatePath(`/admin/contacts/${contactId}`);
+}
+
+export async function resumeDripAction(formData: FormData) {
+  await requireRole("super_admin", "marketing");
+
+  const contactId = formData.get("contactId") as string;
+  if (!contactId) throw new Error("Contact ID is required");
+
+  await prisma.dripProgress.update({
+    where: { contactId },
+    data: { isPaused: false },
+  });
+
+  revalidatePath(`/admin/contacts/${contactId}`);
+}
+
+export async function resetDripAction(formData: FormData) {
+  await requireRole("super_admin", "marketing");
+
+  const contactId = formData.get("contactId") as string;
+  if (!contactId) throw new Error("Contact ID is required");
+
+  // Delete progress — cron will recreate at step 0 on next run
+  await prisma.dripProgress.deleteMany({
+    where: { contactId },
+  });
+
+  revalidatePath(`/admin/contacts/${contactId}`);
+}

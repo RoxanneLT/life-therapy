@@ -38,6 +38,7 @@ interface BookingWidgetProps {
 export function BookingWidget({ creditBalance = 0, sessionPrices, currency }: BookingWidgetProps) {
   const searchParams = useSearchParams();
   const widgetRef = useRef<HTMLElement>(null);
+  const hasAppliedUrlParam = useRef(false);
   const [step, setStep] = useState(0);
   const [preselected, setPreselected] = useState(false);
   const [data, setData] = useState<BookingData>({
@@ -50,12 +51,14 @@ export function BookingWidget({ creditBalance = 0, sessionPrices, currency }: Bo
     clientNotes: "",
   });
 
-  // Pre-select session type from URL param and auto-scroll
+  // Pre-select session type from URL param (once only) and auto-scroll
   useEffect(() => {
+    if (hasAppliedUrlParam.current) return;
     const typeParam = searchParams.get("type");
-    if (typeParam && !data.sessionType) {
+    if (typeParam) {
       const match = SESSION_TYPES.find((t) => t.type === typeParam);
       if (match) {
+        hasAppliedUrlParam.current = true;
         setData((d) => ({ ...d, sessionType: match }));
         setStep(1);
         setPreselected(true);
@@ -65,7 +68,7 @@ export function BookingWidget({ creditBalance = 0, sessionPrices, currency }: Bo
         }, 100);
       }
     }
-  }, [searchParams, data.sessionType]);
+  }, [searchParams]);
 
   function goBack() {
     if (step === 1 && preselected) {

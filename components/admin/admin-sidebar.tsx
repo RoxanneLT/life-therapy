@@ -20,6 +20,7 @@ import {
   Mail,
   Send,
   Contact,
+  Timer,
 } from "lucide-react";
 import Image from "next/image";
 import type { AdminRole } from "@/lib/generated/prisma/client";
@@ -72,6 +73,7 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/admin/contacts", label: "Contacts", icon: Contact, roles: ["super_admin", "marketing"] },
       { href: "/admin/campaigns", label: "Campaigns", icon: Send, roles: ["super_admin", "marketing"] },
+      { href: "/admin/drip-emails", label: "Drip Sequence", icon: Timer, roles: ["super_admin", "marketing"] },
       { href: "/admin/email-templates", label: "Email Templates", icon: Mail, roles: ["super_admin"] },
     ],
   },

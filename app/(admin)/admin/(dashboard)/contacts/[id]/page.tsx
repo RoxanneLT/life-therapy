@@ -4,7 +4,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { updateContactAction, deleteContactAction } from "../actions";
+import {
+  updateContactAction,
+  deleteContactAction,
+  pauseDripAction,
+  resumeDripAction,
+  resetDripAction,
+} from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Trash2, Pause, Play, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 
 export default async function ContactDetailPage({
@@ -32,7 +38,10 @@ export default async function ContactDetailPage({
 
   const contact = await prisma.contact.findUnique({
     where: { id },
-    include: { student: { select: { id: true, firstName: true, lastName: true } } },
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true } },
+      dripProgress: true,
+    },
   });
 
   if (!contact) notFound();
@@ -44,6 +53,24 @@ export default async function ContactDetailPage({
   });
 
   const tags = (contact.tags as string[]) || [];
+
+  // Drip progress info
+  const drip = contact.dripProgress;
+  let currentDripEmail: { subject: string } | null = null;
+  if (drip && !drip.completedAt) {
+    currentDripEmail = await prisma.dripEmail.findUnique({
+      where: { type_step: { type: drip.currentPhase, step: drip.currentStep } },
+      select: { subject: true },
+    });
+  }
+  const ONBOARDING_TOTAL = 12;
+  const NEWSLETTER_TOTAL = 24;
+  const dripTotalSteps = drip?.currentPhase === "newsletter" ? NEWSLETTER_TOTAL : ONBOARDING_TOTAL;
+  const dripProgressPct = drip
+    ? drip.completedAt
+      ? 100
+      : Math.round((drip.currentStep / dripTotalSteps) * 100)
+    : 0;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -227,6 +254,105 @@ export default async function ContactDetailPage({
             </CardContent>
           </Card>
         )}
+
+        {/* Drip Email Progress */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Drip Email Progress</CardTitle>
+              {drip?.completedAt ? (
+                <Badge className="bg-green-100 text-green-800">Completed</Badge>
+              ) : drip?.isPaused ? (
+                <Badge variant="secondary">Paused</Badge>
+              ) : drip ? (
+                <Badge variant="outline" className="capitalize">{drip.currentPhase}</Badge>
+              ) : (
+                <Badge variant="outline">Not Started</Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {drip ? (
+              <>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Phase</span>
+                    <span className="capitalize">{drip.currentPhase}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Step</span>
+                    <span>
+                      {drip.completedAt
+                        ? `${dripTotalSteps} of ${dripTotalSteps}`
+                        : `${drip.currentStep} of ${dripTotalSteps}`}
+                    </span>
+                  </div>
+                  {currentDripEmail && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Next email</span>
+                      <span className="max-w-[200px] truncate text-right">{currentDripEmail.subject}</span>
+                    </div>
+                  )}
+                  {drip.lastSentAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Last sent</span>
+                      <span>{format(new Date(drip.lastSentAt), "d MMM yyyy HH:mm")}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div>
+                  <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                    <span>Progress</span>
+                    <span>{dripProgressPct}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-brand-500 transition-all"
+                      style={{ width: `${dripProgressPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  {!drip.completedAt && (
+                    drip.isPaused ? (
+                      <form action={resumeDripAction}>
+                        <input type="hidden" name="contactId" value={contact.id} />
+                        <Button variant="outline" size="sm" type="submit">
+                          <Play className="mr-2 h-4 w-4" />
+                          Resume
+                        </Button>
+                      </form>
+                    ) : (
+                      <form action={pauseDripAction}>
+                        <input type="hidden" name="contactId" value={contact.id} />
+                        <Button variant="outline" size="sm" type="submit">
+                          <Pause className="mr-2 h-4 w-4" />
+                          Pause
+                        </Button>
+                      </form>
+                    )
+                  )}
+                  <form action={resetDripAction}>
+                    <input type="hidden" name="contactId" value={contact.id} />
+                    <Button variant="outline" size="sm" type="submit">
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Reset
+                    </Button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This contact has not entered the drip sequence yet. The cron job will create a progress
+                record on its next run if the contact has consent and has not opted out.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Delete */}
         <Card className="border-destructive/30">
