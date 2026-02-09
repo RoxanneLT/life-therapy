@@ -29,10 +29,11 @@ const TYPE_ICONS: Record<string, typeof Video> = {
 export default async function LecturesPage({
   params,
 }: {
-  params: { id: string; moduleId: string };
+  params: Promise<{ id: string; moduleId: string }>;
 }) {
+  const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
-    where: { id: params.moduleId },
+    where: { id: moduleId },
     include: {
       course: { select: { id: true, title: true } },
       lectures: { orderBy: { sortOrder: "asc" } },
@@ -40,14 +41,14 @@ export default async function LecturesPage({
   });
 
   if (!mod) notFound();
-  const base = `/admin/courses/${params.id}/modules/${params.moduleId}/lectures`;
+  const base = `/admin/courses/${id}/modules/${moduleId}/lectures`;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <Link
-            href={`/admin/courses/${params.id}/modules`}
+            href={`/admin/courses/${id}/modules`}
             className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3 w-3" />
@@ -114,8 +115,8 @@ export default async function LecturesPage({
                       <Link href={`${base}/${lec.id}`}>Edit</Link>
                     </Button>
                     <DeleteLectureButton
-                      courseId={params.id}
-                      moduleId={params.moduleId}
+                      courseId={id}
+                      moduleId={moduleId}
                       lectureId={lec.id}
                       title={lec.title}
                     />

@@ -10,10 +10,11 @@ import { ArrowLeft } from "lucide-react";
 export default async function NewModulePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const course = await prisma.course.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { id: true, title: true },
   });
 
@@ -21,7 +22,7 @@ export default async function NewModulePage({
 
   async function handleCreate(formData: FormData) {
     "use server";
-    await createModule(params.id, formData);
+    await createModule(id, formData);
   }
 
   return (

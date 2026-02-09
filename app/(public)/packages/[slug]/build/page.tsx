@@ -24,7 +24,7 @@ export default async function PackageBuildPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   const pkg = await prisma.hybridPackage.findUnique({
     where: { slug },

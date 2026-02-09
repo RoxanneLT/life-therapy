@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileDown, Download } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 export default async function DownloadsPage() {
   const { student } = await requirePasswordChanged();
@@ -43,7 +44,7 @@ export default async function DownloadsPage() {
             Purchase digital products from our shop to see them here.
           </p>
           <Button className="mt-4" asChild>
-            <a href="/products">Browse Products</a>
+            <Link href="/products">Browse Products</Link>
           </Button>
         </div>
       ) : (

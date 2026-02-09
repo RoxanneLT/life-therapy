@@ -10,10 +10,11 @@ import { ArrowLeft } from "lucide-react";
 export default async function NewLecturePage({
   params,
 }: {
-  params: { id: string; moduleId: string };
+  params: Promise<{ id: string; moduleId: string }>;
 }) {
+  const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
-    where: { id: params.moduleId },
+    where: { id: moduleId },
     include: { course: { select: { title: true } } },
   });
 
@@ -21,14 +22,14 @@ export default async function NewLecturePage({
 
   async function handleCreate(formData: FormData) {
     "use server";
-    await createLecture(params.id, params.moduleId, formData);
+    await createLecture(id, moduleId, formData);
   }
 
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href={`/admin/courses/${params.id}/modules/${params.moduleId}/lectures`}
+          href={`/admin/courses/${id}/modules/${moduleId}/lectures`}
           className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" />

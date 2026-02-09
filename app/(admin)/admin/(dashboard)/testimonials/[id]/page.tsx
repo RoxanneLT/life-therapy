@@ -22,22 +22,23 @@ import { redirect } from "next/navigation";
 export default async function EditTestimonialPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const testimonial = await prisma.testimonial.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!testimonial) notFound();
 
   async function handleUpdate(formData: FormData) {
     "use server";
-    await updateTestimonial(params.id, formData);
+    await updateTestimonial(id, formData);
   }
 
   async function handleDelete() {
     "use server";
-    await deleteTestimonial(params.id);
+    await deleteTestimonial(id);
     redirect("/admin/testimonials");
   }
 

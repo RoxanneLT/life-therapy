@@ -21,7 +21,7 @@ export default async function CheckoutSuccessPage({
 }) {
   const params = await searchParams;
   const sessionId = params.session_id;
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   if (!sessionId) {
     return (

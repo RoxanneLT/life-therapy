@@ -6,8 +6,9 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
+  const { slug } = await params;
   // Admin-only: verify authenticated admin
   const supabase = await createSupabaseServerClient();
   const {
@@ -27,7 +28,7 @@ export async function GET(
   }
 
   const page = await prisma.page.findUnique({
-    where: { slug: params.slug },
+    where: { slug },
     include: {
       sections: { orderBy: { sortOrder: "asc" } },
     },

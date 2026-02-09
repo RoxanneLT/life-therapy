@@ -15,7 +15,7 @@ interface CourseGridProps {
 }
 
 export async function CourseGrid({ section }: CourseGridProps) {
-  const currency = getCurrency();
+  const currency = await getCurrency();
   const config = (section.config as Record<string, unknown>) || {};
   const featuredOnly = config.featuredOnly === true;
   const maxCount = (config.maxCount as number) || 6;

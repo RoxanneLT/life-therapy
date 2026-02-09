@@ -37,7 +37,7 @@ export default async function ShortCourseDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const currency = getCurrency();
+  const currency = await getCurrency();
   const mod = await prisma.module.findUnique({
     where: { standaloneSlug: slug },
     include: {

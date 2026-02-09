@@ -3,8 +3,8 @@ import { getBaseUrl } from "@/lib/get-region";
 
 export const dynamic = "force-dynamic";
 
-export default function robots(): MetadataRoute.Robots {
-  const baseUrl = getBaseUrl();
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const baseUrl = await getBaseUrl();
   return {
     rules: [
       {

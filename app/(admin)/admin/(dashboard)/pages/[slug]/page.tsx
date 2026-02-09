@@ -5,12 +5,13 @@ import { notFound } from "next/navigation";
 import { PageEditor } from "./page-editor";
 
 interface Props {
-  readonly params: { readonly slug: string };
+  readonly params: Promise<{ readonly slug: string }>;
 }
 
 export default async function PageEditorPage({ params }: Props) {
+  const { slug } = await params;
   const page = await prisma.page.findUnique({
-    where: { slug: params.slug },
+    where: { slug },
     include: {
       sections: { orderBy: { sortOrder: "asc" } },
     },

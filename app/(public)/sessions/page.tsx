@@ -26,7 +26,7 @@ export default async function SessionsPage() {
     notFound();
   }
 
-  const currency = getCurrency();
+  const currency = await getCurrency();
   const settings = await getSiteSettings();
 
   // Inject dynamic session prices into any pricing sections

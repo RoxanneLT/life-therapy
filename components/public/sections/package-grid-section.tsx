@@ -19,7 +19,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
     orderBy: { sortOrder: "asc" },
   });
 
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   return (
     <section className="px-4 py-12">

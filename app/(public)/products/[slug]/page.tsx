@@ -32,7 +32,7 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   const product = await prisma.digitalProduct.findUnique({
     where: { slug },

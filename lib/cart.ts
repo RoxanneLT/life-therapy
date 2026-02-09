@@ -21,7 +21,7 @@ export async function resolveCartItems(
   items: CartItemLocal[],
   currency?: Currency
 ): Promise<(CartItemLocal & { product: CartProductInfo })[]> {
-  const cur = currency || getCurrency();
+  const cur = currency || await getCurrency();
   const courseIds = items.filter((i) => i.courseId).map((i) => i.courseId!);
   const packageIds = items
     .filter((i) => i.hybridPackageId)

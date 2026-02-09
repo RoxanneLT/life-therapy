@@ -95,8 +95,8 @@ export async function POST(request: Request) {
 
     // Create Stripe session
     const stripe = getStripe();
-    const currency = getCurrency();
-    const baseUrl = getBaseUrl();
+    const currency = await getCurrency();
+    const baseUrl = await getBaseUrl();
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",

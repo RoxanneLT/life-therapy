@@ -52,14 +52,15 @@ const STATUS_STYLES: Record<BookingStatus, string> = {
 };
 
 interface Props {
-  readonly params: { readonly id: string };
+  readonly params: Promise<{ readonly id: string }>;
 }
 
 export default async function BookingDetailPage({ params }: Props) {
+  const { id } = await params;
   await requireRole("super_admin", "editor");
 
   const booking = await prisma.booking.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!booking) notFound();
@@ -69,17 +70,17 @@ export default async function BookingDetailPage({ params }: Props) {
   async function handleStatusChange(formData: FormData) {
     "use server";
     const status = formData.get("status") as BookingStatus;
-    await updateBookingStatus(params.id, status);
+    await updateBookingStatus(id, status);
   }
 
   async function handleNotesUpdate(formData: FormData) {
     "use server";
-    await updateBookingNotes(params.id, formData);
+    await updateBookingNotes(id, formData);
   }
 
   async function handleDelete() {
     "use server";
-    await deleteBooking(params.id);
+    await deleteBooking(id);
   }
 
   return (

@@ -23,22 +23,23 @@ import Link from "next/link";
 export default async function EditCoursePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const course = await prisma.course.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!course) notFound();
 
   async function handleUpdate(formData: FormData) {
     "use server";
-    await updateCourse(params.id, formData);
+    await updateCourse(id, formData);
   }
 
   async function handleDelete() {
     "use server";
-    await deleteCourse(params.id);
+    await deleteCourse(id);
     redirect("/admin/courses");
   }
 
@@ -51,7 +52,7 @@ export default async function EditCoursePage({
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/admin/courses/${params.id}/modules`}>
+            <Link href={`/admin/courses/${id}/modules`}>
               <Layers className="mr-2 h-4 w-4" />
               Manage Modules
             </Link>

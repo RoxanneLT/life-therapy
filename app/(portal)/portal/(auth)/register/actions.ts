@@ -10,7 +10,7 @@ import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
 
 export async function registerStudent(formData: FormData) {
-  const headersList = headers();
+  const headersList = await headers();
   const ip =
     headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const { success } = rateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
@@ -64,7 +64,7 @@ export async function registerStudent(formData: FormData) {
   });
 
   // Send welcome email (non-blocking)
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
   renderEmail("account_created", {
     firstName,
     loginUrl: `${baseUrl}/portal`,

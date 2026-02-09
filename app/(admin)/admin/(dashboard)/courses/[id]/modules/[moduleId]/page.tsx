@@ -10,21 +10,22 @@ import { ArrowLeft } from "lucide-react";
 export default async function EditModulePage({
   params,
 }: {
-  params: { id: string; moduleId: string };
+  params: Promise<{ id: string; moduleId: string }>;
 }) {
+  const { id, moduleId } = await params;
   const [course, mod] = await Promise.all([
     prisma.course.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, title: true },
     }),
-    prisma.module.findUnique({ where: { id: params.moduleId } }),
+    prisma.module.findUnique({ where: { id: moduleId } }),
   ]);
 
   if (!course || !mod) notFound();
 
   async function handleUpdate(formData: FormData) {
     "use server";
-    await updateModule(params.id, params.moduleId, formData);
+    await updateModule(id, moduleId, formData);
   }
 
   return (

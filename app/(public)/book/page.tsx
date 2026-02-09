@@ -40,7 +40,7 @@ export default async function BookPage() {
   }
 
   // Compute session prices in the user's currency
-  const currency = getCurrency();
+  const currency = await getCurrency();
   const sessionPrices: Record<string, number> = {
     free_consultation: 0,
     individual: getSessionPrice("individual", currency, settings),

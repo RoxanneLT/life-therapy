@@ -27,13 +27,13 @@ const STATUS_STYLES: Record<BookingStatus, string> = {
 };
 
 interface Props {
-  readonly searchParams: { status?: string };
+  readonly searchParams: Promise<{ status?: string }>;
 }
 
 export default async function BookingsPage({ searchParams }: Props) {
   await requireRole("super_admin", "editor");
 
-  const statusFilter = searchParams.status;
+  const { status: statusFilter } = await searchParams;
   const where = statusFilter
     ? { status: statusFilter as BookingStatus }
     : {};

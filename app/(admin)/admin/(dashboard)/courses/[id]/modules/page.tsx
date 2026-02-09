@@ -22,10 +22,11 @@ import { deleteModule } from "./actions";
 export default async function ModulesPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const course = await prisma.course.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       modules: {
         orderBy: { sortOrder: "asc" },

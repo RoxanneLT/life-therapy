@@ -10,10 +10,11 @@ import { ArrowLeft } from "lucide-react";
 export default async function QuizPage({
   params,
 }: {
-  params: { id: string; moduleId: string };
+  params: Promise<{ id: string; moduleId: string }>;
 }) {
+  const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
-    where: { id: params.moduleId },
+    where: { id: moduleId },
     include: {
       course: { select: { title: true } },
       quiz: {
@@ -28,12 +29,12 @@ export default async function QuizPage({
 
   async function handleSaveQuiz(formData: FormData) {
     "use server";
-    await createOrUpdateQuiz(params.id, params.moduleId, formData);
+    await createOrUpdateQuiz(id, moduleId, formData);
   }
 
   async function handleDeleteQuiz() {
     "use server";
-    await deleteQuiz(params.id, params.moduleId);
+    await deleteQuiz(id, moduleId);
   }
 
   async function handleSaveQuestion(
@@ -42,19 +43,19 @@ export default async function QuizPage({
     formData: FormData
   ) {
     "use server";
-    await saveQuestion(params.id, params.moduleId, quizId, questionId, formData);
+    await saveQuestion(id, moduleId, quizId, questionId, formData);
   }
 
   async function handleDeleteQuestion(questionId: string) {
     "use server";
-    await deleteQuestion(params.id, params.moduleId, questionId);
+    await deleteQuestion(id, moduleId, questionId);
   }
 
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href={`/admin/courses/${params.id}/modules`}
+          href={`/admin/courses/${id}/modules`}
           className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" />

@@ -36,7 +36,7 @@ export default async function CourseOverviewPage({
   const { slug } = await params;
   const { module: moduleIdParam } = await searchParams;
   const { student } = await requirePasswordChanged();
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   const course = await prisma.course.findUnique({
     where: { slug },

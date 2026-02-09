@@ -52,8 +52,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const settings = await getSiteSettings();
-  const region = getRegion();
-  const currency = getCurrency();
+  const region = await getRegion();
+  const currency = await getCurrency();
 
   return (
     <html lang="en" className={poppins.variable} suppressHydrationWarning>

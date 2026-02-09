@@ -61,7 +61,7 @@ export async function recalculateProgress(
 
     if (student && course) {
       let baseUrl: string;
-      try { baseUrl = getBaseUrl(); } catch { baseUrl = "https://life-therapy.co.za"; }
+      try { baseUrl = await getBaseUrl(); } catch { baseUrl = "https://life-therapy.co.za"; }
       renderEmail("course_completed", {
         firstName: student.firstName,
         courseTitle: course.title,

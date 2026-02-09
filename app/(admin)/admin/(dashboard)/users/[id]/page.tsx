@@ -20,14 +20,15 @@ import {
 import { Trash2 } from "lucide-react";
 
 interface Props {
-  readonly params: { readonly id: string };
+  readonly params: Promise<{ readonly id: string }>;
 }
 
 export default async function EditUserPage({ params }: Props) {
+  const { id } = await params;
   const { adminUser: currentAdmin } = await requireRole("super_admin");
 
   const user = await prisma.adminUser.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!user) {
@@ -36,12 +37,12 @@ export default async function EditUserPage({ params }: Props) {
 
   async function handleUpdate(formData: FormData) {
     "use server";
-    await updateUser(params.id, formData);
+    await updateUser(id, formData);
   }
 
   async function handleDelete() {
     "use server";
-    await deleteUser(params.id);
+    await deleteUser(id);
   }
 
   const isSelf = currentAdmin.id === user.id;

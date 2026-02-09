@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     // Resolve cart items to real products with server-verified prices
-    const currency = getCurrency();
+    const currency = await getCurrency();
     const resolved = await resolveCartItems(items, currency);
     if (resolved.length === 0) {
       return NextResponse.json(
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
 
     // Create Stripe Checkout Session
     const stripe = getStripe();
-    const baseUrl = getBaseUrl();
+    const baseUrl = await getBaseUrl();
     const stripeCurrency = currency.toLowerCase();
 
     const lineItems = resolved.map((r) => ({

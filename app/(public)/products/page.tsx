@@ -22,7 +22,7 @@ export default async function ProductsPage() {
     orderBy: { sortOrder: "asc" },
   });
 
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">

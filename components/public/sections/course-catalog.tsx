@@ -64,7 +64,7 @@ export async function CourseCatalog({
     categoryFilter = c;
   }
 
-  const currency = getCurrency();
+  const currency = await getCurrency();
 
   const categoryWhere =
     categoryFilter !== "all" ? { category: categoryFilter } : {};

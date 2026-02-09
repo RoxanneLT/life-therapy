@@ -43,7 +43,7 @@ export default async function CourseDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const currency = getCurrency();
+  const currency = await getCurrency();
   const course = await prisma.course.findUnique({
     where: { slug },
     include: {

@@ -35,7 +35,7 @@ function parseTimeToMinutes(t: string): number {
 
 export async function createBooking(formData: FormData) {
   // Rate limit by IP
-  const headersList = headers();
+  const headersList = await headers();
   const ip = headersList.get("x-forwarded-for")?.split(",")[0] || "unknown";
   const { success } = rateLimitBooking(ip);
   if (!success) {
@@ -53,7 +53,7 @@ export async function createBooking(formData: FormData) {
 
   // Compute session price in the user's currency
   const settings = await getSiteSettings();
-  const currency = getCurrency();
+  const currency = await getCurrency();
   const sessionPriceCents = sessionConfig.isFree
     ? 0
     : getSessionPrice(parsed.sessionType as "individual" | "couples", currency, settings);
@@ -135,7 +135,7 @@ export async function createBooking(formData: FormData) {
   }
 
   // Send emails (don't block redirect on failure)
-  const baseUrl = getBaseUrl();
+  const baseUrl = await getBaseUrl();
   const dateStr = format(new Date(booking.date), "EEEE, d MMMM yyyy");
   const timeStr = `${booking.startTime} – ${booking.endTime} (SAST)`;
   const bookingCurrency = (booking.priceCurrency || "ZAR") as Currency;
