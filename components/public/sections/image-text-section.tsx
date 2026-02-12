@@ -44,7 +44,14 @@ export function ImageTextSection({ section }: ImageTextSectionProps) {
           {section.content && (
             <div className="space-y-3 text-muted-foreground leading-relaxed">
               {section.content.split("\n\n").map((paragraph, i) => (
-                <p key={i}>{paragraph}</p>
+                <p key={i}>
+                  {paragraph.split("\n").map((line, j, arr) => (
+                    <span key={j}>
+                      {line}
+                      {j < arr.length - 1 && <br />}
+                    </span>
+                  ))}
+                </p>
               ))}
             </div>
           )}

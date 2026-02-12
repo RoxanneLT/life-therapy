@@ -169,7 +169,14 @@ export default async function CourseDetailPage({
             <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
             <div className="mt-6 space-y-4 text-muted-foreground leading-relaxed">
               {course.description.split("\n\n").map((paragraph, i) => (
-                <p key={i}>{paragraph}</p>
+                <p key={i}>
+                  {paragraph.split("\n").map((line, j, arr) => (
+                    <span key={j}>
+                      {line}
+                      {j < arr.length - 1 && <br />}
+                    </span>
+                  ))}
+                </p>
               ))}
             </div>
           </div>
