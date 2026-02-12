@@ -55,7 +55,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={poppins.variable} suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider>
           <RegionProvider region={region} currency={currency}>
             <CartProvider>
