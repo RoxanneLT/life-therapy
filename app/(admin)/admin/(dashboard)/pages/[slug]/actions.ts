@@ -35,7 +35,7 @@ export async function createSection(pageId: string, formData: FormData) {
 export async function updateSection(sectionId: string, formData: FormData) {
   await requireRole("super_admin", "editor");
   const raw = Object.fromEntries(formData.entries());
-  const parsed = pageSectionSchema.parse({
+  const { sortOrder: _, ...parsed } = pageSectionSchema.parse({
     ...raw,
     isVisible: raw.isVisible === "true",
     config: raw.config ? JSON.parse(raw.config as string) : undefined,
