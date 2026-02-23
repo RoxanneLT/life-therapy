@@ -50,25 +50,28 @@ function timeRangesOverlap(
   return a0 < b1 && b0 < a1;
 }
 
+// Fixed time slots as specified by the client.
+// Same start times regardless of session duration (30 or 60 min).
+const FIXED_SLOT_STARTS = ["09:00", "10:15", "11:30", "13:00", "14:15", "15:30"];
+
 function generateSlots(
   open: string,
   close: string,
   duration: number,
-  buffer: number
+  _buffer: number
 ): TimeSlot[] {
-  const slots: TimeSlot[] = [];
-  let current = parseTime(open);
-  const end = parseTime(close);
+  const openMin = parseTime(open);
+  const closeMin = parseTime(close);
 
-  while (current + duration <= end) {
-    slots.push({
-      start: formatTime(current),
-      end: formatTime(current + duration),
-    });
-    current += duration + buffer;
-  }
-
-  return slots;
+  return FIXED_SLOT_STARTS
+    .filter((start) => {
+      const startMin = parseTime(start);
+      return startMin >= openMin && startMin + duration <= closeMin;
+    })
+    .map((start) => ({
+      start,
+      end: formatTime(parseTime(start) + duration),
+    }));
 }
 
 function isoToTimeString(iso: string): string {

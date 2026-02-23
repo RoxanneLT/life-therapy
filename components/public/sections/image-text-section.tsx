@@ -11,7 +11,7 @@ export function ImageTextSection({ section }: ImageTextSectionProps) {
   const config = (section.config as Record<string, string>) || {};
   const imageLeft = config.imagePosition === "left";
   return (
-    <section className="px-4 py-16">
+    <section className="px-4 py-10">
       <div
         className={`mx-auto flex max-w-6xl flex-col items-center gap-8 md:flex-row ${
           imageLeft ? "" : "md:flex-row-reverse"

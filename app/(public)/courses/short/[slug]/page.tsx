@@ -11,6 +11,8 @@ import { PreviewVideoPlayer } from "@/components/public/preview-video-player";
 import { ArrowLeft, BookOpen } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/metadata";
+import { breadcrumbJsonLd, JsonLdScript } from "@/lib/json-ld";
 
 export const revalidate = 60;
 
@@ -22,13 +24,15 @@ export async function generateMetadata({
   const { slug } = await params;
   const mod = await prisma.module.findUnique({
     where: { standaloneSlug: slug },
-    select: { standaloneTitle: true, title: true, standaloneDescription: true },
+    select: { standaloneTitle: true, title: true, standaloneDescription: true, standaloneImageUrl: true },
   });
   if (!mod) return {};
-  return {
+  return buildMetadata({
     title: mod.standaloneTitle || mod.title,
-    description: mod.standaloneDescription || undefined,
-  };
+    description: mod.standaloneDescription,
+    ogImageUrl: mod.standaloneImageUrl,
+    route: `/courses/short/${slug}`,
+  });
 }
 
 export default async function ShortCourseDetailPage({
@@ -102,8 +106,15 @@ export default async function ShortCourseDetailPage({
       ? Math.round(((allModulesTotal - fullCoursePrice) / allModulesTotal) * 100)
       : 0;
 
+  const breadcrumbLd = await breadcrumbJsonLd([
+    { name: "Home", href: "/" },
+    { name: "Courses", href: "/courses" },
+    { name: mod.standaloneTitle || mod.title, href: `/courses/short/${mod.standaloneSlug}` },
+  ]);
+
   return (
     <>
+      <JsonLdScript data={breadcrumbLd} />
       {/* Hero — branded background, preview video right */}
       <section
         className="relative bg-cover bg-center px-4 py-16"

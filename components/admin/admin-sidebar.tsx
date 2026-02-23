@@ -8,6 +8,7 @@ import {
   FileText,
   GraduationCap,
   Quote,
+  Search,
   CalendarDays,
   Settings,
   Users,
@@ -50,6 +51,7 @@ const navGroups: NavGroup[] = [
       { href: "/admin/pages", label: "Pages", icon: FileText, roles: ["super_admin", "editor"] },
       { href: "/admin/courses", label: "Courses", icon: GraduationCap, roles: ["super_admin", "editor"] },
       { href: "/admin/testimonials", label: "Testimonials", icon: Quote, roles: ["super_admin", "editor", "marketing"] },
+      { href: "/admin/seo", label: "SEO", icon: Search, roles: ["super_admin", "editor"] },
     ],
   },
   {

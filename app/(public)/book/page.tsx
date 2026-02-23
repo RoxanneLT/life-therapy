@@ -9,12 +9,16 @@ import { SectionRenderer } from "@/components/public/section-renderer";
 import { BookingWidget } from "@/components/public/booking/booking-widget";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { buildStaticPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "Book a Session",
-  description:
+export async function generateMetadata(): Promise<Metadata> {
+  return buildStaticPageMetadata(
+    "/book",
+    "Book a Session",
     "Book a free consultation or schedule a 1:1 coaching session with Roxanne Bouwer.",
-};
+    "/images/hero-book.jpg"
+  );
+}
 
 export default async function BookPage() {
   const [page, settings, student] = await Promise.all([

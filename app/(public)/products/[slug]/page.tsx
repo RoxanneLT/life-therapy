@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/metadata";
+import { productJsonLd, breadcrumbJsonLd, JsonLdScript } from "@/lib/json-ld";
 
 export async function generateMetadata({
   params,
@@ -20,10 +22,12 @@ export async function generateMetadata({
   const { slug } = await params;
   const product = await prisma.digitalProduct.findUnique({ where: { slug } });
   if (!product) return {};
-  return {
-    title: product.title,
-    description: product.description || undefined,
-  };
+  return buildMetadata({
+    title: product.metaTitle || product.title,
+    description: product.metaDescription || product.description,
+    ogImageUrl: product.imageUrl,
+    route: `/products/${slug}`,
+  });
 }
 
 export default async function ProductDetailPage({
@@ -42,7 +46,25 @@ export default async function ProductDetailPage({
 
   const price = getDigitalProductPrice(product, currency);
 
+  const [prodLd, breadcrumbLd] = await Promise.all([
+    productJsonLd({
+      title: product.title,
+      description: product.description,
+      imageUrl: product.imageUrl,
+      priceCents: product.priceCents,
+      slug: product.slug,
+      category: product.category,
+    }),
+    breadcrumbJsonLd([
+      { name: "Home", href: "/" },
+      { name: "Digital Products", href: "/products" },
+      { name: product.title, href: `/products/${product.slug}` },
+    ]),
+  ]);
+
   return (
+    <>
+    <JsonLdScript data={[prodLd, breadcrumbLd]} />
     <div className="mx-auto max-w-4xl px-4 py-12">
       <Button variant="ghost" size="sm" asChild className="mb-6">
         <Link href="/products">
@@ -110,5 +132,6 @@ export default async function ProductDetailPage({
         </div>
       </div>
     </div>
+    </>
   );
 }

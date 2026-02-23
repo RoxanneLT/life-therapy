@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, GraduationCap, FileDown, Sparkles, Package } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { buildMetadata } from "@/lib/metadata";
+import { breadcrumbJsonLd, JsonLdScript } from "@/lib/json-ld";
 
 export async function generateMetadata({
   params,
@@ -18,10 +20,12 @@ export async function generateMetadata({
   const { slug } = await params;
   const pkg = await prisma.hybridPackage.findUnique({ where: { slug } });
   if (!pkg) return {};
-  return {
-    title: pkg.title,
-    description: pkg.description || undefined,
-  };
+  return buildMetadata({
+    title: pkg.metaTitle || pkg.title,
+    description: pkg.metaDescription || pkg.description,
+    ogImageUrl: pkg.imageUrl,
+    route: `/packages/${slug}`,
+  });
 }
 
 export default async function PackageDetailPage({
@@ -40,7 +44,15 @@ export default async function PackageDetailPage({
 
   const price = getPackagePrice(pkg, currency);
 
+  const breadcrumbLd = await breadcrumbJsonLd([
+    { name: "Home", href: "/" },
+    { name: "Packages", href: "/packages" },
+    { name: pkg.title, href: `/packages/${pkg.slug}` },
+  ]);
+
   return (
+    <>
+    <JsonLdScript data={breadcrumbLd} />
     <div className="mx-auto max-w-3xl px-4 py-12">
       <Button variant="ghost" size="sm" asChild className="mb-6">
         <Link href="/packages">
@@ -102,5 +114,6 @@ export default async function PackageDetailPage({
         </div>
       </div>
     </div>
+    </>
   );
 }

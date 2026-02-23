@@ -7,6 +7,7 @@ import { RedeemClient } from "./redeem-client";
 
 export const metadata: Metadata = {
   title: "Redeem Your Gift",
+  robots: { index: false, follow: false },
 };
 
 export default async function RedeemGiftPage({

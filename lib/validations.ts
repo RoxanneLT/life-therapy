@@ -53,6 +53,8 @@ export const courseSchema = z.object({
   previewVideoUrl: z.string().optional().or(z.literal("")),
   facilitatorScript: z.string().optional(),
   relatedCourseIds: z.any().optional(),
+  metaTitle: z.string().max(70, "Keep under 70 characters").optional().or(z.literal("")).transform((v) => v || undefined),
+  metaDescription: z.string().max(320, "Keep under 320 characters").optional().or(z.literal("")).transform((v) => v || undefined),
 });
 
 export const testimonialSchema = z.object({
@@ -215,6 +217,8 @@ export const packageSchema = z.object({
   digitalProductSlots: z.coerce.number().int().min(0).default(0),
   isPublished: z.boolean().default(false),
   sortOrder: z.coerce.number().int().default(0),
+  metaTitle: z.string().max(70, "Keep under 70 characters").optional().or(z.literal("")).transform((v) => v || undefined),
+  metaDescription: z.string().max(320, "Keep under 320 characters").optional().or(z.literal("")).transform((v) => v || undefined),
 });
 
 export const digitalProductSchema = z.object({
@@ -232,6 +236,18 @@ export const digitalProductSchema = z.object({
   category: z.string().optional().transform((v) => v || undefined),
   isPublished: z.boolean().default(false),
   sortOrder: z.coerce.number().int().default(0),
+  metaTitle: z.string().max(70, "Keep under 70 characters").optional().or(z.literal("")).transform((v) => v || undefined),
+  metaDescription: z.string().max(320, "Keep under 320 characters").optional().or(z.literal("")).transform((v) => v || undefined),
+});
+
+// ============================================================
+// SEO: PageSeo
+// ============================================================
+export const pageSeoSchema = z.object({
+  metaTitle: z.string().max(70, "Keep under 70 characters").optional().or(z.literal("")),
+  metaDescription: z.string().max(320, "Keep under 320 characters").optional().or(z.literal("")),
+  ogImageUrl: z.string().optional().or(z.literal("")),
+  keywords: z.string().optional().or(z.literal("")),
 });
 
 // ============================================================
@@ -266,5 +282,6 @@ export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
 export type CouponInput = z.infer<typeof couponSchema>;
 export type PackageInput = z.infer<typeof packageSchema>;
 export type DigitalProductInput = z.infer<typeof digitalProductSchema>;
+export type PageSeoInput = z.infer<typeof pageSeoSchema>;
 export type StudentRegisterInput = z.infer<typeof studentRegisterSchema>;
 export type StudentLoginInput = z.infer<typeof studentLoginSchema>;

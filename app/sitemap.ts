@@ -14,12 +14,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/sessions`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.9 },
     { url: `${baseUrl}/courses`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.9 },
     { url: `${baseUrl}/packages`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
+    { url: `${baseUrl}/products`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
     { url: `${baseUrl}/book`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.9 },
     { url: `${baseUrl}/contact`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.6 },
   ];
 
-  // Dynamic course pages
-  const [courses, standaloneModules] = await Promise.all([
+  // Dynamic pages
+  const [courses, standaloneModules, products, packages] = await Promise.all([
     prisma.course.findMany({
       where: { isPublished: true },
       select: { slug: true, updatedAt: true },
@@ -27,6 +28,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     prisma.module.findMany({
       where: { isStandalonePublished: true, standaloneSlug: { not: null } },
       select: { standaloneSlug: true, updatedAt: true },
+    }),
+    prisma.digitalProduct.findMany({
+      where: { isPublished: true },
+      select: { slug: true, updatedAt: true },
+    }),
+    prisma.hybridPackage.findMany({
+      where: { isPublished: true },
+      select: { slug: true, updatedAt: true },
     }),
   ]);
 
@@ -44,5 +53,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticPages, ...coursePages, ...shortCoursePages];
+  const productPages: MetadataRoute.Sitemap = products.map((p) => ({
+    url: `${baseUrl}/products/${p.slug}`,
+    lastModified: p.updatedAt,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  const packagePages: MetadataRoute.Sitemap = packages.map((p) => ({
+    url: `${baseUrl}/packages/${p.slug}`,
+    lastModified: p.updatedAt,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  return [...staticPages, ...coursePages, ...shortCoursePages, ...productPages, ...packagePages];
 }

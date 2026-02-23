@@ -10,6 +10,7 @@ import { ImageUpload } from "@/components/admin/image-upload";
 import { FileUpload } from "@/components/admin/file-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { SeoFields } from "@/components/admin/seo-fields";
 
 interface DigitalProductFormProps {
   initialData?: {
@@ -28,6 +29,8 @@ interface DigitalProductFormProps {
     category?: string | null;
     isPublished: boolean;
     sortOrder: number;
+    metaTitle?: string | null;
+    metaDescription?: string | null;
   };
   onSubmit: (formData: FormData) => Promise<void>;
 }
@@ -199,6 +202,11 @@ export function DigitalProductForm({ initialData, onSubmit }: DigitalProductForm
           />
         </div>
       </div>
+
+      <SeoFields
+        metaTitle={initialData?.metaTitle || ""}
+        metaDescription={initialData?.metaDescription || ""}
+      />
 
       <div className="flex items-center gap-2">
         <Switch checked={isPublished} onCheckedChange={setIsPublished} />

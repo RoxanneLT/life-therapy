@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { packageSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -37,6 +37,7 @@ export async function updatePackage(id: string, formData: FormData) {
     data: parsed,
   });
 
+  revalidateTag("page-seo");
   revalidatePath("/admin/packages");
   redirect("/admin/packages");
 }

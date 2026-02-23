@@ -4,12 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { buildStaticPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "Online Courses",
-  description:
+export async function generateMetadata(): Promise<Metadata> {
+  return buildStaticPageMetadata(
+    "/courses",
+    "Online Courses",
     "Self-paced online courses covering self-esteem, confidence, anxiety, relationships, and more. Expert-designed by Roxanne Bouwer.",
-};
+    "/images/hero-courses.jpg"
+  );
+}
 
 export const revalidate = 60;
 

@@ -20,6 +20,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { PreviewVideoPlayer } from "@/components/public/preview-video-player";
 import { getRelatedCourses } from "@/lib/recommendations";
+import { buildMetadata } from "@/lib/metadata";
+import { courseJsonLd, breadcrumbJsonLd, JsonLdScript } from "@/lib/json-ld";
 
 export const revalidate = 60;
 
@@ -31,10 +33,12 @@ export async function generateMetadata({
   const { slug } = await params;
   const course = await prisma.course.findUnique({ where: { slug } });
   if (!course) return {};
-  return {
-    title: course.title,
-    description: course.shortDescription || course.subtitle || undefined,
-  };
+  return buildMetadata({
+    title: course.metaTitle || course.title,
+    description: course.metaDescription || course.shortDescription || course.subtitle,
+    ogImageUrl: course.imageUrl,
+    route: `/courses/${slug}`,
+  });
 }
 
 export default async function CourseDetailPage({
@@ -72,8 +76,26 @@ export default async function CourseDetailPage({
 
   const relatedCourses = await getRelatedCourses(course.id, 3, currency);
 
+  const [courseLd, breadcrumbLd] = await Promise.all([
+    courseJsonLd({
+      title: course.title,
+      description: course.shortDescription || course.description,
+      imageUrl: course.imageUrl,
+      priceZarCents: course.price,
+      slug: course.slug,
+      level: course.level,
+      hours: course.hours,
+    }),
+    breadcrumbJsonLd([
+      { name: "Home", href: "/" },
+      { name: "Courses", href: "/courses" },
+      { name: course.title, href: `/courses/${course.slug}` },
+    ]),
+  ]);
+
   return (
     <>
+      <JsonLdScript data={[courseLd, breadcrumbLd]} />
       {/* Hero — branded background, preview video right */}
       <section className="relative px-4 py-16">
         <Image

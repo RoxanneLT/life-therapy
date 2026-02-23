@@ -22,7 +22,7 @@ export function FaqSection({ section }: FaqSectionProps) {
   if (items.length === 0) return null;
 
   return (
-    <section className="px-4 py-16">
+    <section className="px-4 py-10">
       <div className="mx-auto max-w-3xl">
         {section.title && (
           <div className="mb-8 text-center">

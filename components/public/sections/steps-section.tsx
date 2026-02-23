@@ -16,7 +16,7 @@ export function StepsSection({ section }: StepsSectionProps) {
   if (items.length === 0) return null;
 
   return (
-    <section className="bg-muted/50 px-4 py-16">
+    <section className="bg-muted/50 px-4 py-10">
       <div className="mx-auto max-w-3xl text-center">
         {section.title && (
           <>

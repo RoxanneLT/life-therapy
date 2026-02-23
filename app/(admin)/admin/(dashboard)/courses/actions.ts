@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { courseSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -33,6 +33,7 @@ export async function updateCourse(id: string, formData: FormData) {
 
   await prisma.course.update({ where: { id }, data: parsed });
 
+  revalidateTag("page-seo");
   revalidatePath("/admin/courses");
   revalidatePath("/");
   redirect("/admin/courses");

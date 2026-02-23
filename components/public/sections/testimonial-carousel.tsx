@@ -22,7 +22,7 @@ export async function TestimonialCarousel({
   if (testimonials.length === 0) return null;
 
   return (
-    <section className="bg-muted/30 px-4 py-16">
+    <section className="bg-muted/30 px-4 py-10">
       <div className="mx-auto max-w-6xl">
         {section.title && (
           <div className="mb-8 text-center">

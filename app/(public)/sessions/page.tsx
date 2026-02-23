@@ -9,12 +9,16 @@ import { getCurrency } from "@/lib/get-region";
 import { getSiteSettings } from "@/lib/settings";
 import { getSessionPrice } from "@/lib/pricing";
 import { formatPrice } from "@/lib/utils";
+import { buildStaticPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "1:1 Online Sessions",
-  description:
+export async function generateMetadata(): Promise<Metadata> {
+  return buildStaticPageMetadata(
+    "/sessions",
+    "1:1 Online Sessions",
     "Personalised online life coaching and counselling sessions with Roxanne Bouwer. Secure video calls from anywhere in the world.",
-};
+    "/images/hero-sessions.jpg"
+  );
+}
 
 export default async function SessionsPage() {
   const page = await prisma.page.findUnique({

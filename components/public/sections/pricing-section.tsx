@@ -42,7 +42,7 @@ export function PricingSection({ section }: PricingSectionProps) {
   if (items.length === 0) return null;
 
   return (
-    <section className="px-4 py-16">
+    <section className="px-4 py-10">
       <div className="mx-auto max-w-5xl">
         {section.title && (
           <div className="mb-2 text-center">

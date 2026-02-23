@@ -10,11 +10,16 @@ import { FileDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { buildStaticPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "Digital Products",
-  description: "Downloadable workbooks, toolkits, and guides to support your personal growth journey.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return buildStaticPageMetadata(
+    "/products",
+    "Digital Products",
+    "Downloadable workbooks, toolkits, and guides to support your personal growth journey.",
+    "/images/hero-home.jpg"
+  );
+}
 
 export default async function ProductsPage() {
   const products = await prisma.digitalProduct.findMany({

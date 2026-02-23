@@ -6,7 +6,7 @@ interface TextSectionProps {
 
 export function TextSection({ section }: TextSectionProps) {
   return (
-    <section className="px-4 py-16">
+    <section className="px-4 py-10">
       <div className="mx-auto max-w-6xl">
         {section.title && (
           <div className="mb-6">

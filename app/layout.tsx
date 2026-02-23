@@ -7,7 +7,8 @@ import { GoogleAnalytics } from "@/components/google-analytics";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getSiteSettings } from "@/lib/settings";
 import { RegionProvider } from "@/lib/region-store";
-import { getRegion, getCurrency } from "@/lib/get-region";
+import { getRegion, getCurrency, getBaseUrl } from "@/lib/get-region";
+import { organizationJsonLd, JsonLdScript } from "@/lib/json-ld";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -19,11 +20,18 @@ const poppins = Poppins({
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
+  const baseUrl = await getBaseUrl();
 
   const title = settings.metaTitle || "Life-Therapy | Personal Development & Life Coaching";
   const description = settings.metaDescription || "Transform your life with Roxanne Bouwer. Qualified life coach, counsellor & NLP practitioner offering online courses and 1:1 sessions.";
+  const ogImage = settings.ogImageUrl || "/images/hero-home.jpg";
 
   return {
+    metadataBase: new URL(baseUrl),
+    icons: {
+      icon: "/favicon.ico",
+      apple: "/favicon.ico",
+    },
     title: {
       default: title,
       template: `%s | ${settings.siteName || "Life-Therapy"}`,
@@ -39,7 +47,16 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      ...(settings.ogImageUrl ? { images: [{ url: settings.ogImageUrl }] } : {}),
+      siteName: settings.siteName || "Life-Therapy",
+      type: "website",
+      locale: "en_ZA",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
     },
   };
 }
@@ -52,10 +69,12 @@ export default async function RootLayout({
   const settings = await getSiteSettings();
   const region = await getRegion();
   const currency = await getCurrency();
+  const orgJsonLd = await organizationJsonLd();
 
   return (
     <html lang="en" className={poppins.variable} suppressHydrationWarning>
       <body className="font-sans antialiased" suppressHydrationWarning>
+        <JsonLdScript data={orgJsonLd} />
         <ThemeProvider>
           <RegionProvider region={region} currency={currency}>
             <CartProvider>

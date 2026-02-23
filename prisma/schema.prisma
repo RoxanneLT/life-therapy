@@ -74,6 +74,8 @@ model Course {
   previewVideoUrl  String?        // Sofia Hart intro video (YouTube/Vimeo/direct URL)
   facilitatorScript String?       @db.Text  // Script for Sofia Hart to introduce this course
   relatedCourseIds Json?          // Admin cross-sell overrides (array of course IDs)
+  metaTitle        String?        // SEO: override for <title> tag
+  metaDescription  String?        @db.Text  // SEO: override for meta description
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   // LMS relations
@@ -772,6 +774,8 @@ model HybridPackage {
   digitalProductSlots Int      @default(0) // How many digital products the customer picks
   isPublished         Boolean  @default(false)
   sortOrder           Int      @default(0)
+  metaTitle           String?
+  metaDescription     String?  @db.Text
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -800,6 +804,8 @@ model DigitalProduct {
   category       String?  // workbook, toolkit, guide, journal, cheat_sheet (for future filtering)
   isPublished    Boolean  @default(false)
   sortOrder      Int      @default(0)
+  metaTitle      String?
+  metaDescription String?  @db.Text
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1015,4 +1021,20 @@ model DripProgress {
   @@index([currentPhase, currentStep])
   @@index([isPaused])
   @@map("drip_progress")
+}
+
+// ============================================================
+// Page SEO (per-route meta tags, client-manageable)
+// ============================================================
+model PageSeo {
+  id              String   @id @default(cuid())
+  route           String   @unique // e.g. "/about", "/courses", "/"
+  metaTitle       String?
+  metaDescription String?  @db.Text
+  ogImageUrl      String?
+  keywords        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("page_seo")
 }

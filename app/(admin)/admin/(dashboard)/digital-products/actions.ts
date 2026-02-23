@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { digitalProductSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
@@ -37,6 +37,7 @@ export async function updateDigitalProduct(id: string, formData: FormData) {
     data: parsed,
   });
 
+  revalidateTag("page-seo");
   revalidatePath("/admin/digital-products");
   redirect("/admin/digital-products");
 }

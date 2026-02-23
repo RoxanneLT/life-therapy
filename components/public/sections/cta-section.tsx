@@ -8,7 +8,7 @@ interface CtaSectionProps {
 
 export function CtaSection({ section }: CtaSectionProps) {
   return (
-    <section className="bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-16">
+    <section className="bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-10">
       <div className="mx-auto max-w-3xl text-center">
         {section.title && (
           <h2 className="font-heading text-3xl font-bold text-white">

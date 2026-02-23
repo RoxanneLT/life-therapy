@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { SeoFields } from "@/components/admin/seo-fields";
 
 const CATEGORIES = [
   { value: "self_esteem", label: "Self-Esteem & Confidence" },
@@ -48,6 +49,8 @@ interface CourseFormProps {
     sortOrder: number;
     previewVideoUrl?: string | null;
     facilitatorScript?: string | null;
+    metaTitle?: string | null;
+    metaDescription?: string | null;
   };
   onSubmit: (formData: FormData) => Promise<void>;
 }
@@ -289,6 +292,11 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
           </p>
         </div>
       </div>
+
+      <SeoFields
+        metaTitle={initialData?.metaTitle || ""}
+        metaDescription={initialData?.metaDescription || ""}
+      />
 
       <div className="flex gap-6">
         <div className="flex items-center gap-2">

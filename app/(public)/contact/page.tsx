@@ -4,12 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { buildStaticPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "Contact",
-  description:
+export async function generateMetadata(): Promise<Metadata> {
+  return buildStaticPageMetadata(
+    "/contact",
+    "Contact",
     "Get in touch with Life-Therapy. Reach out via email, WhatsApp, or book a free consultation.",
-};
+    "/images/hero-contact.jpg"
+  );
+}
 
 export const revalidate = 60;
 

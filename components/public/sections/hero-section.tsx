@@ -12,7 +12,7 @@ export function HeroSection({ section }: HeroSectionProps) {
 
   return (
     <section
-      className={`relative flex min-h-[400px] items-center px-4 py-20 ${
+      className={`relative flex min-h-[400px] items-center px-4 py-12 ${
         section.imageUrl ? "" : "bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100"
       }`}
     >
