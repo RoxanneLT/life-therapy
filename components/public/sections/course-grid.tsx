@@ -98,7 +98,7 @@ export async function CourseGrid({ section }: CourseGridProps) {
                 </div>
                 <div className="mt-4 flex gap-2">
                   <Button className="flex-1" variant="outline" asChild>
-                    <Link href={`/courses/${course.slug}`}>Learn More</Link>
+                    <Link href={`/courses/${course.slug}`}>Learn More<span className="sr-only"> about {course.title}</span></Link>
                   </Button>
                   <AddToCartButton
                     courseId={course.id}

@@ -200,13 +200,15 @@ export async function CourseCatalog({
   return (
     <section className="px-4 py-12">
       <div className="mx-auto max-w-6xl">
-        {section.title && (
+        {section.title ? (
           <div className="mb-2 text-center">
             <h2 className="font-heading text-3xl font-bold uppercase tracking-wide text-brand-700">
               {section.title}
             </h2>
             <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
           </div>
+        ) : (
+          <h2 className="sr-only">Browse Courses</h2>
         )}
         {section.subtitle && (
           <p className="mb-8 text-center text-muted-foreground">
@@ -342,7 +344,7 @@ export async function CourseCatalog({
                       <div className="mt-4 flex gap-2">
                         <Button className="flex-1" variant="outline" asChild>
                           <Link href={`/courses/${item.slug}`}>
-                            Learn More
+                            Learn More<span className="sr-only"> about {item.title}</span>
                           </Link>
                         </Button>
                         <AddToCartButton
@@ -437,7 +439,7 @@ export async function CourseCatalog({
                           <div className="flex shrink-0 gap-2">
                             <Button variant="outline" size="sm" asChild>
                               <Link href={`/courses/${item.slug}`}>
-                                Learn More
+                                Learn More<span className="sr-only"> about {item.title}</span>
                               </Link>
                             </Button>
                             <AddToCartButton

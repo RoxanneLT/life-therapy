@@ -10,7 +10,7 @@ export async function getAuthenticatedAdmin() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/admin/login");
+    redirect("/login");
   }
 
   const adminUser = await prisma.adminUser.findUnique({
@@ -18,7 +18,7 @@ export async function getAuthenticatedAdmin() {
   });
 
   if (!adminUser) {
-    redirect("/admin/login");
+    redirect("/login");
   }
 
   return { user, adminUser };

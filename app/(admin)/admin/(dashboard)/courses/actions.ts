@@ -33,7 +33,7 @@ export async function updateCourse(id: string, formData: FormData) {
 
   await prisma.course.update({ where: { id }, data: parsed });
 
-  revalidateTag("page-seo");
+  revalidateTag("page-seo", "max");
   revalidatePath("/admin/courses");
   revalidatePath("/");
   redirect("/admin/courses");

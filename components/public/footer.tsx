@@ -69,7 +69,7 @@ export function PublicFooter({
   return (
     <footer>
       {/* Newsletter + social band */}
-      <div className="bg-brand-500 px-4 py-10 text-white">
+      <div className="bg-brand-700 px-4 py-10 text-white">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-6">
           <div className="flex items-center gap-5">
             {socialLinks.map(({ platform, url }) => {

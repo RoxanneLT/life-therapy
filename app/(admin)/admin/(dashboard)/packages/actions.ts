@@ -37,7 +37,7 @@ export async function updatePackage(id: string, formData: FormData) {
     data: parsed,
   });
 
-  revalidateTag("page-seo");
+  revalidateTag("page-seo", "max");
   revalidatePath("/admin/packages");
   redirect("/admin/packages");
 }

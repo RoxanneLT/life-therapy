@@ -37,7 +37,7 @@ export async function updateDigitalProduct(id: string, formData: FormData) {
     data: parsed,
   });
 
-  revalidateTag("page-seo");
+  revalidateTag("page-seo", "max");
   revalidatePath("/admin/digital-products");
   redirect("/admin/digital-products");
 }

@@ -1,6 +1,7 @@
 import { getSiteSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
 
@@ -57,43 +58,50 @@ export async function sendEmail({
 }: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
   const settings = await getSiteSettings();
 
-  if (
-    !settings.smtpHost ||
-    !settings.smtpPort ||
-    !settings.smtpUser ||
-    !settings.smtpPass
-  ) {
-    console.error("SMTP not configured — email not sent:", subject);
-    await logEmail({ to, subject, templateKey, studentId, metadata, status: "failed", error: "SMTP not configured" });
-    return { success: false, error: "SMTP not configured" };
-  }
-
   // Generate tracking ID and inject tracking into HTML
   const trackingId = skipTracking ? undefined : randomUUID();
   const finalHtml = trackingId ? injectTracking(html, trackingId, DEFAULT_BASE_URL) : html;
 
-  const transporter = nodemailer.createTransport({
-    host: settings.smtpHost,
-    port: settings.smtpPort,
-    secure: settings.smtpPort === 465,
-    auth: {
-      user: settings.smtpUser,
-      pass: settings.smtpPass,
-    },
-  });
+  const useResend = !!process.env.RESEND_API_KEY;
+  const hasSMTP = !!(settings.smtpHost && settings.smtpPort && settings.smtpUser && settings.smtpPass);
+
+  if (!useResend && !hasSMTP) {
+    console.error("No email provider configured — email not sent:", subject);
+    await logEmail({ to, subject, templateKey, studentId, metadata, status: "failed", error: "No email provider configured" });
+    return { success: false, error: "No email provider configured" };
+  }
 
   const MAX_RETRIES = 2;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      await transporter.sendMail({
-        from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || settings.smtpUser}>`,
-        to,
-        subject,
-        html: finalHtml,
-        ...(replyTo ? { replyTo } : {}),
-      });
+      if (useResend) {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const from = process.env.RESEND_FROM || `${settings.smtpFromName || "Life-Therapy"} <hello@life-therapy.co.za>`;
+        const { error } = await resend.emails.send({
+          from,
+          to,
+          subject,
+          html: finalHtml,
+          ...(replyTo ? { replyTo } : {}),
+        });
+        if (error) throw new Error(error.message);
+      } else {
+        const transporter = nodemailer.createTransport({
+          host: settings.smtpHost,
+          port: settings.smtpPort!,
+          secure: settings.smtpPort === 465,
+          auth: { user: settings.smtpUser!, pass: settings.smtpPass! },
+        } as nodemailer.TransportOptions);
+        await transporter.sendMail({
+          from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || settings.smtpUser}>`,
+          to,
+          subject,
+          html: finalHtml,
+          ...(replyTo ? { replyTo } : {}),
+        });
+      }
       await logEmail({ to, subject, templateKey, studentId, metadata, status: "sent", trackingId });
       return { success: true };
     } catch (error) {

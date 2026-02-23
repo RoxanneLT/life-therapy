@@ -23,6 +23,6 @@ export async function updatePageSeo(id: string, formData: FormData) {
     },
   });
 
-  revalidateTag("page-seo");
+  revalidateTag("page-seo", "max");
   revalidatePath("/admin/seo");
 }

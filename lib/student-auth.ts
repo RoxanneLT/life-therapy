@@ -9,7 +9,7 @@ export async function getAuthenticatedStudent() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/portal/login");
+    redirect("/login");
   }
 
   const student = await prisma.student.findUnique({
@@ -17,7 +17,7 @@ export async function getAuthenticatedStudent() {
   });
 
   if (!student) {
-    redirect("/portal/login");
+    redirect("/login");
   }
 
   return { user, student };
