@@ -8,7 +8,7 @@ import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import type { DripEmailType } from "@/lib/generated/prisma/client";
 
-const DEFAULT_BASE_URL = "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
 function buildPreviewBody(
   bodyHtml: string,

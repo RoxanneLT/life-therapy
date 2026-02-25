@@ -135,7 +135,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
         ) : (
           <div className="relative rounded-lg border">
             {/* Time grid */}
-            {slots.map((slot, i) => {
+            {slots.map((slot, _i) => {
               const slotMinutes = timeToMinutes(slot);
               const isBusinessHour =
                 dayHours && !dayHours.closed &&

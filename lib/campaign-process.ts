@@ -3,7 +3,7 @@ import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 
-const DEFAULT_BASE_URL = "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 1000;
 const COLD_THRESHOLD = 5; // Auto-pause after 5 consecutive unopened emails

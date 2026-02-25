@@ -28,7 +28,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { format, isPast, differenceInHours } from "date-fns";
-import { cn } from "@/lib/utils";
 import { ReschedulePicker } from "@/components/booking/reschedule-picker";
 import {
   portalCancelBookingAction,

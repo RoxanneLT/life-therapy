@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import type { Currency } from "./region";
 import type { Booking, Order, OrderItem, Student } from "@/lib/generated/prisma/client";
 
-const DEFAULT_BASE_URL = "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
 export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE_URL, unsubscribeUrl?: string): string {
   const domain = baseUrl.replace(/^https?:\/\//, "");

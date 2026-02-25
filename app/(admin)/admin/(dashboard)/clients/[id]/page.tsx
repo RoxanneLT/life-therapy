@@ -11,13 +11,6 @@ import { ClientProfileTabs } from "./client-profile-tabs";
 import { ConvertDialog } from "./convert-dialog";
 import { StatusSelect } from "./status-select";
 
-const STATUS_COLORS: Record<string, string> = {
-  potential: "bg-blue-100 text-blue-700",
-  active: "bg-green-100 text-green-700",
-  inactive: "bg-gray-100 text-gray-600",
-  archived: "bg-red-100 text-red-700",
-};
-
 export default async function ClientDetailPage({
   params,
   searchParams,

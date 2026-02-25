@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { cancelCalendarEvent, createCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
-import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
+import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";

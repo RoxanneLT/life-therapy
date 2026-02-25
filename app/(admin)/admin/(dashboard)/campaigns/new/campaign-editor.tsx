@@ -493,9 +493,9 @@ function wrapInBaseTemplate(body: string): string {
       ${body}
     </div>
     <div style="border-top: 1px solid #e5e7eb; padding: 20px 24px; font-size: 12px; color: #6b7280; text-align: center;">
-      <p style="margin: 0 0 4px;"><a href="#" style="color: #8BA889; text-decoration: none; font-weight: 600;">life-therapy.co.za</a></p>
+      <p style="margin: 0 0 4px;"><a href="https://life-therapy.co.za" style="color: #8BA889; text-decoration: none; font-weight: 600;">life-therapy.co.za</a></p>
       <p style="margin: 0;">hello@life-therapy.co.za</p>
-      <p style="margin: 8px 0 0;"><a href="#" style="color: #9ca3af; text-decoration: underline;">Unsubscribe from marketing emails</a></p>
+      <p style="margin: 8px 0 0;"><a href="{{unsubscribeUrl}}" style="color: #9ca3af; text-decoration: underline;">Unsubscribe from marketing emails</a></p>
     </div>
   </div>
 </body></html>`;

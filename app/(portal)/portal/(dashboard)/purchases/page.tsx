@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ProgressBar } from "@/components/portal/progress-bar";
 import { ShoppingBag, GraduationCap, FileDown, Coins, ExternalLink } from "lucide-react";
 import { format } from "date-fns";

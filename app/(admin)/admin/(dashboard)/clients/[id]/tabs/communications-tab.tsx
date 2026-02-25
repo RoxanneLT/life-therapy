@@ -1,18 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Mail,
   X,
   Plus,
   Pause,
   Play,
   RotateCcw,
-  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import {

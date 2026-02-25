@@ -9,10 +9,8 @@ import {
   isSameDay,
 } from "date-fns";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getSessionTypeConfig } from "@/lib/booking-config";
 import type { BusinessHours } from "@/lib/settings";
 
 interface BookingData {

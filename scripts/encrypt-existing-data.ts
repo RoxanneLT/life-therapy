@@ -12,12 +12,8 @@ config({ path: ".env.local" });
 
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import {
-  encrypt,
-  decrypt,
-  encryptArray,
-  decryptArray,
-} from "../lib/encryption";
+// Also available from "../lib/encryption": decrypt, decryptArray
+import { encrypt, encryptArray } from "../lib/encryption";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
