@@ -37,18 +37,39 @@ export async function requestPasswordResetAction(
     return { success: true };
   }
 
-  if (!student.supabaseUserId) {
-    console.log(`[password-reset] Student ${email} has no supabaseUserId`);
-    return { success: true };
+  // Step 2: Ensure student is linked to a Supabase auth user
+  let supabaseUserId = student.supabaseUserId;
+
+  if (!supabaseUserId) {
+    // Try to find the auth user by email and auto-link
+    console.log(`[password-reset] Student ${email} has no supabaseUserId, searching auth...`);
+    const { data: userList } = await supabaseAdmin.auth.admin.listUsers({
+      perPage: 1000,
+    });
+    const authMatch = userList?.users?.find(
+      (u) => u.email?.toLowerCase() === email,
+    );
+
+    if (authMatch) {
+      supabaseUserId = authMatch.id;
+      await prisma.student.update({
+        where: { id: student.id },
+        data: { supabaseUserId: authMatch.id },
+      });
+      console.log(`[password-reset] Linked student to auth user ${authMatch.id}`);
+    } else {
+      console.log(`[password-reset] No auth user found for ${email}`);
+      return { success: true };
+    }
   }
 
-  // Step 2: Verify user exists in Supabase auth
+  // Verify auth user exists
   const { data: authUser, error: authError } =
-    await supabaseAdmin.auth.admin.getUserById(student.supabaseUserId);
+    await supabaseAdmin.auth.admin.getUserById(supabaseUserId);
 
   if (authError || !authUser?.user) {
     console.log(
-      `[password-reset] Auth user not found for supabaseUserId=${student.supabaseUserId}: ${authError?.message}`,
+      `[password-reset] Auth user not found for supabaseUserId=${supabaseUserId}: ${authError?.message}`,
     );
     return { success: true };
   }
