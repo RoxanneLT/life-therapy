@@ -62,9 +62,56 @@ export function UsersPanel({ users }: UsersPanelProps) {
   }, {});
 
   return (
-    <div className="flex h-[calc(100vh-10rem)] gap-6">
-      {/* Sidebar */}
-      <div className="flex w-48 shrink-0 flex-col">
+    <div className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+      {/* Mobile nav */}
+      <div className="md:hidden space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-heading text-xl font-bold">Users</h2>
+            <p className="text-xs text-muted-foreground">
+              {users.length} admin user{users.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" asChild>
+              <Link href="/admin/users/new">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Invite
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/admin/users/change-password">
+                <Key className="mr-1.5 h-3.5 w-3.5" />
+                Password
+              </Link>
+            </Button>
+          </div>
+        </div>
+        <div className="flex gap-1 overflow-x-auto border-b pb-px scrollbar-none">
+          {SECTIONS.map((section) => {
+            const Icon = section.icon;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setActiveSection(section.id)}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                  activeSection === section.id
+                    ? "border-brand-600 text-brand-700"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex w-48 shrink-0 flex-col">
         <div className="mb-5">
           <h2 className="font-heading text-xl font-bold">Users</h2>
           <p className="text-xs text-muted-foreground">

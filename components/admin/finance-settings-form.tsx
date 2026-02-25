@@ -222,9 +222,40 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} onChange={markDirty} className="flex h-[calc(100vh-10rem)] gap-6">
-      {/* Sidebar */}
-      <div className="flex w-52 shrink-0 flex-col">
+    <form onSubmit={handleSubmit} onChange={markDirty} className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+      {/* Mobile nav — horizontal scrollable strip */}
+      <div className="md:hidden space-y-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold">Finance</h1>
+          <p className="text-sm text-muted-foreground">
+            Business details, VAT, pricing, billing, and banking.
+          </p>
+        </div>
+        <div className="flex gap-1 overflow-x-auto border-b pb-px scrollbar-none">
+          {SECTIONS.map((section) => {
+            const Icon = section.icon;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setActiveSection(section.id)}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                  activeSection === section.id
+                    ? "border-brand-600 text-brand-700"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex w-52 shrink-0 flex-col">
         <div className="mb-5">
           <h1 className="font-heading text-2xl font-bold">Finance</h1>
           <p className="text-sm text-muted-foreground">
@@ -767,6 +798,19 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
             bankBranchCode={bankBranchCode}
           />
         )}
+
+        {/* Mobile save button */}
+        <div className="mt-6 border-t pt-4 md:hidden">
+          <Button type="submit" disabled={saving} className="w-full">
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save Settings
+          </Button>
+          {isDirty && (
+            <p className="mt-2 text-center text-xs text-amber-600">
+              You have unsaved changes
+            </p>
+          )}
+        </div>
       </div>
     </form>
   );

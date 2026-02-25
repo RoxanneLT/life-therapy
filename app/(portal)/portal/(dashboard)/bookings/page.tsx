@@ -28,6 +28,7 @@ export default async function PortalBookingsPage() {
       creditRefunded: true,
       isLateCancel: true,
       cancelledAt: true,
+      clientNotes: true,
     },
   });
 
@@ -38,6 +39,7 @@ export default async function PortalBookingsPage() {
     rescheduledAt: b.rescheduledAt?.toISOString() || null,
     originalDate: b.originalDate ? b.originalDate.toISOString().slice(0, 10) : null,
     cancelledAt: b.cancelledAt?.toISOString() || null,
+    clientNotes: b.clientNotes || null,
   }));
 
   return (

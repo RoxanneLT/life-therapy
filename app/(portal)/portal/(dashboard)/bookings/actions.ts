@@ -167,3 +167,23 @@ export async function portalRescheduleBookingAction(
 
   revalidatePath("/portal/bookings");
 }
+
+export async function updateClientNotesAction(bookingId: string, notes: string) {
+  const { student } = await getAuthenticatedStudent();
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, studentId: true, status: true },
+  });
+  if (!booking) throw new Error("Booking not found");
+  if (booking.studentId !== student.id) throw new Error("Unauthorized");
+  if (booking.status === "cancelled") throw new Error("Cannot update notes on a cancelled session");
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { clientNotes: notes.trim() || null },
+  });
+
+  revalidatePath("/portal/bookings");
+  return { success: true };
+}

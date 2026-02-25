@@ -69,6 +69,25 @@ export default async function BookingDetailPage({ params }: Props) {
 
   const config = getSessionTypeConfig(booking.sessionType);
 
+  const previousBookings = booking.studentId
+    ? await prisma.booking.findMany({
+        where: {
+          studentId: booking.studentId,
+          id: { not: booking.id },
+          status: { in: ["completed", "no_show"] },
+        },
+        orderBy: { date: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          date: true,
+          sessionType: true,
+          adminNotes: true,
+          clientNotes: true,
+        },
+      })
+    : [];
+
   async function handleStatusChange(formData: FormData) {
     "use server";
     const status = formData.get("status") as BookingStatus;
@@ -355,6 +374,61 @@ export default async function BookingDetailPage({ params }: Props) {
           </form>
         </CardContent>
       </Card>
+
+      {/* Previous Session Notes */}
+      {booking.studentId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Previous Session Notes</CardTitle>
+            <CardDescription>
+              Notes from the client&apos;s recent completed sessions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {previousBookings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No previous sessions for this client.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {previousBookings.map((prev) => {
+                  const prevConfig = getSessionTypeConfig(prev.sessionType);
+                  return (
+                    <div key={prev.id} className="space-y-1.5 rounded-lg border p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                          {prevConfig.label} — {format(new Date(prev.date), "d MMM yyyy")}
+                        </span>
+                        <Link
+                          href={`/admin/bookings/${prev.id}`}
+                          className="text-xs text-brand-600 hover:underline"
+                        >
+                          View
+                        </Link>
+                      </div>
+                      {prev.adminNotes && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Your notes</p>
+                          <p className="text-sm whitespace-pre-wrap">{prev.adminNotes}</p>
+                        </div>
+                      )}
+                      {prev.clientNotes && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Client notes</p>
+                          <p className="text-sm whitespace-pre-wrap">{prev.clientNotes}</p>
+                        </div>
+                      )}
+                      {!prev.adminNotes && !prev.clientNotes && (
+                        <p className="text-xs text-muted-foreground italic">No notes</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

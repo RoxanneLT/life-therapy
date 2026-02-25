@@ -97,9 +97,41 @@ export function LegalDocumentsClient({
 
   return (
     <>
-      <div className="flex h-[calc(100vh-10rem)] gap-6">
-        {/* Sidebar */}
-        <div className="flex w-48 shrink-0 flex-col">
+      <div className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+        {/* Mobile nav */}
+        <div className="md:hidden space-y-4">
+          <div>
+            <h2 className="font-heading text-xl font-bold">Legal</h2>
+            <p className="text-xs text-muted-foreground">
+              Manage legal documents
+            </p>
+          </div>
+          <div className="flex gap-1 overflow-x-auto border-b pb-px scrollbar-none">
+            {documents.map((doc) => {
+              const meta = SLUG_META[doc.slug];
+              const Icon = meta?.icon ?? FileText;
+              return (
+                <button
+                  key={doc.slug}
+                  type="button"
+                  onClick={() => setActiveSlug(doc.slug)}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                    activeSlug === doc.slug
+                      ? "border-brand-600 text-brand-700"
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {meta?.label ?? doc.slug}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Desktop sidebar */}
+        <div className="hidden md:flex w-48 shrink-0 flex-col">
           <div className="mb-5">
             <h2 className="font-heading text-xl font-bold">Legal</h2>
             <p className="text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,10 @@ import {
   XCircle,
   Ban,
   CheckCircle2,
+  MessageSquareText,
+  Loader2,
+  Check,
+  ChevronRight,
 } from "lucide-react";
 import { format, isPast, differenceInHours } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -29,6 +33,7 @@ import { ReschedulePicker } from "@/components/booking/reschedule-picker";
 import {
   portalCancelBookingAction,
   portalRescheduleBookingAction,
+  updateClientNotesAction,
 } from "./actions";
 import {
   CANCEL_NOTICE_HOURS,
@@ -58,6 +63,7 @@ interface SerializedBooking {
   creditRefunded: boolean;
   isLateCancel: boolean;
   cancelledAt: string | null;
+  clientNotes: string | null;
 }
 
 const SESSION_LABELS: Record<string, string> = {
@@ -154,49 +160,78 @@ function UpcomingBookingCard({
   const hoursUntil = differenceInHours(sessionDate, now);
   const canReschedule =
     b.rescheduleCount < MAX_RESCHEDULES && hoursUntil >= RESCHEDULE_NOTICE_HOURS;
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Badge variant={STATUS_CONFIG[b.status]?.variant ?? "outline"}>
-              {SESSION_LABELS[b.sessionType] || b.sessionType}
-            </Badge>
-            {b.rescheduleCount > 0 && (
-              <span className="text-xs text-muted-foreground">
-                (rescheduled {b.rescheduleCount}x)
+    <>
+      <Card
+        className="cursor-pointer transition-colors hover:bg-muted/50"
+        onClick={() => setDetailOpen(true)}
+      >
+        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge variant={STATUS_CONFIG[b.status]?.variant ?? "outline"}>
+                {SESSION_LABELS[b.sessionType] || b.sessionType}
+              </Badge>
+              {b.rescheduleCount > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  (rescheduled {b.rescheduleCount}x)
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                {format(new Date(b.date + "T12:00:00"), "EEEE, d MMMM yyyy")}
               </span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                {b.startTime} – {b.endTime}
+              </span>
+            </div>
+            {b.clientNotes && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MessageSquareText className="h-3 w-3" />
+                Notes added
+              </p>
             )}
           </div>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="flex items-center gap-1.5">
-              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-              {format(new Date(b.date + "T12:00:00"), "EEEE, d MMMM yyyy")}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-              {b.startTime} – {b.endTime}
-            </span>
-          </div>
-        </div>
 
-        <div className="flex flex-wrap gap-2">
-          {b.teamsMeetingUrl && (
-            <Button variant="outline" size="sm" asChild>
-              <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
-                <Video className="mr-2 h-4 w-4" />
-                Join
-              </a>
-            </Button>
-          )}
-          {canReschedule && (
-            <RescheduleBookingDialog booking={b} />
-          )}
-          <CancelBookingDialog booking={b} hoursUntil={hoursUntil} />
-        </div>
-      </CardContent>
-    </Card>
+          <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            {b.teamsMeetingUrl && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
+                  <Video className="mr-2 h-4 w-4" />
+                  Join
+                </a>
+              </Button>
+            )}
+            {canReschedule && (
+              <RescheduleBookingDialog
+                booking={b}
+                open={rescheduleOpen}
+                onOpenChange={setRescheduleOpen}
+              />
+            )}
+            <CancelBookingDialog
+              booking={b}
+              hoursUntil={hoursUntil}
+              onReschedule={canReschedule ? () => setRescheduleOpen(true) : undefined}
+            />
+            <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <SessionDetailDialog
+        booking={b}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        isUpcoming
+      />
+    </>
   );
 }
 
@@ -206,47 +241,61 @@ function UpcomingBookingCard({
 
 function PastBookingCard({ booking: b }: Readonly<{ booking: SerializedBooking }>) {
   const statusCfg = STATUS_CONFIG[b.status] ?? STATUS_CONFIG.pending;
+  const [detailOpen, setDetailOpen] = useState(false);
 
   return (
-    <Card className="opacity-75">
-      <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Badge variant={statusCfg.variant}>
-              {statusCfg.label}
-            </Badge>
-            <span className="text-sm font-medium">
-              {SESSION_LABELS[b.sessionType] || b.sessionType}
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {format(new Date(b.date + "T12:00:00"), "d MMM yyyy")} at{" "}
-            {b.startTime} – {b.endTime}
-          </p>
-          {b.status === "cancelled" && (
-            <div className="text-xs text-muted-foreground">
-              {b.sessionType !== "free_consultation" && (
-                <>
-                  {b.isLateCancel && (
-                    <span className="text-amber-600 font-medium">Late cancel — </span>
-                  )}
-                  {b.creditRefunded ? "Credit refunded" : "Credit forfeited"}
-                </>
-              )}
-              {b.cancellationReason && (
-                <>{b.sessionType !== "free_consultation" && " • "}&quot;{b.cancellationReason}&quot;</>
-              )}
+    <>
+      <Card
+        className="cursor-pointer opacity-75 transition-colors hover:opacity-100 hover:bg-muted/50"
+        onClick={() => setDetailOpen(true)}
+      >
+        <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge variant={statusCfg.variant}>
+                {statusCfg.label}
+              </Badge>
+              <span className="text-sm font-medium">
+                {SESSION_LABELS[b.sessionType] || b.sessionType}
+              </span>
             </div>
-          )}
-          {b.originalDate && b.originalDate !== b.date && (
-            <p className="text-xs text-muted-foreground">
-              Originally: {format(new Date(b.originalDate + "T12:00:00"), "d MMM yyyy")}
-              {b.originalStartTime && ` at ${b.originalStartTime}`}
+            <p className="text-sm text-muted-foreground">
+              {format(new Date(b.date + "T12:00:00"), "d MMM yyyy")} at{" "}
+              {b.startTime} – {b.endTime}
             </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            {b.status === "cancelled" && (
+              <div className="text-xs text-muted-foreground">
+                {b.sessionType !== "free_consultation" && (
+                  <>
+                    {b.isLateCancel && (
+                      <span className="text-amber-600 font-medium">Late cancel — </span>
+                    )}
+                    {b.creditRefunded ? "Credit refunded" : "Credit forfeited"}
+                  </>
+                )}
+                {b.cancellationReason && (
+                  <>{b.sessionType !== "free_consultation" && " • "}&quot;{b.cancellationReason}&quot;</>
+                )}
+              </div>
+            )}
+            {b.originalDate && b.originalDate !== b.date && (
+              <p className="text-xs text-muted-foreground">
+                Originally: {format(new Date(b.originalDate + "T12:00:00"), "d MMM yyyy")}
+                {b.originalStartTime && ` at ${b.originalStartTime}`}
+              </p>
+            )}
+          </div>
+          <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
+        </CardContent>
+      </Card>
+
+      <SessionDetailDialog
+        booking={b}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        isUpcoming={false}
+      />
+    </>
   );
 }
 
@@ -257,7 +306,8 @@ function PastBookingCard({ booking: b }: Readonly<{ booking: SerializedBooking }
 function CancelBookingDialog({
   booking: b,
   hoursUntil,
-}: Readonly<{ booking: SerializedBooking; hoursUntil: number }>) {
+  onReschedule,
+}: Readonly<{ booking: SerializedBooking; hoursUntil: number; onReschedule?: () => void }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -385,17 +435,192 @@ function CancelBookingDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Keep Session
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleCancel}
-            disabled={isPending}
-          >
-            {isPending ? "Cancelling..." : isFreeConsultation || isNormal ? "Cancel Session" : "Cancel Anyway"}
-          </Button>
+          {isFreeConsultation && onReschedule ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpen(false);
+                  onReschedule();
+                }}
+              >
+                <CalendarClock className="mr-2 h-4 w-4" />
+                Reschedule Instead
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancel}
+                disabled={isPending}
+              >
+                {isPending ? "Cancelling..." : "Cancel Session"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Keep Session
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancel}
+                disabled={isPending}
+              >
+                {isPending ? "Cancelling..." : isNormal ? "Cancel Session" : "Cancel Anyway"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Session Detail Dialog
+// ---------------------------------------------------------------------------
+
+function SessionDetailDialog({
+  booking: b,
+  open,
+  onOpenChange,
+  isUpcoming,
+}: Readonly<{
+  booking: SerializedBooking;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  isUpcoming: boolean;
+}>) {
+  const [notes, setNotes] = useState(b.clientNotes || "");
+  const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+  const statusCfg = STATUS_CONFIG[b.status] ?? STATUS_CONFIG.pending;
+
+  // Reset notes when dialog opens with fresh data
+  const handleOpenChange = useCallback(
+    (v: boolean) => {
+      if (v) {
+        setNotes(b.clientNotes || "");
+        setSaved(false);
+      }
+      onOpenChange(v);
+    },
+    [b.clientNotes, onOpenChange],
+  );
+
+  function handleSaveNotes() {
+    startTransition(async () => {
+      await updateClientNotesAction(b.id, notes);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {SESSION_LABELS[b.sessionType] || b.sessionType}
+          </DialogTitle>
+          <DialogDescription>
+            {format(new Date(b.date + "T12:00:00"), "EEEE, d MMMM yyyy")} at{" "}
+            {b.startTime} – {b.endTime}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Status & info */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+            <span className="text-sm text-muted-foreground">
+              {b.durationMinutes} min
+            </span>
+            {b.rescheduleCount > 0 && (
+              <span className="text-xs text-muted-foreground">
+                (rescheduled {b.rescheduleCount}x)
+              </span>
+            )}
+          </div>
+
+          {/* Teams link for upcoming */}
+          {isUpcoming && b.teamsMeetingUrl && (
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
+                <Video className="mr-2 h-4 w-4" />
+                Join Microsoft Teams Meeting
+              </a>
+            </Button>
+          )}
+
+          {/* Cancellation details for past */}
+          {b.status === "cancelled" && (
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
+              <p className="font-medium text-muted-foreground">Cancelled</p>
+              {b.sessionType !== "free_consultation" && (
+                <p className="text-xs text-muted-foreground">
+                  {b.isLateCancel && "Late cancel — "}
+                  {b.creditRefunded ? "Credit refunded" : "Credit forfeited"}
+                </p>
+              )}
+              {b.cancellationReason && (
+                <p className="text-xs text-muted-foreground italic">
+                  &quot;{b.cancellationReason}&quot;
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Original date if rescheduled */}
+          {b.originalDate && b.originalDate !== b.date && (
+            <p className="text-xs text-muted-foreground">
+              Originally scheduled:{" "}
+              {format(new Date(b.originalDate + "T12:00:00"), "d MMM yyyy")}
+              {b.originalStartTime && ` at ${b.originalStartTime}`}
+            </p>
+          )}
+
+          {/* Client notes */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium">
+              <MessageSquareText className="h-4 w-4 text-muted-foreground" />
+              Things I&apos;d like to discuss
+            </label>
+            {isUpcoming && b.status !== "cancelled" ? (
+              <>
+                <Textarea
+                  placeholder="Anything on your mind that you'd like to talk about during your session..."
+                  value={notes}
+                  onChange={(e) => {
+                    setNotes(e.target.value);
+                    setSaved(false);
+                  }}
+                  rows={4}
+                />
+                <div className="flex items-center justify-end gap-2">
+                  {saved && (
+                    <span className="flex items-center gap-1 text-xs text-green-600">
+                      <Check className="h-3.5 w-3.5" /> Saved
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNotes}
+                    disabled={isPending || notes === (b.clientNotes || "")}
+                  >
+                    {isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                    Save Notes
+                  </Button>
+                </div>
+              </>
+            ) : b.clientNotes ? (
+              <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                {b.clientNotes}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No notes</p>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -407,8 +632,16 @@ function CancelBookingDialog({
 
 function RescheduleBookingDialog({
   booking: b,
-}: Readonly<{ booking: SerializedBooking }>) {
-  const [open, setOpen] = useState(false);
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+}: Readonly<{
+  booking: SerializedBooking;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+}>) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
 
   function handleConfirm(date: string, startTime: string, endTime: string) {
