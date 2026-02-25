@@ -19,6 +19,9 @@ import {
   Mail,
   CreditCard,
   DollarSign,
+  CheckCircle2,
+  AlertCircle,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -58,19 +61,28 @@ const SECTIONS: SettingsSection[] = [
   { id: "contact", label: "Contact & Hours", group: "General", icon: Phone },
   { id: "social", label: "Social Links", group: "General", icon: Share2 },
   { id: "seo", label: "SEO & Analytics", group: "General", icon: Search },
-  { id: "email", label: "Email (SMTP)", group: "Integrations", icon: Mail },
+  { id: "email", label: "Email", group: "Integrations", icon: Mail },
   { id: "newsletter", label: "Newsletter", group: "Integrations", icon: Newspaper },
   { id: "payments", label: "Payments", group: "Integrations", icon: CreditCard },
+  { id: "calendar", label: "Calendar", group: "Integrations", icon: Calendar },
   { id: "session-pricing", label: "Session Pricing", group: "Pricing", icon: DollarSign },
 ];
 
 const GROUPS = ["General", "Integrations", "Pricing"];
 
-interface SettingsFormProps {
-  initialSettings: SiteSetting;
+interface SecretStatus {
+  msGraphConfigured: boolean;
+  smtpConfigured: boolean;
+  paystackConfigured: boolean;
+  resendConfigured: boolean;
 }
 
-export function SettingsForm({ initialSettings }: SettingsFormProps) {
+interface SettingsFormProps {
+  initialSettings: SiteSetting;
+  secretStatus: SecretStatus;
+}
+
+export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProps) {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState("branding");
 
@@ -107,18 +119,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [ogImageUrl, setOgImageUrl] = useState(initialSettings.ogImageUrl || "");
   const [googleAnalyticsId, setGoogleAnalyticsId] = useState(initialSettings.googleAnalyticsId || "");
 
-  // SMTP
-  const [smtpHost, setSmtpHost] = useState(initialSettings.smtpHost || "");
-  const [smtpPort, setSmtpPort] = useState(initialSettings.smtpPort?.toString() || "");
-  const [smtpUser, setSmtpUser] = useState(initialSettings.smtpUser || "");
-  const [smtpPass, setSmtpPass] = useState(initialSettings.smtpPass || "");
+  // Email display preferences (non-secret — kept in DB)
   const [smtpFromName, setSmtpFromName] = useState(initialSettings.smtpFromName || "");
   const [smtpFromEmail, setSmtpFromEmail] = useState(initialSettings.smtpFromEmail || "");
-
-  // Payments (Stripe)
-  const [stripeSecretKey, setStripeSecretKey] = useState(initialSettings.stripeSecretKey || "");
-  const [stripePublishableKey, setStripePublishableKey] = useState(initialSettings.stripePublishableKey || "");
-  const [stripeWebhookSecret, setStripeWebhookSecret] = useState(initialSettings.stripeWebhookSecret || "");
 
   // Session Pricing (all currencies)
   const [sessionPriceIndividualZar, setSessionPriceIndividualZar] = useState(initialSettings.sessionPriceIndividualZar?.toString() || "");
@@ -159,15 +162,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       formData.set("metaDescription", metaDescription);
       formData.set("ogImageUrl", ogImageUrl);
       formData.set("googleAnalyticsId", googleAnalyticsId);
-      formData.set("smtpHost", smtpHost);
-      formData.set("smtpPort", smtpPort);
-      formData.set("smtpUser", smtpUser);
-      formData.set("smtpPass", smtpPass);
       formData.set("smtpFromName", smtpFromName);
       formData.set("smtpFromEmail", smtpFromEmail);
-      formData.set("stripeSecretKey", stripeSecretKey);
-      formData.set("stripePublishableKey", stripePublishableKey);
-      formData.set("stripeWebhookSecret", stripeWebhookSecret);
       formData.set("sessionPriceIndividualZar", sessionPriceIndividualZar);
       formData.set("sessionPriceIndividualUsd", sessionPriceIndividualUsd);
       formData.set("sessionPriceIndividualEur", sessionPriceIndividualEur);
@@ -189,7 +185,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex h-[calc(100vh-7rem)] gap-6">
+    <form onSubmit={handleSubmit} className="flex h-[calc(100vh-10rem)] gap-6">
       {/* Sidebar — fixed in place, never scrolls */}
       <div className="flex w-52 shrink-0 flex-col">
         <div className="mb-5">
@@ -425,46 +421,63 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             </Card>
           )}
 
-          {/* SMTP */}
+          {/* Email */}
           {activeSection === "email" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Email (SMTP)</CardTitle>
-                <CardDescription>Configure SMTP for sending transactional emails (booking confirmations, contact form, etc.)</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="smtpHost">SMTP Host</Label>
-                    <Input id="smtpHost" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com" />
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Email Providers</CardTitle>
+                  <CardDescription>Email credentials are configured via environment variables for security.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center gap-3 rounded-lg border p-3">
+                    {secretStatus.resendConfigured ? (
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">Resend (Primary)</p>
+                      <p className="text-xs text-muted-foreground">
+                        {secretStatus.resendConfigured ? "Configured via RESEND_API_KEY" : "Not configured — set RESEND_API_KEY in environment"}
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="smtpPort">SMTP Port</Label>
-                    <Input id="smtpPort" type="number" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
+                  <div className="flex items-center gap-3 rounded-lg border p-3">
+                    {secretStatus.smtpConfigured ? (
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">SMTP (Fallback)</p>
+                      <p className="text-xs text-muted-foreground">
+                        {secretStatus.smtpConfigured ? "Configured via SMTP_HOST, SMTP_USER" : "Not configured — set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in environment"}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="smtpUser">Username</Label>
-                    <Input id="smtpUser" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="your@email.com" />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sender Identity</CardTitle>
+                  <CardDescription>Display name and email shown in outgoing messages</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="smtpFromName">From Name</Label>
+                      <Input id="smtpFromName" value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} placeholder="Life-Therapy" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="smtpFromEmail">From Email</Label>
+                      <Input id="smtpFromEmail" type="email" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} placeholder="noreply@life-therapy.co.za" />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="smtpPass">Password</Label>
-                    <Input id="smtpPass" type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder="App password or SMTP password" />
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="smtpFromName">From Name</Label>
-                    <Input id="smtpFromName" value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} placeholder="Life-Therapy" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="smtpFromEmail">From Email</Label>
-                    <Input id="smtpFromEmail" type="email" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} placeholder="noreply@life-therapy.co.za" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {/* Newsletter */}
@@ -492,25 +505,50 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           {activeSection === "payments" && (
             <Card>
               <CardHeader>
-                <CardTitle>Stripe Payment Settings</CardTitle>
-                <CardDescription>Configure Stripe for online payments. Use test keys for development.</CardDescription>
+                <CardTitle>Payment Provider</CardTitle>
+                <CardDescription>Payment credentials are configured via environment variables for security.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="stripePublishableKey">Publishable Key</Label>
-                  <Input id="stripePublishableKey" value={stripePublishableKey} onChange={(e) => setStripePublishableKey(e.target.value)} placeholder="pk_test_..." />
+              <CardContent>
+                <div className="flex items-center gap-3 rounded-lg border p-3">
+                  {secretStatus.paystackConfigured ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium">Paystack</p>
+                    <p className="text-xs text-muted-foreground">
+                      {secretStatus.paystackConfigured ? "Configured via PAYSTACK_SECRET_KEY" : "Not configured — set PAYSTACK_SECRET_KEY in environment"}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="stripeSecretKey">Secret Key</Label>
-                  <Input id="stripeSecretKey" type="password" value={stripeSecretKey} onChange={(e) => setStripeSecretKey(e.target.value)} placeholder="sk_test_..." />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Calendar (MS Graph) */}
+          {activeSection === "calendar" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Microsoft Graph (Calendar)</CardTitle>
+                <CardDescription>Calendar and Teams integration credentials are configured via environment variables.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 rounded-lg border p-3">
+                  {secretStatus.msGraphConfigured ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium">Microsoft Graph API</p>
+                    <p className="text-xs text-muted-foreground">
+                      {secretStatus.msGraphConfigured
+                        ? "Configured via MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_USER_EMAIL"
+                        : "Not configured — set MS_GRAPH_* environment variables"}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="stripeWebhookSecret">Webhook Secret</Label>
-                  <Input id="stripeWebhookSecret" type="password" value={stripeWebhookSecret} onChange={(e) => setStripeWebhookSecret(e.target.value)} placeholder="whsec_..." />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Note: Environment variables (STRIPE_SECRET_KEY, etc.) take priority over these settings. Use this for admin-configurable keys.
-                </p>
               </CardContent>
             </Card>
           )}

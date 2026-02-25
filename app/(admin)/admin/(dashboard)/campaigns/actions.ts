@@ -13,125 +13,91 @@ import { getCampaignRecipients } from "@/lib/contacts";
 // Save (create or update) a campaign
 // ────────────────────────────────────────────────────────────
 
+type CampaignFilters = { name: string; filterSource?: string; filterTags?: string[] };
+
+function parseCampaignEmailsJson(formData: FormData) {
+  const emailsJson = formData.get("emails") as string;
+  const emails: Array<{
+    step: number; dayOffset: number; subject: string; previewText?: string;
+    bodyHtml: string; ctaText?: string; ctaUrl?: string;
+  }> = emailsJson ? JSON.parse(emailsJson) : [];
+  if (emails.length === 0) throw new Error("Multi-step campaigns must have at least one email step");
+  return emails;
+}
+
+function mapEmailSteps(emails: ReturnType<typeof parseCampaignEmailsJson>) {
+  return emails.map((e, i) => ({
+    step: i,
+    dayOffset: e.dayOffset,
+    subject: e.subject.trim(),
+    previewText: e.previewText?.trim() || null,
+    bodyHtml: e.bodyHtml.trim(),
+    ctaText: e.ctaText?.trim() || null,
+    ctaUrl: e.ctaUrl?.trim() || null,
+  }));
+}
+
+async function saveMultiStepCampaign(id: string | null, filters: CampaignFilters, formData: FormData) {
+  const emails = parseCampaignEmailsJson(formData);
+
+  if (id) {
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
+    if (campaign?.status !== "draft") throw new Error("Can only edit draft campaigns");
+
+    await prisma.campaign.update({ where: { id }, data: { ...filters, isMultiStep: true } });
+    await prisma.campaignEmail.deleteMany({ where: { campaignId: id } });
+    await prisma.campaignEmail.createMany({ data: mapEmailSteps(emails).map((e) => ({ ...e, campaignId: id })) });
+
+    revalidatePath("/admin/campaigns");
+    revalidatePath(`/admin/campaigns/${id}`);
+    redirect(`/admin/campaigns/${id}`);
+  }
+
+  const campaign = await prisma.campaign.create({
+    data: { ...filters, isMultiStep: true, status: "draft", emails: { create: mapEmailSteps(emails) } },
+  });
+  revalidatePath("/admin/campaigns");
+  redirect(`/admin/campaigns/${campaign.id}`);
+}
+
+async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilters, formData: FormData) {
+  const subject = (formData.get("subject") as string)?.trim();
+  const bodyHtml = (formData.get("bodyHtml") as string)?.trim();
+  if (!subject || !bodyHtml) throw new Error("Subject and body are required for single-email campaigns");
+
+  if (id) {
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
+    if (campaign?.status !== "draft") throw new Error("Can only edit draft campaigns");
+
+    await prisma.campaign.update({ where: { id }, data: { ...filters, subject, bodyHtml, isMultiStep: false } });
+    revalidatePath("/admin/campaigns");
+    revalidatePath(`/admin/campaigns/${id}`);
+    redirect(`/admin/campaigns/${id}`);
+  }
+
+  const campaign = await prisma.campaign.create({
+    data: { ...filters, subject, bodyHtml, isMultiStep: false, status: "draft" },
+  });
+  revalidatePath("/admin/campaigns");
+  redirect(`/admin/campaigns/${campaign.id}`);
+}
+
 export async function saveCampaignAction(formData: FormData) {
   await requireRole("super_admin", "marketing");
 
   const id = formData.get("id") as string | null;
   const name = (formData.get("name") as string)?.trim();
-  const isMultiStep = formData.get("isMultiStep") === "true";
+  if (!name) throw new Error("Campaign name is required");
+
   const filterSource = (formData.get("filterSource") as string) || undefined;
   const filterTagsStr = (formData.get("filterTags") as string)?.trim();
-  const filterTags = filterTagsStr
-    ? filterTagsStr.split(",").map((t) => t.trim()).filter(Boolean)
-    : undefined;
+  const filterTags = filterTagsStr ? filterTagsStr.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
+  const filters: CampaignFilters = { name, filterSource, filterTags };
 
-  if (!name) {
-    throw new Error("Campaign name is required");
-  }
-
-  if (isMultiStep) {
-    // Multi-step: emails come as JSON array
-    const emailsJson = formData.get("emails") as string;
-    const emails: Array<{
-      id?: string;
-      step: number;
-      dayOffset: number;
-      subject: string;
-      previewText?: string;
-      bodyHtml: string;
-      ctaText?: string;
-      ctaUrl?: string;
-    }> = emailsJson ? JSON.parse(emailsJson) : [];
-
-    if (emails.length === 0) {
-      throw new Error("Multi-step campaigns must have at least one email step");
-    }
-
-    if (id) {
-      const campaign = await prisma.campaign.findUnique({ where: { id } });
-      if (campaign?.status !== "draft") {
-        throw new Error("Can only edit draft campaigns");
-      }
-
-      await prisma.campaign.update({
-        where: { id },
-        data: { name, isMultiStep: true, filterSource, filterTags },
-      });
-
-      // Delete existing emails and recreate
-      await prisma.campaignEmail.deleteMany({ where: { campaignId: id } });
-      await prisma.campaignEmail.createMany({
-        data: emails.map((e, i) => ({
-          campaignId: id,
-          step: i,
-          dayOffset: e.dayOffset,
-          subject: e.subject.trim(),
-          previewText: e.previewText?.trim() || null,
-          bodyHtml: e.bodyHtml.trim(),
-          ctaText: e.ctaText?.trim() || null,
-          ctaUrl: e.ctaUrl?.trim() || null,
-        })),
-      });
-
-      revalidatePath("/admin/campaigns");
-      revalidatePath(`/admin/campaigns/${id}`);
-      redirect(`/admin/campaigns/${id}`);
-    } else {
-      const campaign = await prisma.campaign.create({
-        data: {
-          name,
-          isMultiStep: true,
-          status: "draft",
-          filterSource,
-          filterTags,
-          emails: {
-            create: emails.map((e, i) => ({
-              step: i,
-              dayOffset: e.dayOffset,
-              subject: e.subject.trim(),
-              previewText: e.previewText?.trim() || null,
-              bodyHtml: e.bodyHtml.trim(),
-              ctaText: e.ctaText?.trim() || null,
-              ctaUrl: e.ctaUrl?.trim() || null,
-            })),
-          },
-        },
-      });
-
-      revalidatePath("/admin/campaigns");
-      redirect(`/admin/campaigns/${campaign.id}`);
-    }
+  if (formData.get("isMultiStep") === "true") {
+    await saveMultiStepCampaign(id, filters, formData);
   } else {
-    // Single-email (legacy) campaign
-    const subject = (formData.get("subject") as string)?.trim();
-    const bodyHtml = (formData.get("bodyHtml") as string)?.trim();
-
-    if (!subject || !bodyHtml) {
-      throw new Error("Subject and body are required for single-email campaigns");
-    }
-
-    if (id) {
-      const campaign = await prisma.campaign.findUnique({ where: { id } });
-      if (campaign?.status !== "draft") {
-        throw new Error("Can only edit draft campaigns");
-      }
-
-      await prisma.campaign.update({
-        where: { id },
-        data: { name, subject, bodyHtml, isMultiStep: false, filterSource, filterTags },
-      });
-
-      revalidatePath("/admin/campaigns");
-      revalidatePath(`/admin/campaigns/${id}`);
-      redirect(`/admin/campaigns/${id}`);
-    } else {
-      const campaign = await prisma.campaign.create({
-        data: { name, subject, bodyHtml, isMultiStep: false, status: "draft", filterSource, filterTags },
-      });
-
-      revalidatePath("/admin/campaigns");
-      redirect(`/admin/campaigns/${campaign.id}`);
-    }
+    await saveSingleEmailCampaign(id, filters, formData);
   }
 }
 

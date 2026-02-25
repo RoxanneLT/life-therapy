@@ -155,98 +155,67 @@ export async function sendGiftEmail(giftId: string) {
   }
 }
 
-/**
- * Redeem a gift: create student if needed, enroll in course/bundle or add credits.
- */
-export async function redeemGift(
-  token: string,
-  recipientInfo?: {
-    firstName: string;
-    lastName: string;
-    password: string;
-  }
-) {
-  const gift = await prisma.gift.findUnique({
-    where: { redeemToken: token },
-    include: {
-      course: { select: { id: true, title: true } },
-      hybridPackage: {
-        select: { id: true, title: true, credits: true },
-      },
-      module: { select: { id: true, courseId: true, standalonePrice: true } },
-    },
-  });
+/** Resolve or create the recipient student for a gift */
+async function resolveGiftRecipient(
+  gift: { recipientId: string | null; recipientEmail: string },
+  recipientInfo?: { firstName: string; lastName: string; password: string },
+): Promise<{ studentId: string } | { error: string }> {
+  if (gift.recipientId) return { studentId: gift.recipientId };
+  if (!recipientInfo) return { error: "Account information required" };
 
-  if (!gift) return { error: "Gift not found" };
-  if (gift.status === "redeemed") return { error: "This gift has already been redeemed" };
-  if (gift.status === "cancelled") return { error: "This gift has been cancelled" };
+  const result = await findOrCreateStudent(
+    gift.recipientEmail,
+    recipientInfo.firstName,
+    recipientInfo.lastName,
+  );
 
-  // Find or create the recipient student
-  let studentId: string;
-  if (gift.recipientId) {
-    // Already linked to a student
-    studentId = gift.recipientId;
-  } else if (recipientInfo) {
-    // Create new student
-    const result = await findOrCreateStudent(
-      gift.recipientEmail,
-      recipientInfo.firstName,
-      recipientInfo.lastName
-    );
-    studentId = result.id;
-
-    // If existing student, no need to set password
-    // If new student, the password was set during findOrCreateStudent
-    // Actually, findOrCreateStudent creates with a temp password.
-    // We need to update their password if they provided one.
-    if (result.isNew && recipientInfo.password) {
-      const { supabaseAdmin } = await import("@/lib/supabase-admin");
-      const student = await prisma.student.findUnique({
-        where: { id: studentId },
-        select: { supabaseUserId: true },
+  if (result.isNew && recipientInfo.password) {
+    const { supabaseAdmin } = await import("@/lib/supabase-admin");
+    const student = await prisma.student.findUnique({
+      where: { id: result.id },
+      select: { supabaseUserId: true },
+    });
+    if (student?.supabaseUserId) {
+      await supabaseAdmin.auth.admin.updateUserById(
+        student.supabaseUserId,
+        { password: recipientInfo.password },
+      );
+      await prisma.student.update({
+        where: { id: result.id },
+        data: { mustChangePassword: false },
       });
-      if (student) {
-        await supabaseAdmin.auth.admin.updateUserById(
-          student.supabaseUserId,
-          { password: recipientInfo.password }
-        );
-        await prisma.student.update({
-          where: { id: studentId },
-          data: { mustChangePassword: false },
-        });
-      }
     }
-  } else {
-    return { error: "Account information required" };
   }
 
-  // Enroll in course(s) or add credits
+  return { studentId: result.id };
+}
+
+/** Grant all entitlements for a redeemed gift (courses, modules, products, credits, package selections) */
+async function grantGiftEntitlements(
+  giftId: string,
+  studentId: string,
+  gift: {
+    courseId: string | null;
+    moduleId: string | null;
+    digitalProductId: string | null;
+    hybridPackageId: string | null;
+    creditAmount: number | null;
+    recipientName: string;
+    packageSelections: unknown;
+    module: { id: string; courseId: string; standalonePrice: number | null } | null;
+  },
+) {
   if (gift.courseId) {
     await prisma.enrollment.upsert({
-      where: {
-        studentId_courseId: {
-          studentId,
-          courseId: gift.courseId,
-        },
-      },
-      create: {
-        studentId,
-        courseId: gift.courseId,
-        source: "gift",
-        giftId: gift.id,
-      },
+      where: { studentId_courseId: { studentId, courseId: gift.courseId } },
+      create: { studentId, courseId: gift.courseId, source: "gift", giftId },
       update: {},
     });
   }
 
   if (gift.moduleId && gift.module) {
     await prisma.moduleAccess.upsert({
-      where: {
-        studentId_moduleId: {
-          studentId,
-          moduleId: gift.moduleId,
-        },
-      },
+      where: { studentId_moduleId: { studentId, moduleId: gift.moduleId } },
       create: {
         studentId,
         moduleId: gift.moduleId,
@@ -260,62 +229,27 @@ export async function redeemGift(
 
   if (gift.digitalProductId) {
     await prisma.digitalProductAccess.upsert({
-      where: {
-        studentId_digitalProductId: {
-          studentId,
-          digitalProductId: gift.digitalProductId,
-        },
-      },
-      create: {
-        studentId,
-        digitalProductId: gift.digitalProductId,
-        source: "gift",
-      },
+      where: { studentId_digitalProductId: { studentId, digitalProductId: gift.digitalProductId } },
+      create: { studentId, digitalProductId: gift.digitalProductId, source: "gift" },
       update: {},
     });
   }
 
-  if (gift.hybridPackageId && gift.hybridPackage) {
-    // Pick-your-own package: use selections stored on gift
-    const selections = gift.packageSelections as {
-      courseIds?: string[];
-      digitalProductIds?: string[];
-    } | null;
-
-    if (selections?.courseIds) {
-      for (const courseId of selections.courseIds) {
-        await prisma.enrollment.upsert({
-          where: {
-            studentId_courseId: { studentId, courseId },
-          },
-          create: {
-            studentId,
-            courseId,
-            source: "gift",
-            giftId: gift.id,
-          },
-          update: {},
-        });
-      }
+  if (gift.hybridPackageId) {
+    const selections = gift.packageSelections as { courseIds?: string[]; digitalProductIds?: string[] } | null;
+    for (const courseId of selections?.courseIds || []) {
+      await prisma.enrollment.upsert({
+        where: { studentId_courseId: { studentId, courseId } },
+        create: { studentId, courseId, source: "gift", giftId },
+        update: {},
+      });
     }
-
-    if (selections?.digitalProductIds) {
-      for (const dpId of selections.digitalProductIds) {
-        await prisma.digitalProductAccess.upsert({
-          where: {
-            studentId_digitalProductId: {
-              studentId,
-              digitalProductId: dpId,
-            },
-          },
-          create: {
-            studentId,
-            digitalProductId: dpId,
-            source: "gift",
-          },
-          update: {},
-        });
-      }
+    for (const dpId of selections?.digitalProductIds || []) {
+      await prisma.digitalProductAccess.upsert({
+        where: { studentId_digitalProductId: { studentId, digitalProductId: dpId } },
+        create: { studentId, digitalProductId: dpId, source: "gift" },
+        update: {},
+      });
     }
   }
 
@@ -325,7 +259,6 @@ export async function redeemGift(
       create: { studentId, balance: gift.creditAmount },
       update: { balance: { increment: gift.creditAmount } },
     });
-
     await prisma.sessionCreditTransaction.create({
       data: {
         studentId,
@@ -336,15 +269,38 @@ export async function redeemGift(
       },
     });
   }
+}
 
-  // Mark gift as redeemed
+/**
+ * Redeem a gift: create student if needed, enroll in course/bundle or add credits.
+ */
+export async function redeemGift(
+  token: string,
+  recipientInfo?: { firstName: string; lastName: string; password: string },
+) {
+  const gift = await prisma.gift.findUnique({
+    where: { redeemToken: token },
+    include: {
+      course: { select: { id: true, title: true } },
+      hybridPackage: { select: { id: true, title: true, credits: true } },
+      module: { select: { id: true, courseId: true, standalonePrice: true } },
+    },
+  });
+
+  if (!gift) return { error: "Gift not found" };
+  if (gift.status === "redeemed") return { error: "This gift has already been redeemed" };
+  if (gift.status === "cancelled") return { error: "This gift has been cancelled" };
+
+  const recipientResult = await resolveGiftRecipient(gift, recipientInfo);
+  if ("error" in recipientResult) return recipientResult;
+
+  const { studentId } = recipientResult;
+
+  await grantGiftEntitlements(gift.id, studentId, gift);
+
   await prisma.gift.update({
     where: { id: gift.id },
-    data: {
-      status: "redeemed",
-      recipientId: studentId,
-      redeemedAt: new Date(),
-    },
+    data: { status: "redeemed", recipientId: studentId, redeemedAt: new Date() },
   });
 
   return { success: true };

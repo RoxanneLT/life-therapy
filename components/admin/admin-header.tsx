@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { createBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,13 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Close mobile sheet on navigation
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [pathname]);
 
   async function handleSignOut() {
     const supabase = createBrowserClient();
@@ -44,7 +52,7 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
       {/* Mobile menu */}
-      <Sheet>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="lg:hidden">
             <Menu className="h-5 w-5" />

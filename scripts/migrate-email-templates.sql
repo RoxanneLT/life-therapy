@@ -306,3 +306,27 @@ VALUES (
   true, now(), now()
 )
 ON CONFLICT (key) DO NOTHING;
+
+-- Legal Document Updated
+INSERT INTO public.email_templates (id, key, name, category, subject, "bodyHtml", variables, "isActive", "createdAt", "updatedAt")
+VALUES (
+  'et_legal_document_updated',
+  'legal_document_updated',
+  'Legal Document Updated',
+  'legal',
+  'Updated {{documentTitle}} — Please Review',
+  '<p>Hi {{firstName}},</p>
+<p>We''ve updated our <strong>{{documentTitle}}</strong>. Here''s a summary of what changed:</p>
+<div style="background: #f9fafb; border-left: 4px solid #8BA889; border-radius: 4px; padding: 16px; margin: 16px 0;">
+  <p style="margin: 0; color: #555; font-style: italic;">&ldquo;{{changeSummary}}&rdquo;</p>
+</div>
+<p>Please log in to your portal to review and accept the updated agreement:</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{portalUrl}}/review-documents" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Review Now</a>
+</div>
+<p style="color: #dc2626; font-weight: 600;">This is required to continue booking sessions.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>',
+  '["firstName", "documentTitle", "changeSummary", "portalUrl"]'::jsonb,
+  true, now(), now()
+)
+ON CONFLICT (key) DO NOTHING;

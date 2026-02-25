@@ -129,61 +129,28 @@ export async function getAvailableSlots(
     select: { startTime: true, endTime: true },
   });
 
-  // 6. Filter out unavailable slots
-  const nowMs = Date.now();
-  const minNoticeMs =
-    (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
+  // 6. Build blocked time ranges (Exchange busy times + DB bookings, with buffer)
+  const blockedRanges = [
+    ...busyTimes.map((busy) => {
+      const start = parseTime(isoToTimeString(busy.start));
+      const end = parseTime(isoToTimeString(busy.end));
+      return { start: formatTime(Math.max(0, start - buffer)), end: formatTime(end + buffer) };
+    }),
+    ...existingBookings.map((b) => ({
+      start: formatTime(Math.max(0, parseTime(b.startTime) - buffer)),
+      end: formatTime(parseTime(b.endTime) + buffer),
+    })),
+  ];
 
-  const available = candidates.filter((slot) => {
-    // Minimum notice — convert SAST slot time to UTC ms for comparison
+  // 7. Filter out unavailable slots
+  const nowMs = Date.now();
+  const minNoticeMs = (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
+
+  return candidates.filter((slot) => {
     const slotUtc = fromZonedTime(`${dateStr}T${slot.start}:00`, TIMEZONE);
     if (slotUtc.getTime() - nowMs < minNoticeMs) return false;
-
-    // Check Exchange busy times
-    for (const busy of busyTimes) {
-      const busyStart = isoToTimeString(busy.start);
-      const busyEnd = isoToTimeString(busy.end);
-      // Include buffer around busy times
-      const busyStartWithBuffer = formatTime(
-        Math.max(0, parseTime(busyStart) - buffer)
-      );
-      const busyEndWithBuffer = formatTime(parseTime(busyEnd) + buffer);
-      if (
-        timeRangesOverlap(
-          slot.start,
-          slot.end,
-          busyStartWithBuffer,
-          busyEndWithBuffer
-        )
-      ) {
-        return false;
-      }
-    }
-
-    // Check existing bookings (with buffer)
-    for (const booking of existingBookings) {
-      const bookingStartWithBuffer = formatTime(
-        Math.max(0, parseTime(booking.startTime) - buffer)
-      );
-      const bookingEndWithBuffer = formatTime(
-        parseTime(booking.endTime) + buffer
-      );
-      if (
-        timeRangesOverlap(
-          slot.start,
-          slot.end,
-          bookingStartWithBuffer,
-          bookingEndWithBuffer
-        )
-      ) {
-        return false;
-      }
-    }
-
-    return true;
+    return !blockedRanges.some((r) => timeRangesOverlap(slot.start, slot.end, r.start, r.end));
   });
-
-  return available;
 }
 
 export async function getAvailableDates(): Promise<string[]> {

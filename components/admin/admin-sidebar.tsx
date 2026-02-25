@@ -8,20 +8,18 @@ import {
   FileText,
   GraduationCap,
   Quote,
-  Search,
   CalendarDays,
   Settings,
   Users,
   ShoppingCart,
   Gift,
   Tag,
-  UserCheck,
   Package,
   FileDown,
   Mail,
   Send,
-  Contact,
   Timer,
+  Scale,
 } from "lucide-react";
 import Image from "next/image";
 import type { AdminRole } from "@/lib/generated/prisma/client";
@@ -43,6 +41,8 @@ const navGroups: NavGroup[] = [
     label: "",
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "editor", "marketing"] },
+      { href: "/admin/clients", label: "Clients", icon: Users, roles: ["super_admin", "marketing"] },
+      { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, roles: ["super_admin", "editor"] },
     ],
   },
   {
@@ -51,13 +51,6 @@ const navGroups: NavGroup[] = [
       { href: "/admin/pages", label: "Pages", icon: FileText, roles: ["super_admin", "editor"] },
       { href: "/admin/courses", label: "Courses", icon: GraduationCap, roles: ["super_admin", "editor"] },
       { href: "/admin/testimonials", label: "Testimonials", icon: Quote, roles: ["super_admin", "editor", "marketing"] },
-      { href: "/admin/seo", label: "SEO", icon: Search, roles: ["super_admin", "editor"] },
-    ],
-  },
-  {
-    label: "Bookings",
-    items: [
-      { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, roles: ["super_admin", "editor"] },
     ],
   },
   {
@@ -73,7 +66,6 @@ const navGroups: NavGroup[] = [
   {
     label: "Communication",
     items: [
-      { href: "/admin/contacts", label: "Contacts", icon: Contact, roles: ["super_admin", "marketing"] },
       { href: "/admin/campaigns", label: "Campaigns", icon: Send, roles: ["super_admin", "marketing"] },
       { href: "/admin/drip-emails", label: "Drip Sequence", icon: Timer, roles: ["super_admin", "marketing"] },
       { href: "/admin/email-templates", label: "Email Templates", icon: Mail, roles: ["super_admin"] },
@@ -82,9 +74,8 @@ const navGroups: NavGroup[] = [
   {
     label: "Admin",
     items: [
-      { href: "/admin/students", label: "Students", icon: UserCheck, roles: ["super_admin"] },
-      { href: "/admin/users", label: "Users", icon: Users, roles: ["super_admin"] },
       { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
+      { href: "/admin/legal-documents", label: "Legal Documents", icon: Scale, roles: ["super_admin"] },
     ],
   },
 ];

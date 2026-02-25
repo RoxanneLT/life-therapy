@@ -25,10 +25,10 @@ function replacePlaceholders(
 }
 
 interface DripCandidate {
-  contactId: string;
+  studentId: string;
   email: string;
-  firstName: string | null;
-  unsubscribeToken: string;
+  firstName: string;
+  unsubscribeToken: string | null;
   daysSinceSignup: number;
   currentPhase: "onboarding" | "newsletter";
   currentStep: number;
@@ -45,7 +45,7 @@ interface DripResult {
 }
 
 /**
- * Process drip emails for all eligible contacts.
+ * Process drip emails for all eligible clients.
  * Called daily by the cron job.
  */
 export async function processDripEmails(): Promise<DripResult> {
@@ -54,8 +54,8 @@ export async function processDripEmails(): Promise<DripResult> {
   // Get dynamic phase counts from DB
   const phaseCounts = await getDripPhaseCounts();
 
-  // Get all eligible contacts with their drip progress
-  const contacts = await prisma.contact.findMany({
+  // Get all eligible clients with their drip progress
+  const students = await prisma.student.findMany({
     where: {
       consentGiven: true,
       emailOptOut: false,
@@ -71,23 +71,23 @@ export async function processDripEmails(): Promise<DripResult> {
   const candidates: DripCandidate[] = [];
   const now = new Date();
 
-  for (const contact of contacts) {
+  for (const student of students) {
     const daysSinceSignup = Math.floor(
-      (now.getTime() - contact.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+      (now.getTime() - student.createdAt.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    const progress = contact.dripProgress;
+    const progress = student.dripProgress;
 
-    // Skip completed contacts
+    // Skip completed clients
     if (progress?.completedAt) continue;
-    // Skip paused contacts
+    // Skip paused clients
     if (progress?.isPaused) continue;
 
     candidates.push({
-      contactId: contact.id,
-      email: contact.email,
-      firstName: contact.firstName,
-      unsubscribeToken: contact.unsubscribeToken,
+      studentId: student.id,
+      email: student.email,
+      firstName: student.firstName,
+      unsubscribeToken: student.unsubscribeToken,
       daysSinceSignup,
       currentPhase: (progress?.currentPhase as "onboarding" | "newsletter") || "onboarding",
       currentStep: progress?.currentStep ?? 0,
@@ -102,7 +102,7 @@ export async function processDripEmails(): Promise<DripResult> {
     const batch = candidates.slice(i, i + BATCH_SIZE);
 
     const results = await Promise.allSettled(
-      batch.map((candidate) => processSingleContact(candidate, phaseCounts))
+      batch.map((candidate) => processSingleClient(candidate, phaseCounts))
     );
 
     for (const res of results) {
@@ -125,7 +125,7 @@ export async function processDripEmails(): Promise<DripResult> {
   return result;
 }
 
-async function processSingleContact(
+async function processSingleClient(
   candidate: DripCandidate,
   phaseCounts: { onboarding: number; newsletter: number }
 ): Promise<"sent" | "skipped" | "failed"> {
@@ -160,11 +160,11 @@ async function processSingleContact(
     return "skipped";
   }
 
-  // Auto-pause cold contacts: check last 5 tracked emails
-  const isCold = await checkContactEngagement(candidate.contactId);
+  // Auto-pause cold clients: check last 5 tracked emails
+  const isCold = await checkClientEngagement(candidate.studentId);
   if (isCold) {
-    await prisma.contact.update({
-      where: { id: candidate.contactId },
+    await prisma.student.update({
+      where: { id: candidate.studentId },
       data: {
         emailPaused: true,
         emailPausedAt: new Date(),
@@ -175,10 +175,12 @@ async function processSingleContact(
   }
 
   // Build and send the email
-  const unsubscribeUrl = `${DEFAULT_BASE_URL}/api/unsubscribe?token=${candidate.unsubscribeToken}`;
+  const unsubscribeUrl = candidate.unsubscribeToken
+    ? `${DEFAULT_BASE_URL}/api/unsubscribe?token=${candidate.unsubscribeToken}`
+    : undefined;
   const variables: Record<string, string> = {
     firstName: candidate.firstName || "there",
-    unsubscribeUrl,
+    unsubscribeUrl: unsubscribeUrl || "",
   };
 
   let bodyHtml = replacePlaceholders(dripEmail.bodyHtml, variables);
@@ -200,7 +202,7 @@ async function processSingleContact(
     html,
     templateKey,
     metadata: {
-      contactId: candidate.contactId,
+      studentId: candidate.studentId,
       dripEmailId: dripEmail.id,
       dripPhase: currentPhase,
       dripStep: currentStep,
@@ -217,15 +219,15 @@ async function processSingleContact(
 }
 
 /**
- * Check if a contact is "cold" — 5 consecutive tracked emails with no opens.
- * Returns true if the contact should be auto-paused.
+ * Check if a client is "cold" — 5 consecutive tracked emails with no opens.
+ * Returns true if the client should be auto-paused.
  */
-async function checkContactEngagement(contactId: string): Promise<boolean> {
+async function checkClientEngagement(studentId: string): Promise<boolean> {
   const recentEmails = await prisma.emailLog.findMany({
     where: {
+      studentId,
       status: "sent",
       trackingId: { not: null },
-      metadata: { path: ["contactId"], equals: contactId },
     },
     orderBy: { sentAt: "desc" },
     take: 5,
@@ -243,7 +245,7 @@ async function advanceProgress(
   candidate: DripCandidate,
   phaseCounts: { onboarding: number; newsletter: number }
 ): Promise<void> {
-  const { currentPhase, currentStep, contactId, progressId } = candidate;
+  const { currentPhase, currentStep, studentId, progressId } = candidate;
 
   let nextPhase: "onboarding" | "newsletter" = currentPhase;
   let nextStep = currentStep + 1;
@@ -274,7 +276,7 @@ async function advanceProgress(
     // Create new progress record (first email sent)
     await prisma.dripProgress.create({
       data: {
-        contactId,
+        studentId,
         currentPhase: nextPhase,
         currentStep: nextStep,
         lastSentAt: new Date(),

@@ -10,6 +10,25 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/admin/students",
+        destination: "/admin/clients",
+        permanent: true,
+      },
+      {
+        source: "/admin/students/:id",
+        destination: "/admin/clients/:id",
+        permanent: true,
+      },
+      {
+        source: "/admin/contacts",
+        destination: "/admin/clients",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

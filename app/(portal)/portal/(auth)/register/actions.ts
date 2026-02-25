@@ -8,7 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
-import { upsertContact } from "@/lib/contacts";
+
 
 export async function registerStudent(formData: FormData) {
   const headersList = await headers();
@@ -54,26 +54,37 @@ export async function registerStudent(formData: FormData) {
     return { error: authError.message };
   }
 
-  // Create Student record
-  const student = await prisma.student.create({
-    data: {
-      supabaseUserId: authData.user.id,
-      email,
-      firstName,
-      lastName,
-    },
-  });
+  // Create or link Student record (may already exist from newsletter/booking)
+  const existingStudent = await prisma.student.findUnique({ where: { email } });
 
-  // Sync to Contact list (non-blocking)
-  upsertContact({
-    email,
-    firstName,
-    lastName,
-    source: "student",
-    consentGiven: true,
-    consentMethod: "registration",
-    studentId: student.id,
-  }).catch((err) => console.error("Failed to sync contact:", err));
+  if (existingStudent) {
+    // Link existing record to auth account
+    await prisma.student.update({
+      where: { id: existingStudent.id },
+      data: {
+        supabaseUserId: authData.user.id,
+        firstName,
+        lastName,
+        source: existingStudent.source === "newsletter" ? "website" : existingStudent.source,
+        consentGiven: true,
+        consentDate: new Date(),
+        consentMethod: "registration",
+      },
+    });
+  } else {
+    await prisma.student.create({
+      data: {
+        supabaseUserId: authData.user.id,
+        email,
+        firstName,
+        lastName,
+        source: "website",
+        consentGiven: true,
+        consentDate: new Date(),
+        consentMethod: "registration",
+      },
+    });
+  }
 
   // Send welcome email (non-blocking)
   const baseUrl = await getBaseUrl();

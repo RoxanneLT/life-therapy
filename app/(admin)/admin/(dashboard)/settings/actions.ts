@@ -19,9 +19,6 @@ export async function updateSettings(formData: FormData) {
     }
   }
 
-  // Parse smtpPort as number or null
-  const smtpPort = raw.smtpPort ? parseInt(raw.smtpPort as string, 10) : null;
-
   // Build data object, converting empty strings to null
   const toNullable = (val: FormDataEntryValue | undefined): string | null => {
     if (!val || val === "") return null;
@@ -46,15 +43,8 @@ export async function updateSettings(formData: FormData) {
     metaDescription: toNullable(raw.metaDescription),
     ogImageUrl: toNullable(raw.ogImageUrl),
     googleAnalyticsId: toNullable(raw.googleAnalyticsId),
-    smtpHost: toNullable(raw.smtpHost),
-    smtpPort: isNaN(smtpPort as number) ? null : smtpPort,
-    smtpUser: toNullable(raw.smtpUser),
-    smtpPass: toNullable(raw.smtpPass),
     smtpFromName: toNullable(raw.smtpFromName),
     smtpFromEmail: toNullable(raw.smtpFromEmail),
-    stripeSecretKey: toNullable(raw.stripeSecretKey),
-    stripePublishableKey: toNullable(raw.stripePublishableKey),
-    stripeWebhookSecret: toNullable(raw.stripeWebhookSecret),
     copyrightText: toNullable(raw.copyrightText),
     footerTagline: toNullable(raw.footerTagline),
     // Session Pricing (all currencies)

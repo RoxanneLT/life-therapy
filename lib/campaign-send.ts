@@ -93,7 +93,7 @@ export async function sendCampaign(campaignId: string): Promise<{
             subject,
             html,
             templateKey: "campaign_broadcast",
-            metadata: { campaignId, contactId: recipient.id },
+            metadata: { campaignId, studentId: recipient.id },
           });
         })
       );

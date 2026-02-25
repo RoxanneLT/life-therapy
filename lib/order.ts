@@ -23,6 +23,110 @@ export async function createOrderNumber(): Promise<string> {
   return `LT-${dateStr}-${seq}`;
 }
 
+/** Process a gift order item: look up cart details and create Gift record */
+async function processGiftItem(
+  item: { id: string; courseId: string | null; hybridPackageId: string | null; moduleId: string | null; digitalProductId: string | null; packageSelections: unknown; description: string },
+  orderId: string,
+  studentId: string,
+) {
+  const cartItem = await prisma.cartItem.findFirst({
+    where: {
+      courseId: item.courseId,
+      hybridPackageId: item.hybridPackageId,
+      moduleId: item.moduleId,
+      isGift: true,
+      cart: { studentId },
+    },
+  });
+
+  if (cartItem?.giftRecipientEmail) {
+    await createGiftFromOrderItem(orderId, studentId, item, {
+      recipientName: cartItem.giftRecipientName || "Friend",
+      recipientEmail: cartItem.giftRecipientEmail,
+      message: cartItem.giftMessage,
+      deliveryDate: cartItem.giftDeliveryDate,
+    });
+  }
+}
+
+/** Process a non-gift order item: enroll in courses, grant access, add credits */
+async function processOrderItem(
+  item: { courseId: string | null; moduleId: string | null; digitalProductId: string | null; hybridPackageId: string | null; packageSelections: unknown; totalCents: number; quantity: number },
+  orderId: string,
+  studentId: string,
+) {
+  if (item.courseId) {
+    await prisma.enrollment.upsert({
+      where: { studentId_courseId: { studentId, courseId: item.courseId } },
+      create: { studentId, courseId: item.courseId, source: "purchase", orderId },
+      update: {},
+    });
+  }
+
+  if (item.moduleId) {
+    const mod = await prisma.module.findUnique({ where: { id: item.moduleId }, select: { courseId: true } });
+    if (mod) {
+      await prisma.moduleAccess.upsert({
+        where: { studentId_moduleId: { studentId, moduleId: item.moduleId } },
+        create: { studentId, moduleId: item.moduleId, courseId: mod.courseId, orderId, pricePaid: item.totalCents, source: "purchase" },
+        update: {},
+      });
+    }
+  }
+
+  if (item.digitalProductId) {
+    await prisma.digitalProductAccess.upsert({
+      where: { studentId_digitalProductId: { studentId, digitalProductId: item.digitalProductId } },
+      create: { studentId, digitalProductId: item.digitalProductId, source: "purchase", orderId },
+      update: {},
+    });
+  }
+
+  if (item.hybridPackageId) {
+    await processPackageItem(item, orderId, studentId);
+  }
+}
+
+/** Process a hybrid package order item: selections + credits */
+async function processPackageItem(
+  item: { hybridPackageId: string | null; packageSelections: unknown; quantity: number },
+  orderId: string,
+  studentId: string,
+) {
+  const pkg = await prisma.hybridPackage.findUnique({ where: { id: item.hybridPackageId! } });
+  if (!pkg) return;
+
+  const selections = item.packageSelections as { courseIds?: string[]; digitalProductIds?: string[] } | null;
+
+  for (const courseId of selections?.courseIds || []) {
+    await prisma.enrollment.upsert({
+      where: { studentId_courseId: { studentId, courseId } },
+      create: { studentId, courseId, source: "purchase", orderId },
+      update: {},
+    });
+  }
+
+  for (const dpId of selections?.digitalProductIds || []) {
+    await prisma.digitalProductAccess.upsert({
+      where: { studentId_digitalProductId: { studentId, digitalProductId: dpId } },
+      create: { studentId, digitalProductId: dpId, source: "purchase", orderId },
+      update: {},
+    });
+  }
+
+  if (pkg.credits > 0) {
+    const creditAmount = pkg.credits * item.quantity;
+    const balance = await prisma.sessionCreditBalance.upsert({
+      where: { studentId },
+      create: { studentId, balance: creditAmount },
+      update: { balance: { increment: creditAmount } },
+    });
+    await prisma.sessionCreditTransaction.create({
+      data: { studentId, type: "purchase", amount: creditAmount, balanceAfter: balance.balance, description: `Purchased ${pkg.title}`, orderId },
+    });
+  }
+}
+
 /**
  * Process a completed checkout: create enrollments, add credits, handle gifts.
  * Must be idempotent — safe to call multiple times for the same order.
@@ -30,208 +134,25 @@ export async function createOrderNumber(): Promise<string> {
 export async function processCheckoutCompleted(orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: {
-      items: true,
-      student: true,
-    },
+    include: { items: true, student: true },
   });
 
   if (!order) throw new Error(`Order not found: ${orderId}`);
-  if (order.status === "paid") return order; // Already processed — idempotent
+  if (order.status === "paid") return order;
 
-  // Mark order as paid
   await prisma.order.update({
     where: { id: orderId },
     data: { status: "paid", paidAt: new Date() },
   });
 
-  // Process each item
   for (const item of order.items) {
     if (item.isGift) {
-      // Look up gift details from the original cart item
-      // Gift recipient info is stored on the OrderItem via the checkout flow
-      const cartItem = await prisma.cartItem.findFirst({
-        where: {
-          courseId: item.courseId,
-          hybridPackageId: item.hybridPackageId,
-          moduleId: item.moduleId,
-          isGift: true,
-          cart: { studentId: order.studentId },
-        },
-      });
-
-      // Create Gift record (uses cart item details or falls back to order info)
-      if (cartItem?.giftRecipientEmail) {
-        await createGiftFromOrderItem(
-          order.id,
-          order.studentId,
-          {
-            id: item.id,
-            courseId: item.courseId,
-            hybridPackageId: item.hybridPackageId,
-            moduleId: item.moduleId,
-            digitalProductId: item.digitalProductId,
-            packageSelections: item.packageSelections,
-            description: item.description,
-          },
-          {
-            recipientName: cartItem.giftRecipientName || "Friend",
-            recipientEmail: cartItem.giftRecipientEmail,
-            message: cartItem.giftMessage,
-            deliveryDate: cartItem.giftDeliveryDate,
-          }
-        );
-      }
-      continue;
-    }
-
-    if (item.courseId) {
-      // Enroll in single course (skip if already enrolled)
-      await prisma.enrollment.upsert({
-        where: {
-          studentId_courseId: {
-            studentId: order.studentId,
-            courseId: item.courseId,
-          },
-        },
-        create: {
-          studentId: order.studentId,
-          courseId: item.courseId,
-          source: "purchase",
-          orderId: order.id,
-        },
-        update: {}, // Already enrolled — no-op
-      });
-    }
-
-    if (item.moduleId) {
-      // Grant standalone module access
-      const mod = await prisma.module.findUnique({
-        where: { id: item.moduleId },
-        select: { courseId: true },
-      });
-      if (mod) {
-        await prisma.moduleAccess.upsert({
-          where: {
-            studentId_moduleId: {
-              studentId: order.studentId,
-              moduleId: item.moduleId,
-            },
-          },
-          create: {
-            studentId: order.studentId,
-            moduleId: item.moduleId,
-            courseId: mod.courseId,
-            orderId: order.id,
-            pricePaid: item.totalCents,
-            source: "purchase",
-          },
-          update: {}, // Already has access — no-op
-        });
-      }
-    }
-
-    if (item.digitalProductId) {
-      // Grant digital product access
-      await prisma.digitalProductAccess.upsert({
-        where: {
-          studentId_digitalProductId: {
-            studentId: order.studentId,
-            digitalProductId: item.digitalProductId,
-          },
-        },
-        create: {
-          studentId: order.studentId,
-          digitalProductId: item.digitalProductId,
-          source: "purchase",
-          orderId: order.id,
-        },
-        update: {},
-      });
-    }
-
-    if (item.hybridPackageId) {
-      // Pick-your-own package: enroll in selected courses/products + add credits
-      const pkg = await prisma.hybridPackage.findUnique({
-        where: { id: item.hybridPackageId },
-      });
-      if (pkg) {
-        const selections = item.packageSelections as {
-          courseIds?: string[];
-          digitalProductIds?: string[];
-        } | null;
-
-        // Enroll in selected courses
-        if (selections?.courseIds) {
-          for (const courseId of selections.courseIds) {
-            await prisma.enrollment.upsert({
-              where: {
-                studentId_courseId: {
-                  studentId: order.studentId,
-                  courseId,
-                },
-              },
-              create: {
-                studentId: order.studentId,
-                courseId,
-                source: "purchase",
-                orderId: order.id,
-              },
-              update: {},
-            });
-          }
-        }
-
-        // Grant access to selected digital products
-        if (selections?.digitalProductIds) {
-          for (const dpId of selections.digitalProductIds) {
-            await prisma.digitalProductAccess.upsert({
-              where: {
-                studentId_digitalProductId: {
-                  studentId: order.studentId,
-                  digitalProductId: dpId,
-                },
-              },
-              create: {
-                studentId: order.studentId,
-                digitalProductId: dpId,
-                source: "purchase",
-                orderId: order.id,
-              },
-              update: {},
-            });
-          }
-        }
-
-        // Add session credits if included
-        if (pkg.credits > 0) {
-          const balance = await prisma.sessionCreditBalance.upsert({
-            where: { studentId: order.studentId },
-            create: {
-              studentId: order.studentId,
-              balance: pkg.credits * item.quantity,
-            },
-            update: {
-              balance: { increment: pkg.credits * item.quantity },
-            },
-          });
-
-          await prisma.sessionCreditTransaction.create({
-            data: {
-              studentId: order.studentId,
-              type: "purchase",
-              amount: pkg.credits * item.quantity,
-              balanceAfter: balance.balance,
-              description: `Purchased ${pkg.title}`,
-              orderId: order.id,
-            },
-          });
-        }
-      }
+      await processGiftItem(item, order.id, order.studentId);
+    } else {
+      await processOrderItem(item, order.id, order.studentId);
     }
   }
 
-  // Increment coupon usage if applicable
   if (order.couponId) {
     await prisma.coupon.update({
       where: { id: order.couponId },
@@ -239,10 +160,7 @@ export async function processCheckoutCompleted(orderId: string) {
     });
   }
 
-  // Clear the student's cart
-  const cart = await prisma.cart.findUnique({
-    where: { studentId: order.studentId },
-  });
+  const cart = await prisma.cart.findUnique({ where: { studentId: order.studentId } });
   if (cart) {
     await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
   }

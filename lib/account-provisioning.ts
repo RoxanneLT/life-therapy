@@ -2,8 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
-import { upsertContact } from "@/lib/contacts";
-
 /**
  * Find an existing student by email or auto-create one.
  * Used for gift recipients who may not have an account yet.
@@ -48,17 +46,6 @@ export async function findOrCreateStudent(
       mustChangePassword: true,
     },
   });
-
-  // Sync to Contact list (non-blocking)
-  upsertContact({
-    email,
-    firstName,
-    lastName,
-    source: "student",
-    consentGiven: true,
-    consentMethod: "registration",
-    studentId: student.id,
-  }).catch((err) => console.error("Failed to sync contact:", err));
 
   // Send provisioned account email (non-blocking)
   renderEmail("account_provisioned", {

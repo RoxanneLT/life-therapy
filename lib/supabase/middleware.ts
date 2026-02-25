@@ -111,13 +111,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // ── Authenticated users visiting /login → send to /portal ─
-  // (Portal layout redirects admins to /admin based on DB role)
-  if (
-    user &&
-    (pathname === "/login" ||
-      pathname.startsWith("/portal/register"))
-  ) {
+  // ── Authenticated users visiting /login ─────────────────
+  // The login page handles auto-redirect client-side via /api/auth/role.
+  // We do NOT redirect here because we can't determine the user's DB role
+  // in Edge middleware (no Prisma). This prevents redirect loops when an
+  // admin user's portal lookup fails.
+
+  // Block authenticated users from /portal/register (already have account)
+  if (user && pathname.startsWith("/portal/register")) {
     const url = request.nextUrl.clone();
     url.pathname = "/portal";
     url.search = "";

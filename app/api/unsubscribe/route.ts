@@ -10,66 +10,27 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Try Student token first
   const student = await prisma.student.findUnique({
     where: { unsubscribeToken: token },
     select: { id: true, email: true, emailOptOut: true },
   });
 
-  if (student) {
-    if (student.emailOptOut) {
-      return new NextResponse(renderPage("Already Unsubscribed", "You have already been unsubscribed from marketing emails."), {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
-
-    await prisma.student.update({
-      where: { id: student.id },
-      data: { emailOptOut: true },
-    });
-
-    // Also sync linked Contact
-    await prisma.contact.updateMany({
-      where: { studentId: student.id },
-      data: { emailOptOut: true },
-    });
-
-    return new NextResponse(
-      renderPage("Unsubscribed", "You have been unsubscribed from marketing emails. You will still receive essential emails about your account, orders, and bookings."),
-      { headers: { "Content-Type": "text/html" } }
-    );
-  }
-
-  // Try Contact token
-  const contact = await prisma.contact.findUnique({
-    where: { unsubscribeToken: token },
-    select: { id: true, emailOptOut: true, studentId: true },
-  });
-
-  if (!contact) {
+  if (!student) {
     return new NextResponse(renderPage("Invalid Link", "This unsubscribe link is invalid or has expired."), {
       headers: { "Content-Type": "text/html" },
     });
   }
 
-  if (contact.emailOptOut) {
+  if (student.emailOptOut) {
     return new NextResponse(renderPage("Already Unsubscribed", "You have already been unsubscribed from marketing emails."), {
       headers: { "Content-Type": "text/html" },
     });
   }
 
-  await prisma.contact.update({
-    where: { id: contact.id },
+  await prisma.student.update({
+    where: { id: student.id },
     data: { emailOptOut: true },
   });
-
-  // Also sync linked Student
-  if (contact.studentId) {
-    await prisma.student.update({
-      where: { id: contact.studentId },
-      data: { emailOptOut: true },
-    });
-  }
 
   return new NextResponse(
     renderPage("Unsubscribed", "You have been unsubscribed from marketing emails. You will still receive essential emails about your account, orders, and bookings."),

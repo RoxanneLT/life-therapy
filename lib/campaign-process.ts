@@ -73,7 +73,7 @@ async function activateScheduledCampaigns(result: CampaignProcessResult) {
       await prisma.campaignProgress.createMany({
         data: recipients.map((r) => ({
           campaignId: campaign.id,
-          contactId: r.id,
+          studentId: r.id,
           currentStep: 0,
         })),
         skipDuplicates: true,
@@ -120,7 +120,7 @@ async function processActiveCampaigns(result: CampaignProcessResult) {
         isPaused: false,
       },
       include: {
-        contact: {
+        student: {
           select: {
             id: true,
             email: true,
@@ -136,7 +136,7 @@ async function processActiveCampaigns(result: CampaignProcessResult) {
 
     // Build candidate list for this campaign
     const candidates = progressRecords.filter(
-      (p) => p.contact.consentGiven && !p.contact.emailOptOut && !p.contact.emailPaused
+      (p) => p.student.consentGiven && !p.student.emailOptOut && !p.student.emailPaused
     );
 
     // Process in batches
@@ -204,12 +204,12 @@ type CampaignWithEmails = Awaited<ReturnType<typeof prisma.campaign.findMany>>[n
   emails: Awaited<ReturnType<typeof prisma.campaignEmail.findMany>>;
 };
 
-type ProgressWithContact = Awaited<ReturnType<typeof prisma.campaignProgress.findMany>>[number] & {
-  contact: {
+type ProgressWithStudent = Awaited<ReturnType<typeof prisma.campaignProgress.findMany>>[number] & {
+  student: {
     id: string;
     email: string;
-    firstName: string | null;
-    unsubscribeToken: string;
+    firstName: string;
+    unsubscribeToken: string | null;
     consentGiven: boolean;
     emailOptOut: boolean;
     emailPaused: boolean;
@@ -218,17 +218,17 @@ type ProgressWithContact = Awaited<ReturnType<typeof prisma.campaignProgress.fin
 
 async function processSingleCampaignContact(
   campaign: CampaignWithEmails,
-  progress: ProgressWithContact,
+  progress: ProgressWithStudent,
   totalSteps: number,
   daysSinceActivation: number,
 ): Promise<"sent" | "skipped" | "failed" | "auto_paused"> {
-  const { contact } = progress;
+  const { student } = progress;
 
   // Check engagement: auto-pause if last N emails all unopened
-  const isCold = await checkContactEngagement(contact.email);
+  const isCold = await checkContactEngagement(student.email);
   if (isCold) {
-    await prisma.contact.update({
-      where: { id: contact.id },
+    await prisma.student.update({
+      where: { id: student.id },
       data: {
         emailPaused: true,
         emailPausedAt: new Date(),
@@ -252,7 +252,7 @@ async function processSingleCampaignContact(
   // Idempotency: check EmailLog
   const templateKey = `campaign_${campaign.id}_${progress.currentStep}`;
   const alreadySent = await prisma.emailLog.findFirst({
-    where: { templateKey, to: contact.email },
+    where: { templateKey, to: student.email },
   });
 
   if (alreadySent) {
@@ -262,10 +262,12 @@ async function processSingleCampaignContact(
   }
 
   // Build and send
-  const unsubscribeUrl = `${DEFAULT_BASE_URL}/api/unsubscribe?token=${contact.unsubscribeToken}`;
+  const unsubscribeUrl = student.unsubscribeToken
+    ? `${DEFAULT_BASE_URL}/api/unsubscribe?token=${student.unsubscribeToken}`
+    : undefined;
   const variables: Record<string, string> = {
-    firstName: contact.firstName || "there",
-    unsubscribeUrl,
+    firstName: student.firstName || "there",
+    unsubscribeUrl: unsubscribeUrl || "",
   };
 
   let bodyHtml = replacePlaceholders(campaignEmail.bodyHtml, variables);
@@ -282,14 +284,14 @@ async function processSingleCampaignContact(
   const html = baseTemplate(subject, bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
 
   const emailResult = await sendEmail({
-    to: contact.email,
+    to: student.email,
     subject,
     html,
     templateKey,
     metadata: {
       campaignId: campaign.id,
       campaignEmailId: campaignEmail.id,
-      contactId: contact.id,
+      studentId: student.id,
       step: progress.currentStep,
     },
   });
@@ -303,7 +305,7 @@ async function processSingleCampaignContact(
 }
 
 async function advanceCampaignProgress(
-  progress: ProgressWithContact,
+  progress: ProgressWithStudent,
   totalSteps: number,
 ) {
   const nextStep = progress.currentStep + 1;

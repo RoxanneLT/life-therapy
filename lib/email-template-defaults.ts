@@ -9,6 +9,27 @@ interface TemplateDefault {
 }
 
 const defaults: Record<string, TemplateDefault> = {
+  portal_welcome: {
+    subject: "Your Life Therapy Portal is Ready",
+    bodyHtml: `<p>Hi {{firstName}},</p>
+<p>Your free consultation is confirmed for <strong>{{sessionDate}}</strong> at <strong>{{sessionTime}}</strong>.</p>
+<p>In the meantime, your personal portal is ready:</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{loginUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Login to Your Portal</a>
+</div>
+<div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0;">
+  <p style="margin: 4px 0;"><strong>Email:</strong> {{email}}</p>
+  <p style="margin: 4px 0;"><strong>Temporary password:</strong> <code style="background: #fff; padding: 2px 8px; border-radius: 4px; font-size: 15px;">{{tempPassword}}</code></p>
+</div>
+<p style="color: #dc2626; font-weight: 600;">You&rsquo;ll be asked to set your own password on first login.</p>
+<p>In your portal you can:</p>
+<ul style="color: #555; padding-left: 20px;">
+  <li>View your scheduled sessions</li>
+  <li>Update your personal details</li>
+</ul>
+<p>Looking forward to meeting you!</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Accredited Coach &amp; Counsellor</p>`,
+  },
   booking_confirmation: {
     subject: "Booking Confirmed: {{sessionType}} on {{date}}",
     bodyHtml: `<p>Hi {{clientName}},</p>
@@ -142,6 +163,24 @@ const defaults: Record<string, TemplateDefault> = {
 </div>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
+  client_welcome: {
+    subject: "Welcome to Life-Therapy — You're All Set!",
+    bodyHtml: `<p>Hi {{clientName}},</p>
+<p>Welcome! You are now an active client at Life-Therapy. We're looking forward to supporting you on your journey.</p>
+{{creditsInfo}}
+<p>From your portal you can:</p>
+<ul>
+  <li>Book and manage your sessions</li>
+  <li>View your session credits</li>
+  <li>Complete your personal assessment</li>
+  <li>Update your profile and preferences</li>
+</ul>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{portalUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Go to My Portal</a>
+</div>
+<p>If you have any questions, feel free to reply to this email.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
   course_completed: {
     subject: "Congratulations! You completed {{courseTitle}}",
     bodyHtml: `<p>Hi {{firstName}},</p>
@@ -188,6 +227,46 @@ const defaults: Record<string, TemplateDefault> = {
     bodyHtml: `<p>Hi {{firstName}},</p>
 <p>Your password has been successfully changed.</p>
 <p>If you did not make this change, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
+  booking_reschedule: {
+    subject: "Session Rescheduled: {{sessionType}} — New Date {{newDate}}",
+    bodyHtml: `<p>Hi {{clientName}},</p>
+<p>Your session has been rescheduled. Here are the updated details:</p>
+<div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+  <p style="margin: 4px 0; color: #6b7280; text-decoration: line-through;"><strong>Was:</strong> {{oldDate}} at {{oldTime}}</p>
+  <p style="margin: 8px 0 4px; font-size: 16px;"><strong>Now:</strong> {{newDate}} at {{newTime}}</p>
+  <p style="margin: 4px 0;"><strong>Session:</strong> {{sessionType}}</p>
+</div>
+{{teamsSection}}
+<p>If you have any questions, feel free to reply to this email.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
+  booking_recurring_series: {
+    subject: "Your Upcoming {{sessionType}} Sessions with Life-Therapy",
+    bodyHtml: `<p>Hi {{clientName}},</p>
+<p>Your {{pattern}} <strong>{{sessionType}}</strong> sessions have been scheduled. Here are your upcoming dates:</p>
+{{dateList}}
+{{skippedNote}}
+<p>Each session has a unique Microsoft Teams meeting link — you'll find it in your portal for each session.</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{portalUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">View My Sessions</a>
+</div>
+<p>If you need to reschedule any individual session, you can do so from your portal or contact me directly.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
+  legal_document_updated: {
+    subject: "Updated {{documentTitle}} — Please Review",
+    bodyHtml: `<p>Hi {{firstName}},</p>
+<p>We've updated our <strong>{{documentTitle}}</strong>. Here's a summary of what changed:</p>
+<div style="background: #f9fafb; border-left: 4px solid #8BA889; border-radius: 4px; padding: 16px; margin: 16px 0;">
+  <p style="margin: 0; color: #555; font-style: italic;">"{{changeSummary}}"</p>
+</div>
+<p>Please log in to your portal to review and accept the updated agreement:</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{portalUrl}}/review-documents" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Review Now</a>
+</div>
+<p style="color: #dc2626; font-weight: 600;">This is required to continue booking sessions.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
 };

@@ -189,6 +189,16 @@ export function PublicFooter({
                     Book a Session
                   </Link>
                 </li>
+                <li>
+                  <Link href="/terms" className="hover:text-foreground">
+                    Terms &amp; Conditions
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/privacy" className="hover:text-foreground">
+                    Privacy Policy
+                  </Link>
+                </li>
               </ul>
             </div>
 

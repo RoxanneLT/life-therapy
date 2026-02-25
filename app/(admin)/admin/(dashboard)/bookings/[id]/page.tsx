@@ -39,9 +39,11 @@ import {
   UserX,
   Video,
   ArrowLeft,
+  Repeat,
 } from "lucide-react";
 import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
+import { RescheduleDialog } from "./reschedule-dialog";
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -193,6 +195,32 @@ export default async function BookingDetailPage({ params }: Props) {
                 </div>
               </>
             )}
+            {booking.recurringSeriesId && (
+              <>
+                <Separator />
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Series</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                      <Repeat className="mr-1 h-3 w-3" />
+                      {booking.recurringPattern === "weekly"
+                        ? "Weekly"
+                        : booking.recurringPattern === "bimonthly"
+                          ? "Bi-monthly"
+                          : booking.recurringPattern === "monthly"
+                            ? "Monthly"
+                            : "Recurring"}
+                    </Badge>
+                    <Link
+                      href={`/admin/bookings?series=${booking.recurringSeriesId}`}
+                      className="text-xs text-brand-600 hover:underline"
+                    >
+                      View all in series
+                    </Link>
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -283,6 +311,12 @@ export default async function BookingDetailPage({ params }: Props) {
                   </Button>
                 </form>
               )}
+              <RescheduleDialog
+                bookingId={booking.id}
+                sessionType={booking.sessionType}
+                currentDate={format(new Date(booking.date), "d MMM yyyy")}
+                currentTime={`${booking.startTime} – ${booking.endTime}`}
+              />
               <form action={handleStatusChange}>
                 <input type="hidden" name="status" value="cancelled" />
                 <Button type="submit" variant="outline" size="sm">

@@ -73,3 +73,58 @@ export async function deductCredit(
 
   return updated.balance;
 }
+
+/**
+ * Refund one credit for a cancelled booking.
+ * Credits are deducted at booking time, so this adds 1 back.
+ */
+export async function refundCredit(
+  studentId: string,
+  bookingId: string,
+  description: string
+): Promise<number> {
+  const bal = await prisma.sessionCreditBalance.upsert({
+    where: { studentId },
+    create: { studentId, balance: 1 },
+    update: { balance: { increment: 1 } },
+  });
+
+  await prisma.sessionCreditTransaction.create({
+    data: {
+      studentId,
+      type: "refund",
+      amount: 1,
+      balanceAfter: bal.balance,
+      description,
+      bookingId,
+    },
+  });
+
+  return bal.balance;
+}
+
+/**
+ * Record a credit forfeit for a late-cancelled booking.
+ * Credits are deducted at booking time so the balance is already correct —
+ * this only creates an audit trail entry.
+ */
+export async function forfeitCredit(
+  studentId: string,
+  bookingId: string,
+  description: string
+): Promise<void> {
+  const bal = await prisma.sessionCreditBalance.findUnique({
+    where: { studentId },
+  });
+
+  await prisma.sessionCreditTransaction.create({
+    data: {
+      studentId,
+      type: "used",
+      amount: 0,
+      balanceAfter: bal?.balance ?? 0,
+      description,
+      bookingId,
+    },
+  });
+}

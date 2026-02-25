@@ -6,6 +6,14 @@ const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 
 // Sample data for each template (used in admin preview)
 const SAMPLE_DATA: Record<string, Record<string, string>> = {
+  portal_welcome: {
+    firstName: "Jane",
+    email: "jane@example.com",
+    tempPassword: "LT-Xk9mP2!",
+    loginUrl: "https://life-therapy.co.za/login",
+    sessionDate: "Tuesday, 11 March 2025",
+    sessionTime: "10:00 – 10:30 (SAST)",
+  },
   booking_confirmation: {
     clientName: "Jane Doe",
     sessionType: "Individual Therapy",
@@ -75,6 +83,12 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     tempPassword: "TempPass#2025",
     loginUrl: "https://life-therapy.co.za/portal/login",
   },
+  client_welcome: {
+    clientName: "Jane Doe",
+    portalUrl: "https://life-therapy.co.za/portal",
+    creditsInfo:
+      '<p style="margin: 8px 0;">You have <strong>5 session credits</strong> available.</p>',
+  },
   course_completed: {
     firstName: "Jane",
     courseTitle: "Understanding Self-Esteem",
@@ -97,10 +111,37 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
   password_changed: {
     firstName: "Jane",
   },
+  booking_reschedule: {
+    clientName: "Jane Doe",
+    sessionType: "Individual Therapy",
+    oldDate: "Monday, 10 March 2025",
+    oldTime: "10:00 – 11:00 (SAST)",
+    newDate: "Wednesday, 12 March 2025",
+    newTime: "14:00 – 15:00 (SAST)",
+    teamsSection:
+      '<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;"><p style="margin: 0 0 8px; font-weight: 600; color: #333;">Join your session:</p><a href="https://teams.microsoft.com/l/meetup-join/example" style="color: #8BA889; font-weight: 600; word-break: break-all;">https://teams.microsoft.com/l/meetup-join/example</a></div>',
+  },
+  booking_recurring_series: {
+    clientName: "Jane Doe",
+    sessionType: "Individual Therapy",
+    pattern: "weekly",
+    sessionCount: "24",
+    dateList:
+      '<ul style="padding-left: 20px; margin: 12px 0;"><li style="margin: 4px 0;">Monday, 10 March 2025 at 10:00 – 11:00 (SAST)</li><li style="margin: 4px 0;">Monday, 17 March 2025 at 10:00 – 11:00 (SAST)</li><li style="margin: 4px 0;">Monday, 24 March 2025 at 10:00 – 11:00 (SAST)</li></ul>',
+    skippedNote: "",
+    portalUrl: "https://life-therapy.co.za/portal/bookings",
+  },
+  legal_document_updated: {
+    firstName: "Jane",
+    documentTitle: "Terms & Conditions",
+    changeSummary: "Updated cancellation window from 24h to 48h",
+    portalUrl: "https://life-therapy.co.za/portal",
+  },
 };
 
 // Title mapping for baseTemplate wrapper
 const TEMPLATE_TITLES: Record<string, string> = {
+  portal_welcome: "Your Portal is Ready",
   booking_confirmation: "Your Session is Confirmed!",
   booking_notification: "New Booking Received",
   booking_reminder: "Session Reminder",
@@ -108,10 +149,14 @@ const TEMPLATE_TITLES: Record<string, string> = {
   order_confirmation: "Order Confirmation",
   account_created: "Welcome to Life-Therapy!",
   account_provisioned: "Your Account is Ready",
+  client_welcome: "Welcome to Life-Therapy!",
   course_completed: "Course Completed!",
   gift_received: "You've Received a Gift!",
   gift_delivered_buyer: "Gift Delivered!",
   password_changed: "Password Changed",
+  booking_reschedule: "Session Rescheduled",
+  booking_recurring_series: "Your Upcoming Sessions",
+  legal_document_updated: "Document Updated",
 };
 
 /**
@@ -210,6 +255,16 @@ function renderFallback(
   unsubscribeUrl?: string
 ): { subject: string; html: string } {
   switch (key) {
+    case "portal_welcome":
+      return fallback.portalWelcomeEmail({
+        firstName: variables.firstName || "",
+        email: variables.email || "",
+        tempPassword: variables.tempPassword || "",
+        loginUrl: variables.loginUrl || "",
+        sessionDate: variables.sessionDate || "",
+        sessionTime: variables.sessionTime || "",
+        baseUrl,
+      });
     case "booking_confirmation":
       return {
         subject: `Booking Confirmed: ${variables.sessionType || "Session"} on ${variables.date || ""}`,
@@ -256,6 +311,29 @@ function renderFallback(
         redeemUrl: variables.redeemUrl || "",
         baseUrl,
       });
+    case "client_welcome":
+      return {
+        subject: "Welcome to Life-Therapy — You're All Set!",
+        html: baseTemplate(
+          "Welcome to Life-Therapy!",
+          `<p>Hi ${variables.clientName || ""},</p>
+          <p>Welcome! You are now an active client at Life-Therapy. We're looking forward to supporting you on your journey.</p>
+          ${variables.creditsInfo || ""}
+          <p>From your portal you can:</p>
+          <ul>
+            <li>Book and manage your sessions</li>
+            <li>View your session credits</li>
+            <li>Complete your personal assessment</li>
+            <li>Update your profile and preferences</li>
+          </ul>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.portalUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Go to My Portal</a>
+          </div>
+          <p>If you have any questions, feel free to reply to this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
     case "password_changed":
       return {
         subject: "Your Life-Therapy password has been changed",
@@ -264,6 +342,65 @@ function renderFallback(
           `<p>Hi ${variables.firstName || ""},</p>
           <p>Your password has been successfully changed.</p>
           <p>If you did not make this change, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "booking_reschedule": {
+      const teamsSection = variables.teamsUrl
+        ? `<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;"><p style="margin: 0 0 8px; font-weight: 600; color: #333;">Join your session:</p><a href="${variables.teamsUrl}" style="color: #8BA889; font-weight: 600; word-break: break-all;">${variables.teamsUrl}</a></div>`
+        : "";
+      return {
+        subject: `Session Rescheduled: ${variables.sessionType || "Session"} — New Date ${variables.newDate || ""}`,
+        html: baseTemplate(
+          "Session Rescheduled",
+          `<p>Hi ${variables.clientName || ""},</p>
+          <p>Your session has been rescheduled. Here are the updated details:</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0; color: #6b7280; text-decoration: line-through;"><strong>Was:</strong> ${variables.oldDate || ""} at ${variables.oldTime || ""}</p>
+            <p style="margin: 8px 0 4px; font-size: 16px;"><strong>Now:</strong> ${variables.newDate || ""} at ${variables.newTime || ""}</p>
+            <p style="margin: 4px 0;"><strong>Session:</strong> ${variables.sessionType || ""}</p>
+          </div>
+          ${teamsSection}
+          <p>If you have any questions, feel free to reply to this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    }
+    case "booking_recurring_series":
+      return {
+        subject: `Your Upcoming ${variables.sessionType || "Sessions"} with Life-Therapy`,
+        html: baseTemplate(
+          "Your Upcoming Sessions",
+          `<p>Hi ${variables.clientName || ""},</p>
+          <p>Your ${variables.pattern || ""} <strong>${variables.sessionType || ""}</strong> sessions have been scheduled. Here are your upcoming dates:</p>
+          ${variables.dateList || ""}
+          ${variables.skippedNote || ""}
+          <p>Each session has a unique Microsoft Teams meeting link — you'll find it in your portal for each session.</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.portalUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">View My Sessions</a>
+          </div>
+          <p>If you need to reschedule any individual session, you can do so from your portal or contact me directly.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "legal_document_updated":
+      return {
+        subject: `Updated ${variables.documentTitle || "Document"} — Please Review`,
+        html: baseTemplate(
+          "Document Updated",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>We've updated our <strong>${variables.documentTitle || "document"}</strong>. Here's a summary of what changed:</p>
+          <div style="background: #f9fafb; border-left: 4px solid #8BA889; border-radius: 4px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0; color: #555; font-style: italic;">&ldquo;${variables.changeSummary || ""}&rdquo;</p>
+          </div>
+          <p>Please log in to your portal to review and accept the updated agreement:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.portalUrl || baseUrl}/review-documents" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Review Now</a>
+          </div>
+          <p style="color: #dc2626; font-weight: 600;">This is required to continue booking sessions.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
           baseUrl, unsubscribeUrl
         ),

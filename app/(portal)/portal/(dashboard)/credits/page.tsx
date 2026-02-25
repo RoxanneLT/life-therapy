@@ -4,7 +4,7 @@ import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Coins, ArrowUpRight, ArrowDownRight, CalendarDays } from "lucide-react";
+import { Coins, ArrowUpRight, ArrowDownRight, CalendarDays, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -67,6 +67,7 @@ export default async function CreditsPage() {
                 const isPositive = ["purchase", "admin_grant", "gift_received", "refund"].includes(
                   tx.type
                 );
+                const isForfeit = tx.description?.toLowerCase().includes("forfeit");
                 return (
                   <div
                     key={tx.id}
@@ -75,6 +76,8 @@ export default async function CreditsPage() {
                     <div className="flex items-center gap-3">
                       {isPositive ? (
                         <ArrowDownRight className="h-4 w-4 text-green-500" />
+                      ) : isForfeit ? (
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
                       ) : (
                         <ArrowUpRight className="h-4 w-4 text-red-500" />
                       )}
@@ -88,7 +91,11 @@ export default async function CreditsPage() {
                     <div className="text-right">
                       <p
                         className={`text-sm font-semibold ${
-                          isPositive ? "text-green-600" : "text-red-600"
+                          isPositive
+                            ? "text-green-600"
+                            : isForfeit
+                              ? "text-amber-600"
+                              : "text-red-600"
                         }`}
                       >
                         {isPositive ? "+" : "-"}

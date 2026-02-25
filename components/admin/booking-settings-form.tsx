@@ -12,18 +12,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { updateBookingSettings } from "@/app/(admin)/admin/(dashboard)/bookings/settings/actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 
 interface BookingSettingsFormProps {
   readonly initialSettings: SiteSetting;
+  readonly msGraphConfigured: boolean;
 }
 
 export function BookingSettingsForm({
   initialSettings,
+  msGraphConfigured,
 }: BookingSettingsFormProps) {
   const [saving, setSaving] = useState(false);
   const [enabled, setEnabled] = useState(initialSettings.bookingEnabled);
@@ -132,55 +133,27 @@ export function BookingSettingsForm({
         <CardHeader>
           <CardTitle>Microsoft 365 Integration</CardTitle>
           <CardDescription>
-            Connect to your Exchange calendar for real-time availability and
+            Exchange calendar integration for real-time availability and
             automatic Teams meeting links.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="msGraphTenantId">Tenant ID</Label>
-              <Input
-                id="msGraphTenantId"
-                name="msGraphTenantId"
-                defaultValue={initialSettings.msGraphTenantId || ""}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="msGraphClientId">Client ID</Label>
-              <Input
-                id="msGraphClientId"
-                name="msGraphClientId"
-                defaultValue={initialSettings.msGraphClientId || ""}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="msGraphClientSecret">Client Secret</Label>
-            <Input
-              id="msGraphClientSecret"
-              name="msGraphClientSecret"
-              type="password"
-              defaultValue={initialSettings.msGraphClientSecret || ""}
-              placeholder="Enter client secret"
-            />
-          </div>
-          <Separator />
-          <div className="space-y-2">
-            <Label htmlFor="msGraphUserEmail">Calendar Email</Label>
-            <Input
-              id="msGraphUserEmail"
-              name="msGraphUserEmail"
-              type="email"
-              defaultValue={initialSettings.msGraphUserEmail || ""}
-              placeholder="roxanne@yourdomain.co.za"
-            />
-            <p className="text-xs text-muted-foreground">
-              The Microsoft 365 email address whose calendar should be used for
-              availability.
-            </p>
+        <CardContent>
+          <div className="flex items-center gap-2">
+            {msGraphConfigured ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm text-green-700">
+                  MS Graph credentials configured via environment variables
+                </span>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <span className="text-sm text-amber-600">
+                  Not configured — set <code className="text-xs">MS_GRAPH_*</code> environment variables
+                </span>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

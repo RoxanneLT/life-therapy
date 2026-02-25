@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import { createBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,10 +20,18 @@ import { ThemeToggle } from "@/components/theme-toggle";
 interface PortalHeaderProps {
   readonly studentName?: string | null;
   readonly studentEmail?: string;
+  readonly upcomingSessionCount?: number;
 }
 
-export function PortalHeader({ studentName, studentEmail }: PortalHeaderProps) {
+export function PortalHeader({ studentName, studentEmail, upcomingSessionCount }: PortalHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Close mobile sheet on navigation
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [pathname]);
 
   async function handleSignOut() {
     const supabase = createBrowserClient();
@@ -41,14 +50,14 @@ export function PortalHeader({ studentName, studentEmail }: PortalHeaderProps) {
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
-      <Sheet>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="lg:hidden">
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
-          <PortalSidebar className="h-full" />
+          <PortalSidebar className="h-full" upcomingSessionCount={upcomingSessionCount} />
         </SheetContent>
       </Sheet>
 

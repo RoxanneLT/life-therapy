@@ -4,34 +4,40 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  GraduationCap,
-  Award,
-  Coins,
+  LayoutDashboard,
   CalendarDays,
-  FileDown,
+  GraduationCap,
+  ShoppingBag,
+  Coins,
+  UserCircle,
+  Bell,
+  FileCheck,
   Settings,
 } from "lucide-react";
 import Image from "next/image";
 
 const navItems = [
-  { href: "/portal", label: "My Courses", icon: GraduationCap },
-  { href: "/portal/certificates", label: "Certificates", icon: Award },
-  { href: "/portal/credits", label: "Session Credits", icon: Coins },
-  { href: "/portal/downloads", label: "My Downloads", icon: FileDown },
-  { href: "/portal/book", label: "Book a Session", icon: CalendarDays },
-  { href: "/portal/settings", label: "Settings", icon: Settings },
+  { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/portal/bookings", label: "My Sessions", icon: CalendarDays },
+  { href: "/portal/courses", label: "My Courses", icon: GraduationCap },
+  { href: "/portal/purchases", label: "My Purchases", icon: ShoppingBag },
+  { href: "/portal/credits", label: "Credits", icon: Coins },
+  { href: "/portal/profile", label: "Profile", icon: UserCircle },
+  { href: "/portal/preferences", label: "Preferences", icon: Bell },
+  { href: "/portal/commitment", label: "Agreements", icon: FileCheck },
+  { href: "/portal/settings", label: "Account Settings", icon: Settings },
 ];
 
 interface PortalSidebarProps {
   readonly className?: string;
+  readonly upcomingSessionCount?: number;
 }
 
-export function PortalSidebar({ className }: PortalSidebarProps) {
+export function PortalSidebar({ className, upcomingSessionCount }: PortalSidebarProps) {
   const pathname = usePathname();
 
   function isActive(href: string) {
-    if (href === "/portal")
-      return pathname === "/portal" || pathname.startsWith("/portal/courses");
+    if (href === "/portal") return pathname === "/portal";
     return pathname.startsWith(href);
   }
 
@@ -62,6 +68,13 @@ export function PortalSidebar({ className }: PortalSidebarProps) {
             >
               <item.icon className="h-4 w-4" />
               {item.label}
+              {item.href === "/portal/bookings" &&
+                upcomingSessionCount != null &&
+                upcomingSessionCount > 0 && (
+                  <span className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    {upcomingSessionCount}
+                  </span>
+                )}
             </Link>
           ))}
         </nav>

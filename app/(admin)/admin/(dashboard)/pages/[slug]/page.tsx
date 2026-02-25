@@ -6,10 +6,13 @@ import { PageEditor } from "./page-editor";
 
 interface Props {
   readonly params: Promise<{ readonly slug: string }>;
+  readonly searchParams: Promise<{ tab?: string }>;
 }
 
-export default async function PageEditorPage({ params }: Props) {
+export default async function PageEditorPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const { tab } = await searchParams;
+
   const page = await prisma.page.findUnique({
     where: { slug },
     include: {
@@ -21,7 +24,12 @@ export default async function PageEditorPage({ params }: Props) {
     notFound();
   }
 
-  // Serialize for client component (convert Dates, Decimals, etc.)
+  // Find SEO record for this page's route
+  const seoRoute = slug === "home" ? "/" : `/${slug}`;
+  const seo = await prisma.pageSeo.findUnique({
+    where: { route: seoRoute },
+  });
+
   const serializedPage = {
     id: page.id,
     title: page.title,
@@ -43,5 +51,22 @@ export default async function PageEditorPage({ params }: Props) {
     })),
   };
 
-  return <PageEditor initialPage={serializedPage} />;
+  const serializedSeo = seo
+    ? {
+        id: seo.id,
+        route: seo.route,
+        metaTitle: seo.metaTitle,
+        metaDescription: seo.metaDescription,
+        ogImageUrl: seo.ogImageUrl,
+        keywords: seo.keywords,
+      }
+    : null;
+
+  return (
+    <PageEditor
+      initialPage={serializedPage}
+      seo={serializedSeo}
+      activeTab={tab === "seo" ? "seo" : "content"}
+    />
+  );
 }

@@ -8,6 +8,8 @@ export default async function BookingSettingsPage() {
   await requireRole("super_admin");
   const settings = await getSiteSettings();
 
+  const msGraphConfigured = !!(process.env.MS_GRAPH_TENANT_ID && process.env.MS_GRAPH_CLIENT_SECRET);
+
   return (
     <div className="space-y-6">
       <div>
@@ -16,7 +18,7 @@ export default async function BookingSettingsPage() {
           Configure scheduling rules and Microsoft 365 calendar integration.
         </p>
       </div>
-      <BookingSettingsForm initialSettings={settings} />
+      <BookingSettingsForm initialSettings={settings} msGraphConfigured={msGraphConfigured} />
     </div>
   );
 }

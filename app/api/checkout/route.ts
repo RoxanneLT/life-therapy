@@ -7,6 +7,86 @@ import { prisma } from "@/lib/prisma";
 import { getCurrency, getBaseUrl } from "@/lib/get-region";
 import type { CartItemLocal } from "@/lib/cart-store";
 
+type ResolvedItem = Awaited<ReturnType<typeof resolveCartItems>>[number];
+
+/** Check if student already owns any non-gift items and return error message if so */
+async function checkDuplicatePurchases(
+  studentId: string,
+  resolved: ResolvedItem[],
+): Promise<string | null> {
+  const checks: { type: string; ids: string[]; lookup: () => Promise<string[]> }[] = [
+    {
+      type: "course",
+      ids: resolved.filter((r) => r.product.type === "course" && !r.isGift).map((r) => r.product.id),
+      lookup: async () => {
+        const rows = await prisma.enrollment.findMany({ where: { studentId, courseId: { in: checks[0].ids } }, select: { courseId: true } });
+        return rows.map((r) => r.courseId);
+      },
+    },
+    {
+      type: "module",
+      ids: resolved.filter((r) => r.product.type === "module" && !r.isGift).map((r) => r.product.id),
+      lookup: async () => {
+        const rows = await prisma.moduleAccess.findMany({ where: { studentId, moduleId: { in: checks[1].ids } }, select: { moduleId: true } });
+        return rows.map((r) => r.moduleId);
+      },
+    },
+    {
+      type: "digital_product",
+      ids: resolved.filter((r) => r.product.type === "digital_product" && !r.isGift).map((r) => r.product.id),
+      lookup: async () => {
+        const rows = await prisma.digitalProductAccess.findMany({ where: { studentId, digitalProductId: { in: checks[2].ids } }, select: { digitalProductId: true } });
+        return rows.map((r) => r.digitalProductId);
+      },
+    },
+  ];
+
+  for (const check of checks) {
+    if (check.ids.length === 0) continue;
+    const ownedIds = new Set(await check.lookup());
+    if (ownedIds.size > 0) {
+      const ownedTitles = resolved.filter((r) => ownedIds.has(r.product.id)).map((r) => r.product.title);
+      return `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.`;
+    }
+  }
+
+  return null;
+}
+
+/** Persist gift cart items to DB so the webhook can access recipient details */
+async function persistGiftCartItems(studentId: string, resolved: ResolvedItem[]) {
+  const giftItems = resolved.filter((r) => r.isGift);
+  if (giftItems.length === 0) return;
+
+  const cart = await prisma.cart.findUnique({ where: { studentId } })
+    ?? await prisma.cart.create({ data: { studentId } });
+
+  for (const r of giftItems) {
+    await prisma.cartItem.upsert({
+      where: { id: r.id },
+      create: {
+        cartId: cart.id,
+        courseId: r.product.type === "course" ? r.product.id : null,
+        hybridPackageId: r.product.type === "package" ? r.product.id : null,
+        moduleId: r.product.type === "module" ? r.product.id : null,
+        digitalProductId: r.product.type === "digital_product" ? r.product.id : null,
+        packageSelections: r.packageSelections || undefined,
+        isGift: true,
+        giftRecipientName: r.giftRecipientName || null,
+        giftRecipientEmail: r.giftRecipientEmail || null,
+        giftMessage: r.giftMessage || null,
+        giftDeliveryDate: r.giftDeliveryDate ? new Date(r.giftDeliveryDate) : null,
+      },
+      update: {
+        giftRecipientName: r.giftRecipientName || null,
+        giftRecipientEmail: r.giftRecipientEmail || null,
+        giftMessage: r.giftMessage || null,
+        giftDeliveryDate: r.giftDeliveryDate ? new Date(r.giftDeliveryDate) : null,
+      },
+    });
+  }
+}
+
 /**
  * POST /api/checkout
  * Creates a Stripe Checkout Session for the student's cart.
@@ -27,113 +107,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
-    // Resolve cart items to real products with server-verified prices
     const currency = await getCurrency();
     const resolved = await resolveCartItems(items, currency);
     if (resolved.length === 0) {
-      return NextResponse.json(
-        { error: "No valid items in cart" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No valid items in cart" }, { status: 400 });
     }
 
-    // Duplicate purchase prevention: courses, modules, and digital products
-    const nonGiftCourseIds = resolved
-      .filter((r) => r.product.type === "course" && !r.isGift)
-      .map((r) => r.product.id);
-    const nonGiftModuleIds = resolved
-      .filter((r) => r.product.type === "module" && !r.isGift)
-      .map((r) => r.product.id);
-    const nonGiftDpIds = resolved
-      .filter((r) => r.product.type === "digital_product" && !r.isGift)
-      .map((r) => r.product.id);
-
-    if (nonGiftCourseIds.length > 0) {
-      const existingEnrollments = await prisma.enrollment.findMany({
-        where: {
-          studentId: auth.student.id,
-          courseId: { in: nonGiftCourseIds },
-        },
-        select: { courseId: true },
-      });
-
-      if (existingEnrollments.length > 0) {
-        const ownedIds = new Set(existingEnrollments.map((e) => e.courseId));
-        const ownedTitles = resolved
-          .filter((r) => ownedIds.has(r.product.id))
-          .map((r) => r.product.title);
-        return NextResponse.json(
-          { error: `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.` },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (nonGiftModuleIds.length > 0) {
-      const existingAccess = await prisma.moduleAccess.findMany({
-        where: {
-          studentId: auth.student.id,
-          moduleId: { in: nonGiftModuleIds },
-        },
-        select: { moduleId: true },
-      });
-
-      if (existingAccess.length > 0) {
-        const ownedIds = new Set(existingAccess.map((a) => a.moduleId));
-        const ownedTitles = resolved
-          .filter((r) => ownedIds.has(r.product.id))
-          .map((r) => r.product.title);
-        return NextResponse.json(
-          { error: `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.` },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (nonGiftDpIds.length > 0) {
-      const existingDpAccess = await prisma.digitalProductAccess.findMany({
-        where: {
-          studentId: auth.student.id,
-          digitalProductId: { in: nonGiftDpIds },
-        },
-        select: { digitalProductId: true },
-      });
-
-      if (existingDpAccess.length > 0) {
-        const ownedIds = new Set(existingDpAccess.map((a) => a.digitalProductId));
-        const ownedTitles = resolved
-          .filter((r) => ownedIds.has(r.product.id))
-          .map((r) => r.product.title);
-        return NextResponse.json(
-          { error: `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.` },
-          { status: 400 }
-        );
-      }
+    // Duplicate purchase prevention
+    const duplicateError = await checkDuplicatePurchases(auth.student.id, resolved);
+    if (duplicateError) {
+      return NextResponse.json({ error: duplicateError }, { status: 400 });
     }
 
     // Calculate subtotal from server-verified prices
-    const subtotalCents = resolved.reduce(
-      (sum, r) => sum + r.product.priceCents * r.quantity,
-      0
-    );
+    const subtotalCents = resolved.reduce((sum, r) => sum + r.product.priceCents * r.quantity, 0);
 
     // Validate coupon if provided
     let discountCents = 0;
     let couponId: string | null = null;
     if (couponCode) {
-      const courseIds = resolved
-        .filter((r) => r.product.type === "course")
-        .map((r) => r.product.id);
-      const packageIds = resolved
-        .filter((r) => r.product.type === "package")
-        .map((r) => r.product.id);
-
-      const couponResult = await validateCoupon(
-        couponCode,
-        { courseIds, packageIds },
-        subtotalCents,
-        currency
-      );
+      const courseIds = resolved.filter((r) => r.product.type === "course").map((r) => r.product.id);
+      const packageIds = resolved.filter((r) => r.product.type === "package").map((r) => r.product.id);
+      const couponResult = await validateCoupon(couponCode, { courseIds, packageIds }, subtotalCents, currency);
       if (couponResult.valid) {
         discountCents = couponResult.coupon.discountCents;
         couponId = couponResult.coupon.id;
@@ -142,49 +137,7 @@ export async function POST(request: Request) {
 
     const totalCents = Math.max(0, subtotalCents - discountCents);
 
-    // Persist cart items (with gift details) to DB so the webhook can access them
-    const hasGifts = resolved.some((r) => r.isGift);
-    if (hasGifts) {
-      let cart = await prisma.cart.findUnique({
-        where: { studentId: auth.student.id },
-      });
-      if (!cart) {
-        cart = await prisma.cart.create({
-          data: { studentId: auth.student.id },
-        });
-      }
-      // Save gift items with recipient details
-      for (const r of resolved.filter((r) => r.isGift)) {
-        await prisma.cartItem.upsert({
-          where: {
-            id: r.id, // localStorage ID won't match — use create path
-          },
-          create: {
-            cartId: cart.id,
-            courseId: r.product.type === "course" ? r.product.id : null,
-            hybridPackageId: r.product.type === "package" ? r.product.id : null,
-            moduleId: r.product.type === "module" ? r.product.id : null,
-            digitalProductId: r.product.type === "digital_product" ? r.product.id : null,
-            packageSelections: r.packageSelections || undefined,
-            isGift: true,
-            giftRecipientName: r.giftRecipientName || null,
-            giftRecipientEmail: r.giftRecipientEmail || null,
-            giftMessage: r.giftMessage || null,
-            giftDeliveryDate: r.giftDeliveryDate
-              ? new Date(r.giftDeliveryDate)
-              : null,
-          },
-          update: {
-            giftRecipientName: r.giftRecipientName || null,
-            giftRecipientEmail: r.giftRecipientEmail || null,
-            giftMessage: r.giftMessage || null,
-            giftDeliveryDate: r.giftDeliveryDate
-              ? new Date(r.giftDeliveryDate)
-              : null,
-          },
-        });
-      }
-    }
+    await persistGiftCartItems(auth.student.id, resolved);
 
     // Create order in our DB
     const orderNumber = await createOrderNumber();
@@ -200,11 +153,9 @@ export async function POST(request: Request) {
         items: {
           create: resolved.map((r) => ({
             courseId: r.product.type === "course" ? r.product.id : null,
-            hybridPackageId:
-              r.product.type === "package" ? r.product.id : null,
+            hybridPackageId: r.product.type === "package" ? r.product.id : null,
             moduleId: r.product.type === "module" ? r.product.id : null,
-            digitalProductId:
-              r.product.type === "digital_product" ? r.product.id : null,
+            digitalProductId: r.product.type === "digital_product" ? r.product.id : null,
             packageSelections: r.packageSelections || undefined,
             description: r.product.title,
             unitPriceCents: r.product.priceCents,
@@ -226,16 +177,13 @@ export async function POST(request: Request) {
         currency: stripeCurrency,
         product_data: {
           name: r.product.title,
-          ...(r.product.imageUrl
-            ? { images: [r.product.imageUrl] }
-            : {}),
+          ...(r.product.imageUrl ? { images: [r.product.imageUrl] } : {}),
         },
         unit_amount: r.product.priceCents,
       },
       quantity: r.quantity,
     }));
 
-    // Handle coupon discount in Stripe
     const discounts: { coupon: string }[] = [];
     if (discountCents > 0 && couponCode) {
       const stripeCoupon = await stripe.coupons.create({
@@ -254,13 +202,9 @@ export async function POST(request: Request) {
       discounts: discounts.length > 0 ? discounts : undefined,
       success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/checkout/cancel`,
-      metadata: {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-      },
+      metadata: { orderId: order.id, orderNumber: order.orderNumber },
     });
 
-    // Store Stripe session ID on our order
     await prisma.order.update({
       where: { id: order.id },
       data: { stripeSessionId: session.id },
@@ -269,9 +213,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: session.url });
   } catch (error) {
     console.error("Checkout error:", error);
-    return NextResponse.json(
-      { error: "Failed to create checkout session" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
   }
 }

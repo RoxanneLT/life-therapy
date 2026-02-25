@@ -25,4 +25,5 @@ export async function updatePageSeo(id: string, formData: FormData) {
 
   revalidateTag("page-seo", "max");
   revalidatePath("/admin/seo");
+  revalidatePath("/admin/pages");
 }

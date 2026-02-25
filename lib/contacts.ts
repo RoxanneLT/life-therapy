@@ -1,7 +1,6 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import type { ContactSource } from "@/lib/generated/prisma/client";
 
 interface UpsertContactData {
   email: string;
@@ -9,52 +8,42 @@ interface UpsertContactData {
   lastName?: string;
   phone?: string;
   gender?: string;
-  source: ContactSource;
+  source: string;
   consentGiven?: boolean;
   consentMethod?: string;
-  studentId?: string;
 }
 
 /**
- * Upsert a contact — creates if not exists, merges fields if exists.
+ * Upsert a client (Student record) — creates if not exists, merges fields if exists.
  * Never downgrades consentGiven from true→false.
  * Never overwrites source (keeps the original).
+ *
+ * For newsletter-only subscribers, creates a Student without a Supabase auth account
+ * (supabaseUserId = null). They become full portal users when they later book/register.
  */
 export async function upsertContact(data: UpsertContactData) {
   const normalizedEmail = data.email.toLowerCase().trim();
 
-  return prisma.contact.upsert({
+  return prisma.student.upsert({
     where: { email: normalizedEmail },
     create: {
       email: normalizedEmail,
-      firstName: data.firstName || null,
-      lastName: data.lastName || null,
+      firstName: data.firstName || "Friend",
+      lastName: data.lastName || "",
       phone: data.phone || null,
       gender: data.gender || null,
       source: data.source,
+      clientStatus: "potential",
       consentGiven: data.consentGiven ?? false,
       consentDate: data.consentGiven ? new Date() : null,
       consentMethod: data.consentMethod || null,
-      studentId: data.studentId || null,
     },
     update: {
       // Only fill in blank fields — don't overwrite existing data
-      firstName: data.firstName
-        ? { set: data.firstName }
-        : undefined,
-      lastName: data.lastName
-        ? { set: data.lastName }
-        : undefined,
-      phone: data.phone
-        ? { set: data.phone }
-        : undefined,
-      gender: data.gender
-        ? { set: data.gender }
-        : undefined,
-      // Link student if not already linked
-      studentId: data.studentId
-        ? { set: data.studentId }
-        : undefined,
+      ...(data.firstName ? { firstName: data.firstName } : {}),
+      ...(data.lastName ? { lastName: data.lastName } : {}),
+      ...(data.phone ? { phone: data.phone } : {}),
+      ...(data.gender ? { gender: data.gender } : {}),
       // Never downgrade consent — only upgrade from false to true
       ...(data.consentGiven
         ? {
@@ -68,8 +57,8 @@ export async function upsertContact(data: UpsertContactData) {
 }
 
 /**
- * Query contacts eligible for campaigns.
- * Only returns contacts where consentGiven=true AND emailOptOut=false.
+ * Query clients (Students) eligible for campaigns.
+ * Only returns students where consentGiven=true AND emailOptOut=false.
  */
 export async function getCampaignRecipients(filters?: {
   source?: string;
@@ -85,14 +74,14 @@ export async function getCampaignRecipients(filters?: {
     where.source = filters.source;
   }
 
-  // Tag filtering: contacts must have ALL specified tags
+  // Tag filtering: clients must have ALL specified tags
   if (filters?.tags && filters.tags.length > 0) {
     where.AND = filters.tags.map((tag) => ({
       tags: { array_contains: [tag] },
     }));
   }
 
-  return prisma.contact.findMany({
+  return prisma.student.findMany({
     where,
     select: {
       id: true,

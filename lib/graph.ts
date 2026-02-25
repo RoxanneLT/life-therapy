@@ -6,7 +6,6 @@ import {
 import {
   TokenCredentialAuthenticationProvider,
 } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
-import { prisma } from "@/lib/prisma";
 import { TIMEZONE } from "@/lib/booking-config";
 
 interface GraphConfig {
@@ -16,31 +15,15 @@ interface GraphConfig {
   userEmail: string;
 }
 
-async function getGraphConfig(): Promise<GraphConfig | null> {
-  const settings = await prisma.siteSetting.findFirst({
-    select: {
-      msGraphTenantId: true,
-      msGraphClientId: true,
-      msGraphClientSecret: true,
-      msGraphUserEmail: true,
-    },
-  });
+function getGraphConfig(): GraphConfig | null {
+  const tenantId = process.env.MS_GRAPH_TENANT_ID;
+  const clientId = process.env.MS_GRAPH_CLIENT_ID;
+  const clientSecret = process.env.MS_GRAPH_CLIENT_SECRET;
+  const userEmail = process.env.MS_GRAPH_USER_EMAIL;
 
-  if (
-    !settings?.msGraphTenantId ||
-    !settings?.msGraphClientId ||
-    !settings?.msGraphClientSecret ||
-    !settings?.msGraphUserEmail
-  ) {
-    return null;
-  }
+  if (!tenantId || !clientId || !clientSecret || !userEmail) return null;
 
-  return {
-    tenantId: settings.msGraphTenantId,
-    clientId: settings.msGraphClientId,
-    clientSecret: settings.msGraphClientSecret,
-    userEmail: settings.msGraphUserEmail,
-  };
+  return { tenantId, clientId, clientSecret, userEmail };
 }
 
 function createGraphClient(config: GraphConfig): Client {
@@ -60,7 +43,7 @@ export async function getFreeBusy(
   startDate: Date,
   endDate: Date
 ): Promise<{ start: string; end: string }[]> {
-  const config = await getGraphConfig();
+  const config = getGraphConfig();
   if (!config) return [];
 
   try {
@@ -107,7 +90,7 @@ export async function createCalendarEvent(params: {
   clientEmail: string;
   description?: string;
 }): Promise<{ eventId: string; teamsMeetingUrl: string } | null> {
-  const config = await getGraphConfig();
+  const config = getGraphConfig();
   if (!config) return null;
 
   try {
@@ -147,7 +130,7 @@ export async function createCalendarEvent(params: {
 }
 
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
-  const config = await getGraphConfig();
+  const config = getGraphConfig();
   if (!config) return;
 
   try {
@@ -164,7 +147,7 @@ export async function testGraphConnection(): Promise<{
   success: boolean;
   error?: string;
 }> {
-  const config = await getGraphConfig();
+  const config = getGraphConfig();
   if (!config) {
     return { success: false, error: "Microsoft Graph credentials not configured" };
   }

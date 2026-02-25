@@ -445,3 +445,47 @@ export function giftReceivedEmail(params: {
     html: baseTemplate("You've Received a Gift!", body, params.baseUrl),
   };
 }
+
+export function portalWelcomeEmail(params: {
+  firstName: string;
+  email: string;
+  tempPassword: string;
+  loginUrl: string;
+  sessionDate: string;
+  sessionTime: string;
+  baseUrl?: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `
+    <p>Hi ${params.firstName},</p>
+    <p>Your free consultation is confirmed for <strong>${params.sessionDate}</strong> at <strong>${params.sessionTime}</strong>.</p>
+    <p>In the meantime, your personal portal is ready:</p>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${params.loginUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Login to Your Portal</a>
+    </div>
+
+    <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0;">
+      <p style="margin: 4px 0;"><strong>Email:</strong> ${params.email}</p>
+      <p style="margin: 4px 0;"><strong>Temporary password:</strong> <code style="background: #fff; padding: 2px 8px; border-radius: 4px; font-size: 15px;">${params.tempPassword}</code></p>
+    </div>
+
+    <p style="color: #dc2626; font-weight: 600;">You&rsquo;ll be asked to set your own password on first login.</p>
+
+    <p>In your portal you can:</p>
+    <ul style="color: #555; padding-left: 20px;">
+      <li>View your scheduled sessions</li>
+      <li>Update your personal details</li>
+    </ul>
+
+    <p>Looking forward to meeting you!</p>
+    <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Accredited Coach &amp; Counsellor</p>
+  `;
+
+  return {
+    subject: "Your Life Therapy Portal is Ready",
+    html: baseTemplate("Your Portal is Ready", body, params.baseUrl),
+  };
+}

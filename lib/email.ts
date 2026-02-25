@@ -63,7 +63,11 @@ export async function sendEmail({
   const finalHtml = trackingId ? injectTracking(html, trackingId, DEFAULT_BASE_URL) : html;
 
   const useResend = !!process.env.RESEND_API_KEY;
-  const hasSMTP = !!(settings.smtpHost && settings.smtpPort && settings.smtpUser && settings.smtpPass);
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT ? Number.parseInt(process.env.SMTP_PORT, 10) : null;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const hasSMTP = !!(smtpHost && smtpPort && smtpUser && smtpPass);
 
   if (!useResend && !hasSMTP) {
     console.error("No email provider configured — email not sent:", subject);
@@ -89,13 +93,13 @@ export async function sendEmail({
         if (error) throw new Error(error.message);
       } else {
         const transporter = nodemailer.createTransport({
-          host: settings.smtpHost,
-          port: settings.smtpPort!,
-          secure: settings.smtpPort === 465,
-          auth: { user: settings.smtpUser!, pass: settings.smtpPass! },
+          host: smtpHost,
+          port: smtpPort!,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser!, pass: smtpPass! },
         } as nodemailer.TransportOptions);
         await transporter.sendMail({
-          from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || settings.smtpUser}>`,
+          from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || smtpUser}>`,
           to,
           subject,
           html: finalHtml,

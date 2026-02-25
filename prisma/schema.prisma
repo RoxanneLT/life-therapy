@@ -157,11 +157,7 @@ model SiteSetting {
   metaDescription     String?  @db.Text
   ogImageUrl          String?
   googleAnalyticsId   String?
-  // Email (SMTP)
-  smtpHost            String?
-  smtpPort            Int?
-  smtpUser            String?
-  smtpPass            String?
+  // Email (display preferences — credentials moved to env vars)
   smtpFromName        String?
   smtpFromEmail       String?
   // Footer
@@ -172,15 +168,7 @@ model SiteSetting {
   bookingMinNoticeHours  Int     @default(24)
   bookingBufferMinutes   Int     @default(15)
   bookingEnabled         Boolean @default(false)
-  // Microsoft Graph (Exchange/Teams)
-  msGraphTenantId        String?
-  msGraphClientId        String?
-  msGraphClientSecret    String?
-  msGraphUserEmail       String?
-  // Stripe
-  stripeSecretKey        String?
-  stripePublishableKey   String?
-  stripeWebhookSecret    String?
+  // Note: MS Graph, SMTP, Stripe/Paystack credentials moved to env vars
   // Session Pricing (all currencies, cents)
   sessionPriceIndividualZar  Int?  @default(85000)  // R850.00
   sessionPriceIndividualUsd  Int?  @default(6500)   // $65.00
@@ -237,9 +225,32 @@ model Booking {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
+  // Link to student (null for walk-in/unregistered bookings)
+  studentId              String?
+  student                Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  // Reschedule tracking (anti-abuse)
+  originalDate           DateTime? @db.Date
+  originalStartTime      String?
+  rescheduledAt          DateTime?
+  rescheduleCount        Int       @default(0)
+
+  // Cancellation tracking
+  cancelledAt            DateTime?
+  cancelledBy            String?   // "client" | "admin"
+  cancellationReason     String?
+  creditRefunded         Boolean   @default(false)
+  isLateCancel           Boolean   @default(false)
+
+  // Recurring series
+  recurringSeriesId      String?
+  recurringPattern       String?   // "weekly" | "bimonthly" | "monthly"
+
   @@index([date])
   @@index([status])
   @@index([clientEmail])
+  @@index([studentId])
+  @@index([recurringSeriesId])
   @@map("bookings")
 }
 
@@ -307,14 +318,6 @@ enum CouponType {
   fixed_amount
 }
 
-enum ContactSource {
-  newsletter
-  booking
-  student
-  import
-  manual
-}
-
 enum CampaignStatus {
   draft
   scheduled
@@ -336,7 +339,7 @@ enum DripEmailType {
 // ============================================================
 model Student {
   id                 String    @id @default(cuid())
-  supabaseUserId     String    @unique
+  supabaseUserId     String?   @unique
   email              String    @unique
   firstName          String
   lastName           String
@@ -347,7 +350,45 @@ model Student {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  enrollments          Enrollment[]
+  // Extended profile
+  dateOfBirth        DateTime?  @db.Date
+  gender             String?
+  phone              String?
+  address            String?    @db.Text
+  relationshipStatus String?
+  emergencyContact   String?
+  referralSource     String?
+  referralDetail     String?
+
+  // Onboarding tracking
+  onboardingStep     Int        @default(0) // 0=not started, 1=details done, 2=assessment done, 3=commitment done
+  profileCompletedAt DateTime?
+
+  // Client lifecycle (merged from Contact)
+  clientStatus       String     @default("potential") // "potential" | "active" | "inactive" | "archived"
+  convertedAt        DateTime?
+  convertedBy        String?
+
+  // Source & tags (merged from Contact)
+  source             String     @default("booking") // "newsletter" | "booking" | "import" | "manual" | "website"
+  tags               Json?
+
+  // Communication preferences (merged from Contact)
+  emailPaused        Boolean    @default(false)
+  emailPausedAt      DateTime?
+  emailPauseReason   String?
+  newsletterOptIn    Boolean    @default(true)
+  marketingOptIn     Boolean    @default(true)
+  smsOptIn           Boolean    @default(false)
+  sessionReminders   Boolean    @default(true)
+  consentGiven       Boolean    @default(false)
+  consentDate        DateTime?
+  consentMethod      String?
+
+  // Admin notes
+  adminNotes         String?    @db.Text
+
+  enrollments            Enrollment[]
   moduleAccess           ModuleAccess[]
   digitalProductAccess   DigitalProductAccess[]
   lectureProgress        LectureProgress[]
@@ -361,8 +402,15 @@ model Student {
   giftsGiven             Gift[]   @relation("GiftBuyer")
   giftsReceived          Gift[]   @relation("GiftRecipient")
   emailLogs              EmailLog[]
-  contact                Contact?
+  intake                 ClientIntake?
+  commitmentAcks         CommitmentAcknowledgement[]
+  documentAcceptances    DocumentAcceptance[]
+  bookings               Booking[]
+  dripProgress           DripProgress?
+  campaignProgress       CampaignProgress[]
 
+  @@index([clientStatus])
+  @@index([source])
   @@map("students")
 }
 
@@ -882,40 +930,6 @@ model EmailLog {
 }
 
 // ============================================================
-// Contact Management (unified mailing list)
-// ============================================================
-model Contact {
-  id               String             @id @default(cuid())
-  email            String             @unique
-  firstName        String?
-  lastName         String?
-  phone            String?
-  gender           String?
-  source           ContactSource      @default(newsletter)
-  tags             Json?
-  consentGiven     Boolean            @default(false)
-  consentDate      DateTime?
-  consentMethod    String?
-  emailOptOut      Boolean            @default(false)
-  emailPaused      Boolean            @default(false)
-  emailPausedAt    DateTime?
-  emailPauseReason String?
-  unsubscribeToken String             @unique @default(cuid())
-  studentId        String?            @unique
-  student          Student?           @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  notes            String?            @db.Text
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  dripProgress     DripProgress?
-  campaignProgress CampaignProgress[]
-
-  @@index([source])
-  @@index([emailOptOut])
-  @@index([emailPaused])
-  @@map("contacts")
-}
-
-// ============================================================
 // Campaigns (email broadcasts)
 // ============================================================
 model Campaign {
@@ -969,8 +983,8 @@ model CampaignProgress {
   id          String    @id @default(cuid())
   campaignId  String
   campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  contactId   String
-  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   currentStep Int       @default(0)
   lastSentAt  DateTime?
   completedAt DateTime?
@@ -978,9 +992,9 @@ model CampaignProgress {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([campaignId, contactId])
+  @@unique([campaignId, studentId])
   @@index([campaignId, completedAt])
-  @@index([contactId])
+  @@index([studentId])
   @@map("campaign_progress")
 }
 
@@ -1008,8 +1022,8 @@ model DripEmail {
 
 model DripProgress {
   id           String        @id @default(cuid())
-  contactId    String        @unique
-  contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  studentId    String        @unique
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   currentPhase DripEmailType @default(onboarding)
   currentStep  Int           @default(0)
   lastSentAt   DateTime?
@@ -1037,4 +1051,92 @@ model PageSeo {
   updatedAt       DateTime @updatedAt
 
   @@map("page_seo")
+}
+
+// ============================================================
+// Client Intake (Assessment — behaviours, feelings, symptoms)
+// ============================================================
+model ClientIntake {
+  id              String    @id @default(cuid())
+  studentId       String    @unique
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // Checklist arrays
+  behaviours      String[]  @default([])
+  feelings        String[]  @default([])
+  symptoms        String[]  @default([])
+
+  // Free text
+  otherBehaviours String?
+  otherFeelings   String?
+  otherSymptoms   String?
+  additionalNotes String?   @db.Text
+  adminNotes      String?   @db.Text  // Admin-only, not visible to client
+
+  // Tracking
+  lastEditedBy    String?   // "client" | "admin"
+  lastEditedAt    DateTime  @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("client_intakes")
+}
+
+// ============================================================
+// DEPRECATED: Legacy Commitment Acknowledgement
+// TODO: Remove after confirming migration to document_acceptances — keep 1 release
+// Replaced by LegalDocument + DocumentAcceptance system (Phase 5B)
+// ============================================================
+model CommitmentAcknowledgement {
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  version        String   @default("v1")
+  ipAddress      String?
+  userAgent      String?
+  acknowledgedAt DateTime @default(now())
+
+  @@unique([studentId, version])
+  @@map("commitment_acknowledgements")
+}
+
+// ============================================================
+// Legal Documents (versioned, admin-managed)
+// ============================================================
+model LegalDocument {
+  id             String    @id @default(cuid())
+  slug           String    // "commitment" | "terms" | "privacy"
+  title          String
+  content        Json      // Array of { heading: string, content: string }
+  version        Int       @default(1)
+  changeSummary  String?
+  publishedAt    DateTime?
+  isActive       Boolean   @default(false)
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  acceptances    DocumentAcceptance[]
+
+  @@unique([slug, version])
+  @@index([slug, isActive])
+  @@map("legal_documents")
+}
+
+model DocumentAcceptance {
+  id              String        @id @default(cuid())
+  studentId       String
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  documentId      String
+  document        LegalDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentSlug    String        // denormalised for quick queries
+  documentVersion Int           // denormalised for quick queries
+  ipAddress       String?
+  userAgent       String?
+  acceptedAt      DateTime      @default(now())
+
+  @@unique([studentId, documentSlug, documentVersion])
+  @@index([studentId, documentSlug])
+  @@map("document_acceptances")
 }
