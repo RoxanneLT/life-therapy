@@ -19,10 +19,23 @@ export async function addCredits(
   description: string,
   orderId?: string
 ): Promise<number> {
+  const { getSiteSettings } = await import("@/lib/settings");
+  const settings = await getSiteSettings();
+  const expiresAt = settings.creditExpiryDays
+    ? new Date(Date.now() + settings.creditExpiryDays * 24 * 60 * 60 * 1000)
+    : null;
+
   const bal = await prisma.sessionCreditBalance.upsert({
     where: { studentId },
-    create: { studentId, balance: amount },
-    update: { balance: { increment: amount } },
+    create: { studentId, balance: amount, expiresAt },
+    update: {
+      balance: { increment: amount },
+      ...(expiresAt ? {
+        expiresAt,
+        expiryWarning14: false,
+        expiryWarning3: false,
+      } : {}),
+    },
   });
 
   await prisma.sessionCreditTransaction.create({

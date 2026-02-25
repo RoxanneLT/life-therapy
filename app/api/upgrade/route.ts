@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
-import { getStripe } from "@/lib/stripe";
+import { initializeTransaction } from "@/lib/paystack";
 import { calculateUpgradePrice } from "@/lib/access";
 import { createOrderNumber } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
-import { getCurrency, getBaseUrl } from "@/lib/get-region";
+import { getBaseUrl } from "@/lib/get-region";
 
 /**
  * POST /api/upgrade
- * Creates a Stripe Checkout Session for upgrading from module access to full course.
+ * Creates a Paystack transaction for upgrading from module access to full course.
  * Requires student authentication.
  */
 export async function POST(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (!auth) {
       return NextResponse.json(
         { error: "Please log in" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     if (!courseId) {
       return NextResponse.json(
         { error: "courseId is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -42,19 +42,19 @@ export async function POST(request: Request) {
     if (existingEnrollment) {
       return NextResponse.json(
         { error: "You already own the full course" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const { upgradePrice, fullPrice } = await calculateUpgradePrice(
       auth.student.id,
-      courseId
+      courseId,
     );
 
     if (upgradePrice <= 0) {
       return NextResponse.json(
         { error: "No upgrade price to pay" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     if (!course) {
       return NextResponse.json(
         { error: "Course not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -93,29 +93,16 @@ export async function POST(request: Request) {
       },
     });
 
-    // Create Stripe session
-    const stripe = getStripe();
-    const currency = await getCurrency();
+    // Create Paystack transaction
     const baseUrl = await getBaseUrl();
+    const reference = `${order.orderNumber}-${Date.now()}`;
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: auth.student.email,
-      line_items: [
-        {
-          price_data: {
-            currency: currency.toLowerCase(),
-            product_data: {
-              name: `${course.title} (Upgrade)`,
-              ...(course.imageUrl ? { images: [course.imageUrl] } : {}),
-            },
-            unit_amount: upgradePrice,
-          },
-          quantity: 1,
-        },
-      ],
-      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/portal/courses/${course.slug}`,
+    const paystack = await initializeTransaction({
+      email: auth.student.email,
+      amount: upgradePrice,
+      currency: "ZAR",
+      reference,
+      callback_url: `${baseUrl}/checkout/success?reference=${reference}`,
       metadata: {
         orderId: order.id,
         orderNumber: order.orderNumber,
@@ -125,15 +112,18 @@ export async function POST(request: Request) {
 
     await prisma.order.update({
       where: { id: order.id },
-      data: { stripeSessionId: session.id },
+      data: {
+        paystackReference: reference,
+        paystackAccessCode: paystack.access_code,
+      },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: paystack.authorization_url });
   } catch (error) {
     console.error("Upgrade checkout error:", error);
     return NextResponse.json(
       { error: "Failed to create upgrade checkout" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

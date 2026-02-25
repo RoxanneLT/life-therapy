@@ -32,6 +32,7 @@ export async function portalCancelBookingAction(
 
   const isLate = result.type === "late" || result.type === "anti_abuse";
   const creditRefunded = result.type === "normal";
+  const billingNote = isLate ? "(late cancel)" : "(cancelled)";
 
   // Update booking
   await prisma.booking.update({
@@ -43,12 +44,14 @@ export async function portalCancelBookingAction(
       cancellationReason: cancellationReason?.trim() || null,
       isLateCancel: isLate,
       creditRefunded,
+      billingNote,
     },
   });
 
-  // Handle credits (skip for free consultations)
+  // Handle credits (skip for free consultations and postpaid clients)
   const config = getSessionTypeConfig(booking.sessionType);
-  if (!config.isFree && booking.studentId) {
+  const isPostpaid = student.billingType === "postpaid";
+  if (!config.isFree && booking.studentId && !isPostpaid) {
     if (creditRefunded) {
       await refundCredit(
         booking.studentId,
@@ -133,6 +136,7 @@ export async function portalRescheduleBookingAction(
       originalStartTime: booking.originalStartTime || booking.startTime,
       rescheduledAt: new Date(),
       rescheduleCount: { increment: 1 },
+      billingNote: "(rescheduled)",
       date: dateObj,
       startTime: newStartTime,
       endTime: newEndTime,

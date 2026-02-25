@@ -33,13 +33,14 @@ export async function registerStudent(formData: FormData) {
 
   const { firstName, lastName, email, password } = parsed.data;
 
-  // Check if student already exists
+  // Check if student already exists WITH auth (i.e. already has login)
   const existing = await prisma.student.findUnique({ where: { email } });
-  if (existing) {
+  if (existing?.supabaseUserId) {
     return { error: "An account with this email already exists" };
   }
 
   // Create Supabase auth user
+  let supabaseUserId: string;
   const { data: authData, error: authError } =
     await supabaseAdmin.auth.admin.createUser({
       email,
@@ -49,41 +50,71 @@ export async function registerStudent(formData: FormData) {
 
   if (authError) {
     if (authError.message?.includes("already been registered")) {
-      return { error: "An account with this email already exists" };
+      // Auth user exists but student isn't linked — find and link
+      const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+      const authMatch = users?.find(
+        (u) => u.email?.toLowerCase() === email,
+      );
+      if (!authMatch) {
+        return { error: "An account with this email already exists" };
+      }
+      supabaseUserId = authMatch.id;
+      // Update password since they're registering fresh
+      await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, {
+        password,
+      });
+    } else {
+      return { error: authError.message };
     }
-    return { error: authError.message };
+  } else {
+    supabaseUserId = authData.user.id;
   }
 
-  // Create or link Student record (may already exist from newsletter/booking)
-  const existingStudent = await prisma.student.findUnique({ where: { email } });
-
-  if (existingStudent) {
-    // Link existing record to auth account
+  // Link existing student record or create new one
+  if (existing) {
+    // Student exists from booking/newsletter/import — link to auth account
     await prisma.student.update({
-      where: { id: existingStudent.id },
+      where: { id: existing.id },
       data: {
-        supabaseUserId: authData.user.id,
+        supabaseUserId,
         firstName,
         lastName,
-        source: existingStudent.source === "newsletter" ? "website" : existingStudent.source,
+        source: existing.source === "newsletter" ? "website" : existing.source,
         consentGiven: true,
         consentDate: new Date(),
         consentMethod: "registration",
       },
     });
   } else {
-    await prisma.student.create({
-      data: {
-        supabaseUserId: authData.user.id,
-        email,
-        firstName,
-        lastName,
-        source: "website",
-        consentGiven: true,
-        consentDate: new Date(),
-        consentMethod: "registration",
-      },
-    });
+    // Race condition guard: re-check before create
+    const existingStudent = await prisma.student.findUnique({ where: { email } });
+    if (existingStudent) {
+      await prisma.student.update({
+        where: { id: existingStudent.id },
+        data: {
+          supabaseUserId,
+          firstName,
+          lastName,
+          source: existingStudent.source === "newsletter" ? "website" : existingStudent.source,
+          consentGiven: true,
+          consentDate: new Date(),
+          consentMethod: "registration",
+        },
+      });
+    } else {
+      await prisma.student.create({
+        data: {
+          supabaseUserId,
+          email,
+          firstName,
+          lastName,
+          source: "website",
+          consentGiven: true,
+          consentDate: new Date(),
+          consentMethod: "registration",
+        },
+      });
+    }
   }
 
   // Send welcome email (non-blocking)

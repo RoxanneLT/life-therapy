@@ -178,11 +178,43 @@ model SiteSetting {
   sessionPriceCouplesUsd     Int?  @default(9500)   // $95.00
   sessionPriceCouplesEur     Int?  @default(8500)   // €85.00
   sessionPriceCouplesGbp     Int?  @default(7500)   // £75.00
+  // Finance / Invoice settings
+  businessRegistrationNumber String?  @default("2019/570691/07")
+  invoicePrefix              String?  @default("LT")
+  vatRegistered              Boolean  @default(false)
+  vatNumber                  String?
+  vatPercent                 Float    @default(15)
+  bankName                   String?
+  bankAccountHolder          String?
+  bankAccountNumber          String?
+  bankBranchCode             String?
+  postpaidBillingDay         Int      @default(20)
+  postpaidDueDay             Int      @default(28)
+  businessAddress            String?  @db.Text
+  // WhatsApp Cloud API
+  whatsappEnabled           Boolean  @default(false)
+  whatsappPhoneNumberId     String?
+  whatsappBusinessAccountId String?
+  whatsappSessionReminders  Boolean  @default(true)
+  whatsappBillingReminders  Boolean  @default(true)
+  whatsappCreditReminders   Boolean  @default(true)
+  // Credit expiry
+  creditExpiryDays          Int?
   // Timestamps
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   @@map("site_settings")
+}
+
+// ============================================================
+// Invoice Numbering (global atomic counter)
+// ============================================================
+model InvoiceSequence {
+  id         String @id @default("global")
+  nextNumber Int    @default(1)
+
+  @@map("invoice_sequences")
 }
 
 // ============================================================
@@ -246,11 +278,24 @@ model Booking {
   recurringSeriesId      String?
   recurringPattern       String?   // "weekly" | "bimonthly" | "monthly"
 
+  // Invoicing links
+  invoiceId              String?
+  invoice                Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  paymentRequestId       String?
+  paymentRequest         PaymentRequest? @relation(fields: [paymentRequestId], references: [id], onDelete: SetNull)
+  billingNote            String?         // "(no-show)" | "(rescheduled)" | "(cancelled)" | null
+  couplesPartnerName     String?         // Partner name for couples sessions
+  // WhatsApp reminders
+  whatsappReminder48hSentAt     DateTime?
+  whatsappReminderMorningSentAt DateTime?
+
   @@index([date])
   @@index([status])
   @@index([clientEmail])
   @@index([studentId])
   @@index([recurringSeriesId])
+  @@index([invoiceId])
+  @@index([paymentRequestId])
   @@map("bookings")
 }
 
@@ -388,6 +433,20 @@ model Student {
   // Admin notes
   adminNotes         String?    @db.Text
 
+  // Billing
+  billingType             String     @default("prepaid")   // "prepaid" | "postpaid"
+  billingEmail            String?                           // Overrides email for invoice delivery
+  billingAddress          String?    @db.Text               // Shown on invoice
+  standingDiscountPercent Float?                            // e.g. 10.0 for 10% off every line item
+  standingDiscountFixed   Int?                              // Fixed discount in cents per line item
+
+  // Per-session-type billing assignment
+  // Points to a ClientRelationship whose studentId (the payer) receives invoices
+  individualBilledToId     String?
+  individualBilledTo       ClientRelationship? @relation("IndividualBilledTo", fields: [individualBilledToId], references: [id], onDelete: SetNull)
+  couplesBilledToId        String?
+  couplesBilledTo          ClientRelationship? @relation("CouplesBilledTo", fields: [couplesBilledToId], references: [id], onDelete: SetNull)
+
   enrollments            Enrollment[]
   moduleAccess           ModuleAccess[]
   digitalProductAccess   DigitalProductAccess[]
@@ -408,6 +467,11 @@ model Student {
   bookings               Booking[]
   dripProgress           DripProgress?
   campaignProgress       CampaignProgress[]
+  relationshipsFrom      ClientRelationship[] @relation("RelationshipsFrom")
+  relationshipsTo        ClientRelationship[] @relation("RelationshipsTo")
+  invoices               Invoice[]
+  paymentRequests        PaymentRequest[]
+  whatsappLogs           WhatsAppLog[]
 
   @@index([clientStatus])
   @@index([source])
@@ -631,8 +695,8 @@ model Order {
   currency            String      @default("ZAR")
   couponId            String?
   coupon              Coupon?     @relation(fields: [couponId], references: [id])
-  stripeSessionId     String?     @unique
-  stripePaymentIntent String?     @unique
+  paystackReference   String?     @unique
+  paystackAccessCode  String?
   paidAt              DateTime?
   refundedAt          DateTime?
   createdAt           DateTime    @default(now())
@@ -715,10 +779,13 @@ model Gift {
 // Session Credits
 // ============================================================
 model SessionCreditBalance {
-  id        String  @id @default(cuid())
-  studentId String  @unique
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  balance   Int     @default(0)
+  id              String    @id @default(cuid())
+  studentId       String    @unique
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  balance         Int       @default(0)
+  expiresAt       DateTime?
+  expiryWarning14 Boolean   @default(false)
+  expiryWarning3  Boolean   @default(false)
 
   @@map("session_credit_balances")
 }
@@ -737,6 +804,196 @@ model SessionCreditTransaction {
 
   @@index([studentId])
   @@map("session_credit_transactions")
+}
+
+// ============================================================
+// Billing: Corporate Billing Entities
+// ============================================================
+model BillingEntity {
+  id               String    @id @default(cuid())
+  name             String
+  contactPerson    String?
+  email            String
+  phone            String?
+  vatNumber        String?
+  address          String?   @db.Text
+  accountReference String?
+
+  relationships    ClientRelationship[]
+  invoices         Invoice[]
+  paymentRequests  PaymentRequest[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("billing_entities")
+}
+
+// ============================================================
+// Billing: Client Relationships (family, partner, corporate links)
+// ============================================================
+model ClientRelationship {
+  id                 String          @id @default(cuid())
+  studentId          String
+  student            Student         @relation("RelationshipsFrom", fields: [studentId], references: [id], onDelete: Cascade)
+  relatedStudentId   String?
+  relatedStudent     Student?        @relation("RelationshipsTo", fields: [relatedStudentId], references: [id], onDelete: Cascade)
+  billingEntityId    String?
+  billingEntity      BillingEntity?  @relation(fields: [billingEntityId], references: [id], onDelete: Cascade)
+  relationshipType   String          // "partner" | "parent" | "child" | "sibling" | "guardian" | "corporate" | "other"
+  relationshipLabel  String?         // Free text, e.g. "Husband", "Son", "HR Manager"
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Reverse relations for billing assignment
+  individualBillingFor     Student[] @relation("IndividualBilledTo")
+  couplesBillingFor        Student[] @relation("CouplesBilledTo")
+
+  @@unique([studentId, relatedStudentId])
+  @@index([studentId])
+  @@index([relatedStudentId])
+  @@index([billingEntityId])
+  @@map("client_relationships")
+}
+
+// ============================================================
+// Billing: Invoices (universal — all payment types)
+// ============================================================
+model Invoice {
+  id                 String          @id @default(cuid())
+  invoiceNumber      String          @unique  // Format: YYYYMMDD-LT-GS-00001
+
+  // Type determines what generated this invoice
+  type               String          // "monthly_postpaid" | "package_purchase" | "course_purchase" | "product_sale" | "ad_hoc_session" | "credit_note" | "other"
+
+  // Billing contact (who pays / who it's addressed to)
+  studentId          String?
+  student            Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  billingEntityId    String?
+  billingEntity      BillingEntity?  @relation(fields: [billingEntityId], references: [id], onDelete: SetNull)
+
+  // Snapshot at invoice creation time (denormalised — won't change if client updates profile)
+  billingName        String
+  billingEmail       String
+  billingAddress     String?
+  billingVatNumber   String?
+
+  // Billing period (monthly postpaid only)
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  billingMonth       String?         // "2026-03" format for easy filtering
+
+  // Financials (always ZAR)
+  currency           String          @default("ZAR")
+  subtotalCents      Int             // Sum of line item totals before invoice-level discount
+  discountCents      Int             @default(0)  // Invoice-level discount amount
+  discountPercent    Float           @default(0)  // Invoice-level discount percentage
+  vatPercent         Float           @default(0)  // 0 if not VAT registered, 15 if registered
+  vatAmountCents     Int             @default(0)  // Calculated: (subtotal - discount) × vatPercent / 100
+  totalCents         Int             // Final amount: subtotal - discount + vat
+
+  // Line items (stored as JSON array — see InvoiceLineItem type in lib/billing-types.ts)
+  lineItems          Json            // InvoiceLineItem[]
+
+  // Payment tracking
+  status             String          @default("draft") // "draft" | "payment_requested" | "paid" | "overdue" | "cancelled" | "credited"
+  paymentMethod      String?         // "paystack" | "eft" | "cash" | "card"
+  paystackReference  String?
+  paymentUrl         String?
+  paidAt             DateTime?
+  paidAmountCents    Int?
+  eftReference       String?         // Manual EFT reference entered by admin
+
+  // Source links (what triggered this invoice)
+  orderId            String?         // Links to Order for e-commerce purchases
+  paymentRequestId   String?         // Links to PaymentRequest for postpaid billing
+  creditNoteId       String?         // Links to original invoice if this is a credit note
+
+  // PDF storage
+  pdfUrl             String?         // Supabase Storage path: invoices/{invoiceId}.pdf
+
+  // Dates
+  issuedAt           DateTime?       // When the invoice was officially issued (= payment date)
+  dueDate            DateTime?       // Payment due date (postpaid only)
+
+  // Reminder tracking (prevents duplicate sends)
+  reminderSentAt     DateTime?
+  overdueSentAt      DateTime?
+
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Relations
+  bookings           Booking[]       // Bookings covered by this invoice (monthly postpaid)
+
+  @@index([studentId])
+  @@index([billingEntityId])
+  @@index([orderId])
+  @@index([status])
+  @@index([type])
+  @@index([billingMonth])
+  @@map("invoices")
+}
+
+// ============================================================
+// Billing: Payment Requests (postpaid monthly billing — sent before payment)
+// ============================================================
+model PaymentRequest {
+  id                 String          @id @default(cuid())
+
+  // Who is being billed
+  studentId          String?
+  student            Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  billingEntityId    String?
+  billingEntity      BillingEntity?  @relation(fields: [billingEntityId], references: [id], onDelete: SetNull)
+
+  // Period this request covers
+  billingMonth       String          // "2026-03" format
+  periodStart        DateTime
+  periodEnd          DateTime
+
+  // Financials (always ZAR)
+  currency           String          @default("ZAR")
+  subtotalCents      Int
+  discountCents      Int             @default(0)
+  vatAmountCents     Int             @default(0)
+  totalCents         Int
+  lineItems          Json            // InvoiceLineItem[] — same structure as Invoice.lineItems
+
+  // Payment link
+  paystackReference  String?         // Set when Paystack payment link is generated
+  paymentUrl         String?         // Paystack authorization_url for client to pay
+
+  // Status
+  status             String          @default("pending") // "pending" | "paid" | "overdue" | "cancelled"
+
+  // Due date
+  dueDate            DateTime
+
+  // Tracking
+  sentAt             DateTime?       // When payment request email was sent
+  reminderSentAt     DateTime?       // When reminder email was sent
+  overdueSentAt      DateTime?       // When overdue notice was sent
+  // WhatsApp reminders
+  whatsappSentAt             DateTime?
+  whatsappReminderSentAt     DateTime?
+  whatsappOverdueSentAt      DateTime?
+
+  // Link to invoice (created only after payment)
+  invoiceId          String?
+
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Relations
+  bookings           Booking[]       // Bookings included in this request
+
+  // One payment request per client per month
+  @@unique([studentId, billingMonth])
+  @@unique([billingEntityId, billingMonth])
+  @@index([status])
+  @@index([dueDate])
+  @@map("payment_requests")
 }
 
 // ============================================================
@@ -1139,4 +1396,25 @@ model DocumentAcceptance {
   @@unique([studentId, documentSlug, documentVersion])
   @@index([studentId, documentSlug])
   @@map("document_acceptances")
+}
+
+// ============================================================
+// WhatsApp Message Log
+// ============================================================
+model WhatsAppLog {
+  id           String   @id @default(cuid())
+  templateName String
+  to           String
+  studentId    String?
+  student      Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  waMessageId  String?
+  status       String   @default("sent")
+  error        String?
+  metadata     Json?
+  sentAt       DateTime @default(now())
+
+  @@index([studentId])
+  @@index([templateName])
+  @@index([sentAt])
+  @@map("whatsapp_logs")
 }

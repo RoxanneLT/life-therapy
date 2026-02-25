@@ -27,8 +27,8 @@ const PREFS = [
   },
   {
     field: "smsOptIn",
-    label: "SMS Notifications",
-    description: "Receive text message notifications",
+    label: "WhatsApp Reminders",
+    description: "Receive session and billing reminders via WhatsApp",
   },
   {
     field: "sessionReminders",

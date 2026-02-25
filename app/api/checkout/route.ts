@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
-import { getStripe } from "@/lib/stripe";
+import { initializeTransaction } from "@/lib/paystack";
 import { resolveCartItems, validateCoupon } from "@/lib/cart";
 import { createOrderNumber } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
-import { getCurrency, getBaseUrl } from "@/lib/get-region";
+import { getBaseUrl } from "@/lib/get-region";
 import type { CartItemLocal } from "@/lib/cart-store";
 
 type ResolvedItem = Awaited<ReturnType<typeof resolveCartItems>>[number];
@@ -89,7 +89,7 @@ async function persistGiftCartItems(studentId: string, resolved: ResolvedItem[])
 
 /**
  * POST /api/checkout
- * Creates a Stripe Checkout Session for the student's cart.
+ * Creates a Paystack transaction for the student's cart.
  * Requires student authentication.
  */
 export async function POST(request: Request) {
@@ -107,8 +107,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
-    const currency = await getCurrency();
-    const resolved = await resolveCartItems(items, currency);
+    // Always resolve prices in ZAR — Paystack only charges ZAR
+    const resolved = await resolveCartItems(items, "ZAR");
     if (resolved.length === 0) {
       return NextResponse.json({ error: "No valid items in cart" }, { status: 400 });
     }
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
     if (couponCode) {
       const courseIds = resolved.filter((r) => r.product.type === "course").map((r) => r.product.id);
       const packageIds = resolved.filter((r) => r.product.type === "package").map((r) => r.product.id);
-      const couponResult = await validateCoupon(couponCode, { courseIds, packageIds }, subtotalCents, currency);
+      const couponResult = await validateCoupon(couponCode, { courseIds, packageIds }, subtotalCents, "ZAR");
       if (couponResult.valid) {
         discountCents = couponResult.coupon.discountCents;
         couponId = couponResult.coupon.id;
@@ -167,50 +167,31 @@ export async function POST(request: Request) {
       },
     });
 
-    // Create Stripe Checkout Session
-    const stripe = getStripe();
+    // Create Paystack transaction
     const baseUrl = await getBaseUrl();
-    const stripeCurrency = currency.toLowerCase();
+    const reference = `${order.orderNumber}-${Date.now()}`;
 
-    const lineItems = resolved.map((r) => ({
-      price_data: {
-        currency: stripeCurrency,
-        product_data: {
-          name: r.product.title,
-          ...(r.product.imageUrl ? { images: [r.product.imageUrl] } : {}),
-        },
-        unit_amount: r.product.priceCents,
+    const paystack = await initializeTransaction({
+      email: auth.student.email,
+      amount: totalCents,
+      currency: "ZAR",
+      reference,
+      callback_url: `${baseUrl}/checkout/success?reference=${reference}`,
+      metadata: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
       },
-      quantity: r.quantity,
-    }));
-
-    const discounts: { coupon: string }[] = [];
-    if (discountCents > 0 && couponCode) {
-      const stripeCoupon = await stripe.coupons.create({
-        amount_off: discountCents,
-        currency: stripeCurrency,
-        duration: "once",
-        name: couponCode.toUpperCase(),
-      });
-      discounts.push({ coupon: stripeCoupon.id });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: auth.student.email,
-      line_items: lineItems,
-      discounts: discounts.length > 0 ? discounts : undefined,
-      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/checkout/cancel`,
-      metadata: { orderId: order.id, orderNumber: order.orderNumber },
     });
 
     await prisma.order.update({
       where: { id: order.id },
-      data: { stripeSessionId: session.id },
+      data: {
+        paystackReference: reference,
+        paystackAccessCode: paystack.access_code,
+      },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: paystack.authorization_url });
   } catch (error) {
     console.error("Checkout error:", error);
     return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });

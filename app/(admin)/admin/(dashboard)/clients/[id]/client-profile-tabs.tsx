@@ -10,6 +10,7 @@ import { SessionsTab } from "./tabs/sessions-tab";
 import { PurchasesTab } from "./tabs/purchases-tab";
 import { FinancesTab } from "./tabs/finances-tab";
 import { CommunicationsTab } from "./tabs/communications-tab";
+import { RelationshipsTab } from "./tabs/relationships-tab";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -19,6 +20,7 @@ const TABS = [
   { key: "sessions", label: "Sessions" },
   { key: "purchases", label: "Purchases" },
   { key: "finances", label: "Finances" },
+  { key: "relationships", label: "Relationships" },
   { key: "communications", label: "Communications" },
 ] as const;
 
@@ -74,6 +76,7 @@ export function ClientProfileTabs({ client, activeTab, insights }: ClientProfile
         {currentTab === "sessions" && <SessionsTab client={client} />}
         {currentTab === "purchases" && <PurchasesTab client={client} />}
         {currentTab === "finances" && <FinancesTab client={client} />}
+        {currentTab === "relationships" && <RelationshipsTab client={client} />}
         {currentTab === "communications" && <CommunicationsTab client={client} />}
       </div>
     </div>

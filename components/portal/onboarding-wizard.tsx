@@ -26,6 +26,7 @@ interface StudentData {
   lastName: string;
   email: string;
   phone: string | null;
+  smsOptIn: boolean;
   dateOfBirth: string | null;
   gender: string | null;
   address: string | null;
@@ -246,6 +247,23 @@ function PersonalDetailsStep({
             <div className="space-y-1.5">
               <Label htmlFor="referralSource">How did you hear about us?</Label>
               <Input id="referralSource" name="referralSource" defaultValue={student.referralSource || ""} />
+            </div>
+          </div>
+          <div className="flex items-start gap-3 rounded-md border p-3">
+            <input
+              type="checkbox"
+              id="smsOptIn"
+              name="smsOptIn"
+              defaultChecked={student.smsOptIn}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+            />
+            <div>
+              <Label htmlFor="smsOptIn" className="text-sm font-medium">
+                WhatsApp Reminders
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Receive session and billing reminders via WhatsApp
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">

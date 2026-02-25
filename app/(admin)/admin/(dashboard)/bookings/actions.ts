@@ -19,9 +19,16 @@ import type { BookingStatus, SessionType } from "@/lib/generated/prisma/client";
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   await requireRole("super_admin", "editor");
 
+  const billingNote =
+    status === "cancelled"
+      ? "(cancelled)"
+      : status === "no_show"
+        ? "(no-show)"
+        : undefined;
+
   const booking = await prisma.booking.update({
     where: { id },
-    data: { status },
+    data: { status, ...(billingNote ? { billingNote } : {}) },
   });
 
   if (status === "cancelled") {
@@ -102,6 +109,7 @@ export async function rescheduleBooking(
       originalStartTime: booking.originalStartTime || booking.startTime,
       rescheduledAt: new Date(),
       rescheduleCount: { increment: 1 },
+      billingNote: "(rescheduled)",
       date: dateObj,
       startTime: newStartTime,
       endTime: newEndTime,
@@ -147,6 +155,7 @@ interface AdminCreateBookingData {
   endTime: string;
   useCredit: boolean;
   adminNotes?: string;
+  couplesPartnerName?: string;
 }
 
 export async function adminCreateBookingAction(data: AdminCreateBookingData) {
@@ -154,11 +163,12 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
 
   const student = await prisma.student.findUnique({
     where: { id: data.studentId },
-    select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+    select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
   });
   if (!student) throw new Error("Client not found");
 
   const config = getSessionTypeConfig(data.sessionType);
+  const isPostpaid = student.billingType === "postpaid";
 
   // Validate slot availability (race condition guard)
   const slots = await getAvailableSlots(data.date, config);
@@ -167,8 +177,8 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     throw new Error("This time slot is no longer available. Please choose another.");
   }
 
-  // Credit check
-  if (data.useCredit && !config.isFree) {
+  // Credit check (skip for postpaid — session will be invoiced monthly)
+  if (data.useCredit && !config.isFree && !isPostpaid) {
     const balance = await getBalance(student.id);
     if (balance < 1) throw new Error("Client has insufficient session credits.");
   }
@@ -201,6 +211,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
       clientPhone: student.phone || null,
       status: "confirmed",
       adminNotes: data.adminNotes || null,
+      couplesPartnerName: data.couplesPartnerName || null,
       graphEventId: calResult?.eventId || null,
       teamsMeetingUrl: calResult?.teamsMeetingUrl || null,
       confirmationToken,
@@ -210,8 +221,8 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     },
   });
 
-  // Deduct credit
-  if (data.useCredit && !config.isFree) {
+  // Deduct credit (skip for postpaid clients)
+  if (data.useCredit && !config.isFree && !isPostpaid) {
     await deductCredit(
       student.id,
       booking.id,
@@ -298,6 +309,7 @@ interface AdminCreateRecurringData {
   months: number;
   useCredits: boolean;
   adminNotes?: string;
+  couplesPartnerName?: string;
 }
 
 export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurringData) {
@@ -305,17 +317,18 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 
   const student = await prisma.student.findUnique({
     where: { id: data.studentId },
-    select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+    select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
   });
   if (!student) throw new Error("Client not found");
 
   const config = getSessionTypeConfig(data.sessionType);
+  const isPostpaid = student.billingType === "postpaid";
   const clientName = `${student.firstName} ${student.lastName}`.trim();
   const dates = generateRecurringDates(data.startDate, data.pattern, data.months);
 
-  // Check credits
+  // Check credits (skip for postpaid — sessions will be invoiced monthly)
   let creditsRemaining = 0;
-  if (data.useCredits && !config.isFree) {
+  if (data.useCredits && !config.isFree && !isPostpaid) {
     creditsRemaining = await getBalance(student.id);
   }
 
@@ -360,6 +373,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         clientPhone: student.phone || null,
         status: "confirmed",
         adminNotes: data.adminNotes || null,
+        couplesPartnerName: data.couplesPartnerName || null,
         graphEventId: calResult?.eventId || null,
         teamsMeetingUrl: calResult?.teamsMeetingUrl || null,
         confirmationToken,
@@ -371,8 +385,8 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
       },
     });
 
-    // Deduct credit if available
-    if (data.useCredits && !config.isFree && creditsRemaining > 0) {
+    // Deduct credit if available (skip for postpaid)
+    if (data.useCredits && !config.isFree && !isPostpaid && creditsRemaining > 0) {
       await deductCredit(
         student.id,
         booking.id,
@@ -476,4 +490,38 @@ export async function getClientsForBookingAction(search?: string) {
 export async function getClientCreditBalance(studentId: string) {
   await requireRole("super_admin", "editor");
   return getBalance(studentId);
+}
+
+// ────────────────────────────────────────────────────────────
+// Get linked partners for couples booking
+// ────────────────────────────────────────────────────────────
+
+export async function getClientPartnersAction(studentId: string) {
+  await requireRole("super_admin", "editor");
+
+  const relationships = await prisma.clientRelationship.findMany({
+    where: {
+      relationshipType: "partner",
+      OR: [
+        { studentId, relatedStudentId: { not: null } },
+        { relatedStudentId: studentId },
+      ],
+    },
+    include: {
+      student: { select: { id: true, firstName: true, lastName: true } },
+      relatedStudent: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+
+  // Return the "other" person in each relationship
+  const partners: { id: string; firstName: string; lastName: string }[] = [];
+  for (const rel of relationships) {
+    if (rel.studentId === studentId && rel.relatedStudent) {
+      partners.push(rel.relatedStudent);
+    } else if (rel.relatedStudentId === studentId && rel.student) {
+      partners.push(rel.student);
+    }
+  }
+
+  return partners;
 }

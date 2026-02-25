@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ interface SortableHeaderProps {
   currentSort: string;
   currentDir: string;
   className?: string;
+  basePath?: string;
 }
 
 export function SortableHeader({
@@ -18,22 +19,23 @@ export function SortableHeader({
   currentSort,
   currentDir,
   className,
+  basePath,
 }: SortableHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const isActive = currentSort === field;
 
   function handleClick() {
     const sp = new URLSearchParams(searchParams.toString());
     sp.set("sort", field);
-    // Toggle direction if already sorting by this field, otherwise default to asc
     if (isActive) {
       sp.set("dir", currentDir === "asc" ? "desc" : "asc");
     } else {
       sp.set("dir", "asc");
     }
-    router.push(`/admin/clients?${sp.toString()}`);
+    router.push(`${basePath ?? pathname}?${sp.toString()}`);
   }
 
   return (

@@ -7,6 +7,12 @@ import { randomUUID } from "node:crypto";
 
 const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 interface SendEmailOptions {
   to: string;
   subject: string;
@@ -15,18 +21,17 @@ interface SendEmailOptions {
   templateKey?: string;
   studentId?: string;
   metadata?: Record<string, unknown>;
-  skipTracking?: boolean; // Skip tracking injection (e.g. for admin test emails)
+  skipTracking?: boolean;
+  attachments?: EmailAttachment[];
 }
 
 /**
  * Inject a 1x1 tracking pixel and wrap links for click tracking.
  */
 function injectTracking(html: string, trackingId: string, baseUrl: string): string {
-  // Wrap links with click tracking redirect (skip unsubscribe and track links)
   let tracked = html.replaceAll(
     /href="(https?:\/\/[^"]+)"/gi,
     (_match, url: string) => {
-      // Don't wrap unsubscribe links or existing tracking links
       if (url.includes("/api/unsubscribe") || url.includes("/api/track/")) {
         return `href="${url}"`;
       }
@@ -35,7 +40,6 @@ function injectTracking(html: string, trackingId: string, baseUrl: string): stri
     }
   );
 
-  // Inject tracking pixel before </body> or at the end
   const pixel = `<img src="${baseUrl}/api/track/open?t=${trackingId}" width="1" height="1" style="display:none;border:0;" alt="" />`;
   if (tracked.includes("</body>")) {
     tracked = tracked.replace("</body>", `${pixel}</body>`);
@@ -46,19 +50,63 @@ function injectTracking(html: string, trackingId: string, baseUrl: string): stri
   return tracked;
 }
 
-export async function sendEmail({
-  to,
-  subject,
-  html,
-  replyTo,
-  templateKey,
-  studentId,
-  metadata,
-  skipTracking,
-}: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
+/** Send via Resend API */
+async function sendViaResend(
+  opts: { from: string; to: string; subject: string; html: string; replyTo?: string; attachments?: EmailAttachment[] },
+) {
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { error } = await resend.emails.send({
+    from: opts.from,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+    ...(opts.attachments?.length
+      ? {
+          attachments: opts.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+            content_type: a.contentType,
+          })),
+        }
+      : {}),
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Send via SMTP / Nodemailer */
+async function sendViaSMTP(
+  opts: { from: string; to: string; subject: string; html: string; replyTo?: string; attachments?: EmailAttachment[] },
+  smtp: { host: string; port: number; user: string; pass: string },
+) {
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.port === 465,
+    auth: { user: smtp.user, pass: smtp.pass },
+  } as nodemailer.TransportOptions);
+  await transporter.sendMail({
+    from: opts.from,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+    ...(opts.attachments?.length
+      ? {
+          attachments: opts.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+            contentType: a.contentType || "application/octet-stream",
+          })),
+        }
+      : {}),
+  });
+}
+
+export async function sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
+  const { to, subject, html, replyTo, templateKey, studentId, metadata, skipTracking, attachments } = options;
   const settings = await getSiteSettings();
 
-  // Generate tracking ID and inject tracking into HTML
   const trackingId = skipTracking ? undefined : randomUUID();
   const finalHtml = trackingId ? injectTracking(html, trackingId, DEFAULT_BASE_URL) : html;
 
@@ -81,30 +129,14 @@ export async function sendEmail({
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       if (useResend) {
-        const resend = new Resend(process.env.RESEND_API_KEY);
         const from = process.env.RESEND_FROM || `${settings.smtpFromName || "Life-Therapy"} <hello@life-therapy.co.za>`;
-        const { error } = await resend.emails.send({
-          from,
-          to,
-          subject,
-          html: finalHtml,
-          ...(replyTo ? { replyTo } : {}),
-        });
-        if (error) throw new Error(error.message);
+        await sendViaResend({ from, to, subject, html: finalHtml, replyTo, attachments });
       } else {
-        const transporter = nodemailer.createTransport({
-          host: smtpHost,
-          port: smtpPort!,
-          secure: smtpPort === 465,
-          auth: { user: smtpUser!, pass: smtpPass! },
-        } as nodemailer.TransportOptions);
-        await transporter.sendMail({
-          from: `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || smtpUser}>`,
-          to,
-          subject,
-          html: finalHtml,
-          ...(replyTo ? { replyTo } : {}),
-        });
+        const from = `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || smtpUser}>`;
+        await sendViaSMTP(
+          { from, to, subject, html: finalHtml, replyTo, attachments },
+          { host: smtpHost!, port: smtpPort!, user: smtpUser!, pass: smtpPass! },
+        );
       }
       await logEmail({ to, subject, templateKey, studentId, metadata, status: "sent", trackingId });
       return { success: true };

@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { getStripe } from "@/lib/stripe";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, Package, Loader2 } from "lucide-react";
@@ -18,18 +17,18 @@ export const metadata: Metadata = {
 export default async function CheckoutSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ session_id?: string }>;
+  searchParams: Promise<{ reference?: string; trxref?: string }>;
 }) {
   const params = await searchParams;
-  const sessionId = params.session_id;
+  const reference = params.reference || params.trxref;
   const currency = await getCurrency();
 
-  if (!sessionId) {
+  if (!reference) {
     return (
       <section className="px-4 py-16">
         <div className="mx-auto max-w-lg text-center">
           <p className="text-muted-foreground">
-            No session found. If you just made a purchase, check your email for
+            No payment reference found. If you just made a purchase, check your email for
             confirmation.
           </p>
           <Button className="mt-6" asChild>
@@ -40,21 +39,15 @@ export default async function CheckoutSuccessPage({
     );
   }
 
-  // Look up the order via Stripe session metadata
+  // Look up the order via Paystack reference
   let order = null;
   try {
-    const stripe = getStripe();
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    const orderId = session.metadata?.orderId;
-
-    if (orderId) {
-      order = await prisma.order.findUnique({
-        where: { id: orderId },
-        include: { items: true, student: true },
-      });
-    }
+    order = await prisma.order.findUnique({
+      where: { paystackReference: reference },
+      include: { items: true, student: true },
+    });
   } catch {
-    // Stripe lookup failed — show generic success
+    // DB lookup failed — show generic success
   }
 
   if (!order) {

@@ -140,6 +140,35 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     changeSummary: "Updated cancellation window from 24h to 48h",
     portalUrl: "https://life-therapy.co.za/portal",
   },
+  invoice: {
+    billingName: "Jane Doe",
+    invoiceNumber: "20260220-LT-JD-00001",
+    invoiceDate: "20 February 2026",
+    total: "R1,700.00",
+  },
+  payment_request: {
+    billingName: "Jane Doe",
+    month: "February 2026",
+    sessionSummary: `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">
+      <tr><td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">Individual Session — 3 Feb 2026, 10:00–11:00</td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb;">R850.00</td></tr>
+      <tr><td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">Individual Session — 10 Feb 2026, 10:00–11:00</td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb;">R850.00</td></tr>
+    </table>`,
+    total: "R1,700.00",
+    dueDate: "28 February 2026",
+    paymentUrl: "https://paystack.com/pay/sample",
+  },
+  payment_request_reminder: {
+    billingName: "Jane Doe",
+    total: "R1,700.00",
+    dueDate: "28 February 2026",
+    paymentUrl: "https://paystack.com/pay/sample",
+  },
+  payment_request_overdue: {
+    billingName: "Jane Doe",
+    month: "February 2026",
+    total: "R1,700.00",
+    paymentUrl: "https://paystack.com/pay/sample",
+  },
 };
 
 // Title mapping for baseTemplate wrapper
@@ -161,6 +190,10 @@ const TEMPLATE_TITLES: Record<string, string> = {
   booking_reschedule: "Session Rescheduled",
   booking_recurring_series: "Your Upcoming Sessions",
   legal_document_updated: "Document Updated",
+  invoice: "Invoice",
+  payment_request: "Payment Request",
+  payment_request_reminder: "Payment Reminder",
+  payment_request_overdue: "Payment Overdue",
 };
 
 /**
@@ -420,6 +453,75 @@ function renderFallback(
             <a href="${variables.portalUrl || baseUrl}/review-documents" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Review Now</a>
           </div>
           <p style="color: #dc2626; font-weight: 600;">This is required to continue booking sessions.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "invoice":
+      return {
+        subject: `Life Therapy Invoice ${variables.invoiceNumber || ""}`,
+        html: baseTemplate(
+          "Invoice",
+          `<p>Hi ${variables.billingName || ""},</p>
+          <p>Please find your invoice attached.</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Invoice:</strong> ${variables.invoiceNumber || ""}</p>
+            <p style="margin: 4px 0;"><strong>Date:</strong> ${variables.invoiceDate || ""}</p>
+            <p style="margin: 4px 0;"><strong>Amount:</strong> ${variables.total || ""}</p>
+          </div>
+          <p>Your invoice is attached as a PDF to this email.</p>
+          <p>If you have any questions about this invoice, please reply to this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "payment_request":
+      return {
+        subject: `Your Life Therapy sessions for ${variables.month || ""}`,
+        html: baseTemplate(
+          "Payment Request",
+          `<p>Hi ${variables.billingName || ""},</p>
+          <p>Here is a summary of sessions for <strong>${variables.month || ""}</strong>:</p>
+          ${variables.sessionSummary || ""}
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Total Due:</strong> ${variables.total || ""}</p>
+            <p style="margin: 4px 0;"><strong>Due Date:</strong> ${variables.dueDate || ""}</p>
+          </div>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          </div>
+          <p>If you have any questions, please reply to this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "payment_request_reminder":
+      return {
+        subject: `Friendly reminder — payment due ${variables.dueDate || ""}`,
+        html: baseTemplate(
+          "Payment Reminder",
+          `<p>Hi ${variables.billingName || ""},</p>
+          <p>Just a friendly reminder that your payment of <strong>${variables.total || ""}</strong> is due on <strong>${variables.dueDate || ""}</strong>.</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          </div>
+          <p>If you&rsquo;ve already made payment, please disregard this message.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "payment_request_overdue":
+      return {
+        subject: `Payment overdue — Life Therapy ${variables.month || ""}`,
+        html: baseTemplate(
+          "Payment Overdue",
+          `<p>Hi ${variables.billingName || ""},</p>
+          <p>We notice that your payment of <strong>${variables.total || ""}</strong> for <strong>${variables.month || ""}</strong> is now overdue.</p>
+          <p>Please arrange payment at your earliest convenience:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #dc2626; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          </div>
+          <p>If you&rsquo;ve already made payment or have any questions, please reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
           baseUrl, unsubscribeUrl
         ),

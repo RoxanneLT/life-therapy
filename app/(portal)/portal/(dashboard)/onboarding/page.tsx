@@ -53,6 +53,7 @@ export default async function OnboardingPage({ searchParams }: Props) {
     lastName: student.lastName,
     email: student.email,
     phone: student.phone,
+    smsOptIn: student.smsOptIn,
     dateOfBirth: student.dateOfBirth ? format(new Date(student.dateOfBirth), "yyyy-MM-dd") : null,
     gender: student.gender,
     address: student.address,

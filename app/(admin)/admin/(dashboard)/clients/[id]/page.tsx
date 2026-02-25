@@ -75,6 +75,34 @@ export default async function ClientDetailPage({
           templateKey: true,
         },
       },
+      relationshipsFrom: {
+        include: {
+          relatedStudent: { select: { id: true, firstName: true, lastName: true, email: true } },
+          billingEntity: true,
+        },
+      },
+      relationshipsTo: {
+        include: {
+          student: { select: { id: true, firstName: true, lastName: true, email: true } },
+          billingEntity: true,
+        },
+      },
+      individualBilledTo: {
+        include: {
+          student: { select: { id: true, firstName: true, lastName: true } },
+          relatedStudent: { select: { id: true, firstName: true, lastName: true } },
+          billingEntity: { select: { id: true, name: true } },
+        },
+      },
+      couplesBilledTo: {
+        include: {
+          student: { select: { id: true, firstName: true, lastName: true } },
+          relatedStudent: { select: { id: true, firstName: true, lastName: true } },
+          billingEntity: { select: { id: true, name: true } },
+        },
+      },
+      invoices: { orderBy: { createdAt: "desc" }, take: 50 },
+      paymentRequests: { orderBy: { createdAt: "desc" }, take: 50 },
     },
   });
 
@@ -82,6 +110,36 @@ export default async function ClientDetailPage({
 
   const activeTab = tab || "overview";
   const insights = await getClientInsights(client.id);
+
+  // Billing indicator: find students whose billing is assigned to this person
+  const billedToMeRaw = await prisma.student.findMany({
+    where: {
+      id: { not: id },
+      OR: [
+        { individualBilledTo: { OR: [{ studentId: id }, { relatedStudentId: id }] } },
+        { couplesBilledTo: { OR: [{ studentId: id }, { relatedStudentId: id }] } },
+      ],
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      individualBilledTo: { select: { studentId: true, relatedStudentId: true } },
+      couplesBilledTo: { select: { studentId: true, relatedStudentId: true } },
+    },
+  });
+  const billedToMe = billedToMeRaw
+    .map((s) => {
+      const types: string[] = [];
+      if (s.individualBilledTo && (s.individualBilledTo.studentId === id || s.individualBilledTo.relatedStudentId === id)) {
+        types.push("individual");
+      }
+      if (s.couplesBilledTo && (s.couplesBilledTo.studentId === id || s.couplesBilledTo.relatedStudentId === id)) {
+        types.push("couples");
+      }
+      return { id: s.id, name: `${s.firstName} ${s.lastName}`, types };
+    })
+    .filter((s) => s.types.length > 0);
 
   return (
     <div className="space-y-6">
@@ -126,7 +184,7 @@ export default async function ClientDetailPage({
 
       {/* Tabs */}
       <ClientProfileTabs
-        client={JSON.parse(JSON.stringify(client))}
+        client={{ ...JSON.parse(JSON.stringify(client)), _billedToMe: billedToMe }}
         activeTab={activeTab}
         insights={JSON.parse(JSON.stringify(insights))}
       />

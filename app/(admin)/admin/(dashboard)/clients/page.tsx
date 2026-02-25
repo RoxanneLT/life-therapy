@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Upload } from "lucide-react";
 import { ClientListFilters } from "./client-list-filters";
-import { SortableHeader } from "./sortable-header";
+import { SortableHeader } from "@/components/admin/sortable-header";
 
 const STATUS_TABS = ["all", "active", "potential", "inactive", "archived"] as const;
 

@@ -30,6 +30,7 @@ import {
   adminCreateRecurringBookingsAction,
   getClientsForBookingAction,
   getClientCreditBalance,
+  getClientPartnersAction,
 } from "./actions";
 import {
   CalendarPlus,
@@ -49,6 +50,12 @@ interface ClientOption {
   lastName: string;
   email: string;
   clientStatus: string;
+}
+
+interface PartnerOption {
+  id: string;
+  firstName: string;
+  lastName: string;
 }
 
 type BookingMode = "single" | "recurring";
@@ -87,6 +94,11 @@ export function CreateBookingDialog() {
 
   // Admin notes
   const [adminNotes, setAdminNotes] = useState("");
+
+  // Couples partner
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [selectedPartnerName, setSelectedPartnerName] = useState("");
+  const [customPartnerName, setCustomPartnerName] = useState("");
 
   // Recurring options
   const [recurringPattern, setRecurringPattern] = useState<RecurringPattern>("weekly");
@@ -160,6 +172,24 @@ export function CreateBookingDialog() {
       .catch(() => setCreditBalance(null));
   }, [selectedClient]);
 
+  // Fetch partners when client selected and session type is couples
+  useEffect(() => {
+    if (!selectedClient || sessionType !== "couples") {
+      setPartners([]);
+      setSelectedPartnerName("");
+      setCustomPartnerName("");
+      return;
+    }
+    getClientPartnersAction(selectedClient.id)
+      .then((result) => {
+        setPartners(result);
+        if (result.length === 1) {
+          setSelectedPartnerName(`${result[0].firstName} ${result[0].lastName}`);
+        }
+      })
+      .catch(() => setPartners([]));
+  }, [selectedClient, sessionType]);
+
   function resetForm() {
     setStep(1);
     setSearch("");
@@ -169,6 +199,9 @@ export function CreateBookingDialog() {
     setCreditBalance(null);
     setUseCredit(true);
     setAdminNotes("");
+    setPartners([]);
+    setSelectedPartnerName("");
+    setCustomPartnerName("");
     setRecurringPattern("weekly");
     setRecurringMonths(6);
     setRecurringDate("");
@@ -183,6 +216,12 @@ export function CreateBookingDialog() {
     setOpen(isOpen);
     if (!isOpen) resetForm();
   }
+
+  // Effective partner name for couples bookings
+  const effectivePartnerName =
+    sessionType === "couples"
+      ? (selectedPartnerName === "__custom__" ? customPartnerName.trim() : selectedPartnerName) || undefined
+      : undefined;
 
   function handleNext() {
     if (!selectedClient) return;
@@ -205,6 +244,7 @@ export function CreateBookingDialog() {
           endTime,
           useCredit: useCredit && !config.isFree,
           adminNotes: adminNotes.trim() || undefined,
+          couplesPartnerName: effectivePartnerName,
         });
         setOpen(false);
         resetForm();
@@ -243,6 +283,7 @@ export function CreateBookingDialog() {
           months: recurringMonths,
           useCredits: useCredit && !config.isFree,
           adminNotes: adminNotes.trim() || undefined,
+          couplesPartnerName: effectivePartnerName,
         });
         setRecurringResult(result);
       } catch (err) {
@@ -431,6 +472,60 @@ export function CreateBookingDialog() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Couples partner selection */}
+            {sessionType === "couples" && selectedClient && (
+              <div className="space-y-2">
+                <Label>Partner</Label>
+                {partners.length > 0 ? (
+                  <>
+                    <Select
+                      value={selectedPartnerName}
+                      onValueChange={(v) => {
+                        setSelectedPartnerName(v);
+                        if (v !== "__custom__") setCustomPartnerName("");
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select partner..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {partners.map((p) => {
+                          const name = `${p.firstName} ${p.lastName}`;
+                          return (
+                            <SelectItem key={p.id} value={name}>
+                              {name}
+                            </SelectItem>
+                          );
+                        })}
+                        <SelectItem value="__custom__">Other (type name)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {selectedPartnerName === "__custom__" && (
+                      <Input
+                        value={customPartnerName}
+                        onChange={(e) => setCustomPartnerName(e.target.value)}
+                        placeholder="Partner's full name"
+                      />
+                    )}
+                  </>
+                ) : (
+                  <Input
+                    value={customPartnerName}
+                    onChange={(e) => {
+                      setCustomPartnerName(e.target.value);
+                      setSelectedPartnerName("__custom__");
+                    }}
+                    placeholder="Partner's full name"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {partners.length === 0
+                    ? "No linked partners. Type the partner's name manually."
+                    : "Select a linked partner or choose 'Other' to type a name."}
+                </p>
+              </div>
+            )}
 
             {/* Booking mode toggle */}
             <div className="space-y-2">

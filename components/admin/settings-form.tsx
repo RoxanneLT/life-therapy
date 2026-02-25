@@ -18,7 +18,6 @@ import {
   Newspaper,
   Mail,
   CreditCard,
-  DollarSign,
   CheckCircle2,
   AlertCircle,
   Calendar,
@@ -65,10 +64,9 @@ const SECTIONS: SettingsSection[] = [
   { id: "newsletter", label: "Newsletter", group: "Integrations", icon: Newspaper },
   { id: "payments", label: "Payments", group: "Integrations", icon: CreditCard },
   { id: "calendar", label: "Calendar", group: "Integrations", icon: Calendar },
-  { id: "session-pricing", label: "Session Pricing", group: "Pricing", icon: DollarSign },
 ];
 
-const GROUPS = ["General", "Integrations", "Pricing"];
+const GROUPS = ["General", "Integrations"];
 
 interface SecretStatus {
   msGraphConfigured: boolean;
@@ -123,16 +121,6 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
   const [smtpFromName, setSmtpFromName] = useState(initialSettings.smtpFromName || "");
   const [smtpFromEmail, setSmtpFromEmail] = useState(initialSettings.smtpFromEmail || "");
 
-  // Session Pricing (all currencies)
-  const [sessionPriceIndividualZar, setSessionPriceIndividualZar] = useState(initialSettings.sessionPriceIndividualZar?.toString() || "");
-  const [sessionPriceIndividualUsd, setSessionPriceIndividualUsd] = useState(initialSettings.sessionPriceIndividualUsd?.toString() || "");
-  const [sessionPriceIndividualEur, setSessionPriceIndividualEur] = useState(initialSettings.sessionPriceIndividualEur?.toString() || "");
-  const [sessionPriceIndividualGbp, setSessionPriceIndividualGbp] = useState(initialSettings.sessionPriceIndividualGbp?.toString() || "");
-  const [sessionPriceCouplesZar, setSessionPriceCouplesZar] = useState(initialSettings.sessionPriceCouplesZar?.toString() || "");
-  const [sessionPriceCouplesUsd, setSessionPriceCouplesUsd] = useState(initialSettings.sessionPriceCouplesUsd?.toString() || "");
-  const [sessionPriceCouplesEur, setSessionPriceCouplesEur] = useState(initialSettings.sessionPriceCouplesEur?.toString() || "");
-  const [sessionPriceCouplesGbp, setSessionPriceCouplesGbp] = useState(initialSettings.sessionPriceCouplesGbp?.toString() || "");
-
   function updateHours(day: string, field: string, value: string | boolean) {
     setBusinessHours((prev) => ({
       ...prev,
@@ -164,14 +152,6 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
       formData.set("googleAnalyticsId", googleAnalyticsId);
       formData.set("smtpFromName", smtpFromName);
       formData.set("smtpFromEmail", smtpFromEmail);
-      formData.set("sessionPriceIndividualZar", sessionPriceIndividualZar);
-      formData.set("sessionPriceIndividualUsd", sessionPriceIndividualUsd);
-      formData.set("sessionPriceIndividualEur", sessionPriceIndividualEur);
-      formData.set("sessionPriceIndividualGbp", sessionPriceIndividualGbp);
-      formData.set("sessionPriceCouplesZar", sessionPriceCouplesZar);
-      formData.set("sessionPriceCouplesUsd", sessionPriceCouplesUsd);
-      formData.set("sessionPriceCouplesEur", sessionPriceCouplesEur);
-      formData.set("sessionPriceCouplesGbp", sessionPriceCouplesGbp);
       formData.set("copyrightText", copyrightText);
       formData.set("footerTagline", footerTagline);
 
@@ -553,62 +533,6 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
             </Card>
           )}
 
-          {/* Session Pricing */}
-          {activeSection === "session-pricing" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Session Pricing</CardTitle>
-                <CardDescription>Set session prices for all currencies. All values are in cents (e.g. 85000 = R850.00, 6500 = $65.00).</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <h4 className="mb-3 text-sm font-medium">Individual Session (60 min)</h4>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceIndividualZar">ZAR (cents)</Label>
-                      <Input id="sessionPriceIndividualZar" type="number" value={sessionPriceIndividualZar} onChange={(e) => setSessionPriceIndividualZar(e.target.value)} placeholder="e.g. 85000 = R850" min={0} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceIndividualUsd">USD (cents)</Label>
-                      <Input id="sessionPriceIndividualUsd" type="number" value={sessionPriceIndividualUsd} onChange={(e) => setSessionPriceIndividualUsd(e.target.value)} placeholder="e.g. 6500 = $65" min={0} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceIndividualEur">EUR (cents)</Label>
-                      <Input id="sessionPriceIndividualEur" type="number" value={sessionPriceIndividualEur} onChange={(e) => setSessionPriceIndividualEur(e.target.value)} placeholder="e.g. 5900 = €59" min={0} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceIndividualGbp">GBP (cents)</Label>
-                      <Input id="sessionPriceIndividualGbp" type="number" value={sessionPriceIndividualGbp} onChange={(e) => setSessionPriceIndividualGbp(e.target.value)} placeholder="e.g. 4900 = £49" min={0} />
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="mb-3 text-sm font-medium">Couples Session (60 min)</h4>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceCouplesZar">ZAR (cents)</Label>
-                      <Input id="sessionPriceCouplesZar" type="number" value={sessionPriceCouplesZar} onChange={(e) => setSessionPriceCouplesZar(e.target.value)} placeholder="e.g. 120000 = R1,200" min={0} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceCouplesUsd">USD (cents)</Label>
-                      <Input id="sessionPriceCouplesUsd" type="number" value={sessionPriceCouplesUsd} onChange={(e) => setSessionPriceCouplesUsd(e.target.value)} placeholder="e.g. 9500 = $95" min={0} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceCouplesEur">EUR (cents)</Label>
-                      <Input id="sessionPriceCouplesEur" type="number" value={sessionPriceCouplesEur} onChange={(e) => setSessionPriceCouplesEur(e.target.value)} placeholder="e.g. 8500 = €85" min={0} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sessionPriceCouplesGbp">GBP (cents)</Label>
-                      <Input id="sessionPriceCouplesGbp" type="number" value={sessionPriceCouplesGbp} onChange={(e) => setSessionPriceCouplesGbp(e.target.value)} placeholder="e.g. 7500 = £75" min={0} />
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Free consultations are always free regardless of currency. Leave a field blank to use the default price.
-                </p>
-              </CardContent>
-            </Card>
-          )}
         </div>
     </form>
   );

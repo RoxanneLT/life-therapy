@@ -34,9 +34,9 @@ export default async function PortalBookingsPage() {
   // Serialize dates for client component
   const serialized = bookings.map((b) => ({
     ...b,
-    date: b.date.toISOString(),
+    date: b.date.toISOString().slice(0, 10),
     rescheduledAt: b.rescheduledAt?.toISOString() || null,
-    originalDate: b.originalDate?.toISOString() || null,
+    originalDate: b.originalDate ? b.originalDate.toISOString().slice(0, 10) : null,
     cancelledAt: b.cancelledAt?.toISOString() || null,
   }));
 

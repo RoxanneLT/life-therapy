@@ -124,7 +124,7 @@ export function CartPageClient() {
         return;
       }
       if (data.url) {
-        // Clear local cart (order is now in DB) and redirect to Stripe
+        // Clear local cart (order is now in DB) and redirect to Paystack
         clearCart();
         globalThis.location.href = data.url;
       }
@@ -255,8 +255,14 @@ export function CartPageClient() {
                     {checkoutError}
                   </p>
                 )}
+                {currency !== "ZAR" && (
+                  <p className="text-center text-xs text-amber-600">
+                    You&apos;ll be charged in ZAR (South African Rand). Your
+                    bank will convert at the current exchange rate.
+                  </p>
+                )}
                 <p className="text-center text-xs text-muted-foreground">
-                  You&apos;ll be redirected to Stripe for secure payment.
+                  You&apos;ll be redirected to Paystack for secure payment.
                 </p>
               </CardContent>
             </Card>

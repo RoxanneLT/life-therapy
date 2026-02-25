@@ -23,6 +23,8 @@ export async function savePersonalDetailsAction(formData: FormData) {
   const referralDetail = (formData.get("referralDetail") as string)?.trim() || null;
   const dateOfBirthStr = (formData.get("dateOfBirth") as string)?.trim() || null;
 
+  const smsOptIn = formData.get("smsOptIn") === "on";
+
   await prisma.student.update({
     where: { id: student.id },
     data: {
@@ -36,6 +38,7 @@ export async function savePersonalDetailsAction(formData: FormData) {
       referralSource,
       referralDetail,
       dateOfBirth: dateOfBirthStr ? new Date(dateOfBirthStr) : null,
+      smsOptIn,
       onboardingStep: Math.max(student.onboardingStep, 1),
     },
   });

@@ -206,23 +206,17 @@ export default async function OrderDetailPage({
         </Card>
       )}
 
-      {/* Stripe info */}
-      {(order.stripeSessionId || order.stripePaymentIntent) && (
+      {/* Payment info */}
+      {(order.paystackReference || order.paidAt) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Payment Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {order.stripeSessionId && (
+            {order.paystackReference && (
               <p>
-                <span className="text-muted-foreground">Session: </span>
-                <code className="text-xs">{order.stripeSessionId}</code>
-              </p>
-            )}
-            {order.stripePaymentIntent && (
-              <p>
-                <span className="text-muted-foreground">Payment: </span>
-                <code className="text-xs">{order.stripePaymentIntent}</code>
+                <span className="text-muted-foreground">Reference: </span>
+                <code className="text-xs">{order.paystackReference}</code>
               </p>
             )}
             {order.paidAt && (

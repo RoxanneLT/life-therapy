@@ -48,6 +48,9 @@ async function handleSessionCredit(
   const student = await getOptionalStudent();
   if (!student) throw new Error("You must be logged in to use session credits.");
 
+  // Postpaid clients don't use credits — sessions are invoiced monthly
+  if (student.billingType === "postpaid") return { paidWithCredit: false };
+
   const balance = await getBalance(student.id);
   if (balance < 1) throw new Error("Insufficient session credits.");
 

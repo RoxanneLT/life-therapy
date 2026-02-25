@@ -19,7 +19,7 @@ import {
   Mail,
   Send,
   Timer,
-  Scale,
+  Receipt,
 } from "lucide-react";
 import Image from "next/image";
 import type { AdminRole } from "@/lib/generated/prisma/client";
@@ -57,6 +57,7 @@ const navGroups: NavGroup[] = [
     label: "E-Commerce",
     items: [
       { href: "/admin/orders", label: "Orders", icon: ShoppingCart, roles: ["super_admin"] },
+      { href: "/admin/invoices", label: "Invoices", icon: Receipt, roles: ["super_admin"] },
       { href: "/admin/gifts", label: "Gifts", icon: Gift, roles: ["super_admin"] },
       { href: "/admin/coupons", label: "Coupons", icon: Tag, roles: ["super_admin"] },
       { href: "/admin/packages", label: "Packages", icon: Package, roles: ["super_admin"] },
@@ -75,7 +76,6 @@ const navGroups: NavGroup[] = [
     label: "Admin",
     items: [
       { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
-      { href: "/admin/legal-documents", label: "Legal Documents", icon: Scale, roles: ["super_admin"] },
     ],
   },
 ];
@@ -90,6 +90,7 @@ export function AdminSidebar({ className, role }: AdminSidebarProps) {
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
+    if (href === "/admin/settings") return pathname.startsWith("/admin/settings");
     return pathname.startsWith(href);
   }
 

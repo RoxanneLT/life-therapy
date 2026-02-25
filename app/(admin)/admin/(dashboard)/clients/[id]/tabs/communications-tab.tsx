@@ -68,7 +68,7 @@ const PREF_FIELDS = [
   },
   {
     field: "smsOptIn",
-    label: "SMS notifications",
+    label: "WhatsApp reminders",
     onLabel: "Opted in",
     offLabel: "Not opted in",
   },
