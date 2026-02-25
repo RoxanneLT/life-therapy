@@ -4,10 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Pencil, CalendarDays, ShoppingCart, UserPlus, GraduationCap, Gift } from "lucide-react";
+import { Mail, Pencil, CalendarDays, ShoppingCart, UserPlus, GraduationCap, Gift, Receipt } from "lucide-react";
 import Link from "next/link";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+  billing: { label: "Billing & Invoice Emails", icon: Receipt },
   booking: { label: "Booking Emails", icon: CalendarDays },
   order: { label: "Order Emails", icon: ShoppingCart },
   onboarding: { label: "Onboarding Emails", icon: UserPlus },
@@ -15,7 +16,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
   gift: { label: "Gift Emails", icon: Gift },
 };
 
-const CATEGORY_ORDER = ["booking", "order", "onboarding", "course", "gift"];
+const CATEGORY_ORDER = ["billing", "booking", "order", "onboarding", "course", "gift"];
 
 export default async function EmailTemplatesPage() {
   const templates = await prisma.emailTemplate.findMany({

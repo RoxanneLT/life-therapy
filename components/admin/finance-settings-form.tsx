@@ -27,6 +27,7 @@ import {
   DollarSign,
   CalendarClock,
   Landmark,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ const SECTIONS: Section[] = [
   { id: "pricing", label: "Session Rates", icon: DollarSign },
   { id: "billing", label: "Billing Schedule", icon: CalendarClock },
   { id: "banking", label: "Banking Details", icon: Landmark },
+  { id: "invoice", label: "Invoice Template", icon: FileText },
 ];
 
 // ─── Day options ──────────────────────────────────────────────
@@ -749,7 +751,247 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
             </CardContent>
           </Card>
         )}
+
+        {/* ── Invoice Template ── */}
+        {activeSection === "invoice" && (
+          <InvoicePreview
+            vatRegistered={vatRegistered}
+            vatPercent={vatPercent}
+            vatNumber={vatNumber}
+            businessRegistrationNumber={businessRegistrationNumber}
+            businessAddress={businessAddress}
+            invoicePrefix={invoicePrefix}
+            bankName={bankName}
+            bankAccountHolder={bankAccountHolder}
+            bankAccountNumber={bankAccountNumber}
+            bankBranchCode={bankBranchCode}
+          />
+        )}
       </div>
     </form>
+  );
+}
+
+// ─── Invoice Preview ──────────────────────────────────────────
+
+// Sample data matching what the PDF generator would produce
+const SAMPLE_ITEMS = [
+  { desc: "Individual Session (60 min)", sub: "Mon 10 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
+  { desc: "Individual Session (60 min)", sub: "Mon 17 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
+  { desc: "Individual Session (60 min)", sub: "Mon 24 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
+];
+
+function InvoicePreview({
+  vatRegistered,
+  vatPercent,
+  vatNumber,
+  businessRegistrationNumber,
+  businessAddress,
+  invoicePrefix,
+  bankName,
+  bankAccountHolder,
+  bankAccountNumber,
+  bankBranchCode,
+}: {
+  vatRegistered: boolean;
+  vatPercent: string;
+  vatNumber: string;
+  businessRegistrationNumber: string;
+  businessAddress: string;
+  invoicePrefix: string;
+  bankName: string;
+  bankAccountHolder: string;
+  bankAccountNumber: string;
+  bankBranchCode: string;
+}) {
+  const vatRate = parseFloat(vatPercent) || 15;
+  const subtotal = 2550; // 3 sessions × R850
+  const vatAmount = vatRegistered ? (subtotal * vatRate) / 100 : 0;
+  const grandTotal = subtotal + vatAmount;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Invoice Template</CardTitle>
+        <CardDescription>
+          Live preview using your current settings. Changes in Business Details, VAT, and Banking will reflect here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {/* A4-ratio container */}
+        <div
+          className="mx-auto w-full max-w-[600px] overflow-hidden rounded border bg-white shadow-md"
+          style={{ aspectRatio: "210 / 297", fontFamily: "Helvetica, Arial, sans-serif" }}
+        >
+          <div className="flex h-full flex-col p-[5%]">
+            {/* ── HEADER ── */}
+            <div className="mb-[3%]">
+              <div className="flex items-start justify-between">
+                <h2
+                  className="text-[clamp(14px,2.5vw,22px)] font-bold"
+                  style={{ color: "#8BA889" }}
+                >
+                  {vatRegistered ? "Tax Invoice" : "Invoice"}
+                </h2>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.png"
+                  alt="Logo"
+                  className="h-[clamp(24px,5vw,40px)] w-auto object-contain"
+                />
+              </div>
+              <div className="mt-[2%] border-t" style={{ borderColor: "#dcdcdc" }} />
+            </div>
+
+            {/* ── BUSINESS + META ── */}
+            <div className="mb-[3%] flex gap-[4%]" style={{ fontSize: "clamp(6px,1.2vw,9px)" }}>
+              {/* Business details — left ~55% */}
+              <div className="w-[55%]">
+                <p className="font-bold" style={{ color: "#212121", fontSize: "clamp(8px,1.5vw,11px)" }}>
+                  Life Therapy (Pty) Ltd
+                </p>
+                {businessRegistrationNumber && (
+                  <p style={{ color: "#787878" }}>Reg: {businessRegistrationNumber}</p>
+                )}
+                {vatRegistered && vatNumber && (
+                  <p style={{ color: "#787878" }}>VAT: {vatNumber}</p>
+                )}
+                {businessAddress && (
+                  <p className="whitespace-pre-line" style={{ color: "#787878" }}>
+                    {businessAddress}
+                  </p>
+                )}
+              </div>
+
+              {/* Invoice meta — right ~45% */}
+              <div className="w-[45%]">
+                {[
+                  ["Number:", `20260220-${invoicePrefix || "LT"}-GS-00001`],
+                  ["Date:", "20 February 2026"],
+                  ["Reference:", `GS - ${invoicePrefix || "LT"}`],
+                  ["Page:", "1"],
+                  ["Due Date:", "28 February 2026"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex gap-1">
+                    <span className="w-[45%] font-bold" style={{ color: "#787878" }}>
+                      {label}
+                    </span>
+                    <span style={{ color: "#212121" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
+
+            {/* ── BILL TO ── */}
+            <div className="my-[2%]" style={{ fontSize: "clamp(6px,1.2vw,9px)" }}>
+              <p className="font-bold" style={{ color: "#787878", fontSize: "clamp(7px,1.3vw,9px)" }}>
+                Bill To:
+              </p>
+              <p className="font-bold" style={{ color: "#212121", fontSize: "clamp(7px,1.4vw,10px)" }}>
+                Grace Smith
+              </p>
+              <p style={{ color: "#787878" }}>123 Main Road, Cape Town, 8001</p>
+            </div>
+
+            <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
+
+            {/* ── LINE ITEMS TABLE ── */}
+            <div className="my-[2%] flex-1" style={{ fontSize: "clamp(6px,1.1vw,8.5px)" }}>
+              {/* Header */}
+              <div
+                className="flex py-[1%] font-bold"
+                style={{ backgroundColor: "#f5f8f5", color: "#212121" }}
+              >
+                <span className="w-[50%] pl-[1%]">Description</span>
+                <span className="w-[14%] text-center">Qty</span>
+                <span className="w-[18%] text-right">Excl. Price</span>
+                <span className="w-[18%] pr-[1%] text-right">Total</span>
+              </div>
+              <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
+
+              {/* Rows */}
+              {SAMPLE_ITEMS.map((item, i) => (
+                <div key={i}>
+                  <div className="flex py-[0.8%]" style={{ color: "#212121" }}>
+                    <span className="w-[50%] pl-[1%]">{item.desc}</span>
+                    <span className="w-[14%] text-center">{item.qty}</span>
+                    <span className="w-[18%] text-right">{item.price}</span>
+                    <span className="w-[18%] pr-[1%] text-right">{item.total}</span>
+                  </div>
+                  {item.sub && (
+                    <div
+                      className="pb-[0.5%] pl-[2%]"
+                      style={{ color: "#787878", fontSize: "clamp(5px,1vw,7.5px)" }}
+                    >
+                      {item.sub}
+                    </div>
+                  )}
+                  <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
+                </div>
+              ))}
+            </div>
+
+            {/* ── FOOTER: Banking + Totals ── */}
+            <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
+            <div
+              className="mt-[2%] flex gap-[4%]"
+              style={{ fontSize: "clamp(6px,1.1vw,8.5px)" }}
+            >
+              {/* Banking — left ~62% */}
+              <div className="w-[62%]">
+                <p className="mb-[1%] font-bold" style={{ color: "#212121" }}>
+                  Banking Details
+                </p>
+                {[
+                  ["Bank:", bankName],
+                  ["Account Holder:", bankAccountHolder],
+                  ["Account No:", bankAccountNumber],
+                  ["Branch:", bankBranchCode],
+                  ["Reg No:", businessRegistrationNumber],
+                ].filter(([, v]) => v).map(([label, value]) => (
+                  <div key={label} className="flex gap-1">
+                    <span className="w-[40%] font-bold" style={{ color: "#787878" }}>
+                      {label}
+                    </span>
+                    <span style={{ color: "#212121" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Totals — right ~38% */}
+              <div className="w-[38%]">
+                <div className="flex justify-between" style={{ color: "#787878" }}>
+                  <span>Total Exclusive:</span>
+                  <span style={{ color: "#212121" }}>R{subtotal.toFixed(2)}</span>
+                </div>
+
+                {vatRegistered && (
+                  <div className="flex justify-between" style={{ color: "#787878" }}>
+                    <span>VAT ({vatRate}%):</span>
+                    <span style={{ color: "#212121" }}>R{vatAmount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="mt-[3%] border-t pt-[3%]" style={{ borderColor: "#dcdcdc" }}>
+                  <div
+                    className="flex justify-between font-bold"
+                    style={{ color: "#212121", fontSize: "clamp(8px,1.5vw,11px)" }}
+                  >
+                    <span>Total:</span>
+                    <span>R{grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Sample invoice using current settings. Edit Business Details, VAT, and Banking sections to update.
+        </p>
+      </CardContent>
+    </Card>
   );
 }

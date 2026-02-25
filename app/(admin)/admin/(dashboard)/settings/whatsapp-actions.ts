@@ -70,6 +70,58 @@ export async function sendTestWhatsAppAction(phone: string) {
 // Get WhatsApp message logs (paginated)
 // ────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────
+// WhatsApp template management
+// ────────────────────────────────────────────────────────────
+
+const DEFAULT_TEMPLATES = [
+  { name: "session_reminder_48h", bodyText: "Hi {{1}}, this is a reminder that your {{2}} session is on {{3}} at {{4}}.", description: "Sent 48 hours before a session", sortOrder: 1 },
+  { name: "session_reminder_today", bodyText: "Hi {{1}}, your session is today at {{2}}. Join here: {{3}}", description: "Sent morning of session", sortOrder: 2 },
+  { name: "billing_request", bodyText: "Hi {{1}}, your {{2}} invoice of {{3}} is due by {{4}}. Pay here: {{5}}", description: "Sent when payment request is created", sortOrder: 3 },
+  { name: "billing_reminder", bodyText: "Hi {{1}}, a friendly reminder that {{2}} is due by {{3}}. Pay here: {{4}}", description: "Sent 2 days before due date", sortOrder: 4 },
+  { name: "billing_overdue", bodyText: "Hi {{1}}, your payment of {{2}} for {{3}} is overdue. Please pay here: {{4}}", description: "Sent 1 day after due date", sortOrder: 5 },
+  { name: "credit_expiry_14d", bodyText: "Hi {{1}}, you have {{2}} session credit(s) expiring on {{3}}. Book now to use them!", description: "Sent 14 days before credits expire", sortOrder: 6 },
+  { name: "credit_expiry_3d", bodyText: "Hi {{1}}, your {{2}} session credit(s) expire on {{3}} — only 3 days left!", description: "Sent 3 days before credits expire", sortOrder: 7 },
+];
+
+export async function getWhatsAppTemplatesAction() {
+  await requireRole("super_admin", "editor");
+
+  const templates = await prisma.whatsAppTemplate.findMany({
+    orderBy: { sortOrder: "asc" },
+  });
+
+  // Seed defaults if empty
+  if (templates.length === 0) {
+    await prisma.whatsAppTemplate.createMany({ data: DEFAULT_TEMPLATES });
+    return prisma.whatsAppTemplate.findMany({ orderBy: { sortOrder: "asc" } });
+  }
+
+  return templates;
+}
+
+export async function updateWhatsAppTemplateAction(
+  id: string,
+  data: { bodyText: string; description?: string },
+) {
+  await requireRole("super_admin");
+
+  await prisma.whatsAppTemplate.update({
+    where: { id },
+    data: {
+      bodyText: data.bodyText,
+      description: data.description ?? undefined,
+    },
+  });
+
+  revalidatePath("/admin/settings");
+  return { success: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// Get WhatsApp message logs (paginated)
+// ────────────────────────────────────────────────────────────
+
 export async function getWhatsAppLogsAction(page: number, limit: number = 10) {
   await requireRole("super_admin", "editor");
 

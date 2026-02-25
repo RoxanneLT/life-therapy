@@ -1418,3 +1418,18 @@ model WhatsAppLog {
   @@index([sentAt])
   @@map("whatsapp_logs")
 }
+
+// ============================================================
+// WhatsApp: Message template definitions (reference for Meta)
+// ============================================================
+model WhatsAppTemplate {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  bodyText    String
+  description String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("whatsapp_templates")
+}

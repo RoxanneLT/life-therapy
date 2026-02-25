@@ -4,14 +4,14 @@ import { useTransition, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { updatePreferenceAction } from "./actions";
+import { updatePreferenceAction } from "../actions";
 import { Loader2 } from "lucide-react";
 
-interface PreferencesClientProps {
-  newsletterOptIn: boolean;
-  marketingOptIn: boolean;
-  smsOptIn: boolean;
-  sessionReminders: boolean;
+interface PreferencesTabProps {
+  readonly newsletterOptIn: boolean;
+  readonly marketingOptIn: boolean;
+  readonly smsOptIn: boolean;
+  readonly sessionReminders: boolean;
 }
 
 const PREFS = [
@@ -37,7 +37,7 @@ const PREFS = [
   },
 ] as const;
 
-export function PreferencesClient(props: PreferencesClientProps) {
+export function PreferencesTab(props: PreferencesTabProps) {
   const [values, setValues] = useState<Record<string, boolean>>({
     newsletterOptIn: props.newsletterOptIn,
     marketingOptIn: props.marketingOptIn,

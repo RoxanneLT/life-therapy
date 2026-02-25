@@ -32,9 +32,13 @@ import {
   Loader2,
   Users,
   Globe,
+  ScrollText,
+  ShieldCheck,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { publishDocumentVersionAction } from "./actions";
 import type { LegalDocumentSlug } from "@/lib/legal-documents";
 
@@ -74,31 +78,63 @@ interface LegalDocumentsClientProps {
   readonly adminUserId: string;
 }
 
-const SLUG_LABELS: Record<string, string> = {
-  commitment: "My Commitment to You",
-  terms: "Terms & Conditions",
-  privacy: "Privacy Policy",
+const SLUG_META: Record<string, { label: string; icon: typeof ScrollText }> = {
+  commitment: { label: "My Commitment", icon: ScrollText },
+  terms: { label: "Terms & Conditions", icon: ShieldCheck },
+  privacy: { label: "Privacy Policy", icon: Lock },
 };
 
 export function LegalDocumentsClient({
   documents,
   adminUserId,
 }: LegalDocumentsClientProps) {
+  const [activeSlug, setActiveSlug] = useState(documents[0]?.slug ?? "commitment");
   const [editDoc, setEditDoc] = useState<DocumentData | null>(null);
   const [historyDoc, setHistoryDoc] = useState<DocumentData | null>(null);
   const [viewVersion, setViewVersion] = useState<DocumentVersion | null>(null);
 
+  const activeDoc = documents.find((d) => d.slug === activeSlug) ?? null;
+
   return (
     <>
-      <div className="space-y-4">
-        {documents.map((doc) => (
-          <DocumentCard
-            key={doc.slug}
-            doc={doc}
-            onEdit={() => setEditDoc(doc)}
-            onHistory={() => setHistoryDoc(doc)}
-          />
-        ))}
+      <div className="flex h-[calc(100vh-10rem)] gap-6">
+        {/* Sidebar */}
+        <div className="flex w-48 shrink-0 flex-col">
+          <div className="mb-5">
+            <h2 className="font-heading text-xl font-bold">Legal</h2>
+            <p className="text-xs text-muted-foreground">
+              Manage legal documents
+            </p>
+          </div>
+
+          <nav className="flex-1 space-y-0.5">
+            {documents.map((doc) => {
+              const meta = SLUG_META[doc.slug];
+              const Icon = meta?.icon ?? FileText;
+              return (
+                <button
+                  key={doc.slug}
+                  type="button"
+                  onClick={() => setActiveSlug(doc.slug)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                    activeSlug === doc.slug
+                      ? "bg-brand-50 text-brand-700"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {meta?.label ?? doc.slug}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Content area */}
+        <div className="min-w-0 flex-1 overflow-y-auto pr-1">
+          {activeDoc && <DocumentDetail doc={activeDoc} onEdit={() => setEditDoc(activeDoc)} onHistory={() => setHistoryDoc(activeDoc)} />}
+        </div>
       </div>
 
       {editDoc && (
@@ -127,9 +163,9 @@ export function LegalDocumentsClient({
   );
 }
 
-/* ─── Document Card ──────────────────────────────────────── */
+/* ─── Document Detail Panel ──────────────────────────────── */
 
-function DocumentCard({
+function DocumentDetail({
   doc,
   onEdit,
   onHistory,
@@ -141,69 +177,109 @@ function DocumentCard({
   const active = doc.active;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-base">
-              {active?.title ?? SLUG_LABELS[doc.slug] ?? doc.slug}
-            </CardTitle>
-            <CardDescription className="mt-1">
-              {active ? (
-                <>
-                  Version {active.version}
-                  {active.publishedAt && (
-                    <>
-                      {" "}
-                      &middot; Published{" "}
-                      {format(new Date(active.publishedAt), "d MMM yyyy")}
-                    </>
-                  )}
-                </>
-              ) : (
-                "No version published"
-              )}
-            </CardDescription>
+    <div className="space-y-6">
+      {/* Status card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle>
+                {active?.title ?? SLUG_META[doc.slug]?.label ?? doc.slug}
+              </CardTitle>
+              <CardDescription className="mt-1">
+                {active ? (
+                  <>
+                    Version {active.version}
+                    {active.publishedAt && (
+                      <>
+                        {" · "}Published{" "}
+                        {format(new Date(active.publishedAt), "d MMM yyyy")}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  "No version published yet"
+                )}
+              </CardDescription>
+            </div>
+            {active && (
+              <Badge className="bg-green-100 text-green-700">
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+                Active
+              </Badge>
+            )}
           </div>
-          {active && (
-            <Badge className="bg-green-100 text-green-700">
-              <CheckCircle2 className="mr-1 h-3 w-3" />
-              Active
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {doc.requiresAcceptance && doc.stats ? (
-            <span className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              Accepted by {doc.stats.accepted}/{doc.stats.total} clients
-              {doc.stats.pending > 0 && (
-                <span className="text-amber-600">
-                  ({doc.stats.pending} pending)
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {doc.requiresAcceptance && doc.stats ? (
+                <span className="flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" />
+                  Accepted by {doc.stats.accepted}/{doc.stats.total} clients
+                  {doc.stats.pending > 0 && (
+                    <span className="text-amber-600">
+                      ({doc.stats.pending} pending)
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Globe className="h-3.5 w-3.5" />
+                  Public page only
                 </span>
               )}
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5" />
-              Public page only
-            </span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onHistory}>
-            <History className="mr-1.5 h-3.5 w-3.5" />
-            History
-          </Button>
-          <Button size="sm" onClick={onEdit}>
-            <Pencil className="mr-1.5 h-3.5 w-3.5" />
-            Edit &amp; Publish
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={onHistory}>
+                <History className="mr-1.5 h-3.5 w-3.5" />
+                History
+              </Button>
+              <Button size="sm" onClick={onEdit}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Edit &amp; Publish
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Content preview */}
+      {active && active.content.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Content Preview</CardTitle>
+            <CardDescription>
+              {active.content.length} section{active.content.length === 1 ? "" : "s"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {active.content.map((section) => (
+              <div key={section.heading}>
+                <h3 className="text-sm font-semibold">{section.heading}</h3>
+                <p className="mt-1 line-clamp-3 whitespace-pre-line text-sm text-muted-foreground">
+                  {section.content}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Change summary */}
+      {active?.changeSummary && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Last Change</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm italic text-muted-foreground">
+              &ldquo;{active.changeSummary}&rdquo;
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -220,7 +296,7 @@ function EditDialog({
 }) {
   const active = doc.active;
   const [title, setTitle] = useState(
-    active?.title ?? SLUG_LABELS[doc.slug] ?? ""
+    active?.title ?? SLUG_META[doc.slug]?.label ?? ""
   );
   const [sections, setSections] = useState<Section[]>(
     active?.content ? [...active.content] : [{ heading: "", content: "" }]
@@ -283,7 +359,7 @@ function EditDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            Edit: {active?.title ?? SLUG_LABELS[doc.slug]}
+            Edit: {active?.title ?? SLUG_META[doc.slug]?.label ?? doc.slug}
           </DialogTitle>
         </DialogHeader>
 
@@ -416,7 +492,7 @@ function HistoryDialog({
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            Version History: {doc.active?.title ?? SLUG_LABELS[doc.slug]}
+            Version History: {doc.active?.title ?? SLUG_META[doc.slug]?.label ?? doc.slug}
           </DialogTitle>
         </DialogHeader>
 
@@ -453,7 +529,7 @@ function HistoryDialog({
                   )}
                   <p className="text-xs text-muted-foreground">
                     {v.acceptanceCount} acceptance
-                    {v.acceptanceCount !== 1 ? "s" : ""}
+                    {v.acceptanceCount === 1 ? "" : "s"}
                   </p>
                 </div>
                 <Button

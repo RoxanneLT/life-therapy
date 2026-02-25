@@ -40,7 +40,7 @@ export async function publishDocumentVersionAction(
   revalidatePath("/admin/legal-documents");
   revalidatePath("/terms");
   revalidatePath("/privacy");
-  revalidatePath("/portal/commitment");
+  revalidatePath("/portal/settings");
 
   // Send notification emails for required documents (commitment, terms)
   if (REQUIRED_DOCUMENTS.includes(slug)) {

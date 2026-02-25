@@ -10,9 +10,6 @@ import {
   ShoppingBag,
   Coins,
   Receipt,
-  UserCircle,
-  Bell,
-  FileCheck,
   Settings,
 } from "lucide-react";
 import Image from "next/image";
@@ -24,10 +21,7 @@ const navItems = [
   { href: "/portal/purchases", label: "My Purchases", icon: ShoppingBag },
   { href: "/portal/credits", label: "Credits", icon: Coins },
   { href: "/portal/invoices", label: "Invoices", icon: Receipt },
-  { href: "/portal/profile", label: "Profile", icon: UserCircle },
-  { href: "/portal/preferences", label: "Preferences", icon: Bell },
-  { href: "/portal/commitment", label: "Agreements", icon: FileCheck },
-  { href: "/portal/settings", label: "Account Settings", icon: Settings },
+  { href: "/portal/settings", label: "Settings", icon: Settings },
 ];
 
 interface PortalSidebarProps {

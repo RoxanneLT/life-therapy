@@ -225,11 +225,17 @@ function PastBookingCard({ booking: b }: Readonly<{ booking: SerializedBooking }
           </p>
           {b.status === "cancelled" && (
             <div className="text-xs text-muted-foreground">
-              {b.isLateCancel && (
-                <span className="text-amber-600 font-medium">Late cancel — </span>
+              {b.sessionType !== "free_consultation" && (
+                <>
+                  {b.isLateCancel && (
+                    <span className="text-amber-600 font-medium">Late cancel — </span>
+                  )}
+                  {b.creditRefunded ? "Credit refunded" : "Credit forfeited"}
+                </>
               )}
-              {b.creditRefunded ? "Credit refunded" : "Credit forfeited"}
-              {b.cancellationReason && ` • "${b.cancellationReason}"`}
+              {b.cancellationReason && (
+                <>{b.sessionType !== "free_consultation" && " • "}&quot;{b.cancellationReason}&quot;</>
+              )}
             </div>
           )}
           {b.originalDate && b.originalDate !== b.date && (
@@ -256,14 +262,17 @@ function CancelBookingDialog({
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  const isFreeConsultation = b.sessionType === "free_consultation";
+
   // Determine cancel type for UI hints (server re-validates)
   const isAntiAbuse =
+    !isFreeConsultation &&
     b.rescheduledAt &&
     b.originalDate &&
     b.originalStartTime &&
     b.originalDate !== b.date;
-  const isLate = !isAntiAbuse && hoursUntil < CANCEL_NOTICE_HOURS;
-  const isNormal = !isAntiAbuse && !isLate;
+  const isLate = !isFreeConsultation && !isAntiAbuse && hoursUntil < CANCEL_NOTICE_HOURS;
+  const isNormal = !isFreeConsultation && !isAntiAbuse && !isLate;
 
   function handleCancel() {
     startTransition(async () => {
@@ -292,6 +301,28 @@ function CancelBookingDialog({
             {b.startTime}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Free consultation — no credits involved, encourage reschedule */}
+        {isFreeConsultation && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Would you prefer to reschedule?</p>
+                <p className="mt-1">
+                  We&apos;d love to still connect with you. If this time no longer works,
+                  consider rescheduling to a time that suits you better.
+                </p>
+              </div>
+            </div>
+            <Textarea
+              placeholder="Reason for cancelling (optional)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+            />
+          </div>
+        )}
 
         {/* Normal cancel */}
         {isNormal && (
@@ -362,7 +393,7 @@ function CancelBookingDialog({
             onClick={handleCancel}
             disabled={isPending}
           >
-            {isPending ? "Cancelling..." : isNormal ? "Cancel Session" : "Cancel Anyway"}
+            {isPending ? "Cancelling..." : isFreeConsultation || isNormal ? "Cancel Session" : "Cancel Anyway"}
           </Button>
         </DialogFooter>
       </DialogContent>

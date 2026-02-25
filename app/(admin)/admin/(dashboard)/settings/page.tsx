@@ -103,20 +103,10 @@ export default async function AdminSettingsPage({ searchParams }: Props) {
         />
       )}
       {activeTab === "legal" && legalDocuments && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="font-heading text-xl font-bold">Legal Documents</h2>
-            <p className="text-sm text-muted-foreground">
-              Manage commitment agreements, terms &amp; conditions, and privacy
-              policy. Publishing a new version will require active clients to
-              re-accept.
-            </p>
-          </div>
-          <LegalDocumentsClient
-            documents={legalDocuments}
-            adminUserId={adminUser.id}
-          />
-        </div>
+        <LegalDocumentsClient
+          documents={legalDocuments}
+          adminUserId={adminUser.id}
+        />
       )}
     </div>
   );
