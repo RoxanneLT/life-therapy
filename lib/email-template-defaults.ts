@@ -163,6 +163,16 @@ const defaults: Record<string, TemplateDefault> = {
 </div>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
+  password_reset: {
+    subject: "Reset Your Password — Life-Therapy",
+    bodyHtml: `<p>Hi there,</p>
+<p>We received a request to reset your password. Click the button below to choose a new one:</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{resetUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Reset Password</a>
+</div>
+<p style="color: #6b7280; font-size: 13px;">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
   client_welcome: {
     subject: "Welcome to Life-Therapy — You're All Set!",
     bodyHtml: `<p>Hi {{clientName}},</p>

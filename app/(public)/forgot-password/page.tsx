@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { createBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,43 +13,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
+import { requestPasswordResetAction } from "./actions";
+
+const initialState = {
+  error: undefined as string | undefined,
+  success: undefined as boolean | undefined,
+};
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const supabase = createBrowserClient();
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        email,
-        {
-          redirectTo: `${window.location.origin}/reset-password`,
-        }
-      );
-
-      if (resetError) {
-        setError(resetError.message);
-        setLoading(false);
-        return;
-      }
-
-      setSent(true);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "An unexpected error occurred"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [state, formAction, isPending] = useActionState(
+    requestPasswordResetAction,
+    initialState,
+  );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100">
@@ -65,18 +40,18 @@ export default function ForgotPasswordPage() {
           />
           <CardTitle className="font-heading text-2xl">Reset Password</CardTitle>
           <CardDescription>
-            {sent
+            {state.success
               ? "Check your email for a reset link"
-              : "Enter your email and we'll send you a reset link"}
+              : "Enter your email and we\u2019ll send you a reset link"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {sent ? (
+          {state.success ? (
             <div className="space-y-4 text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
               <p className="text-sm text-muted-foreground">
-                We&apos;ve sent a password reset link to <strong>{email}</strong>.
-                Please check your inbox (and spam folder).
+                If an account exists with that email, we&apos;ve sent a
+                password reset link. Please check your inbox (and spam folder).
               </p>
               <Link
                 href="/login"
@@ -88,23 +63,31 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form action={formAction} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
                     required
+                    autoComplete="email"
+                    disabled={isPending}
                   />
                 </div>
-                {error && (
-                  <p className="text-sm text-destructive">{error}</p>
+                {state.error && (
+                  <p className="text-sm text-destructive">{state.error}</p>
                 )}
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Sending..." : "Send Reset Link"}
+                <Button type="submit" className="w-full" disabled={isPending}>
+                  {isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send Reset Link"
+                  )}
                 </Button>
               </form>
               <p className="mt-4 text-center">

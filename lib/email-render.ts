@@ -83,6 +83,9 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     tempPassword: "TempPass#2025",
     loginUrl: "https://life-therapy.co.za/portal/login",
   },
+  password_reset: {
+    resetUrl: "https://life-therapy.co.za/reset-password?token=sample",
+  },
   client_welcome: {
     clientName: "Jane Doe",
     portalUrl: "https://life-therapy.co.za/portal",
@@ -153,6 +156,7 @@ const TEMPLATE_TITLES: Record<string, string> = {
   course_completed: "Course Completed!",
   gift_received: "You've Received a Gift!",
   gift_delivered_buyer: "Gift Delivered!",
+  password_reset: "Reset Your Password",
   password_changed: "Password Changed",
   booking_reschedule: "Session Rescheduled",
   booking_recurring_series: "Your Upcoming Sessions",
@@ -330,6 +334,21 @@ function renderFallback(
             <a href="${variables.portalUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Go to My Portal</a>
           </div>
           <p>If you have any questions, feel free to reply to this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "password_reset":
+      return {
+        subject: "Reset Your Password — Life-Therapy",
+        html: baseTemplate(
+          "Reset Your Password",
+          `<p>Hi there,</p>
+          <p>We received a request to reset your password. Click the button below to choose a new one:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.resetUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Reset Password</a>
+          </div>
+          <p style="color: #6b7280; font-size: 13px;">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
           baseUrl, unsubscribeUrl
         ),
