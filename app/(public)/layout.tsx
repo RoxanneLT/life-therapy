@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { getPublicLayoutData } from "@/lib/public-layout-data";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { PublicHeader } from "@/components/public/header";

@@ -1,11 +1,11 @@
-export const dynamic = "force-dynamic";
-
 import { prisma } from "@/lib/prisma";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { buildStaticPageMetadata } from "@/lib/metadata";
 import { professionalServiceJsonLd, JsonLdScript } from "@/lib/json-ld";
+
+export const revalidate = 60;
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildStaticPageMetadata(
@@ -15,8 +15,6 @@ export async function generateMetadata(): Promise<Metadata> {
     "/images/roxanne-portrait.jpg"
   );
 }
-
-export const revalidate = 60;
 
 export default async function AboutPage() {
   const [page, profServiceLd] = await Promise.all([

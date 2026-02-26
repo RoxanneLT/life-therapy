@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { prisma } from "@/lib/prisma";
 import { SectionRenderer } from "@/components/public/section-renderer";
 import { notFound } from "next/navigation";
@@ -10,6 +8,8 @@ import { getSiteSettings } from "@/lib/settings";
 import { getSessionPrice } from "@/lib/pricing";
 import { formatPrice } from "@/lib/utils";
 import { buildStaticPageMetadata } from "@/lib/metadata";
+
+export const revalidate = 60;
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildStaticPageMetadata(
