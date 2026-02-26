@@ -1027,6 +1027,21 @@ function InvoicePreview({
                     <span>R{grandTotal.toFixed(2)}</span>
                   </div>
                 </div>
+
+                {/* Paid + Amount Due */}
+                <div className="mt-[2%] flex justify-between" style={{ color: "#787878" }}>
+                  <span>Paid:</span>
+                  <span style={{ color: "#16a34a" }}>R{grandTotal.toFixed(2)}</span>
+                </div>
+                <div className="mt-[2%] border-t pt-[3%]" style={{ borderColor: "#dcdcdc" }}>
+                  <div
+                    className="flex justify-between font-bold"
+                    style={{ color: "#212121", fontSize: "clamp(7px,1.3vw,10px)" }}
+                  >
+                    <span>Amount Due:</span>
+                    <span>R0.00</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

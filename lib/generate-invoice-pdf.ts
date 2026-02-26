@@ -389,6 +389,39 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   doc.text("Total:", totalsLabelX, footerRightY);
   doc.text(fmt(invoice.totalCents, currency), totalsValueX, footerRightY, { align: "right" });
 
+  // ── Paid + Amount Due ──
+  footerRightY += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...MUTED_TEXT);
+  doc.text("Paid:", totalsLabelX, footerRightY);
+  doc.setTextColor(22, 163, 74); // green-600
+  doc.text(
+    invoice.status === "paid"
+      ? fmt(invoice.totalCents, currency)
+      : fmt(0, currency),
+    totalsValueX,
+    footerRightY,
+    { align: "right" },
+  );
+  footerRightY += 5;
+
+  hLine(footerRightY - 1);
+  footerRightY += 2;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK_TEXT);
+  doc.text("Amount Due:", totalsLabelX, footerRightY);
+  doc.text(
+    invoice.status === "paid"
+      ? fmt(0, currency)
+      : fmt(invoice.totalCents, currency),
+    totalsValueX,
+    footerRightY,
+    { align: "right" },
+  );
+
   // ── Convert to Buffer ──
   const arrayBuf = doc.output("arraybuffer");
   return Buffer.from(arrayBuf);
