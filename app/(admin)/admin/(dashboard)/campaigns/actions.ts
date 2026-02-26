@@ -8,12 +8,29 @@ import { sendCampaign } from "@/lib/campaign-send";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { getCampaignRecipients } from "@/lib/contacts";
+import type { AudienceFilters } from "@/lib/audience-filters";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 // ────────────────────────────────────────────────────────────
 // Save (create or update) a campaign
 // ────────────────────────────────────────────────────────────
 
-type CampaignFilters = { name: string; filterSource?: string; filterTags?: string[] };
+type CampaignFilters = {
+  name: string;
+  filterSource?: string;
+  filterClientStatus?: string;
+  filterTags?: string[];
+  audienceFilters?: AudienceFilters;
+};
+
+/** Convert CampaignFilters to Prisma-compatible data by casting audienceFilters */
+function toPrismaData(filters: CampaignFilters) {
+  const { audienceFilters, ...rest } = filters;
+  return {
+    ...rest,
+    audienceFilters: audienceFilters as unknown as Prisma.InputJsonValue | undefined,
+  };
+}
 
 function parseCampaignEmailsJson(formData: FormData) {
   const emailsJson = formData.get("emails") as string;
@@ -44,7 +61,7 @@ async function saveMultiStepCampaign(id: string | null, filters: CampaignFilters
     const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (campaign?.status !== "draft") throw new Error("Can only edit draft campaigns");
 
-    await prisma.campaign.update({ where: { id }, data: { ...filters, isMultiStep: true } });
+    await prisma.campaign.update({ where: { id }, data: { ...toPrismaData(filters), isMultiStep: true } });
     await prisma.campaignEmail.deleteMany({ where: { campaignId: id } });
     await prisma.campaignEmail.createMany({ data: mapEmailSteps(emails).map((e) => ({ ...e, campaignId: id })) });
 
@@ -54,7 +71,7 @@ async function saveMultiStepCampaign(id: string | null, filters: CampaignFilters
   }
 
   const campaign = await prisma.campaign.create({
-    data: { ...filters, isMultiStep: true, status: "draft", emails: { create: mapEmailSteps(emails) } },
+    data: { ...toPrismaData(filters), isMultiStep: true, status: "draft", emails: { create: mapEmailSteps(emails) } },
   });
   revalidatePath("/admin/campaigns");
   redirect(`/admin/campaigns/${campaign.id}`);
@@ -69,14 +86,14 @@ async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilte
     const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (campaign?.status !== "draft") throw new Error("Can only edit draft campaigns");
 
-    await prisma.campaign.update({ where: { id }, data: { ...filters, subject, bodyHtml, isMultiStep: false } });
+    await prisma.campaign.update({ where: { id }, data: { ...toPrismaData(filters), subject, bodyHtml, isMultiStep: false } });
     revalidatePath("/admin/campaigns");
     revalidatePath(`/admin/campaigns/${id}`);
     redirect(`/admin/campaigns/${id}`);
   }
 
   const campaign = await prisma.campaign.create({
-    data: { ...filters, subject, bodyHtml, isMultiStep: false, status: "draft" },
+    data: { ...toPrismaData(filters), subject, bodyHtml, isMultiStep: false, status: "draft" },
   });
   revalidatePath("/admin/campaigns");
   redirect(`/admin/campaigns/${campaign.id}`);
@@ -90,9 +107,12 @@ export async function saveCampaignAction(formData: FormData) {
   if (!name) throw new Error("Campaign name is required");
 
   const filterSource = (formData.get("filterSource") as string) || undefined;
+  const filterClientStatus = (formData.get("filterClientStatus") as string) || undefined;
   const filterTagsStr = (formData.get("filterTags") as string)?.trim();
   const filterTags = filterTagsStr ? filterTagsStr.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
-  const filters: CampaignFilters = { name, filterSource, filterTags };
+  const audienceFiltersStr = (formData.get("audienceFilters") as string)?.trim();
+  const audienceFilters = audienceFiltersStr ? JSON.parse(audienceFiltersStr) as AudienceFilters : undefined;
+  const filters: CampaignFilters = { name, filterSource, filterClientStatus, filterTags, audienceFilters };
 
   if (formData.get("isMultiStep") === "true") {
     await saveMultiStepCampaign(id, filters, formData);
@@ -229,7 +249,8 @@ export async function sendTestCampaignAction(campaignId: string, step?: number) 
 
     testBody = email.bodyHtml
       .replaceAll("{{firstName}}", "Test User")
-      .replaceAll("{{unsubscribeUrl}}", "#");
+      .replaceAll("{{unsubscribeUrl}}", "#")
+      .replaceAll("{{passwordResetUrl}}", "#");
     testSubject = `[TEST Step ${step + 1}] ${email.subject.replaceAll("{{firstName}}", "Test User")}`;
   } else if (campaign.isMultiStep) {
     // Multi-step but no step specified: send first step
@@ -238,13 +259,15 @@ export async function sendTestCampaignAction(campaignId: string, step?: number) 
 
     testBody = firstEmail.bodyHtml
       .replaceAll("{{firstName}}", "Test User")
-      .replaceAll("{{unsubscribeUrl}}", "#");
+      .replaceAll("{{unsubscribeUrl}}", "#")
+      .replaceAll("{{passwordResetUrl}}", "#");
     testSubject = `[TEST Step 1] ${firstEmail.subject.replaceAll("{{firstName}}", "Test User")}`;
   } else {
     // Single-email campaign
     testBody = (campaign.bodyHtml || "")
       .replaceAll("{{firstName}}", "Test User")
-      .replaceAll("{{unsubscribeUrl}}", "#");
+      .replaceAll("{{unsubscribeUrl}}", "#")
+      .replaceAll("{{passwordResetUrl}}", "#");
     testSubject = `[TEST] ${(campaign.subject || "").replaceAll("{{firstName}}", "Test User")}`;
   }
 
@@ -283,15 +306,79 @@ export async function deleteCampaignAction(formData: FormData) {
 }
 
 // ────────────────────────────────────────────────────────────
+// Birthday campaign save
+// ────────────────────────────────────────────────────────────
+
+export async function saveBirthdayCampaignAction(formData: FormData) {
+  await requireRole("super_admin", "marketing");
+
+  const id = formData.get("id") as string | null;
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) throw new Error("Campaign name is required");
+
+  const emailsJson = formData.get("emails") as string;
+  const emails: Array<{
+    subject: string; bodyHtml: string; ctaText?: string; ctaUrl?: string;
+    genderTarget: "female" | "male" | "unknown";
+  }> = emailsJson ? JSON.parse(emailsJson) : [];
+
+  if (emails.length === 0) throw new Error("Birthday campaigns need at least one template");
+
+  const mappedEmails = emails.map((e, i) => ({
+    step: i,
+    dayOffset: 0, // Not used for birthday — always day-of
+    subject: e.subject.trim(),
+    bodyHtml: e.bodyHtml.trim(),
+    ctaText: e.ctaText?.trim() || null,
+    ctaUrl: e.ctaUrl?.trim() || null,
+    genderTarget: e.genderTarget,
+  }));
+
+  if (id) {
+    // Update existing
+    await prisma.campaign.update({
+      where: { id },
+      data: { name },
+    });
+    await prisma.campaignEmail.deleteMany({ where: { campaignId: id } });
+    await prisma.campaignEmail.createMany({
+      data: mappedEmails.map((e) => ({ ...e, campaignId: id })),
+    });
+
+    revalidatePath("/admin/campaigns");
+    revalidatePath(`/admin/campaigns/${id}`);
+    redirect(`/admin/campaigns/${id}`);
+  }
+
+  // Create new
+  const campaign = await prisma.campaign.create({
+    data: {
+      name,
+      isMultiStep: true,
+      campaignType: "birthday",
+      status: "active", // Birthday campaigns are always active
+      emails: { create: mappedEmails },
+    },
+  });
+
+  revalidatePath("/admin/campaigns");
+  redirect(`/admin/campaigns/${campaign.id}`);
+}
+
+// ────────────────────────────────────────────────────────────
 // Audience helpers
 // ────────────────────────────────────────────────────────────
 
-export async function getRecipientCountAction(filters?: {
-  source?: string;
-  tags?: string[];
-}) {
+export async function getRecipientCountAction(
+  filters?: {
+    source?: string;
+    tags?: string[];
+    clientStatus?: string;
+  },
+  audienceFilters?: AudienceFilters
+) {
   await requireRole("super_admin", "marketing");
 
-  const recipients = await getCampaignRecipients(filters);
+  const recipients = await getCampaignRecipients(filters, audienceFilters);
   return recipients.length;
 }

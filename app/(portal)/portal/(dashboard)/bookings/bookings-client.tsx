@@ -63,6 +63,7 @@ interface SerializedBooking {
   isLateCancel: boolean;
   cancelledAt: string | null;
   clientNotes: string | null;
+  policyOverride: boolean;
 }
 
 const SESSION_LABELS: Record<string, string> = {
@@ -157,8 +158,10 @@ function UpcomingBookingCard({
 }: Readonly<{ booking: SerializedBooking; now: Date }>) {
   const sessionDate = new Date(b.date + "T" + b.startTime + ":00");
   const hoursUntil = differenceInHours(sessionDate, now);
+  const isFreeConsultation = b.sessionType === "free_consultation";
   const canReschedule =
-    b.rescheduleCount < MAX_RESCHEDULES && hoursUntil >= RESCHEDULE_NOTICE_HOURS;
+    (b.rescheduleCount < MAX_RESCHEDULES || b.policyOverride) &&
+    (isFreeConsultation || b.policyOverride || hoursUntil >= RESCHEDULE_NOTICE_HOURS);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -198,7 +201,8 @@ function UpcomingBookingCard({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+          <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             {b.teamsMeetingUrl && (
               <Button variant="outline" size="sm" asChild>
                 <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
@@ -316,11 +320,12 @@ function CancelBookingDialog({
   // Determine cancel type for UI hints (server re-validates)
   const isAntiAbuse =
     !isFreeConsultation &&
+    !b.policyOverride &&
     b.rescheduledAt &&
     b.originalDate &&
     b.originalStartTime &&
     b.originalDate !== b.date;
-  const isLate = !isFreeConsultation && !isAntiAbuse && hoursUntil < CANCEL_NOTICE_HOURS;
+  const isLate = !isFreeConsultation && !b.policyOverride && !isAntiAbuse && hoursUntil < CANCEL_NOTICE_HOURS;
   const isNormal = !isFreeConsultation && !isAntiAbuse && !isLate;
 
   function handleCancel() {
@@ -352,7 +357,7 @@ function CancelBookingDialog({
         </DialogHeader>
 
         {/* Free consultation — no credits involved, encourage reschedule */}
-        {isFreeConsultation && (
+        {isFreeConsultation && onReschedule && (
           <div className="space-y-3">
             <div className="flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
               <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
@@ -464,7 +469,9 @@ function CancelBookingDialog({
                 onClick={handleCancel}
                 disabled={isPending}
               >
-                {isPending ? "Cancelling..." : isNormal ? "Cancel Session" : "Cancel Anyway"}
+                {isPending && "Cancelling..."}
+                {!isPending && isNormal && "Cancel Session"}
+                {!isPending && !isNormal && "Cancel Anyway"}
               </Button>
             </>
           )}
@@ -611,18 +618,29 @@ function SessionDetailDialog({
                   </Button>
                 </div>
               </>
-            ) : b.clientNotes ? (
-              <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
-                {b.clientNotes}
-              </p>
             ) : (
-              <p className="text-sm text-muted-foreground italic">No notes</p>
+              <ClientNotesDisplay notes={b.clientNotes} />
             )}
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Client Notes (read-only)
+// ---------------------------------------------------------------------------
+
+function ClientNotesDisplay({ notes }: Readonly<{ notes: string | null }>) {
+  if (notes) {
+    return (
+      <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground whitespace-pre-wrap">
+        {notes}
+      </p>
+    );
+  }
+  return <p className="text-sm text-muted-foreground italic">No notes</p>;
 }
 
 // ---------------------------------------------------------------------------

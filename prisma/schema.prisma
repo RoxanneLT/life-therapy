@@ -285,6 +285,9 @@ model Booking {
   paymentRequest         PaymentRequest? @relation(fields: [paymentRequestId], references: [id], onDelete: SetNull)
   billingNote            String?         // "(no-show)" | "(rescheduled)" | "(cancelled)" | null
   couplesPartnerName     String?         // Partner name for couples sessions
+  // Admin policy override — allows client to reschedule/cancel outside normal windows
+  policyOverride     Boolean   @default(false)
+
   // WhatsApp reminders
   whatsappReminder48hSentAt     DateTime?
   whatsappReminderMorningSentAt DateTime?
@@ -469,6 +472,8 @@ model Student {
   campaignProgress       CampaignProgress[]
   relationshipsFrom      ClientRelationship[] @relation("RelationshipsFrom")
   relationshipsTo        ClientRelationship[] @relation("RelationshipsTo")
+  invitesSent            RelationshipInvite[] @relation("InvitesSent")
+  invitesReceived        RelationshipInvite[] @relation("InvitesReceived")
   invoices               Invoice[]
   paymentRequests        PaymentRequest[]
   whatsappLogs           WhatsAppLog[]
@@ -857,6 +862,30 @@ model ClientRelationship {
 }
 
 // ============================================================
+// Relationship Invites (partner linking via email)
+// ============================================================
+model RelationshipInvite {
+  id               String   @id @default(cuid())
+  fromStudentId    String
+  fromStudent      Student  @relation("InvitesSent", fields: [fromStudentId], references: [id], onDelete: Cascade)
+  toEmail          String
+  toName           String
+  relationshipType String   // "partner"
+  token            String   @unique @default(cuid())
+  status           String   @default("pending") // "pending" | "accepted" | "declined" | "cancelled"
+  toStudentId      String?
+  toStudent        Student? @relation("InvitesReceived", fields: [toStudentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+
+  @@index([fromStudentId])
+  @@index([toEmail])
+  @@index([toStudentId])
+  @@index([token])
+  @@map("relationship_invites")
+}
+
+// ============================================================
 // Billing: Invoices (universal — all payment types)
 // ============================================================
 model Invoice {
@@ -1196,8 +1225,11 @@ model Campaign {
   bodyHtml        String?            @db.Text
   status          CampaignStatus     @default(draft)
   isMultiStep     Boolean            @default(false)
-  filterSource    String?
-  filterTags      Json?
+  filterSource       String?       // Legacy — use audienceFilters instead
+  filterClientStatus String?       // Legacy — use audienceFilters instead
+  filterTags         Json?         // Legacy — use audienceFilters instead
+  audienceFilters    Json?         // New: AudienceFilters object
+  campaignType    String             @default("standard") // "standard" | "birthday"
   totalRecipients Int                @default(0)
   sentCount       Int                @default(0)
   failedCount     Int                @default(0)
@@ -1227,6 +1259,7 @@ model CampaignEmail {
   bodyHtml    String   @db.Text
   ctaText     String?
   ctaUrl      String?
+  genderTarget String?               // "female" | "male" | "unknown" — birthday campaigns only
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

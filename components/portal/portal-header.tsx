@@ -21,9 +21,10 @@ interface PortalHeaderProps {
   readonly studentName?: string | null;
   readonly studentEmail?: string;
   readonly upcomingSessionCount?: number;
+  readonly isSessionsClient?: boolean;
 }
 
-export function PortalHeader({ studentName, studentEmail, upcomingSessionCount }: PortalHeaderProps) {
+export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, isSessionsClient }: PortalHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -57,13 +58,13 @@ export function PortalHeader({ studentName, studentEmail, upcomingSessionCount }
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
-          <PortalSidebar className="h-full" upcomingSessionCount={upcomingSessionCount} />
+          <PortalSidebar className="h-full" upcomingSessionCount={upcomingSessionCount} isSessionsClient={isSessionsClient} />
         </SheetContent>
       </Sheet>
 
       <div className="hidden lg:block">
         <h2 className="text-sm font-medium text-muted-foreground">
-          Student Portal
+          Portal
         </h2>
       </div>
 

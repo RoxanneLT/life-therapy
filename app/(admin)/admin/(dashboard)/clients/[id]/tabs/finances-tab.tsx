@@ -111,7 +111,7 @@ interface BilledToMeEntry {
 }
 
 interface FinancesTabProps {
-  client: Record<string, unknown>;
+  readonly client: Record<string, unknown>;
 }
 
 const TXN_TYPE_STYLES: Record<string, { label: string; className: string }> = {
@@ -417,7 +417,7 @@ function BillingConfigCard({
   relationships,
   individualBilledToId,
   couplesBilledToId,
-}: {
+}: Readonly<{
   clientId: string;
   billingType: string;
   billingEmail: string;
@@ -426,7 +426,7 @@ function BillingConfigCard({
   relationships: RelationshipOption[];
   individualBilledToId: string | null;
   couplesBilledToId: string | null;
-}) {
+}>) {
   const [isPending, startTransition] = useTransition();
   const [localEmail, setLocalEmail] = useState(billingEmail);
   const [localPercent, setLocalPercent] = useState(standingDiscountPercent);
@@ -623,10 +623,10 @@ function BillingConfigCard({
 function InvoiceHistorySection({
   invoices,
   clientId,
-}: {
+}: Readonly<{
   invoices: InvoiceData[];
   clientId: string;
-}) {
+}>) {
   const [isPending, startTransition] = useTransition();
 
   function handleMarkPaid(invoiceId: string) {
@@ -773,10 +773,10 @@ function InvoiceHistorySection({
 function PaymentRequestsSection({
   paymentRequests,
   clientId,
-}: {
+}: Readonly<{
   paymentRequests: PaymentRequestData[];
   clientId: string;
-}) {
+}>) {
   const [isPending, startTransition] = useTransition();
 
   function handleVoidPR(prId: string) {
@@ -802,7 +802,7 @@ function PaymentRequestsSection({
           description: "New Paystack link created",
           action: {
             label: "Copy",
-            onClick: () => navigator.clipboard.writeText(paymentUrl),
+            onClick: () => { void navigator.clipboard.writeText(paymentUrl); },
           },
         });
       } catch (err) {
@@ -909,7 +909,7 @@ function PaymentRequestsSection({
 
 // ─── Bill to Date Button ─────────────────────────────────────
 
-function BillToDateButton({ clientId }: { clientId: string }) {
+function BillToDateButton({ clientId }: Readonly<{ clientId: string }>) {
   const [isPending, startTransition] = useTransition();
 
   function handleBillToDate() {
@@ -937,7 +937,7 @@ function BillToDateButton({ clientId }: { clientId: string }) {
 
 // ─── Grant Credits Dialog ────────────────────────────────────
 
-function GrantCreditsDialog({ clientId }: { clientId: string }) {
+function GrantCreditsDialog({ clientId }: Readonly<{ clientId: string }>) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(1);
   const [reason, setReason] = useState("");
@@ -994,7 +994,7 @@ function GrantCreditsDialog({ clientId }: { clientId: string }) {
             onClick={handleGrant}
             disabled={isPending || amount < 1 || amount > 20}
           >
-            {isPending ? "Granting..." : `Grant ${amount} Credit${amount !== 1 ? "s" : ""}`}
+            {isPending ? "Granting..." : `Grant ${amount} Credit${amount === 1 ? "" : "s"}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1005,18 +1005,19 @@ function GrantCreditsDialog({ clientId }: { clientId: string }) {
 // ─── Create Invoice Dialog ──────────────────────────────────
 
 interface LineItemDraft {
+  id: string;
   description: string;
   quantity: number;
   unitPriceRands: string; // text input, converted to cents on submit
 }
 
-function CreateInvoiceDialog({ clientId }: { clientId: string }) {
+function CreateInvoiceDialog({ clientId }: Readonly<{ clientId: string }>) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [method, setMethod] = useState<"eft" | "cash" | "card">("eft");
   const [reference, setReference] = useState("");
   const [lines, setLines] = useState<LineItemDraft[]>([
-    { description: "", quantity: 1, unitPriceRands: "" },
+    { id: crypto.randomUUID(), description: "", quantity: 1, unitPriceRands: "" },
   ]);
   const [rates, setRates] = useState<{ individualRate: number; couplesRate: number } | null>(null);
 
@@ -1027,7 +1028,7 @@ function CreateInvoiceDialog({ clientId }: { clientId: string }) {
   }, [open, rates]);
 
   function addBlankLine() {
-    setLines((prev) => [...prev, { description: "", quantity: 1, unitPriceRands: "" }]);
+    setLines((prev) => [...prev, { id: crypto.randomUUID(), description: "", quantity: 1, unitPriceRands: "" }]);
   }
 
   function addSessionLine(type: "individual" | "couples") {
@@ -1036,7 +1037,7 @@ function CreateInvoiceDialog({ clientId }: { clientId: string }) {
     const label = type === "individual" ? "Individual Session" : "Couples Session";
     setLines((prev) => [
       ...prev,
-      { description: label, quantity: 1, unitPriceRands: (rate / 100).toFixed(2) },
+      { id: crypto.randomUUID(), description: label, quantity: 1, unitPriceRands: (rate / 100).toFixed(2) },
     ]);
   }
 
@@ -1073,7 +1074,7 @@ function CreateInvoiceDialog({ clientId }: { clientId: string }) {
         });
         toast.success("Invoice created and sent");
         setOpen(false);
-        setLines([{ description: "", quantity: 1, unitPriceRands: "" }]);
+        setLines([{ id: crypto.randomUUID(), description: "", quantity: 1, unitPriceRands: "" }]);
         setReference("");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to create invoice");
@@ -1120,7 +1121,7 @@ function CreateInvoiceDialog({ clientId }: { clientId: string }) {
           <div className="space-y-3">
             <Label className="text-xs">Line Items</Label>
             {lines.map((line, i) => (
-              <div key={i} className="flex items-start gap-2">
+              <div key={line.id} className="flex items-start gap-2">
                 <div className="flex-1 space-y-1">
                   <Input
                     placeholder="Description"

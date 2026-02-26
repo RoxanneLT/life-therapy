@@ -21,6 +21,7 @@ interface BookingData {
   rescheduledAt: Date | string | null;
   originalDate: Date | string | null;
   originalStartTime: string | null;
+  policyOverride?: boolean;
 }
 
 export type CancelResult =
@@ -70,6 +71,11 @@ export function evaluateCancel(
 
   const hours = hoursUntil(sessionStart, now);
 
+  // Admin policy override — treat as normal cancel (credit refunded)
+  if (booking.policyOverride) {
+    return { allowed: true, type: "normal", creditRefunded: true };
+  }
+
   // Anti-abuse: booking was rescheduled AND original session was within the cancel window
   // at the time of reschedule. This detects "reschedule to dodge late-cancel penalty".
   if (booking.rescheduledAt && booking.originalDate && booking.originalStartTime) {
@@ -117,7 +123,7 @@ export function evaluateReschedule(
     return { allowed: false, reason: "Cannot reschedule a session that has already started." };
   }
 
-  if (booking.rescheduleCount >= MAX_RESCHEDULES) {
+  if (booking.rescheduleCount >= MAX_RESCHEDULES && !booking.policyOverride) {
     return {
       allowed: false,
       reason: `This booking has already been rescheduled ${MAX_RESCHEDULES} times.`,
@@ -125,7 +131,8 @@ export function evaluateReschedule(
   }
 
   const hours = hoursUntil(sessionStart, now);
-  if (hours < RESCHEDULE_NOTICE_HOURS) {
+  const isFreeConsultation = booking.sessionType === "free_consultation";
+  if (!isFreeConsultation && !booking.policyOverride && hours < RESCHEDULE_NOTICE_HOURS) {
     return {
       allowed: false,
       reason: "Rescheduling requires at least 24 hours notice.",

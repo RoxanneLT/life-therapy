@@ -10,9 +10,14 @@ interface SessionTypeStepProps {
   readonly onSelect: (config: SessionTypeConfig) => void;
   readonly sessionPrices: Record<string, number>;
   readonly currency: Currency;
+  readonly excludeTypes?: string[];
 }
 
-export function SessionTypeStep({ onSelect, sessionPrices, currency }: SessionTypeStepProps) {
+export function SessionTypeStep({ onSelect, sessionPrices, currency, excludeTypes }: SessionTypeStepProps) {
+  const types = excludeTypes
+    ? SESSION_TYPES.filter((t) => !excludeTypes.includes(t.type))
+    : SESSION_TYPES;
+
   return (
     <div className="space-y-4">
       <div className="text-center">
@@ -21,8 +26,8 @@ export function SessionTypeStep({ onSelect, sessionPrices, currency }: SessionTy
           Select the type of session you&rsquo;d like to book.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {SESSION_TYPES.map((config) => (
+      <div className={`mx-auto grid grid-cols-1 gap-4 ${types.length >= 3 ? "sm:grid-cols-3" : "max-w-2xl sm:grid-cols-2"}`}>
+        {types.map((config) => (
           <Card
             key={config.type}
             role="button"

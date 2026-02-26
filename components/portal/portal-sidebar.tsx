@@ -16,10 +16,10 @@ import Image from "next/image";
 
 const navItems = [
   { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/portal/bookings", label: "My Sessions", icon: CalendarDays },
+  { href: "/portal/bookings", label: "My Sessions", icon: CalendarDays, sessionsOnly: true },
   { href: "/portal/courses", label: "My Courses", icon: GraduationCap },
   { href: "/portal/purchases", label: "My Purchases", icon: ShoppingBag },
-  { href: "/portal/credits", label: "Credits", icon: Coins },
+  { href: "/portal/credits", label: "Credits", icon: Coins, sessionsOnly: true },
   { href: "/portal/invoices", label: "Invoices", icon: Receipt },
   { href: "/portal/settings", label: "Settings", icon: Settings },
 ];
@@ -27,10 +27,15 @@ const navItems = [
 interface PortalSidebarProps {
   readonly className?: string;
   readonly upcomingSessionCount?: number;
+  readonly isSessionsClient?: boolean;
 }
 
-export function PortalSidebar({ className, upcomingSessionCount }: PortalSidebarProps) {
+export function PortalSidebar({ className, upcomingSessionCount, isSessionsClient = true }: PortalSidebarProps) {
   const pathname = usePathname();
+
+  const filteredNavItems = navItems.filter(
+    (item) => !item.sessionsOnly || isSessionsClient,
+  );
 
   function isActive(href: string) {
     if (href === "/portal") return pathname === "/portal";
@@ -51,7 +56,7 @@ export function PortalSidebar({ className, upcomingSessionCount }: PortalSidebar
         </div>
 
         <nav className="flex-1 space-y-1 p-4">
-          {navItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -65,6 +70,7 @@ export function PortalSidebar({ className, upcomingSessionCount }: PortalSidebar
               <item.icon className="h-4 w-4" />
               {item.label}
               {item.href === "/portal/bookings" &&
+                isSessionsClient &&
                 upcomingSessionCount != null &&
                 upcomingSessionCount > 0 && (
                   <span className="ml-auto rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">

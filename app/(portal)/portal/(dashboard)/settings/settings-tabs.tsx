@@ -5,19 +5,25 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { key: "profile", label: "Profile" },
-  { key: "assessment", label: "Assessment" },
+  { key: "assessment", label: "Assessment", sessionsOnly: true },
   { key: "preferences", label: "Preferences" },
   { key: "password", label: "Password" },
   { key: "agreements", label: "Agreements" },
+  { key: "relationships", label: "Relationships", sessionsOnly: true },
 ] as const;
 
 interface SettingsTabsProps {
   readonly activeTab: string;
+  readonly isSessionsClient?: boolean;
 }
 
-export function SettingsTabs({ activeTab }: SettingsTabsProps) {
+export function SettingsTabs({ activeTab, isSessionsClient = true }: SettingsTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const filteredTabs = TABS.filter(
+    (tab) => !("sessionsOnly" in tab && tab.sessionsOnly) || isSessionsClient,
+  );
 
   function setTab(tab: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -31,7 +37,7 @@ export function SettingsTabs({ activeTab }: SettingsTabsProps) {
 
   return (
     <div className="flex gap-1 border-b">
-      {TABS.map((tab) => (
+      {filteredTabs.map((tab) => (
         <button
           key={tab.key}
           type="button"

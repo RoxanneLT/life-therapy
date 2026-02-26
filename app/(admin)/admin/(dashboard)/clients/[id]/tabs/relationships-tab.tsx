@@ -79,7 +79,7 @@ interface RelationshipsTabProps {
   client: Record<string, unknown>;
 }
 
-export function RelationshipsTab({ client }: RelationshipsTabProps) {
+export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
   const clientId = client.id as string;
   const clientName = `${client.firstName} ${client.lastName}`;
   const relationshipsFrom = (client.relationshipsFrom as RelationshipData[]) || [];
@@ -215,11 +215,11 @@ function EditRelationshipDialog({
   relationship,
   clientId,
   onClose,
-}: {
+}: Readonly<{
   relationship: RelationshipData;
   clientId: string;
   onClose: () => void;
-}) {
+}>) {
   const [isPending, startTransition] = useTransition();
   const [type, setType] = useState(relationship.relationshipType);
   const [label, setLabel] = useState(relationship.relationshipLabel || "");
@@ -298,10 +298,10 @@ function EditRelationshipDialog({
 function AddRelationshipDialog({
   clientId,
   clientName,
-}: {
+}: Readonly<{
   clientId: string;
   clientName: string;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 

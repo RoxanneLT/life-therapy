@@ -456,6 +456,59 @@ export async function updateRelationshipAction(
 // Billing — Update billing assignment (per-session-type)
 // ────────────────────────────────────────────────────────────
 
+/** Assign someone else as couples payer — clear their billing (they're the payer) */
+async function assignCouplesPayer(studentId: string, relationshipId: string) {
+  const rel = await prisma.clientRelationship.findUniqueOrThrow({
+    where: { id: relationshipId },
+  });
+  const otherStudentId = rel.studentId === studentId
+    ? rel.relatedStudentId
+    : rel.studentId;
+
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { couplesBilledToId: relationshipId },
+  });
+
+  if (otherStudentId) {
+    await prisma.student.update({
+      where: { id: otherStudentId },
+      data: { couplesBilledToId: null },
+    });
+    revalidatePath(`/admin/clients/${otherStudentId}`);
+  }
+}
+
+/** Set self as couples payer — mirror billing to the other person */
+async function assignCouplesSelf(studentId: string) {
+  const current = await prisma.student.findUniqueOrThrow({
+    where: { id: studentId },
+    select: { couplesBilledToId: true },
+  });
+
+  if (current.couplesBilledToId) {
+    const rel = await prisma.clientRelationship.findUniqueOrThrow({
+      where: { id: current.couplesBilledToId },
+    });
+    const otherStudentId = rel.studentId === studentId
+      ? rel.relatedStudentId
+      : rel.studentId;
+
+    if (otherStudentId) {
+      await prisma.student.update({
+        where: { id: otherStudentId },
+        data: { couplesBilledToId: current.couplesBilledToId },
+      });
+      revalidatePath(`/admin/clients/${otherStudentId}`);
+    }
+  }
+
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { couplesBilledToId: null },
+  });
+}
+
 export async function updateBillingAssignmentAction(
   studentId: string,
   sessionType: "individual" | "couples",
@@ -474,68 +527,14 @@ export async function updateBillingAssignmentAction(
   }
 
   if (sessionType === "individual") {
-    // Individual billing: no mirroring, just update the FK
     await prisma.student.update({
       where: { id: studentId },
       data: { individualBilledToId: relationshipId },
     });
+  } else if (relationshipId) {
+    await assignCouplesPayer(studentId, relationshipId);
   } else {
-    // Couples billing: mirror to the other person
-    if (relationshipId) {
-      // Selecting someone else as payer
-      const rel = await prisma.clientRelationship.findUniqueOrThrow({
-        where: { id: relationshipId },
-      });
-      const otherStudentId = rel.studentId === studentId
-        ? rel.relatedStudentId
-        : rel.studentId;
-
-      // Set this student's couples billing to the relationship
-      await prisma.student.update({
-        where: { id: studentId },
-        data: { couplesBilledToId: relationshipId },
-      });
-
-      // Set the other person's couples billing to null (they're the payer → self)
-      if (otherStudentId) {
-        await prisma.student.update({
-          where: { id: otherStudentId },
-          data: { couplesBilledToId: null },
-        });
-        revalidatePath(`/admin/clients/${otherStudentId}`);
-      }
-    } else {
-      // Selecting self as payer — mirror: other person now bills to this student
-      const current = await prisma.student.findUniqueOrThrow({
-        where: { id: studentId },
-        select: { couplesBilledToId: true },
-      });
-
-      if (current.couplesBilledToId) {
-        const rel = await prisma.clientRelationship.findUniqueOrThrow({
-          where: { id: current.couplesBilledToId },
-        });
-        const otherStudentId = rel.studentId === studentId
-          ? rel.relatedStudentId
-          : rel.studentId;
-
-        // Set the other person's couples billing to this same relationship
-        // (resolves to this student as payer)
-        if (otherStudentId) {
-          await prisma.student.update({
-            where: { id: otherStudentId },
-            data: { couplesBilledToId: current.couplesBilledToId },
-          });
-          revalidatePath(`/admin/clients/${otherStudentId}`);
-        }
-      }
-
-      // Set this student's couples billing to null (self)
-      await prisma.student.update({
-        where: { id: studentId },
-        data: { couplesBilledToId: null },
-      });
-    }
+    await assignCouplesSelf(studentId);
   }
 
   revalidatePath(`/admin/clients/${studentId}`);

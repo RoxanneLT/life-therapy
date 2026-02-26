@@ -29,6 +29,7 @@ import {
   Calendar,
   Eye,
   MousePointer,
+  Cake,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -77,12 +78,14 @@ export default async function CampaignDetailPage({
   // Get email logs for tracking stats
   const emailLogs = ["sent", "failed", "completed", "active", "paused"].includes(campaign.status)
     ? await prisma.emailLog.findMany({
-        where: campaign.isMultiStep
-          ? { templateKey: { startsWith: `campaign_${id}_` } }
-          : {
-              templateKey: "campaign_broadcast",
-              metadata: { path: ["campaignId"], equals: id },
-            },
+        where: campaign.campaignType === "birthday"
+          ? { metadata: { path: ["campaignId"], equals: id } }
+          : campaign.isMultiStep
+            ? { templateKey: { startsWith: `campaign_${id}_` } }
+            : {
+                templateKey: "campaign_broadcast",
+                metadata: { path: ["campaignId"], equals: id },
+              },
         orderBy: { sentAt: "desc" },
         take: 200,
       })
@@ -96,9 +99,15 @@ export default async function CampaignDetailPage({
   const clickRate = totalSentLogs > 0 ? Math.round((totalClicked / totalSentLogs) * 100) : 0;
 
   // Per-step stats for multi-step campaigns
-  const stepStats = campaign.isMultiStep
+  const stepStats = (campaign.isMultiStep || campaign.campaignType === "birthday")
     ? campaign.emails.map((email) => {
-        const stepLogs = emailLogs.filter((l) => l.templateKey === `campaign_${id}_${email.step}`);
+        // Birthday uses campaignEmailId in metadata; standard uses templateKey
+        const stepLogs = campaign.campaignType === "birthday"
+          ? emailLogs.filter((l) => {
+              const meta = l.metadata as Record<string, unknown> | null;
+              return meta?.campaignEmailId === email.id;
+            })
+          : emailLogs.filter((l) => l.templateKey === `campaign_${id}_${email.step}`);
         const stepSent = stepLogs.filter((l) => l.status === "sent").length;
         const stepOpened = stepLogs.filter((l) => l.openedAt).length;
         const stepClicked = stepLogs.filter((l) => l.clickedAt).length;
@@ -117,7 +126,8 @@ export default async function CampaignDetailPage({
     : [];
 
   const showActions = ["draft", "scheduled", "active", "paused"].includes(campaign.status);
-  const canEdit = campaign.status === "draft";
+  const canEdit = campaign.status === "draft" || campaign.campaignType === "birthday";
+  const canDelete = campaign.status === "draft";
   const statusColor = STATUS_COLORS[campaign.status];
 
   return (
@@ -140,8 +150,13 @@ export default async function CampaignDetailPage({
             >
               {campaign.status}
             </Badge>
-            <Badge variant="outline">
-              {campaign.isMultiStep ? (
+            <Badge variant="outline" className={campaign.campaignType === "birthday" ? "bg-pink-50 text-pink-700 border-pink-200" : ""}>
+              {campaign.campaignType === "birthday" ? (
+                <>
+                  <Cake className="mr-1 h-3 w-3" />
+                  Birthday ({campaign.emails.length} templates)
+                </>
+              ) : campaign.isMultiStep ? (
                 <>
                   <ListOrdered className="mr-1 h-3 w-3" />
                   {campaign.emails.length} steps
@@ -218,8 +233,8 @@ export default async function CampaignDetailPage({
           </Card>
         </div>
 
-        {/* Multi-step: completed contacts */}
-        {campaign.isMultiStep && campaign.status !== "draft" && (
+        {/* Multi-step: completed contacts (not for birthday) */}
+        {campaign.isMultiStep && campaign.campaignType !== "birthday" && campaign.status !== "draft" && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Progress</CardTitle>
@@ -290,73 +305,119 @@ export default async function CampaignDetailPage({
           />
         )}
 
-        {/* Multi-step: Step progress table */}
-        {campaign.isMultiStep && campaign.emails.length > 0 && (
+        {/* Multi-step / Birthday: Email table */}
+        {(campaign.isMultiStep || campaign.campaignType === "birthday") && campaign.emails.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Email Steps</CardTitle>
+              <CardTitle className="text-base">
+                {campaign.campaignType === "birthday" ? "Birthday Templates" : "Email Steps"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[60px]">Step</TableHead>
-                    <TableHead className="w-[60px]">Day</TableHead>
-                    <TableHead>Subject</TableHead>
-                    <TableHead className="w-[70px] text-right">Sent</TableHead>
-                    <TableHead className="w-[70px] text-right">Failed</TableHead>
-                    <TableHead className="w-[70px] text-right">Opens</TableHead>
-                    <TableHead className="w-[70px] text-right">Clicks</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {campaign.status === "draft"
-                    ? campaign.emails.map((email) => (
-                        <TableRow key={email.id}>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {email.step + 1}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {email.dayOffset}
-                          </TableCell>
-                          <TableCell className="max-w-[300px] truncate">
-                            {email.subject}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">—</TableCell>
-                          <TableCell className="text-right text-muted-foreground">—</TableCell>
-                          <TableCell className="text-right text-muted-foreground">—</TableCell>
-                          <TableCell className="text-right text-muted-foreground">—</TableCell>
-                        </TableRow>
-                      ))
-                    : stepStats.map((stat) => (
-                        <TableRow key={stat.step}>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {stat.step + 1}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {stat.dayOffset}
-                          </TableCell>
-                          <TableCell className="max-w-[300px] truncate">
-                            {stat.subject}
-                          </TableCell>
-                          <TableCell className="text-right">{stat.sent}</TableCell>
-                          <TableCell className="text-right text-red-600">
-                            {stat.failed || "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {stat.sent > 0 ? `${stat.openRate}%` : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {stat.sent > 0 ? `${stat.clickRate}%` : "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                </TableBody>
-              </Table>
+              {campaign.campaignType === "birthday" ? (
+                /* Birthday: group by gender */
+                <div className="space-y-6">
+                  {(["female", "male", "unknown"] as const).map((gender) => {
+                    const genderEmails = campaign.emails.filter((e) => (e.genderTarget || "unknown") === gender);
+                    if (genderEmails.length === 0) return null;
+                    const genderLabel = gender === "female" ? "👩 Women" : gender === "male" ? "👨 Men" : "🧑 Unknown / Other";
+                    return (
+                      <div key={gender}>
+                        <h3 className="mb-2 text-sm font-semibold text-muted-foreground">{genderLabel} ({genderEmails.length} templates)</h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[50px]">#</TableHead>
+                              <TableHead>Subject</TableHead>
+                              <TableHead className="w-[70px] text-right">Sent</TableHead>
+                              <TableHead className="w-[70px] text-right">Opens</TableHead>
+                              <TableHead className="w-[70px] text-right">Clicks</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {genderEmails.map((email, i) => {
+                              const stat = stepStats.find((s) => s.step === email.step);
+                              return (
+                                <TableRow key={email.id}>
+                                  <TableCell>
+                                    <Badge variant="outline" className="text-xs">{i + 1}</Badge>
+                                  </TableCell>
+                                  <TableCell className="max-w-[300px] truncate">{email.subject}</TableCell>
+                                  <TableCell className="text-right">{stat?.sent || "—"}</TableCell>
+                                  <TableCell className="text-right">{stat && stat.sent > 0 ? `${stat.openRate}%` : "—"}</TableCell>
+                                  <TableCell className="text-right">{stat && stat.sent > 0 ? `${stat.clickRate}%` : "—"}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Standard multi-step */
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[60px]">Step</TableHead>
+                      <TableHead className="w-[60px]">Day</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead className="w-[70px] text-right">Sent</TableHead>
+                      <TableHead className="w-[70px] text-right">Failed</TableHead>
+                      <TableHead className="w-[70px] text-right">Opens</TableHead>
+                      <TableHead className="w-[70px] text-right">Clicks</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaign.status === "draft"
+                      ? campaign.emails.map((email) => (
+                          <TableRow key={email.id}>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {email.step + 1}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {email.dayOffset}
+                            </TableCell>
+                            <TableCell className="max-w-[300px] truncate">
+                              {email.subject}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">—</TableCell>
+                            <TableCell className="text-right text-muted-foreground">—</TableCell>
+                            <TableCell className="text-right text-muted-foreground">—</TableCell>
+                            <TableCell className="text-right text-muted-foreground">—</TableCell>
+                          </TableRow>
+                        ))
+                      : stepStats.map((stat) => (
+                          <TableRow key={stat.step}>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {stat.step + 1}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {stat.dayOffset}
+                            </TableCell>
+                            <TableCell className="max-w-[300px] truncate">
+                              {stat.subject}
+                            </TableCell>
+                            <TableCell className="text-right">{stat.sent}</TableCell>
+                            <TableCell className="text-right text-red-600">
+                              {stat.failed || "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {stat.sent > 0 ? `${stat.openRate}%` : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {stat.sent > 0 ? `${stat.clickRate}%` : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         )}
@@ -473,7 +534,7 @@ export default async function CampaignDetailPage({
         )}
 
         {/* Delete (only drafts) */}
-        {canEdit && (
+        {canDelete && (
           <Card className="border-destructive/30">
             <CardContent className="flex items-center justify-between pt-6">
               <div>

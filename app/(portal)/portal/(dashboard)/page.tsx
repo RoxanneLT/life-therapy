@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Coins,
   GraduationCap,
+  ShoppingBag,
   Video,
   ArrowRight,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export default async function PortalDashboardPage() {
     creditBalance,
     enrollmentCount,
     moduleAccessCount,
+    digitalProductCount,
     nextBooking,
   ] = await Promise.all([
     prisma.booking.count({
@@ -41,6 +43,7 @@ export default async function PortalDashboardPage() {
     }),
     prisma.enrollment.count({ where: { studentId: student.id } }),
     prisma.moduleAccess.count({ where: { studentId: student.id } }),
+    prisma.digitalProductAccess.count({ where: { studentId: student.id } }),
     prisma.booking.findFirst({
       where: {
         studentId: student.id,
@@ -53,27 +56,43 @@ export default async function PortalDashboardPage() {
 
   const totalCourseCount = enrollmentCount + moduleAccessCount;
   const currentBalance = creditBalance?.balance ?? 0;
+  const isSessionsClient = upcomingBookingsCount > 0 || currentBalance > 0 || !!nextBooking;
 
-  const stats = [
-    {
-      label: "Upcoming Sessions",
-      value: upcomingBookingsCount,
-      icon: CalendarDays,
-      href: "/portal/bookings",
-    },
-    {
-      label: "Session Credits",
-      value: currentBalance,
-      icon: Coins,
-      href: "/portal/credits",
-    },
-    {
-      label: "My Courses",
-      value: totalCourseCount,
-      icon: GraduationCap,
-      href: "/portal/courses",
-    },
-  ];
+  const stats = isSessionsClient
+    ? [
+        {
+          label: "Upcoming Sessions",
+          value: upcomingBookingsCount,
+          icon: CalendarDays,
+          href: "/portal/bookings",
+        },
+        {
+          label: "Session Credits",
+          value: currentBalance,
+          icon: Coins,
+          href: "/portal/credits",
+        },
+        {
+          label: "My Courses",
+          value: totalCourseCount,
+          icon: GraduationCap,
+          href: "/portal/courses",
+        },
+      ]
+    : [
+        {
+          label: "My Courses",
+          value: totalCourseCount,
+          icon: GraduationCap,
+          href: "/portal/courses",
+        },
+        {
+          label: "My Purchases",
+          value: digitalProductCount,
+          icon: ShoppingBag,
+          href: "/portal/purchases",
+        },
+      ];
 
   const sessionConfig = nextBooking
     ? getSessionTypeConfig(nextBooking.sessionType)
@@ -92,7 +111,7 @@ export default async function PortalDashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 ${isSessionsClient ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <Card className="transition-shadow hover:shadow-md">
@@ -110,56 +129,61 @@ export default async function PortalDashboardPage() {
         ))}
       </div>
 
-      {/* Next Session card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Next Session</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {nextBooking && sessionConfig ? (
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-medium">{sessionConfig.label}</p>
-                <p className="text-sm text-muted-foreground">
-                  {format(new Date(nextBooking.date), "EEEE, d MMMM yyyy")} &middot;{" "}
-                  {nextBooking.startTime} – {nextBooking.endTime}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {nextBooking.durationMinutes} minutes
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                {bookingIsToday && nextBooking.teamsMeetingUrl && (
-                  <Button asChild size="sm">
-                    <a
-                      href={nextBooking.teamsMeetingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Video className="mr-2 h-4 w-4" />
-                      Join Session
-                    </a>
+      {/* Next Session card — sessions clients only */}
+      {isSessionsClient && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Next Session</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {nextBooking && sessionConfig ? (
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">{sessionConfig.label}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {format(new Date(nextBooking.date), "EEEE, d MMMM yyyy")} &middot;{" "}
+                    {nextBooking.startTime} – {nextBooking.endTime}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {nextBooking.durationMinutes} minutes
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  {bookingIsToday && nextBooking.teamsMeetingUrl && (
+                    <Button asChild size="sm">
+                      <a
+                        href={nextBooking.teamsMeetingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Video className="mr-2 h-4 w-4" />
+                        Join Session
+                      </a>
+                    </Button>
+                  )}
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/portal/book">Book a Session</Link>
                   </Button>
-                )}
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/portal/bookings">
-                    View All
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/portal/bookings">
+                      View All
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="py-4 text-center">
+                <CalendarDays className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">No upcoming sessions</p>
+                <Button asChild variant="outline" size="sm" className="mt-3">
+                  <Link href="/portal/book">Book a Session</Link>
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="py-4 text-center">
-              <CalendarDays className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">No upcoming sessions</p>
-              <Button asChild variant="outline" size="sm" className="mt-3">
-                <Link href="/book">Book a Session</Link>
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Onboarding progress card */}
       {student.onboardingStep < 3 && (

@@ -3,15 +3,10 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
-
-const VARIABLE_CHIPS = [
-  { key: "firstName", label: "First Name" },
-  { key: "unsubscribeUrl", label: "Unsubscribe URL" },
-];
+import { RichTextEditor } from "./rich-text-editor";
 
 export interface StepData {
   dayOffset: number;
@@ -36,6 +31,10 @@ interface StepEditorProps {
   onRemove: () => void;
 }
 
+const SUBJECT_VARIABLES = [
+  { key: "firstName", label: "First Name" },
+];
+
 export function StepEditor({
   index,
   step,
@@ -53,13 +52,8 @@ export function StepEditor({
     onChange({ ...step, [field]: value });
   }
 
-  function insertVariable(variable: string, target: "subject" | "body") {
-    const text = `{{${variable}}}`;
-    if (target === "subject") {
-      update("subject", step.subject + text);
-    } else {
-      update("bodyHtml", step.bodyHtml + text);
-    }
+  function insertSubjectVariable(variable: string) {
+    update("subject", step.subject + `{{${variable}}}`);
   }
 
   return (
@@ -144,13 +138,14 @@ export function StepEditor({
               onChange={(e) => update("subject", e.target.value)}
               placeholder="e.g. Welcome back, {{firstName}}!"
             />
-            <div className="flex gap-1">
-              {VARIABLE_CHIPS.filter((v) => v.key === "firstName").map((v) => (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Insert:</span>
+              {SUBJECT_VARIABLES.map((v) => (
                 <Badge
                   key={v.key}
                   variant="outline"
-                  className="cursor-pointer text-xs hover:bg-brand-50"
-                  onClick={() => insertVariable(v.key, "subject")}
+                  className="cursor-pointer text-xs hover:bg-[#8BA889]/10 hover:border-[#8BA889]/40 transition-colors"
+                  onClick={() => insertSubjectVariable(v.key)}
                 >
                   {`{{${v.key}}}`}
                 </Badge>
@@ -168,26 +163,11 @@ export function StepEditor({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Body HTML</Label>
-            <div className="mb-1 flex gap-1.5 text-xs text-muted-foreground">
-              Variables:{" "}
-              {VARIABLE_CHIPS.map((v) => (
-                <Badge
-                  key={v.key}
-                  variant="outline"
-                  className="cursor-pointer text-xs hover:bg-brand-50"
-                  onClick={() => insertVariable(v.key, "body")}
-                >
-                  {`{{${v.key}}}`}
-                </Badge>
-              ))}
-            </div>
-            <Textarea
+            <Label>Email Body</Label>
+            <RichTextEditor
               value={step.bodyHtml}
-              onChange={(e) => update("bodyHtml", e.target.value)}
-              rows={10}
-              className="font-mono text-xs"
-              placeholder="<p>Hi {{firstName}},</p>"
+              onChange={(html) => update("bodyHtml", html)}
+              placeholder="Start typing your email content..."
             />
           </div>
 

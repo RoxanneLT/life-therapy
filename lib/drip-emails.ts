@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { generateTempPassword } from "@/lib/auth/temp-password";
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 const BATCH_SIZE = 10;
@@ -24,10 +26,60 @@ function replacePlaceholders(
   });
 }
 
+/**
+ * Generate a password reset URL for a student.
+ * If no Supabase auth account exists, creates one with a temp password.
+ */
+async function generatePasswordResetUrl(
+  student: { id: string; email: string; supabaseUserId: string | null }
+): Promise<string | null> {
+  try {
+    if (!student.supabaseUserId) {
+      const tempPassword = generateTempPassword();
+      const { data: authUser, error: createError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email: student.email,
+          password: tempPassword,
+          email_confirm: true,
+        });
+
+      if (createError || !authUser?.user) {
+        console.error(`[drip] Failed to create auth user for ${student.email}:`, createError?.message);
+        return null;
+      }
+
+      await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          supabaseUserId: authUser.user.id,
+          mustChangePassword: true,
+        },
+      });
+    }
+
+    const { data: linkData, error: linkError } =
+      await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email: student.email,
+      });
+
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error(`[drip] Failed to generate reset link for ${student.email}:`, linkError?.message);
+      return null;
+    }
+
+    return `${DEFAULT_BASE_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
+  } catch (err) {
+    console.error(`[drip] Password reset URL error for ${student.email}:`, err);
+    return null;
+  }
+}
+
 interface DripCandidate {
   studentId: string;
   email: string;
   firstName: string;
+  supabaseUserId: string | null;
   unsubscribeToken: string | null;
   daysSinceSignup: number;
   currentPhase: "onboarding" | "newsletter";
@@ -35,6 +87,8 @@ interface DripCandidate {
   progressId: string | null;
   isPaused: boolean;
   completedAt: Date | null;
+  clientStatus: string;
+  hasConsultationBooking: boolean;
 }
 
 interface DripResult {
@@ -67,6 +121,20 @@ export async function processDripEmails(): Promise<DripResult> {
     orderBy: { createdAt: "asc" },
   });
 
+  // Pre-fetch free consultation bookings for all students in one query
+  // (pending, confirmed, or completed — anything that means they've engaged)
+  const consultationBookings = await prisma.booking.findMany({
+    where: {
+      clientEmail: { in: students.map((s) => s.email) },
+      sessionType: "free_consultation",
+      status: { in: ["pending", "confirmed", "completed"] },
+    },
+    select: { clientEmail: true },
+  });
+  const emailsWithConsultation = new Set(
+    consultationBookings.map((b) => b.clientEmail.toLowerCase())
+  );
+
   // Build candidates list
   const candidates: DripCandidate[] = [];
   const now = new Date();
@@ -87,6 +155,7 @@ export async function processDripEmails(): Promise<DripResult> {
       studentId: student.id,
       email: student.email,
       firstName: student.firstName,
+      supabaseUserId: student.supabaseUserId,
       unsubscribeToken: student.unsubscribeToken,
       daysSinceSignup,
       currentPhase: (progress?.currentPhase as "onboarding" | "newsletter") || "onboarding",
@@ -94,6 +163,8 @@ export async function processDripEmails(): Promise<DripResult> {
       progressId: progress?.id || null,
       isPaused: progress?.isPaused ?? false,
       completedAt: progress?.completedAt ?? null,
+      clientStatus: student.clientStatus,
+      hasConsultationBooking: emailsWithConsultation.has(student.email.toLowerCase()),
     });
   }
 
@@ -125,11 +196,46 @@ export async function processDripEmails(): Promise<DripResult> {
   return result;
 }
 
+/**
+ * Drip emails whose primary CTA is "book a free consultation".
+ * If the client already has a consultation booked/done, these are
+ * skipped entirely (not just CTA-stripped) because the whole email
+ * is oriented around that action.
+ */
+const FREE_CONSULTATION_CTA_STEPS: Record<string, number[]> = {
+  onboarding: [11],       // onboarding_11: "What's Next? Book a Free Consultation"
+  newsletter: [5, 11, 31, 38], // newsletter_5, 11, 31, 38 all have "Book Free Consultation" as CTA
+};
+
+/**
+ * Drip emails that mention free consultation in the body (inline link)
+ * but have a DIFFERENT primary CTA. For these, we strip the inline link
+ * rather than skipping the whole email.
+ */
+const FREE_CONSULTATION_INLINE_STEPS: Record<string, number[]> = {
+  onboarding: [7],       // onboarding_7: "Ready to Go Deeper" — primary CTA is /courses
+  newsletter: [3],        // newsletter_3: "A Letter to You" — no CTA, inline link to /book
+};
+
 async function processSingleClient(
   candidate: DripCandidate,
   phaseCounts: { onboarding: number; newsletter: number }
 ): Promise<"sent" | "skipped" | "failed"> {
   const { currentPhase, currentStep, daysSinceSignup } = candidate;
+
+  // ── INTELLIGENCE: Auto-graduate converted clients ──
+  // If client was converted to "active" and is still in onboarding,
+  // skip the rest of onboarding and jump to newsletter.
+  if (
+    currentPhase === "onboarding" &&
+    (candidate.clientStatus === "active" || candidate.clientStatus === "inactive")
+  ) {
+    console.log(
+      `[drip] Client ${candidate.email} is '${candidate.clientStatus}' — graduating from onboarding to newsletter`
+    );
+    await graduateToNewsletter(candidate);
+    return "skipped";
+  }
 
   // Look up the drip email for this step
   const dripEmail = await prisma.dripEmail.findUnique({
@@ -143,6 +249,20 @@ async function processSingleClient(
   // Check if it's time to send (daysSinceSignup >= dayOffset)
   if (daysSinceSignup < dripEmail.dayOffset) {
     return "skipped";
+  }
+
+  // ── INTELLIGENCE: Skip "book free consultation" emails ──
+  // If client already has a free consultation (booked, confirmed, or done),
+  // skip emails whose entire purpose is prompting that booking.
+  if (candidate.hasConsultationBooking) {
+    const ctaSteps = FREE_CONSULTATION_CTA_STEPS[currentPhase] || [];
+    if (ctaSteps.includes(currentStep)) {
+      console.log(
+        `[drip] Skipping ${currentPhase}_${currentStep} for ${candidate.email} — already has free consultation`
+      );
+      await advanceProgress(candidate, phaseCounts);
+      return "skipped";
+    }
   }
 
   // Idempotency: check if already sent via EmailLog
@@ -183,14 +303,42 @@ async function processSingleClient(
     unsubscribeUrl: unsubscribeUrl || "",
   };
 
+  // Generate password reset URL only if the email template uses it
+  const needsPasswordReset =
+    dripEmail.bodyHtml.includes("{{passwordResetUrl}}") ||
+    (dripEmail.ctaUrl && dripEmail.ctaUrl === "{{passwordResetUrl}}");
+  if (needsPasswordReset) {
+    const resetUrl = await generatePasswordResetUrl({
+      id: candidate.studentId,
+      email: candidate.email,
+      supabaseUserId: candidate.supabaseUserId,
+    });
+    variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
+  }
+
   let bodyHtml = replacePlaceholders(dripEmail.bodyHtml, variables);
+
+  // ── INTELLIGENCE: Strip inline free consultation links ──
+  // For emails that mention free consultation in passing but have
+  // a different primary CTA, replace the inline link with a softer mention.
+  if (candidate.hasConsultationBooking) {
+    const inlineSteps = FREE_CONSULTATION_INLINE_STEPS[currentPhase] || [];
+    if (inlineSteps.includes(currentStep)) {
+      // Replace inline <a> tags pointing to free_consultation with plain text
+      bodyHtml = bodyHtml.replace(
+        /<a\s+href="[^"]*free_consultation[^"]*"[^>]*>([^<]+)<\/a>/gi,
+        "reach out to me directly"
+      );
+    }
+  }
 
   // Add CTA button if defined
   if (dripEmail.ctaText && dripEmail.ctaUrl) {
-    const ctaUrl = dripEmail.ctaUrl.startsWith("/")
-      ? `${DEFAULT_BASE_URL}${dripEmail.ctaUrl}`
-      : dripEmail.ctaUrl;
-    bodyHtml += `<div style="text-align: center; margin: 28px 0;"><a href="${ctaUrl}" style="display: inline-block; background: #1E4B6E; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">${dripEmail.ctaText}</a></div>`;
+    let ctaUrl = replacePlaceholders(dripEmail.ctaUrl, variables);
+    if (ctaUrl.startsWith("/")) {
+      ctaUrl = `${DEFAULT_BASE_URL}${ctaUrl}`;
+    }
+    bodyHtml += `<div style="text-align: center; margin: 28px 0;"><a href="${ctaUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">${dripEmail.ctaText}</a></div>`;
   }
 
   const subject = replacePlaceholders(dripEmail.subject, variables);
@@ -239,6 +387,34 @@ async function checkClientEngagement(studentId: string): Promise<boolean> {
 
   // If all 5 are unopened → cold
   return recentEmails.every((e) => !e.openedAt);
+}
+
+/**
+ * Graduate a client from onboarding directly to newsletter phase.
+ * Called when a potential client converts to active during onboarding.
+ */
+async function graduateToNewsletter(
+  candidate: DripCandidate
+): Promise<void> {
+  if (candidate.progressId) {
+    await prisma.dripProgress.update({
+      where: { id: candidate.progressId },
+      data: {
+        currentPhase: "newsletter",
+        currentStep: 0,
+        lastSentAt: new Date(),
+      },
+    });
+  } else {
+    await prisma.dripProgress.create({
+      data: {
+        studentId: candidate.studentId,
+        currentPhase: "newsletter",
+        currentStep: 0,
+        lastSentAt: new Date(),
+      },
+    });
+  }
 }
 
 async function advanceProgress(

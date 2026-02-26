@@ -12,9 +12,9 @@ export const metadata: Metadata = {
 
 export default async function RedeemGiftPage({
   searchParams,
-}: {
+}: Readonly<{
   searchParams: Promise<{ token?: string }>;
-}) {
+}>) {
   const params = await searchParams;
   const token = params.token;
 

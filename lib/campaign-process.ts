@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { generateTempPassword } from "@/lib/auth/temp-password";
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 const BATCH_SIZE = 10;
@@ -58,15 +60,20 @@ async function activateScheduledCampaigns(result: CampaignProcessResult) {
     where: {
       status: "scheduled",
       isMultiStep: true,
+      campaignType: { not: "birthday" },
       startDate: { lte: now },
     },
   });
 
   for (const campaign of scheduledCampaigns) {
-    const recipients = await getCampaignRecipients({
-      source: campaign.filterSource || undefined,
-      tags: (campaign.filterTags as string[]) || undefined,
-    });
+    const recipients = await getCampaignRecipients(
+      {
+        source: campaign.filterSource || undefined,
+        tags: (campaign.filterTags as string[]) || undefined,
+        clientStatus: campaign.filterClientStatus || undefined,
+      },
+      (campaign.audienceFilters as import("@/lib/audience-filters").AudienceFilters) || undefined
+    );
 
     if (recipients.length > 0) {
       // Create progress records for each contact
@@ -98,7 +105,7 @@ async function activateScheduledCampaigns(result: CampaignProcessResult) {
  */
 async function processActiveCampaigns(result: CampaignProcessResult) {
   const activeCampaigns = await prisma.campaign.findMany({
-    where: { status: "active", isMultiStep: true },
+    where: { status: "active", isMultiStep: true, campaignType: { not: "birthday" } },
     include: {
       emails: { where: { isActive: true }, orderBy: { step: "asc" } },
     },
@@ -126,6 +133,7 @@ async function processActiveCampaigns(result: CampaignProcessResult) {
             email: true,
             firstName: true,
             unsubscribeToken: true,
+            supabaseUserId: true,
             consentGiven: true,
             emailOptOut: true,
             emailPaused: true,
@@ -210,11 +218,64 @@ type ProgressWithStudent = Awaited<ReturnType<typeof prisma.campaignProgress.fin
     email: string;
     firstName: string;
     unsubscribeToken: string | null;
+    supabaseUserId: string | null;
     consentGiven: boolean;
     emailOptOut: boolean;
     emailPaused: boolean;
   };
 };
+
+/**
+ * Generate a password reset URL for a student.
+ * If no Supabase auth account exists, creates one with a temp password.
+ */
+async function generatePasswordResetUrl(
+  student: { id: string; email: string; supabaseUserId: string | null }
+): Promise<string | null> {
+  try {
+    // Step 1: Ensure student has a Supabase auth account
+    if (!student.supabaseUserId) {
+      const tempPassword = generateTempPassword();
+      const { data: authUser, error: createError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email: student.email,
+          password: tempPassword,
+          email_confirm: true,
+        });
+
+      if (createError || !authUser?.user) {
+        console.error(`[campaign] Failed to create auth user for ${student.email}:`, createError?.message);
+        return null;
+      }
+
+      // Link auth user to student record
+      await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          supabaseUserId: authUser.user.id,
+          mustChangePassword: true,
+        },
+      });
+    }
+
+    // Step 2: Generate recovery link
+    const { data: linkData, error: linkError } =
+      await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email: student.email,
+      });
+
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error(`[campaign] Failed to generate reset link for ${student.email}:`, linkError?.message);
+      return null;
+    }
+
+    return `${DEFAULT_BASE_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
+  } catch (err) {
+    console.error(`[campaign] Password reset URL error for ${student.email}:`, err);
+    return null;
+  }
+}
 
 async function processSingleCampaignContact(
   campaign: CampaignWithEmails,
@@ -270,14 +331,24 @@ async function processSingleCampaignContact(
     unsubscribeUrl: unsubscribeUrl || "",
   };
 
+  // Generate password reset URL only if the email template uses it
+  const needsPasswordReset =
+    campaignEmail.bodyHtml.includes("{{passwordResetUrl}}") ||
+    campaignEmail.ctaUrl === "{{passwordResetUrl}}";
+  if (needsPasswordReset) {
+    const resetUrl = await generatePasswordResetUrl(student);
+    variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
+  }
+
   let bodyHtml = replacePlaceholders(campaignEmail.bodyHtml, variables);
 
   // Add CTA button if defined
   if (campaignEmail.ctaText && campaignEmail.ctaUrl) {
-    const ctaUrl = campaignEmail.ctaUrl.startsWith("/")
-      ? `${DEFAULT_BASE_URL}${campaignEmail.ctaUrl}`
-      : campaignEmail.ctaUrl;
-    bodyHtml += `<div style="text-align: center; margin: 28px 0;"><a href="${ctaUrl}" style="display: inline-block; background: #1E4B6E; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">${campaignEmail.ctaText}</a></div>`;
+    let ctaUrl = replacePlaceholders(campaignEmail.ctaUrl, variables);
+    if (ctaUrl.startsWith("/")) {
+      ctaUrl = `${DEFAULT_BASE_URL}${ctaUrl}`;
+    }
+    bodyHtml += `<div style="text-align: center; margin: 28px 0;"><a href="${ctaUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">${campaignEmail.ctaText}</a></div>`;
   }
 
   const subject = replacePlaceholders(campaignEmail.subject, variables);

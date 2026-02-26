@@ -55,6 +55,13 @@ const SECTIONS: Section[] = [
 
 const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
 
+function ordinalSuffix(n: number): string {
+  if (n === 1 || n === 21) return "st";
+  if (n === 2 || n === 22) return "nd";
+  if (n === 3 || n === 23) return "rd";
+  return "th";
+}
+
 // ─── Component ────────────────────────────────────────────────
 
 interface NextDates {
@@ -69,7 +76,7 @@ interface Props {
   nextDates?: NextDates;
 }
 
-export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
+export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Props>) {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState("business");
   const [isDirty, setIsDirty] = useState(false);
@@ -163,8 +170,8 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
   // ── Helpers ──
 
   function formatCents(cents: string): string {
-    const n = parseInt(cents, 10);
-    if (!cents || isNaN(n)) return "—";
+    const n = Number.parseInt(cents, 10);
+    if (!cents || Number.isNaN(n)) return "—";
     return (n / 100).toFixed(2);
   }
 
@@ -409,11 +416,11 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
                   </p>
                   <p className="text-sm">
                     Subtotal: R850.00 &rarr; VAT ({vatPercent || "15"}%): R
-                    {((850 * (parseFloat(vatPercent) || 15)) / 100).toFixed(2)}{" "}
+                    {((850 * (Number.parseFloat(vatPercent) || 15)) / 100).toFixed(2)}{" "}
                     &rarr; Total: R
                     {(
                       850 +
-                      (850 * (parseFloat(vatPercent) || 15)) / 100
+                      (850 * (Number.parseFloat(vatPercent) || 15)) / 100
                     ).toFixed(2)}
                   </p>
                 </div>
@@ -616,14 +623,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
                     <SelectContent>
                       {DAY_OPTIONS.map((d) => (
                         <SelectItem key={d} value={d.toString()}>
-                          {d}
-                          {d === 1
-                            ? "st"
-                            : d === 2
-                              ? "nd"
-                              : d === 3
-                                ? "rd"
-                                : "th"}
+                          {d}{ordinalSuffix(d)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -644,14 +644,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
                     <SelectContent>
                       {DAY_OPTIONS.map((d) => (
                         <SelectItem key={d} value={d.toString()}>
-                          {d}
-                          {d === 1
-                            ? "st"
-                            : d === 2
-                              ? "nd"
-                              : d === 3
-                                ? "rd"
-                                : "th"}
+                          {d}{ordinalSuffix(d)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -662,7 +655,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
                 </div>
               </div>
 
-              {parseInt(postpaidDueDay) <= parseInt(postpaidBillingDay) && (
+              {Number.parseInt(postpaidDueDay) <= Number.parseInt(postpaidBillingDay) && (
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                   Due day must be after billing day. Please adjust.
                 </div>
@@ -676,28 +669,14 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Props) {
                   <li>
                     Payment requests sent on the{" "}
                     <span className="font-medium text-foreground">
-                      {postpaidBillingDay}
-                      {parseInt(postpaidBillingDay) === 1
-                        ? "st"
-                        : parseInt(postpaidBillingDay) === 2
-                          ? "nd"
-                          : parseInt(postpaidBillingDay) === 3
-                            ? "rd"
-                            : "th"}
+                      {postpaidBillingDay}{ordinalSuffix(Number.parseInt(postpaidBillingDay))}
                     </span>{" "}
                     of each month
                   </li>
                   <li>
                     Payment due by the{" "}
                     <span className="font-medium text-foreground">
-                      {postpaidDueDay}
-                      {parseInt(postpaidDueDay) === 1
-                        ? "st"
-                        : parseInt(postpaidDueDay) === 2
-                          ? "nd"
-                          : parseInt(postpaidDueDay) === 3
-                            ? "rd"
-                            : "th"}
+                      {postpaidDueDay}{ordinalSuffix(Number.parseInt(postpaidDueDay))}
                     </span>
                   </li>
                   <li>Friendly reminder sent 2 business days before due date</li>
@@ -825,6 +804,19 @@ const SAMPLE_ITEMS = [
   { desc: "Individual Session (60 min)", sub: "Mon 24 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
 ];
 
+interface InvoicePreviewProps {
+  vatRegistered: boolean;
+  vatPercent: string;
+  vatNumber: string;
+  businessRegistrationNumber: string;
+  businessAddress: string;
+  invoicePrefix: string;
+  bankName: string;
+  bankAccountHolder: string;
+  bankAccountNumber: string;
+  bankBranchCode: string;
+}
+
 function InvoicePreview({
   vatRegistered,
   vatPercent,
@@ -836,19 +828,8 @@ function InvoicePreview({
   bankAccountHolder,
   bankAccountNumber,
   bankBranchCode,
-}: {
-  vatRegistered: boolean;
-  vatPercent: string;
-  vatNumber: string;
-  businessRegistrationNumber: string;
-  businessAddress: string;
-  invoicePrefix: string;
-  bankName: string;
-  bankAccountHolder: string;
-  bankAccountNumber: string;
-  bankBranchCode: string;
-}) {
-  const vatRate = parseFloat(vatPercent) || 15;
+}: Readonly<InvoicePreviewProps>) {
+  const vatRate = Number.parseFloat(vatPercent) || 15;
   const subtotal = 2550; // 3 sessions × R850
   const vatAmount = vatRegistered ? (subtotal * vatRate) / 100 : 0;
   const grandTotal = subtotal + vatAmount;
@@ -956,8 +937,8 @@ function InvoicePreview({
               <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
 
               {/* Rows */}
-              {SAMPLE_ITEMS.map((item, i) => (
-                <div key={i}>
+              {SAMPLE_ITEMS.map((item) => (
+                <div key={item.sub}>
                   <div className="flex py-[0.8%]" style={{ color: "#212121" }}>
                     <span className="w-[50%] pl-[1%]">{item.desc}</span>
                     <span className="w-[14%] text-center">{item.qty}</span>

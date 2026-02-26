@@ -6,6 +6,7 @@ import { processDripEmails } from "@/lib/drip-emails";
 import { processCampaigns } from "@/lib/campaign-process";
 import { processMonthlyBilling } from "@/lib/cron/monthly-billing";
 import { processWhatsAppReminders } from "@/lib/cron/whatsapp-reminders";
+import { processBirthdayEmails } from "@/lib/birthday-process";
 
 /**
  * Combined daily cron — runs at 08:00 SAST (06:00 UTC).
@@ -77,6 +78,14 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[daily-cron] WhatsApp reminders failed:", err);
     results.whatsappReminders = { error: String(err) };
+  }
+
+  // 8. Birthday emails
+  try {
+    results.birthdayEmails = await processBirthdayEmails();
+  } catch (err) {
+    console.error("[daily-cron] Birthday emails failed:", err);
+    results.birthdayEmails = { error: String(err) };
   }
 
   return NextResponse.json({ ok: true, results });

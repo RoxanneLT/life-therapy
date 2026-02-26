@@ -55,7 +55,7 @@ export default function PortalLoginPage() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <CardTitle className="font-heading text-2xl">Student Portal</CardTitle>
+        <CardTitle className="font-heading text-2xl">Portal</CardTitle>
         <CardDescription>Sign in to access your courses</CardDescription>
       </CardHeader>
       <CardContent>

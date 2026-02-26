@@ -14,10 +14,10 @@ import { ReschedulePicker } from "@/components/booking/reschedule-picker";
 import { rescheduleBooking } from "../actions";
 
 interface RescheduleDialogProps {
-  bookingId: string;
-  sessionType: string;
-  currentDate: string;
-  currentTime: string;
+  readonly bookingId: string;
+  readonly sessionType: string;
+  readonly currentDate: string;
+  readonly currentTime: string;
 }
 
 export function RescheduleDialog({

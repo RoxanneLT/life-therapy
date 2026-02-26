@@ -7,7 +7,7 @@ import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
 import type { Currency } from "@/lib/region";
 import { format } from "date-fns";
-import { updateBookingStatus, updateBookingNotes, deleteBooking } from "../actions";
+import { updateBookingStatus, updateBookingNotes, deleteBooking, togglePolicyOverrideAction } from "../actions";
 import {
   Card,
   CardContent,
@@ -40,10 +40,17 @@ import {
   Video,
   ArrowLeft,
   Repeat,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { RescheduleDialog } from "./reschedule-dialog";
+
+const PATTERN_LABELS: Record<string, string> = {
+  weekly: "Weekly",
+  bimonthly: "Bi-monthly",
+  monthly: "Monthly",
+};
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -102,6 +109,11 @@ export default async function BookingDetailPage({ params }: Props) {
   async function handleDelete() {
     "use server";
     await deleteBooking(id);
+  }
+
+  async function handleTogglePolicyOverride() {
+    "use server";
+    await togglePolicyOverrideAction(id);
   }
 
   return (
@@ -222,13 +234,7 @@ export default async function BookingDetailPage({ params }: Props) {
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="bg-purple-100 text-purple-700">
                       <Repeat className="mr-1 h-3 w-3" />
-                      {booking.recurringPattern === "weekly"
-                        ? "Weekly"
-                        : booking.recurringPattern === "bimonthly"
-                          ? "Bi-monthly"
-                          : booking.recurringPattern === "monthly"
-                            ? "Monthly"
-                            : "Recurring"}
+                      {PATTERN_LABELS[booking.recurringPattern ?? ""] ?? "Recurring"}
                     </Badge>
                     <Link
                       href={`/admin/bookings?series=${booking.recurringSeriesId}`}
@@ -341,6 +347,27 @@ export default async function BookingDetailPage({ params }: Props) {
                 <Button type="submit" variant="outline" size="sm">
                   <XCircle className="mr-2 h-4 w-4 text-red-600" />
                   Cancel Booking
+                </Button>
+              </form>
+            </div>
+            <Separator className="my-4" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-amber-600" />
+                  Policy Override
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Allow client to reschedule/cancel outside normal policy windows
+                </p>
+              </div>
+              <form action={handleTogglePolicyOverride}>
+                <Button
+                  type="submit"
+                  variant={booking.policyOverride ? "default" : "outline"}
+                  size="sm"
+                >
+                  {booking.policyOverride ? "Override Active" : "Enable Override"}
                 </Button>
               </form>
             </div>

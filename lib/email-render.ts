@@ -169,6 +169,18 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     total: "R1,700.00",
     paymentUrl: "https://paystack.com/pay/sample",
   },
+  relationship_invite: {
+    fromName: "Jane Doe",
+    toName: "John",
+    relationshipLabel: "partner",
+    portalUrl: "https://life-therapy.co.za/portal/settings?tab=relationships",
+  },
+  relationship_invite_signup: {
+    fromName: "Jane Doe",
+    toName: "John",
+    relationshipLabel: "partner",
+    signupUrl: "https://life-therapy.co.za/portal/login",
+  },
 };
 
 // Title mapping for baseTemplate wrapper
@@ -194,6 +206,8 @@ const TEMPLATE_TITLES: Record<string, string> = {
   payment_request: "Payment Request",
   payment_request_reminder: "Payment Reminder",
   payment_request_overdue: "Payment Overdue",
+  relationship_invite: "Relationship Link Request",
+  relationship_invite_signup: "You've Been Invited to Life-Therapy",
 };
 
 /**
@@ -204,7 +218,7 @@ function replacePlaceholders(
   template: string,
   variables: Record<string, string>
 ): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+  return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key) => {
     return key in variables ? variables[key] : match;
   });
 }
@@ -228,7 +242,7 @@ export async function renderEmail(
       where: { key },
     });
 
-    if (template && template.isActive) {
+    if (template?.isActive) {
       const subject = replacePlaceholders(template.subject, variables);
       const bodyHtml = replacePlaceholders(template.bodyHtml, variables);
       const title = TEMPLATE_TITLES[key] || template.name;
@@ -522,6 +536,38 @@ function renderFallback(
             <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #dc2626; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
           </div>
           <p>If you&rsquo;ve already made payment or have any questions, please reply to this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "relationship_invite":
+      return {
+        subject: `${variables.fromName || "Someone"} wants to link with you on Life-Therapy`,
+        html: baseTemplate(
+          "Relationship Link Request",
+          `<p>Hi ${variables.toName || ""},</p>
+          <p><strong>${variables.fromName || "Someone"}</strong> would like to link with you as their <strong>${variables.relationshipLabel || "partner"}</strong> on Life-Therapy.</p>
+          <p>Log in to your portal to accept or decline this request:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.portalUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">View Request</a>
+          </div>
+          <p>If you don&rsquo;t recognise this request, you can safely ignore it.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "relationship_invite_signup":
+      return {
+        subject: `${variables.fromName || "Someone"} has invited you to Life-Therapy`,
+        html: baseTemplate(
+          "You've Been Invited to Life-Therapy",
+          `<p>Hi ${variables.toName || ""},</p>
+          <p><strong>${variables.fromName || "Someone"}</strong> would like to link with you as their <strong>${variables.relationshipLabel || "partner"}</strong> on Life-Therapy.</p>
+          <p>Create your free account to connect:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.signupUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Sign Up</a>
+          </div>
+          <p>Once you&rsquo;ve created your account, you&rsquo;ll be able to accept the link request from your settings.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
           baseUrl, unsubscribeUrl
         ),

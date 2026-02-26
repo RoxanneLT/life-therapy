@@ -8,10 +8,10 @@ import { updateClientProfileAction } from "../../actions";
 import { format } from "date-fns";
 
 interface PersonalTabProps {
-  client: Record<string, unknown>;
+  readonly client: Record<string, unknown>;
 }
 
-function DisplayField({ label, value }: { label: string; value: string | null | undefined }) {
+function DisplayField({ label, value }: Readonly<{ label: string; value: string | null | undefined }>) {
   return (
     <div>
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
@@ -26,13 +26,13 @@ function FormField({
   defaultValue,
   type = "text",
   placeholder,
-}: {
+}: Readonly<{
   label: string;
   name: string;
   defaultValue?: string | null;
   type?: string;
   placeholder?: string;
-}) {
+}>) {
   return (
     <div>
       <label htmlFor={name} className="text-xs font-medium text-muted-foreground">
@@ -54,11 +54,11 @@ function CheckboxField({
   label,
   name,
   defaultChecked,
-}: {
+}: Readonly<{
   label: string;
   name: string;
   defaultChecked?: boolean;
-}) {
+}>) {
   return (
     <label className="flex items-center gap-2 text-sm">
       <input
@@ -145,7 +145,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
               <div className="grid gap-3 sm:grid-cols-2">
                 <CheckboxField label="Newsletter" name="newsletterOptIn" defaultChecked={client.newsletterOptIn as boolean} />
                 <CheckboxField label="Marketing emails" name="marketingOptIn" defaultChecked={client.marketingOptIn as boolean} />
-                <CheckboxField label="SMS notifications" name="smsOptIn" defaultChecked={client.smsOptIn as boolean} />
+                <CheckboxField label="WhatsApp notifications" name="smsOptIn" defaultChecked={client.smsOptIn as boolean} />
                 <CheckboxField label="Session reminders" name="sessionReminders" defaultChecked={client.sessionReminders as boolean} />
               </div>
             </div>
@@ -185,7 +185,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <CommPref label="Newsletter" active={client.newsletterOptIn as boolean} />
             <CommPref label="Marketing" active={client.marketingOptIn as boolean} />
-            <CommPref label="SMS" active={client.smsOptIn as boolean} />
+            <CommPref label="WhatsApp" active={client.smsOptIn as boolean} />
             <CommPref label="Session Reminders" active={client.sessionReminders as boolean} />
           </div>
         </div>
@@ -194,7 +194,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
   );
 }
 
-function CommPref({ label, active }: { label: string; active: boolean }) {
+function CommPref({ label, active }: Readonly<{ label: string; active: boolean }>) {
   return (
     <div className="flex items-center gap-2 text-sm">
       <div className={`h-2 w-2 rounded-full ${active ? "bg-green-500" : "bg-gray-300"}`} />

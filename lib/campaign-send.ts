@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { generateTempPassword } from "@/lib/auth/temp-password";
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 const BATCH_SIZE = 10;
@@ -14,6 +16,55 @@ function replacePlaceholders(
   return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     return key in variables ? variables[key] : match;
   });
+}
+
+/**
+ * Generate a password reset URL for a recipient.
+ * If no Supabase auth account exists, creates one with a temp password.
+ */
+async function generatePasswordResetUrl(
+  recipient: { id: string; email: string; supabaseUserId?: string | null }
+): Promise<string | null> {
+  try {
+    if (!recipient.supabaseUserId) {
+      const tempPassword = generateTempPassword();
+      const { data: authUser, error: createError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email: recipient.email,
+          password: tempPassword,
+          email_confirm: true,
+        });
+
+      if (createError || !authUser?.user) {
+        console.error(`[campaign] Failed to create auth user for ${recipient.email}:`, createError?.message);
+        return null;
+      }
+
+      await prisma.student.update({
+        where: { id: recipient.id },
+        data: {
+          supabaseUserId: authUser.user.id,
+          mustChangePassword: true,
+        },
+      });
+    }
+
+    const { data: linkData, error: linkError } =
+      await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email: recipient.email,
+      });
+
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error(`[campaign] Failed to generate reset link for ${recipient.email}:`, linkError?.message);
+      return null;
+    }
+
+    return `${DEFAULT_BASE_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
+  } catch (err) {
+    console.error(`[campaign] Password reset URL error for ${recipient.email}:`, err);
+    return null;
+  }
 }
 
 /**
@@ -49,6 +100,9 @@ export async function sendCampaign(campaignId: string): Promise<{
   const campaignSubject = campaign.subject;
   const campaignBody = campaign.bodyHtml;
 
+  // Check if template uses passwordResetUrl
+  const needsPasswordReset = campaignBody.includes("{{passwordResetUrl}}");
+
   // Set status to sending
   await prisma.campaign.update({
     where: { id: campaignId },
@@ -57,10 +111,14 @@ export async function sendCampaign(campaignId: string): Promise<{
 
   try {
     // Get eligible recipients
-    const recipients = await getCampaignRecipients({
-      source: campaign.filterSource || undefined,
-      tags: (campaign.filterTags as string[]) || undefined,
-    });
+    const recipients = await getCampaignRecipients(
+      {
+        source: campaign.filterSource || undefined,
+        tags: (campaign.filterTags as string[]) || undefined,
+        clientStatus: campaign.filterClientStatus || undefined,
+      },
+      (campaign.audienceFilters as import("@/lib/audience-filters").AudienceFilters) || undefined
+    );
 
     // Update total recipients
     await prisma.campaign.update({
@@ -83,6 +141,11 @@ export async function sendCampaign(campaignId: string): Promise<{
             firstName: recipient.firstName || "there",
             unsubscribeUrl,
           };
+
+          if (needsPasswordReset) {
+            const resetUrl = await generatePasswordResetUrl(recipient);
+            variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
+          }
 
           const bodyHtml = replacePlaceholders(campaignBody, variables);
           const subject = replacePlaceholders(campaignSubject, variables);

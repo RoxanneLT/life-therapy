@@ -42,7 +42,7 @@ export default async function CreditsPage() {
           </div>
           {currentBalance > 0 && (
             <Button asChild>
-              <Link href="/book">
+              <Link href="/portal/book">
                 <CalendarDays className="mr-2 h-4 w-4" />
                 Book a Session
               </Link>

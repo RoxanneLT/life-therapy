@@ -18,12 +18,13 @@ interface NavLink {
 }
 
 interface PublicHeaderProps {
-  navLinks: NavLink[];
-  showBookButton: boolean;
-  logoUrl?: string | null;
+  readonly navLinks: NavLink[];
+  readonly showBookButton: boolean;
+  readonly logoUrl?: string | null;
+  readonly isLoggedIn?: boolean;
 }
 
-export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeaderProps) {
+export function PublicHeader({ navLinks, showBookButton, logoUrl, isLoggedIn }: PublicHeaderProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -67,9 +68,9 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
           <ThemeToggle />
           <CartBadge />
           <Button variant="outline" size="sm" className="gap-1.5" asChild>
-            <Link href="/portal/login">
+            <Link href={isLoggedIn ? "/portal" : "/portal/login"}>
               <User className="h-3.5 w-3.5" />
-              Portal
+              {isLoggedIn ? "My Portal" : "Portal"}
             </Link>
           </Button>
         </nav>
@@ -110,9 +111,9 @@ export function PublicHeader({ navLinks, showBookButton, logoUrl }: PublicHeader
                 </Button>
               )}
               <Button variant="outline" size="sm" className="mt-2 gap-1.5" asChild>
-                <Link href="/portal/login" onClick={() => setOpen(false)}>
+                <Link href={isLoggedIn ? "/portal" : "/portal/login"} onClick={() => setOpen(false)}>
                   <User className="h-3.5 w-3.5" />
-                  Student Portal
+                  {isLoggedIn ? "My Portal" : "Portal"}
                 </Link>
               </Button>
             </nav>

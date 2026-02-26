@@ -37,13 +37,18 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
 
   // Auto-redirect if already authenticated
   useEffect(() => {
     const supabase = createBrowserClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) redirectByRole(router);
+      if (user) {
+        redirectByRole(router);
+      } else {
+        setCheckingAuth(false);
+      }
     });
   }, [router]);
 
@@ -79,6 +84,23 @@ export default function LoginPage() {
       );
       setLoading(false);
     }
+  }
+
+  if (checkingAuth) {
+    return (
+      <Card className="w-full max-w-sm">
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <Image
+            src="/logo.png"
+            alt="Life-Therapy"
+            width={200}
+            height={50}
+            className="mb-4 h-12 w-auto"
+          />
+          <p className="text-sm text-muted-foreground">Checking session...</p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

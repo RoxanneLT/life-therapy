@@ -19,12 +19,11 @@ import type { BookingStatus, SessionType } from "@/lib/generated/prisma/client";
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   await requireRole("super_admin", "editor");
 
-  const billingNote =
-    status === "cancelled"
-      ? "(cancelled)"
-      : status === "no_show"
-        ? "(no-show)"
-        : undefined;
+  const billingNotes: Partial<Record<BookingStatus, string>> = {
+    cancelled: "(cancelled)",
+    no_show: "(no-show)",
+  };
+  const billingNote = billingNotes[status];
 
   const booking = await prisma.booking.update({
     where: { id },
@@ -270,7 +269,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
       date: dateStr,
       time: timeStr,
       duration: String(config.durationMinutes),
-      clientDetails: `<p style="margin: 4px 0;"><strong>Client:</strong> ${clientName}</p><p style="margin: 4px 0;"><strong>Email:</strong> ${student.email}</p>${student.phone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${student.phone}</p>` : ""}`,
+      clientDetails: `<p style="margin: 4px 0;"><strong>Client:</strong> ${clientName}</p><p style="margin: 4px 0;"><strong>Email:</strong> ${student.email}</p>` + (student.phone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${student.phone}</p>` : ""),
       teamsLink: calResult?.teamsMeetingUrl
         ? `<p><strong>Teams link:</strong> <a href="${calResult.teamsMeetingUrl}">${calResult.teamsMeetingUrl}</a></p>`
         : "",
@@ -467,7 +466,7 @@ export async function getClientsForBookingAction(search?: string) {
     clientStatus: { in: ["active", "potential"] },
   };
 
-  if (search && search.trim()) {
+  if (search?.trim()) {
     where.OR = [
       { firstName: { contains: search, mode: "insensitive" } },
       { lastName: { contains: search, mode: "insensitive" } },
@@ -524,4 +523,26 @@ export async function getClientPartnersAction(studentId: string) {
   }
 
   return partners;
+}
+
+// ────────────────────────────────────────────────────────────
+// Toggle policy override for a booking
+// ────────────────────────────────────────────────────────────
+
+export async function togglePolicyOverrideAction(bookingId: string) {
+  await requireRole("super_admin");
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { policyOverride: true },
+  });
+  if (!booking) throw new Error("Booking not found");
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { policyOverride: !booking.policyOverride },
+  });
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  revalidatePath("/admin/bookings");
 }

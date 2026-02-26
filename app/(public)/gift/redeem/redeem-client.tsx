@@ -25,7 +25,7 @@ export function RedeemClient({
   message,
   recipientEmail,
   hasExistingAccount,
-}: RedeemClientProps) {
+}: Readonly<RedeemClientProps>) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
