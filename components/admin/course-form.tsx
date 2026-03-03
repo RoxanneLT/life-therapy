@@ -17,6 +17,7 @@ import { ImageUpload } from "@/components/admin/image-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { SeoFields } from "@/components/admin/seo-fields";
+import { PppPriceFields } from "@/components/admin/ppp-price-fields";
 
 const CATEGORIES = [
   { value: "self_esteem", label: "Self-Esteem & Confidence" },
@@ -152,51 +153,13 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
         <ImageUpload value={imageUrl} onChange={setImageUrl} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="space-y-2">
-          <Label htmlFor="price">Price (ZAR cents)</Label>
-          <Input
-            id="price"
-            name="price"
-            type="number"
-            defaultValue={initialData?.price ?? 38900}
-            min={0}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceUsd">Price (USD cents)</Label>
-          <Input
-            id="priceUsd"
-            name="priceUsd"
-            type="number"
-            defaultValue={initialData?.priceUsd ?? ""}
-            min={0}
-            placeholder="e.g. 2499 = $24.99"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceEur">Price (EUR cents)</Label>
-          <Input
-            id="priceEur"
-            name="priceEur"
-            type="number"
-            defaultValue={initialData?.priceEur ?? ""}
-            min={0}
-            placeholder="e.g. 2299 = €22.99"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceGbp">Price (GBP cents)</Label>
-          <Input
-            id="priceGbp"
-            name="priceGbp"
-            type="number"
-            defaultValue={initialData?.priceGbp ?? ""}
-            min={0}
-            placeholder="e.g. 1999 = £19.99"
-          />
-        </div>
-      </div>
+      <PppPriceFields
+        names={{ zar: "price", usd: "priceUsd", eur: "priceEur", gbp: "priceGbp" }}
+        defaultZar={initialData?.price ?? 38900}
+        defaultUsd={initialData?.priceUsd}
+        defaultEur={initialData?.priceEur}
+        defaultGbp={initialData?.priceGbp}
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">

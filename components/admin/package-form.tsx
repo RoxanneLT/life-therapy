@@ -17,6 +17,7 @@ import { ImageUpload } from "@/components/admin/image-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { SeoFields } from "@/components/admin/seo-fields";
+import { PppPriceFields } from "@/components/admin/ppp-price-fields";
 
 interface PackageFormProps {
   initialData?: {
@@ -111,52 +112,13 @@ export function PackageForm({ initialData, categories = [], onSubmit }: PackageF
         <ImageUpload value={imageUrl} onChange={setImageUrl} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="space-y-2">
-          <Label htmlFor="priceCents">Price (ZAR cents)</Label>
-          <Input
-            id="priceCents"
-            name="priceCents"
-            type="number"
-            defaultValue={initialData?.priceCents ?? 0}
-            min={0}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceCentsUsd">Price (USD cents)</Label>
-          <Input
-            id="priceCentsUsd"
-            name="priceCentsUsd"
-            type="number"
-            defaultValue={initialData?.priceCentsUsd ?? ""}
-            min={0}
-            placeholder="e.g. 4999 = $49.99"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceCentsEur">Price (EUR cents)</Label>
-          <Input
-            id="priceCentsEur"
-            name="priceCentsEur"
-            type="number"
-            defaultValue={initialData?.priceCentsEur ?? ""}
-            min={0}
-            placeholder="e.g. 4499 = €44.99"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="priceCentsGbp">Price (GBP cents)</Label>
-          <Input
-            id="priceCentsGbp"
-            name="priceCentsGbp"
-            type="number"
-            defaultValue={initialData?.priceCentsGbp ?? ""}
-            min={0}
-            placeholder="e.g. 3999 = £39.99"
-          />
-        </div>
-      </div>
+      <PppPriceFields
+        names={{ zar: "priceCents", usd: "priceCentsUsd", eur: "priceCentsEur", gbp: "priceCentsGbp" }}
+        defaultZar={initialData?.priceCents ?? 0}
+        defaultUsd={initialData?.priceCentsUsd}
+        defaultEur={initialData?.priceCentsEur}
+        defaultGbp={initialData?.priceCentsGbp}
+      />
 
       <div className="rounded-md border bg-muted/30 p-4">
         <h3 className="mb-3 text-sm font-semibold">Bundle Contents</h3>

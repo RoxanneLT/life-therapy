@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { slugify } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { PppPriceFields } from "@/components/admin/ppp-price-fields";
 
 const STANDALONE_CATEGORIES = [
   { value: "self_esteem", label: "Self-Esteem & Confidence" },
@@ -194,52 +195,14 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="standalonePrice">Price (ZAR cents)</Label>
-                <Input
-                  id="standalonePrice"
-                  name="standalonePrice"
-                  type="number"
-                  defaultValue={initialData?.standalonePrice ?? ""}
-                  min={0}
-                  placeholder="e.g. 6900 = R69"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="standalonePriceUsd">Price (USD cents)</Label>
-                <Input
-                  id="standalonePriceUsd"
-                  name="standalonePriceUsd"
-                  type="number"
-                  defaultValue={initialData?.standalonePriceUsd ?? ""}
-                  min={0}
-                  placeholder="e.g. 499 = $4.99"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="standalonePriceEur">Price (EUR cents)</Label>
-                <Input
-                  id="standalonePriceEur"
-                  name="standalonePriceEur"
-                  type="number"
-                  defaultValue={initialData?.standalonePriceEur ?? ""}
-                  min={0}
-                  placeholder="e.g. 449 = €4.49"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="standalonePriceGbp">Price (GBP cents)</Label>
-                <Input
-                  id="standalonePriceGbp"
-                  name="standalonePriceGbp"
-                  type="number"
-                  defaultValue={initialData?.standalonePriceGbp ?? ""}
-                  min={0}
-                  placeholder="e.g. 399 = £3.99"
-                />
-              </div>
-            </div>
+            <PppPriceFields
+              names={{ zar: "standalonePrice", usd: "standalonePriceUsd", eur: "standalonePriceEur", gbp: "standalonePriceGbp" }}
+              defaultZar={initialData?.standalonePrice ?? 0}
+              defaultUsd={initialData?.standalonePriceUsd}
+              defaultEur={initialData?.standalonePriceEur}
+              defaultGbp={initialData?.standalonePriceGbp}
+              zarRequired={false}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Category</Label>
