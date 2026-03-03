@@ -383,7 +383,7 @@ export function WhatsAppPanel({
                   <div>
                     <p className="text-sm font-medium">Session Reminders</p>
                     <p className="text-xs text-muted-foreground">
-                      48 hours before + morning of session (08:00 SAST)
+                      24 hours before + morning of session (08:00 SAST)
                     </p>
                   </div>
                   <Switch checked={sessionReminders} onCheckedChange={setSessionReminders} />

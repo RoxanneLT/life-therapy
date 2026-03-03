@@ -75,7 +75,7 @@ export async function sendTestWhatsAppAction(phone: string) {
 // ────────────────────────────────────────────────────────────
 
 const DEFAULT_TEMPLATES = [
-  { name: "session_reminder_48h", bodyText: "Hi {{1}}, this is a reminder that your {{2}} session is on {{3}} at {{4}}.", description: "Sent 48 hours before a session", sortOrder: 1 },
+  { name: "session_reminder_24h", bodyText: "Hi {{1}}, this is a reminder that your {{2}} session is tomorrow ({{3}}) at {{4}}.", description: "Sent 24 hours before a session", sortOrder: 1 },
   { name: "session_reminder_today", bodyText: "Hi {{1}}, your session is today at {{2}}. Join here: {{3}}", description: "Sent morning of session", sortOrder: 2 },
   { name: "billing_request", bodyText: "Hi {{1}}, your {{2}} invoice of {{3}} is due by {{4}}. Pay here: {{5}}", description: "Sent when payment request is created", sortOrder: 3 },
   { name: "billing_reminder", bodyText: "Hi {{1}}, a friendly reminder that {{2}} is due by {{3}}. Pay here: {{4}}", description: "Sent 2 days before due date", sortOrder: 4 },

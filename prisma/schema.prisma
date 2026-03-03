@@ -289,7 +289,7 @@ model Booking {
   policyOverride     Boolean   @default(false)
 
   // WhatsApp reminders
-  whatsappReminder48hSentAt     DateTime?
+  whatsappReminder24hSentAt     DateTime?   @map("whatsappReminder48hSentAt")
   whatsappReminderMorningSentAt DateTime?
 
   @@index([date])

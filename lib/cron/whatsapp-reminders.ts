@@ -2,7 +2,7 @@
  * WhatsApp reminder processor — runs as part of the daily cron.
  *
  * Three categories:
- *   1. Session reminders (48h before + morning-of)
+ *   1. Session reminders (24h before + morning-of)
  *   2. Billing reminders (request sent, 2 days before due, overdue)
  *   3. Credit expiry warnings (14 days + 3 days before)
  *
@@ -51,28 +51,28 @@ function formatCents(cents: number, currency: string): string {
 
 async function processSessionReminders(
   settings: Awaited<ReturnType<typeof getSiteSettings>>,
-): Promise<{ sent48h: number; sentMorning: number }> {
+): Promise<{ sent24h: number; sentMorning: number }> {
   if (!settings.whatsappEnabled || !settings.whatsappSessionReminders) {
-    return { sent48h: 0, sentMorning: 0 };
+    return { sent24h: 0, sentMorning: 0 };
   }
 
   const todayStr = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
-  const twoDaysStr = formatInTimeZone(addDays(new Date(`${todayStr}T12:00:00Z`), 2), "UTC", "yyyy-MM-dd");
+  const tomorrowStr = formatInTimeZone(addDays(new Date(`${todayStr}T12:00:00Z`), 1), "UTC", "yyyy-MM-dd");
 
-  // 48h reminder: bookings 2 days from now
-  const bookings48h = await prisma.booking.findMany({
+  // 24h reminder: bookings 1 day from now
+  const bookings24h = await prisma.booking.findMany({
     where: {
       status: "confirmed",
-      date: toUTCDate(twoDaysStr),
-      whatsappReminder48hSentAt: null,
+      date: toUTCDate(tomorrowStr),
+      whatsappReminder24hSentAt: null,
       student: { isNot: null },
       studentId: { not: null },
     },
     include: { student: true },
   });
 
-  let sent48h = 0;
-  for (const booking of bookings48h) {
+  let sent24h = 0;
+  for (const booking of bookings24h) {
     if (!booking.student?.smsOptIn || !booking.student.phone) continue;
     const config = getSessionTypeConfig(booking.sessionType);
     const dateStr = format(new Date(booking.date), "EEEE d MMMM");
@@ -80,7 +80,7 @@ async function processSessionReminders(
     const result = await sendAndLogTemplate({
       studentId: booking.student.id,
       phone: booking.student.phone,
-      templateName: "session_reminder_48h",
+      templateName: "session_reminder_24h",
       components: [{
         type: "body",
         parameters: [
@@ -96,9 +96,9 @@ async function processSessionReminders(
     if (result.success) {
       await prisma.booking.update({
         where: { id: booking.id },
-        data: { whatsappReminder48hSentAt: new Date() },
+        data: { whatsappReminder24hSentAt: new Date() },
       });
-      sent48h++;
+      sent24h++;
     }
   }
 
@@ -142,7 +142,7 @@ async function processSessionReminders(
     }
   }
 
-  return { sent48h, sentMorning };
+  return { sent24h, sentMorning };
 }
 
 // ─── Billing Reminders ───────────────────────────────────────
@@ -398,7 +398,7 @@ async function processCreditExpiryReminders(
 // ─── Main export ─────────────────────────────────────────────
 
 export async function processWhatsAppReminders(): Promise<{
-  sessionReminders: { sent48h: number; sentMorning: number };
+  sessionReminders: { sent24h: number; sentMorning: number };
   billingReminders: { sentRequest: number; sentReminder: number; sentOverdue: number };
   creditReminders: { sent14d: number; sent3d: number };
 }> {
