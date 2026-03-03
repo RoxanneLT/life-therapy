@@ -3,10 +3,18 @@ export const dynamic = "force-dynamic";
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { BookingsClient } from "./bookings-client";
+import { getSiteSettings } from "@/lib/settings";
+import { getSessionPrice } from "@/lib/pricing";
 import Link from "next/link";
 
 export default async function PortalBookingsPage() {
   const { student } = await requirePasswordChanged();
+  const settings = await getSiteSettings();
+  const sessionRates: Record<string, number> = {
+    individual: getSessionPrice("individual", "ZAR", settings),
+    couples: getSessionPrice("couples", "ZAR", settings),
+    free_consultation: 0,
+  };
 
   const bookings = await prisma.booking.findMany({
     where: { studentId: student.id },
@@ -68,7 +76,7 @@ export default async function PortalBookingsPage() {
           + Book a Session
         </Link>
       </div>
-      <BookingsClient bookings={serialized} />
+      <BookingsClient bookings={serialized} billingType={student.billingType} sessionRates={sessionRates} />
     </div>
   );
 }

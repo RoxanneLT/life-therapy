@@ -39,6 +39,7 @@ import {
   MAX_RESCHEDULES,
   RESCHEDULE_NOTICE_HOURS,
 } from "@/lib/booking-policy";
+import { formatPrice } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,7 +90,13 @@ const STATUS_CONFIG: Record<
 
 export function BookingsClient({
   bookings,
-}: Readonly<{ bookings: SerializedBooking[] }>) {
+  billingType,
+  sessionRates,
+}: Readonly<{
+  bookings: SerializedBooking[];
+  billingType: string;
+  sessionRates: Record<string, number>;
+}>) {
   const now = new Date();
 
   const upcoming = bookings.filter(
@@ -121,7 +128,7 @@ export function BookingsClient({
         ) : (
           <div className="space-y-3">
             {upcoming.map((b) => (
-              <UpcomingBookingCard key={b.id} booking={b} now={now} />
+              <UpcomingBookingCard key={b.id} booking={b} now={now} billingType={billingType} sessionRates={sessionRates} />
             ))}
           </div>
         )}
@@ -155,7 +162,9 @@ export function BookingsClient({
 function UpcomingBookingCard({
   booking: b,
   now,
-}: Readonly<{ booking: SerializedBooking; now: Date }>) {
+  billingType,
+  sessionRates,
+}: Readonly<{ booking: SerializedBooking; now: Date; billingType: string; sessionRates: Record<string, number> }>) {
   const sessionDate = new Date(b.date + "T" + b.startTime + ":00");
   const hoursUntil = differenceInHours(sessionDate, now);
   const isFreeConsultation = b.sessionType === "free_consultation";
@@ -222,6 +231,8 @@ function UpcomingBookingCard({
               booking={b}
               hoursUntil={hoursUntil}
               onReschedule={canReschedule ? () => setRescheduleOpen(true) : undefined}
+              billingType={billingType}
+              sessionRates={sessionRates}
             />
             <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
           </div>
@@ -310,12 +321,23 @@ function CancelBookingDialog({
   booking: b,
   hoursUntil,
   onReschedule,
-}: Readonly<{ booking: SerializedBooking; hoursUntil: number; onReschedule?: () => void }>) {
+  billingType,
+  sessionRates,
+}: Readonly<{
+  booking: SerializedBooking;
+  hoursUntil: number;
+  onReschedule?: () => void;
+  billingType: string;
+  sessionRates: Record<string, number>;
+}>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
 
   const isFreeConsultation = b.sessionType === "free_consultation";
+  const isPostpaid = billingType === "postpaid";
+  const sessionRate = sessionRates[b.sessionType] || 0;
 
   // Determine cancel type for UI hints (server re-validates)
   const isAntiAbuse =
@@ -329,9 +351,14 @@ function CancelBookingDialog({
   const isNormal = !isFreeConsultation && !isAntiAbuse && !isLate;
 
   function handleCancel() {
+    setError("");
     startTransition(async () => {
-      await portalCancelBookingAction(b.id, reason);
-      setOpen(false);
+      try {
+        await portalCancelBookingAction(b.id, reason);
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
@@ -356,9 +383,9 @@ function CancelBookingDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Free consultation — no credits involved, encourage reschedule */}
-        {isFreeConsultation && onReschedule && (
-          <div className="space-y-3">
+        <div className="space-y-3">
+          {/* Free consultation — encourage reschedule */}
+          {isFreeConsultation && onReschedule && (
             <div className="flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
               <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
@@ -369,34 +396,33 @@ function CancelBookingDialog({
                 </p>
               </div>
             </div>
-            <Textarea
-              placeholder="Reason for cancelling (optional)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={2}
-            />
-          </div>
-        )}
+          )}
 
-        {/* Normal cancel */}
-        {isNormal && (
-          <div className="space-y-3">
+          {/* Free consultation — can't reschedule */}
+          {isFreeConsultation && !onReschedule && (
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to cancel your free consultation?
+            </p>
+          )}
+
+          {/* Normal cancel — prepaid (credit refunded) */}
+          {isNormal && !isPostpaid && (
             <div className="flex items-start gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950/30 dark:text-green-300">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
               <p>Your session credit will be refunded to your balance.</p>
             </div>
-            <Textarea
-              placeholder="Reason for cancelling (optional)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={2}
-            />
-          </div>
-        )}
+          )}
 
-        {/* Late cancel */}
-        {isLate && (
-          <div className="space-y-3">
+          {/* Normal cancel — postpaid (no charge) */}
+          {isNormal && isPostpaid && (
+            <div className="flex items-start gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950/30 dark:text-green-300">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>This session won&apos;t be charged — you&apos;re cancelling with more than {CANCEL_NOTICE_HOURS} hours notice.</p>
+            </div>
+          )}
+
+          {/* Late cancel — prepaid (credit not refunded) */}
+          {isLate && !isPostpaid && (
             <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
@@ -407,18 +433,24 @@ function CancelBookingDialog({
                 </p>
               </div>
             </div>
-            <Textarea
-              placeholder="Reason for cancelling (optional)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={2}
-            />
-          </div>
-        )}
+          )}
 
-        {/* Anti-abuse */}
-        {isAntiAbuse && (
-          <div className="space-y-3">
+          {/* Late cancel — postpaid (charged at rate) */}
+          {isLate && isPostpaid && (
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Less than {CANCEL_NOTICE_HOURS} hours notice</p>
+                <p className="mt-1">
+                  This session will be charged at <strong>{formatPrice(sessionRate)}</strong> on your next invoice.
+                  Consider rescheduling instead if a different time works for you.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Anti-abuse — prepaid (credit forfeited) */}
+          {isAntiAbuse && !isPostpaid && (
             <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-300">
               <Ban className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
@@ -429,14 +461,35 @@ function CancelBookingDialog({
                 </p>
               </div>
             </div>
-            <Textarea
-              placeholder="Reason for cancelling (optional)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={2}
-            />
-          </div>
-        )}
+          )}
+
+          {/* Anti-abuse — postpaid (charged at rate) */}
+          {isAntiAbuse && isPostpaid && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-300">
+              <Ban className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Session will be charged</p>
+                <p className="mt-1">
+                  This session was rescheduled from a time within the {CANCEL_NOTICE_HOURS}-hour
+                  cancellation window. It will be charged at <strong>{formatPrice(sessionRate)}</strong> on your next invoice.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <Textarea
+            placeholder="Reason for cancelling (optional)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+          />
+        </div>
 
         <DialogFooter>
           {isFreeConsultation && onReschedule ? (
@@ -660,11 +713,18 @@ function RescheduleBookingDialog({
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const isLastReschedule = b.rescheduleCount === MAX_RESCHEDULES - 1 && !b.policyOverride;
 
   function handleConfirm(date: string, startTime: string, endTime: string) {
+    setError("");
     startTransition(async () => {
-      await portalRescheduleBookingAction(b.id, date, startTime, endTime);
-      setOpen(false);
+      try {
+        await portalRescheduleBookingAction(b.id, date, startTime, endTime);
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
@@ -678,6 +738,17 @@ function RescheduleBookingDialog({
         <DialogHeader>
           <DialogTitle>Reschedule Session</DialogTitle>
         </DialogHeader>
+        {isLastReschedule && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>This is your <strong>last available reschedule</strong> for this session.</p>
+          </div>
+        )}
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
         {open && (
           <ReschedulePicker
             sessionType={b.sessionType}
