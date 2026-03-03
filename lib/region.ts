@@ -51,6 +51,8 @@ export function isValidCurrency(value: string): value is Currency {
 }
 
 export function getBaseUrlForRegion(region: Region): string {
+  // Allow override for local dev / preview deployments
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   if (region === "za") return "https://life-therapy.co.za";
   return "https://life-therapy.online";
 }

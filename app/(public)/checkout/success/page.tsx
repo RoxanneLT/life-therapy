@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/utils";
 import { getCurrency } from "@/lib/get-region";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { AutoRefresh } from "./auto-refresh";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -51,6 +52,8 @@ export default async function CheckoutSuccessPage({
   }
 
   if (!order) {
+    // Auto-refresh: webhook may still be processing, retry in 3 seconds (up to 5 attempts)
+    const currentUrl = `/checkout/success?reference=${encodeURIComponent(reference)}`;
     return (
       <section className="px-4 py-16">
         <div className="mx-auto max-w-lg text-center">
@@ -59,9 +62,10 @@ export default async function CheckoutSuccessPage({
             Processing your order...
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Your payment was received. You&apos;ll receive a confirmation email
-            shortly.
+            Your payment was received. We&apos;re confirming your order &mdash;
+            this usually takes a few seconds.
           </p>
+          <AutoRefresh url={currentUrl} />
           <Button className="mt-6" asChild>
             <Link href="/portal">Go to My Portal</Link>
           </Button>

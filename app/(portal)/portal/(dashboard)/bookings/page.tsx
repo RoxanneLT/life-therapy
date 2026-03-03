@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { BookingsClient } from "./bookings-client";
+import Link from "next/link";
 
 export default async function PortalBookingsPage() {
   const { student } = await requirePasswordChanged();
@@ -60,12 +61,12 @@ export default async function PortalBookingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-heading text-2xl font-bold">My Sessions</h1>
-        <a
+        <Link
           href="/portal/book"
           className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
           + Book a Session
-        </a>
+        </Link>
       </div>
       <BookingsClient bookings={serialized} />
     </div>
