@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -25,19 +32,23 @@ interface PackageFormProps {
     credits: number;
     courseSlots: number;
     digitalProductSlots: number;
+    category?: string | null;
     isPublished: boolean;
-    sortOrder: number;
     metaTitle?: string | null;
     metaDescription?: string | null;
   };
+  categories?: string[];
   onSubmit: (formData: FormData) => Promise<void>;
 }
 
-export function PackageForm({ initialData, onSubmit }: PackageFormProps) {
+export function PackageForm({ initialData, categories = [], onSubmit }: PackageFormProps) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");
   const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || "");
   const [isPublished, setIsPublished] = useState(initialData?.isPublished ?? false);
+  const [category, setCategory] = useState(initialData?.category || "");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [localCategories, setLocalCategories] = useState<string[]>(categories);
   const [submitting, setSubmitting] = useState(false);
 
   function handleTitleChange(value: string) {
@@ -53,6 +64,7 @@ export function PackageForm({ initialData, onSubmit }: PackageFormProps) {
     const formData = new FormData(e.currentTarget);
     formData.set("slug", slug);
     formData.set("imageUrl", imageUrl);
+    formData.set("category", category);
     formData.set("isPublished", String(isPublished));
     await onSubmit(formData);
     setSubmitting(false);
@@ -188,17 +200,64 @@ export function PackageForm({ initialData, onSubmit }: PackageFormProps) {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="sortOrder">Sort Order</Label>
-          <Input
-            id="sortOrder"
-            name="sortOrder"
-            type="number"
-            defaultValue={initialData?.sortOrder ?? 0}
-            min={0}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label>Category</Label>
+        {addingCategory ? (
+          <div className="flex gap-2">
+            <Input
+              autoFocus
+              placeholder="New category name"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setCategory(initialData?.category || "");
+                  setAddingCategory(false);
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => {
+                const trimmed = category.trim();
+                if (trimmed && !localCategories.includes(trimmed)) {
+                  setLocalCategories((prev) => [...prev, trimmed].sort((a, b) => a.localeCompare(b)));
+                }
+                setAddingCategory(false);
+              }}
+            >
+              Done
+            </Button>
+          </div>
+        ) : (
+          <Select
+            value={category}
+            onValueChange={(val) => {
+              if (val === "__new__") {
+                setCategory("");
+                setAddingCategory(true);
+              } else {
+                setCategory(val);
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a category" />
+            </SelectTrigger>
+            <SelectContent>
+              {localCategories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+              <SelectItem value="__new__">+ Add new category</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        <p className="text-xs text-muted-foreground">Optional — used for filtering on the storefront</p>
       </div>
 
       <SeoFields

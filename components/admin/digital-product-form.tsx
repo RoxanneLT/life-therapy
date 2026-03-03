@@ -53,6 +53,7 @@ export function DigitalProductForm({ initialData, categories = [], onSubmit }: D
   const [isPublished, setIsPublished] = useState(initialData?.isPublished ?? false);
   const [category, setCategory] = useState(initialData?.category || "");
   const [addingCategory, setAddingCategory] = useState(false);
+  const [localCategories, setLocalCategories] = useState<string[]>(categories);
   const [submitting, setSubmitting] = useState(false);
 
   function handleTitleChange(value: string) {
@@ -212,7 +213,13 @@ export function DigitalProductForm({ initialData, categories = [], onSubmit }: D
                 variant="outline"
                 size="sm"
                 className="shrink-0"
-                onClick={() => setAddingCategory(false)}
+                onClick={() => {
+                  const trimmed = category.trim();
+                  if (trimmed && !localCategories.includes(trimmed)) {
+                    setLocalCategories((prev) => [...prev, trimmed].sort((a, b) => a.localeCompare(b)));
+                  }
+                  setAddingCategory(false);
+                }}
               >
                 Done
               </Button>
@@ -233,7 +240,7 @@ export function DigitalProductForm({ initialData, categories = [], onSubmit }: D
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((cat) => (
+                {localCategories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
                   </SelectItem>

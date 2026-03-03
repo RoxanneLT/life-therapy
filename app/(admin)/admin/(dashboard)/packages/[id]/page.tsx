@@ -17,9 +17,15 @@ export default async function EditPackagePage({
   await requireRole("super_admin");
   const { id } = await params;
 
-  const pkg = await prisma.hybridPackage.findUnique({
-    where: { id },
-  });
+  const [pkg, categoryRows] = await Promise.all([
+    prisma.hybridPackage.findUnique({ where: { id } }),
+    prisma.hybridPackage.findMany({
+      where: { category: { not: null } },
+      select: { category: true },
+      distinct: ["category"],
+      orderBy: { category: "asc" },
+    }),
+  ]);
 
   if (!pkg) notFound();
 
@@ -53,6 +59,7 @@ export default async function EditPackagePage({
       </div>
       <PackageForm
         initialData={pkg}
+        categories={categoryRows.map((c) => c.category!)}
         onSubmit={handleSubmit}
       />
     </div>

@@ -215,8 +215,8 @@ export const packageSchema = z.object({
   credits: z.coerce.number().int().min(0).default(0),
   courseSlots: z.coerce.number().int().min(0).default(0),
   digitalProductSlots: z.coerce.number().int().min(0).default(0),
+  category: z.string().optional().transform((v) => v || undefined),
   isPublished: z.boolean().default(false),
-  sortOrder: z.coerce.number().int().default(0),
   metaTitle: z.string().max(70, "Keep under 70 characters").optional().or(z.literal("")).transform((v) => v || undefined),
   metaDescription: z.string().max(320, "Keep under 320 characters").optional().or(z.literal("")).transform((v) => v || undefined),
 });

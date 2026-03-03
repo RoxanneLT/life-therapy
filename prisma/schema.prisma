@@ -1106,6 +1106,7 @@ model HybridPackage {
   credits             Int      @default(0)
   courseSlots          Int      @default(0) // How many full courses the customer picks
   digitalProductSlots Int      @default(0) // How many digital products the customer picks
+  category            String?
   isPublished         Boolean  @default(false)
   sortOrder           Int      @default(0)
   metaTitle           String?

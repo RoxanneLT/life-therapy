@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus, Package } from "lucide-react";
 import { SortablePackageList } from "./sortable-package-list";
+import { PackageCategoryManager } from "./category-manager";
 
 export default async function AdminPackagesPage() {
   await requireRole("super_admin");
@@ -19,9 +20,20 @@ export default async function AdminPackagesPage() {
       credits: true,
       courseSlots: true,
       digitalProductSlots: true,
+      category: true,
       isPublished: true,
     },
   });
+
+  const categoryCounts = new Map<string, number>();
+  for (const p of packages) {
+    if (p.category) {
+      categoryCounts.set(p.category, (categoryCounts.get(p.category) ?? 0) + 1);
+    }
+  }
+  const categories = Array.from(categoryCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-6">
@@ -39,6 +51,8 @@ export default async function AdminPackagesPage() {
           </Link>
         </Button>
       </div>
+
+      <PackageCategoryManager categories={categories} />
 
       {packages.length > 0 ? (
         <SortablePackageList packages={packages} />

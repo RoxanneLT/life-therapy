@@ -15,8 +15,15 @@ export async function createPackage(formData: FormData) {
     isPublished: raw.isPublished === "true",
   });
 
+  const maxOrder = await prisma.hybridPackage.aggregate({
+    _max: { sortOrder: true },
+  });
+
   await prisma.hybridPackage.create({
-    data: parsed,
+    data: {
+      ...parsed,
+      sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
+    },
   });
 
   revalidatePath("/admin/packages");
@@ -53,6 +60,30 @@ export async function reorderPackages(orderedIds: string[]) {
       }),
     ),
   );
+
+  revalidatePath("/admin/packages");
+  revalidatePath("/packages");
+}
+
+export async function renamePackageCategory(oldName: string, newName: string) {
+  await requireRole("super_admin");
+
+  await prisma.hybridPackage.updateMany({
+    where: { category: oldName },
+    data: { category: newName || null },
+  });
+
+  revalidatePath("/admin/packages");
+  revalidatePath("/packages");
+}
+
+export async function deletePackageCategory(name: string) {
+  await requireRole("super_admin");
+
+  await prisma.hybridPackage.updateMany({
+    where: { category: name },
+    data: { category: null },
+  });
 
   revalidatePath("/admin/packages");
   revalidatePath("/packages");

@@ -32,6 +32,7 @@ interface Package {
   credits: number;
   courseSlots: number;
   digitalProductSlots: number;
+  category: string | null;
   isPublished: boolean;
 }
 
@@ -75,6 +76,15 @@ function SortableRow({ pkg }: { pkg: Package }) {
         <span className="text-xs text-muted-foreground">
           {getPackageContents(pkg)}
         </span>
+      </td>
+      <td className="p-3">
+        {pkg.category ? (
+          <Badge variant="secondary" className="text-xs">
+            {pkg.category}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">&mdash;</span>
+        )}
       </td>
       <td className="p-3 text-right">{formatPrice(pkg.priceCents)}</td>
       <td className="p-3">
@@ -172,6 +182,7 @@ export function SortablePackageList({ packages: initial }: { packages: Package[]
               <th className="w-10 p-3" />
               <th className="p-3 font-medium">Title</th>
               <th className="p-3 font-medium">Contents</th>
+              <th className="p-3 font-medium">Category</th>
               <th className="p-3 font-medium text-right">Price</th>
               <th className="p-3 font-medium">Status</th>
               <th className="p-3 font-medium">Actions</th>
@@ -192,7 +203,7 @@ export function SortablePackageList({ packages: initial }: { packages: Package[]
                 ))}
                 {packages.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
                       No packages yet.
                     </td>
                   </tr>
