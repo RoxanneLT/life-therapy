@@ -409,22 +409,23 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
                 </div>
               )}
 
-              {vatRegistered && (
-                <div className="rounded-lg bg-muted/50 p-4">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">
-                    Preview
-                  </p>
-                  <p className="text-sm">
-                    Subtotal: R850.00 &rarr; VAT ({vatPercent || "15"}%): R
-                    {((850 * (Number.parseFloat(vatPercent) || 15)) / 100).toFixed(2)}{" "}
-                    &rarr; Total: R
-                    {(
-                      850 +
-                      (850 * (Number.parseFloat(vatPercent) || 15)) / 100
-                    ).toFixed(2)}
-                  </p>
-                </div>
-              )}
+              {vatRegistered && (() => {
+                const sampleRands = Number.parseInt(sessionPriceIndividualZar, 10) / 100 || 850;
+                const vatPct = Number.parseFloat(vatPercent) || 15;
+                return (
+                  <div className="rounded-lg bg-muted/50 p-4">
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">
+                      Preview
+                    </p>
+                    <p className="text-sm">
+                      Subtotal: R{sampleRands.toFixed(2)} &rarr; VAT ({vatPct}%): R
+                      {((sampleRands * vatPct) / 100).toFixed(2)}{" "}
+                      &rarr; Total: R
+                      {(sampleRands + (sampleRands * vatPct) / 100).toFixed(2)}
+                    </p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}
@@ -435,7 +436,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
             <CardHeader>
               <CardTitle>Session Rates</CardTitle>
               <CardDescription>
-                All values in cents (e.g. 85000 = R850.00, 6500 = $65.00)
+                All values in cents (e.g. 100000 = R1,000.00)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -775,6 +776,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
             bankAccountHolder={bankAccountHolder}
             bankAccountNumber={bankAccountNumber}
             bankBranchCode={bankBranchCode}
+            sessionPriceZar={sessionPriceIndividualZar}
           />
         )}
 
@@ -798,11 +800,13 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
 // ─── Invoice Preview ──────────────────────────────────────────
 
 // Sample data matching what the PDF generator would produce
-const SAMPLE_ITEMS = [
-  { desc: "Individual Session (60 min)", sub: "Mon 10 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
-  { desc: "Individual Session (60 min)", sub: "Mon 17 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
-  { desc: "Individual Session (60 min)", sub: "Mon 24 Feb 2026 at 10:00", qty: "1.00", price: "R850.00", total: "R850.00" },
-];
+function buildSampleItems(priceRands: string) {
+  return [
+    { desc: "Individual Session (60 min)", sub: "Mon 10 Feb 2026 at 10:00", qty: "1.00", price: `R${priceRands}`, total: `R${priceRands}` },
+    { desc: "Individual Session (60 min)", sub: "Mon 17 Feb 2026 at 10:00", qty: "1.00", price: `R${priceRands}`, total: `R${priceRands}` },
+    { desc: "Individual Session (60 min)", sub: "Mon 24 Feb 2026 at 10:00", qty: "1.00", price: `R${priceRands}`, total: `R${priceRands}` },
+  ];
+}
 
 interface InvoicePreviewProps {
   vatRegistered: boolean;
@@ -815,6 +819,7 @@ interface InvoicePreviewProps {
   bankAccountHolder: string;
   bankAccountNumber: string;
   bankBranchCode: string;
+  sessionPriceZar: string;
 }
 
 function InvoicePreview({
@@ -828,9 +833,13 @@ function InvoicePreview({
   bankAccountHolder,
   bankAccountNumber,
   bankBranchCode,
+  sessionPriceZar,
 }: Readonly<InvoicePreviewProps>) {
   const vatRate = Number.parseFloat(vatPercent) || 15;
-  const subtotal = 2550; // 3 sessions × R850
+  const priceRands = Number.parseInt(sessionPriceZar, 10) / 100 || 850;
+  const priceFormatted = priceRands.toFixed(2);
+  const sampleItems = buildSampleItems(priceFormatted);
+  const subtotal = priceRands * 3;
   const vatAmount = vatRegistered ? (subtotal * vatRate) / 100 : 0;
   const grandTotal = subtotal + vatAmount;
 
@@ -937,7 +946,7 @@ function InvoicePreview({
               <div className="border-t" style={{ borderColor: "#dcdcdc" }} />
 
               {/* Rows */}
-              {SAMPLE_ITEMS.map((item) => (
+              {sampleItems.map((item) => (
                 <div key={item.sub}>
                   <div className="flex py-[0.8%]" style={{ color: "#212121" }}>
                     <span className="w-[50%] pl-[1%]">{item.desc}</span>
