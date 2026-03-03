@@ -18,21 +18,37 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
     async (file: File) => {
       setUploading(true);
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const res = await fetch("/api/upload", {
+        // 1. Get a signed upload URL (small JSON request, no body-size limit issues)
+        const urlRes = await fetch("/api/upload-signed-url", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bucket: "images",
+            fileName: file.name,
+            contentType: file.type,
+          }),
         });
 
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || "Upload failed");
+        const urlData = await urlRes.json();
+        if (!urlRes.ok) {
+          throw new Error(urlData.error || "Failed to get upload URL");
         }
 
-        onChange(data.url);
+        // 2. Upload directly to Supabase (bypasses Vercel's 4.5 MB limit)
+        const uploadRes = await fetch(urlData.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Upload to storage failed");
+        }
+
+        // 3. Build the public URL
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const publicUrl = `${supabaseUrl}/storage/v1/object/public/images/${urlData.path}`;
+        onChange(publicUrl);
       } catch (err) {
         console.error("Upload error:", err);
       } finally {
