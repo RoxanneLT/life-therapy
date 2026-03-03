@@ -24,41 +24,53 @@ export async function requestPasswordResetAction(
     return { error: "Please enter your email address." };
   }
 
-  // Step 1: Check if user exists in our students table
-  const student = await prisma.student.findUnique({
-    where: { email },
-    select: { id: true, supabaseUserId: true, firstName: true },
-  });
-
-  if (!student) {
-    console.log(`[password-reset] No student found for ${email}`);
-    return { success: true };
-  }
-
-  // Step 2: Ensure student is linked to a Supabase auth user
-  if (!student.supabaseUserId) {
-    console.log(`[password-reset] Student ${email} has no supabaseUserId, searching auth...`);
-    const { data: userList } = await supabaseAdmin.auth.admin.listUsers({
-      perPage: 1000,
+  try {
+    // Step 1: Check if user exists in our students table
+    const student = await prisma.student.findUnique({
+      where: { email },
+      select: { id: true, supabaseUserId: true, firstName: true },
     });
-    const authMatch = userList?.users?.find(
-      (u) => u.email?.toLowerCase() === email,
-    );
 
-    if (authMatch) {
-      await prisma.student.update({
-        where: { id: student.id },
-        data: { supabaseUserId: authMatch.id },
-      });
-      console.log(`[password-reset] Linked student to auth user ${authMatch.id}`);
-    } else {
-      console.log(`[password-reset] No auth user found for ${email}`);
+    if (!student) {
+      console.warn(`[password-reset] No student found for ${email}`);
+      // Don't reveal whether account exists
       return { success: true };
     }
-  }
 
-  // Step 3: Generate recovery link via admin SDK and send via Resend
-  try {
+    // Step 2: Ensure student is linked to a Supabase auth user
+    let authUserId = student.supabaseUserId;
+
+    if (!authUserId) {
+      console.warn(`[password-reset] Student ${email} has no supabaseUserId, searching auth...`);
+      const { data: userList, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+        perPage: 1000,
+      });
+
+      if (listError) {
+        console.error(`[password-reset] listUsers error:`, listError);
+        return { error: "Something went wrong. Please try again later." };
+      }
+
+      const authMatch = userList?.users?.find(
+        (u) => u.email?.toLowerCase() === email,
+      );
+
+      if (authMatch) {
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { supabaseUserId: authMatch.id },
+        });
+        authUserId = authMatch.id;
+        console.log(`[password-reset] Linked student to auth user ${authMatch.id}`);
+      } else {
+        console.warn(`[password-reset] No Supabase auth user found for ${email}`);
+        return { success: true };
+      }
+    }
+
+    // Step 3: Generate recovery link via admin SDK
+    console.log(`[password-reset] Generating recovery link for ${email} (auth: ${authUserId})`);
+
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: "recovery",
@@ -68,19 +80,27 @@ export async function requestPasswordResetAction(
         },
       });
 
-    if (linkError || !linkData?.properties?.hashed_token) {
-      console.log(`[password-reset] generateLink error: ${linkError?.message}`);
-      return { success: true };
+    if (linkError) {
+      console.error(`[password-reset] generateLink error:`, linkError);
+      return { error: "Something went wrong. Please try again later." };
+    }
+
+    if (!linkData?.properties?.hashed_token) {
+      console.error(`[password-reset] generateLink returned no hashed_token`);
+      return { error: "Something went wrong. Please try again later." };
     }
 
     // Build URL pointing directly to our /auth/callback (bypasses Supabase redirect)
     const actionLink = `${BASE_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
-    console.log(`[password-reset] Got recovery link, sending via Resend`);
+
+    // Step 4: Render and send email via Resend
+    console.log(`[password-reset] Sending reset email to ${email}`);
 
     const { subject, html } = await renderEmail("password_reset", {
       resetUrl: actionLink,
     });
-    await sendEmail({
+
+    const result = await sendEmail({
       to: email,
       subject,
       html,
@@ -88,8 +108,16 @@ export async function requestPasswordResetAction(
       studentId: student.id,
       skipTracking: true,
     });
+
+    if (!result.success) {
+      console.error(`[password-reset] sendEmail failed:`, result.error);
+      return { error: "Failed to send reset email. Please try again later." };
+    }
+
+    console.log(`[password-reset] Reset email sent successfully to ${email}`);
   } catch (err) {
-    console.log(`[password-reset] Error: ${err}`);
+    console.error(`[password-reset] Unexpected error:`, err);
+    return { error: "Something went wrong. Please try again later." };
   }
 
   return { success: true };
