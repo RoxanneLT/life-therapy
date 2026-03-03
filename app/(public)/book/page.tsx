@@ -69,26 +69,26 @@ export default async function BookPage() {
       {/* Hero */}
       <SectionRenderer sections={heroSections} />
 
-      {/* How it Works (steps) */}
-      {stepsSections.length > 0 && <SectionRenderer sections={stepsSections} />}
+      {settings.bookingEnabled ? (
+        <>
+          {/* How it Works (steps) */}
+          {stepsSections.length > 0 && <SectionRenderer sections={stepsSections} />}
 
-      {/* Booking widget with anchor for auto-scroll */}
-      {settings.bookingEnabled && (
-        <div id="booking">
-          <BookingWidget creditBalance={creditBalance} sessionPrices={sessionPrices} currency={currency} />
-        </div>
-      )}
+          {/* Booking widget with anchor for auto-scroll */}
+          <div id="booking">
+            <BookingWidget creditBalance={creditBalance} sessionPrices={sessionPrices} currency={currency} />
+          </div>
 
-      {/* FAQ */}
-      {faqSections.length > 0 && <SectionRenderer sections={faqSections} />}
+          {/* FAQ */}
+          {faqSections.length > 0 && <SectionRenderer sections={faqSections} />}
 
-      {/* Any remaining CTA sections */}
-      {remainingSections.length > 0 && (
-        <SectionRenderer sections={remainingSections} />
-      )}
-
-      {/* Fallback: show all CMS sections when booking is disabled */}
-      {!settings.bookingEnabled && (
+          {/* Any remaining CTA sections */}
+          {remainingSections.length > 0 && (
+            <SectionRenderer sections={remainingSections} />
+          )}
+        </>
+      ) : (
+        /* Fallback: show all CMS sections when booking is disabled */
         <SectionRenderer
           sections={page.sections.filter((s) => s.sectionType !== "hero")}
         />
