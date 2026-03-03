@@ -21,9 +21,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/utils";
-import { GripVertical, Loader2, Check } from "lucide-react";
+import { GripVertical, Loader2, Check, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { reorderDigitalProducts } from "./actions";
+import { reorderDigitalProducts, deleteDigitalProduct } from "./actions";
 
 interface Product {
   id: string;
@@ -82,9 +82,25 @@ function SortableRow({ product }: { product: Product }) {
         </Badge>
       </td>
       <td className="p-3">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/admin/digital-products/${product.id}`}>Edit</Link>
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+            <Link href={`/admin/digital-products/${product.id}`}>
+              <Pencil className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={() => {
+              if (confirm(`Delete "${product.title}"? This cannot be undone.`)) {
+                deleteDigitalProduct(product.id);
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </td>
     </tr>
   );
