@@ -2,54 +2,70 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedAdmin } from "@/lib/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, GraduationCap, Quote, CalendarDays, UserCheck, ShoppingCart, Gift, BookOpen } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileText, GraduationCap, CalendarDays, UserCheck, ShoppingCart, Gift, PackageOpen, ShoppingBag } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
+import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
+import { BookingsChart } from "@/components/admin/bookings-chart";
+import { RevenueChart } from "@/components/admin/revenue-chart";
+import { YearSelector } from "@/components/admin/year-selector";
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>;
+}) {
   const { adminUser } = await getAuthenticatedAdmin();
+  const params = await searchParams;
+  const currentYear = new Date().getFullYear();
+  const year = params.year ? parseInt(params.year, 10) : currentYear;
+  const validYear = year >= currentYear - 2 && year <= currentYear + 2 ? year : currentYear;
 
   const [
     pageCount,
     courseCount,
-    testimonialCount,
+    digitalProductCount,
+    packageCount,
     upcomingBookings,
     studentCount,
     revenue,
     pendingGifts,
-    shortCourseSales,
+    bookingsByMonth,
+    revenueByMonth,
   ] = await Promise.all([
     prisma.page.count(),
     prisma.course.count(),
-    prisma.testimonial.count(),
+    prisma.digitalProduct.count(),
+    prisma.hybridPackage.count(),
     prisma.booking.count({
       where: {
         status: { in: ["pending", "confirmed"] },
         date: { gte: new Date() },
       },
     }),
-    prisma.student.count(),
-    prisma.order.aggregate({
-      where: { status: "paid" },
-      _sum: { totalCents: true },
+    prisma.student.count({ where: { clientStatus: "active" } }),
+    prisma.invoice.aggregate({
+      where: { status: "paid", paidAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+      _sum: { paidAmountCents: true },
     }),
     prisma.gift.count({ where: { status: "pending" } }),
-    prisma.moduleAccess.count(),
+    getBookingsByMonth(validYear),
+    getRevenueByMonth(validYear),
   ]);
 
   const stats = [
     {
-      label: "Students",
+      label: "Active Clients",
       value: studentCount,
       icon: UserCheck,
-      href: "/admin/students",
+      href: "/admin/clients?status=active",
     },
     {
-      label: "Revenue",
-      value: formatPrice(revenue._sum.totalCents || 0),
+      label: "Revenue (30 days)",
+      value: formatPrice(revenue._sum.paidAmountCents || 0),
       icon: ShoppingCart,
-      href: "/admin/orders",
+      href: "/admin/invoices",
     },
     {
       label: "Upcoming Bookings",
@@ -76,16 +92,16 @@ export default async function AdminDashboard() {
       href: "/admin/courses",
     },
     {
-      label: "Short Course Sales",
-      value: shortCourseSales,
-      icon: BookOpen,
-      href: "/admin/students",
+      label: "Digital Products",
+      value: digitalProductCount,
+      icon: ShoppingBag,
+      href: "/admin/digital-products",
     },
     {
-      label: "Testimonials",
-      value: testimonialCount,
-      icon: Quote,
-      href: "/admin/testimonials",
+      label: "Packages",
+      value: packageCount,
+      icon: PackageOpen,
+      href: "/admin/packages",
     },
   ];
 
@@ -98,6 +114,32 @@ export default async function AdminDashboard() {
         <p className="text-sm text-muted-foreground">
           Manage your Life-Therapy platform content.
         </p>
+      </div>
+
+      {/* Charts */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Activity Overview</h2>
+        <YearSelector currentYear={validYear} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Bookings per Month</CardTitle>
+            <CardDescription>Planned &amp; completed sessions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BookingsChart data={bookingsByMonth} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Revenue per Month</CardTitle>
+            <CardDescription>Actual payments &amp; estimated from upcoming sessions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RevenueChart data={revenueByMonth} />
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -118,47 +160,22 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Link href="/admin/pages">
-          <Card className="cursor-pointer transition-shadow hover:shadow-md">
-            <CardContent className="pt-6">
-              <p className="font-medium">Edit Homepage</p>
-              <p className="text-sm text-muted-foreground">
-                Update hero, content sections, and CTAs
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/admin/courses">
-          <Card className="cursor-pointer transition-shadow hover:shadow-md">
-            <CardContent className="pt-6">
-              <p className="font-medium">Manage Courses</p>
-              <p className="text-sm text-muted-foreground">
-                Add, edit, or publish courses
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/admin/testimonials">
-          <Card className="cursor-pointer transition-shadow hover:shadow-md">
-            <CardContent className="pt-6">
-              <p className="font-medium">Manage Testimonials</p>
-              <p className="text-sm text-muted-foreground">
-                Add and feature client reviews
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/admin/bookings">
-          <Card className="cursor-pointer transition-shadow hover:shadow-md">
-            <CardContent className="pt-6">
-              <p className="font-medium">View Bookings</p>
-              <p className="text-sm text-muted-foreground">
-                Manage session bookings and availability
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { href: "/admin/pages", title: "Edit Homepage", desc: "Hero, content & CTAs" },
+          { href: "/admin/courses", title: "Manage Courses", desc: "Add, edit, or publish" },
+          { href: "/admin/testimonials", title: "Testimonials", desc: "Client reviews" },
+          { href: "/admin/bookings", title: "View Bookings", desc: "Sessions & availability" },
+        ].map((item) => (
+          <Link key={item.href} href={item.href}>
+            <Card className="h-full cursor-pointer transition-shadow hover:shadow-md">
+              <CardContent className="pt-6">
+                <p className="font-medium">{item.title}</p>
+                <p className="text-sm text-muted-foreground truncate">{item.desc}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
     </div>
   );
