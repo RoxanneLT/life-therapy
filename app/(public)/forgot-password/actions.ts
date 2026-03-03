@@ -63,8 +63,27 @@ export async function requestPasswordResetAction(
         authUserId = authMatch.id;
         console.log(`[password-reset] Linked student to auth user ${authMatch.id}`);
       } else {
-        console.warn(`[password-reset] No Supabase auth user found for ${email}`);
-        return { success: true };
+        // Auto-provision a Supabase auth account for imported clients
+        console.log(`[password-reset] No auth user found — creating one for ${email}`);
+        const tempPassword = `LT-${crypto.randomUUID().slice(0, 8)}!`;
+        const { data: newUser, error: createError } =
+          await supabaseAdmin.auth.admin.createUser({
+            email,
+            password: tempPassword,
+            email_confirm: true,
+          });
+
+        if (createError || !newUser?.user) {
+          console.error(`[password-reset] createUser error:`, createError);
+          return { error: "Something went wrong. Please try again later." };
+        }
+
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { supabaseUserId: newUser.user.id },
+        });
+        authUserId = newUser.user.id;
+        console.log(`[password-reset] Created & linked auth user ${authUserId} for ${email}`);
       }
     }
 
