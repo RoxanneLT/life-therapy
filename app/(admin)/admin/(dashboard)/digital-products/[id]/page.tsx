@@ -15,11 +15,21 @@ export default async function EditDigitalProductPage({
   await requireRole("super_admin");
   const { id } = await params;
 
-  const product = await prisma.digitalProduct.findUnique({
-    where: { id },
-  });
+  const [product, allProducts] = await Promise.all([
+    prisma.digitalProduct.findUnique({ where: { id } }),
+    prisma.digitalProduct.findMany({
+      where: { category: { not: null } },
+      select: { category: true },
+      distinct: ["category"],
+      orderBy: { category: "asc" },
+    }),
+  ]);
 
   if (!product) notFound();
+
+  const categories = allProducts
+    .map((p) => p.category)
+    .filter((c): c is string => Boolean(c));
 
   async function handleUpdate(formData: FormData) {
     "use server";
@@ -53,6 +63,7 @@ export default async function EditDigitalProductPage({
           priceCentsGbp: product.priceCentsGbp,
           category: product.category,
         }}
+        categories={categories}
         onSubmit={handleUpdate}
       />
     </div>

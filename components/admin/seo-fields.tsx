@@ -17,7 +17,7 @@ export function SeoFields({ metaTitle = "", metaDescription = "" }: SeoFieldsPro
   const [descLen, setDescLen] = useState(metaDescription.length);
 
   return (
-    <div className="rounded-lg border p-4 space-y-4">
+    <div className="rounded-lg border bg-background p-4 space-y-4">
       <button
         type="button"
         onClick={() => setOpen(!open)}

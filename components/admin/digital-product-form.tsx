@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { FileUpload } from "@/components/admin/file-upload";
 import { slugify } from "@/lib/utils";
@@ -32,10 +39,11 @@ interface DigitalProductFormProps {
     metaTitle?: string | null;
     metaDescription?: string | null;
   };
+  categories?: string[];
   onSubmit: (formData: FormData) => Promise<void>;
 }
 
-export function DigitalProductForm({ initialData, onSubmit }: DigitalProductFormProps) {
+export function DigitalProductForm({ initialData, categories = [], onSubmit }: DigitalProductFormProps) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");
   const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || "");
@@ -43,6 +51,8 @@ export function DigitalProductForm({ initialData, onSubmit }: DigitalProductForm
   const [fileName, setFileName] = useState(initialData?.fileName || "");
   const [fileSizeBytes, setFileSizeBytes] = useState(initialData?.fileSizeBytes ?? 0);
   const [isPublished, setIsPublished] = useState(initialData?.isPublished ?? false);
+  const [category, setCategory] = useState(initialData?.category || "");
+  const [addingCategory, setAddingCategory] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   function handleTitleChange(value: string) {
@@ -75,6 +85,7 @@ export function DigitalProductForm({ initialData, onSubmit }: DigitalProductForm
     formData.set("fileUrl", fileUrl);
     formData.set("fileName", fileName);
     formData.set("fileSizeBytes", String(fileSizeBytes));
+    formData.set("category", category);
     formData.set("isPublished", String(isPublished));
     await onSubmit(formData);
     setSubmitting(false);
@@ -180,27 +191,58 @@ export function DigitalProductForm({ initialData, onSubmit }: DigitalProductForm
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="category">Category</Label>
-          <Input
-            id="category"
-            name="category"
-            defaultValue={initialData?.category || ""}
-            placeholder="e.g. workbook, toolkit, guide"
-          />
-          <p className="text-xs text-muted-foreground">Optional — for future filtering</p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="sortOrder">Sort Order</Label>
-          <Input
-            id="sortOrder"
-            name="sortOrder"
-            type="number"
-            defaultValue={initialData?.sortOrder ?? 0}
-            min={0}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label>Category</Label>
+        {addingCategory ? (
+            <div className="flex gap-2">
+              <Input
+                autoFocus
+                placeholder="New category name"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setCategory(initialData?.category || "");
+                    setAddingCategory(false);
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setAddingCategory(false)}
+              >
+                Done
+              </Button>
+            </div>
+          ) : (
+            <Select
+              value={category}
+              onValueChange={(val) => {
+                if (val === "__new__") {
+                  setCategory("");
+                  setAddingCategory(true);
+                } else {
+                  setCategory(val);
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__new__">+ Add new category</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        <p className="text-xs text-muted-foreground">Optional — used for filtering on the storefront</p>
       </div>
 
       <SeoFields

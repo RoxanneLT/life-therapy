@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { SortableProductList } from "./sortable-product-list";
+import { CategoryManager } from "./category-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,27 @@ export default async function AdminDigitalProductsPage() {
 
   const products = await prisma.digitalProduct.findMany({
     orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      title: true,
+      priceCents: true,
+      category: true,
+      fileName: true,
+      fileUrl: true,
+      isPublished: true,
+    },
   });
+
+  // Build category counts for the manager
+  const categoryCounts = new Map<string, number>();
+  for (const p of products) {
+    if (p.category) {
+      categoryCounts.set(p.category, (categoryCounts.get(p.category) ?? 0) + 1);
+    }
+  }
+  const categories = Array.from(categoryCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div>
@@ -27,57 +47,8 @@ export default async function AdminDigitalProductsPage() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-muted/50 text-left text-sm">
-              <th className="p-3 font-medium">Title</th>
-              <th className="p-3 font-medium">Price (ZAR)</th>
-              <th className="p-3 font-medium">Category</th>
-              <th className="p-3 font-medium">File</th>
-              <th className="p-3 font-medium">Status</th>
-              <th className="p-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => (
-              <tr key={p.id} className="border-b">
-                <td className="p-3 font-medium">{p.title}</td>
-                <td className="p-3">{formatPrice(p.priceCents)}</td>
-                <td className="p-3">
-                  {p.category ? (
-                    <Badge variant="secondary" className="text-xs">
-                      {p.category}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="p-3 text-sm text-muted-foreground">
-                  {p.fileName || p.fileUrl.split("/").pop()}
-                </td>
-                <td className="p-3">
-                  <Badge variant={p.isPublished ? "default" : "outline"}>
-                    {p.isPublished ? "Published" : "Draft"}
-                  </Badge>
-                </td>
-                <td className="p-3">
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/admin/digital-products/${p.id}`}>Edit</Link>
-                  </Button>
-                </td>
-              </tr>
-            ))}
-            {products.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  No digital products yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <CategoryManager categories={categories} />
+      <SortableProductList products={products} />
     </div>
   );
 }
