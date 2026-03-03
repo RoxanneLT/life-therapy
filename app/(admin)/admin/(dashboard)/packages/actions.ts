@@ -42,6 +42,22 @@ export async function updatePackage(id: string, formData: FormData) {
   redirect("/admin/packages");
 }
 
+export async function reorderPackages(orderedIds: string[]) {
+  await requireRole("super_admin");
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.hybridPackage.update({
+        where: { id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  revalidatePath("/admin/packages");
+  revalidatePath("/packages");
+}
+
 export async function deletePackage(id: string) {
   await requireRole("super_admin");
   await prisma.hybridPackage.delete({ where: { id } });
