@@ -3,9 +3,9 @@ export const dynamic = "force-dynamic";
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { PortalSidebar } from "@/components/portal/portal-sidebar";
 import { PortalHeader } from "@/components/portal/portal-header";
-import { getOutstandingDocuments } from "@/lib/legal-documents";
+import { getOutstandingDocuments, getActiveDocument } from "@/lib/legal-documents";
 import { prisma } from "@/lib/prisma";
-import { redirect } from "next/navigation";
+import { DocumentUpdateModal } from "@/components/portal/document-update-modal";
 
 export default async function PortalDashboardLayout({
   children,
@@ -14,13 +14,20 @@ export default async function PortalDashboardLayout({
 }) {
   const { student } = await requirePasswordChanged();
 
-  // Document gate: redirect to review page if outstanding documents exist.
+  // Document gate: show modal if outstanding documents exist.
   // Only applies after onboarding is complete (step >= 3).
-  // review-documents lives outside (dashboard) to avoid this gate.
+  let outstandingDocuments: { slug: string; title: string; content: { heading: string; content: string }[]; version: number; changeSummary: string | null }[] = [];
   if (student.onboardingStep >= 3) {
     const outstanding = await getOutstandingDocuments(student.id);
     if (outstanding.length > 0) {
-      redirect("/portal/review-documents");
+      const docs = await Promise.all(outstanding.map((slug) => getActiveDocument(slug)));
+      outstandingDocuments = docs.filter(Boolean).map((doc) => ({
+        slug: doc!.slug,
+        title: doc!.title,
+        content: doc!.content as { heading: string; content: string }[],
+        version: doc!.version,
+        changeSummary: doc!.changeSummary,
+      }));
     }
   }
 
@@ -58,6 +65,9 @@ export default async function PortalDashboardLayout({
           {children}
         </main>
       </div>
+      {outstandingDocuments.length > 0 && (
+        <DocumentUpdateModal documents={outstandingDocuments} />
+      )}
     </div>
   );
 }
