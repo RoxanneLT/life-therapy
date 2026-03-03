@@ -1,8 +1,8 @@
 import { fromZonedTime } from "date-fns-tz";
 import { TIMEZONE } from "@/lib/booking-config";
 
-/** Cancel with >=48hr notice: credit refunded. */
-export const CANCEL_NOTICE_HOURS = 48;
+/** Cancel with >=24hr notice: credit refunded. */
+export const CANCEL_NOTICE_HOURS = 24;
 /** Reschedule with >=24hr notice. */
 export const RESCHEDULE_NOTICE_HOURS = 24;
 /** Max reschedules per booking. */
@@ -88,7 +88,7 @@ export function evaluateCancel(
         ? new Date(booking.rescheduledAt)
         : booking.rescheduledAt;
 
-    // Check if the original session was <48hr from when they rescheduled
+    // Check if the original session was <24hr from when they rescheduled
     const hoursFromRescheduleToOriginal =
       (originalStart.getTime() - rescheduledAt.getTime()) / (1000 * 60 * 60);
 
@@ -97,7 +97,7 @@ export function evaluateCancel(
     }
   }
 
-  // Standard: >=48hr = normal (refund), <48hr = late (forfeit)
+  // Standard: >=24hr = normal (refund), <24hr = late (forfeit)
   if (hours >= CANCEL_NOTICE_HOURS) {
     return { allowed: true, type: "normal", creditRefunded: true };
   }

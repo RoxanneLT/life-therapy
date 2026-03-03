@@ -35,7 +35,7 @@ const COMMITMENT_CONTENT = [
   {
     heading: "Cancellation Policy",
     content:
-      "Cancellations require at least 48 hours' notice. If you cancel with 48+ hours' notice, your session credit is fully refunded to your balance. If you cancel with less than 48 hours' notice, or do not attend your session (no-show), the session credit is forfeited. This policy exists because your time slot is reserved exclusively for you — a late cancellation means that slot cannot be offered to another client who may need it. Genuine emergencies are always handled with compassion — please reach out to me directly if something unexpected happens.",
+      "Cancellations require at least 24 hours' notice. If you cancel with 24+ hours' notice, your session credit is fully refunded to your balance. If you cancel with less than 24 hours' notice, or do not attend your session (no-show), the session credit is forfeited. This policy exists because your time slot is reserved exclusively for you — a late cancellation means that slot cannot be offered to another client who may need it. Genuine emergencies are always handled with compassion — please reach out to me directly if something unexpected happens.",
   },
   {
     heading: "Confidentiality",
@@ -83,7 +83,7 @@ const TERMS_CONTENT = [
   {
     heading: "5. Booking, Rescheduling & Cancellation Policy",
     content:
-      "Sessions are booked through the client portal using available credits. Rescheduling requires at least 24 hours' notice and is limited to 2 reschedules per booking. Cancellation with 48+ hours' notice: session credit is refunded to your balance. Cancellation with less than 48 hours' notice: session credit is forfeited. No-show (failure to attend without notice): session credit is forfeited. Anti-abuse policy: if a session is rescheduled from within the 48-hour cancellation window and subsequently cancelled, the original timing applies — the credit is forfeited. Emergency situations are handled at our discretion on a case-by-case basis.",
+      "Sessions are booked through the client portal using available credits. Rescheduling requires at least 24 hours' notice and is limited to 2 reschedules per booking. Cancellation with 24+ hours' notice: session credit is refunded to your balance. Cancellation with less than 24 hours' notice: session credit is forfeited. No-show (failure to attend without notice): session credit is forfeited. Anti-abuse policy: if a session is rescheduled from within the 24-hour cancellation window and subsequently cancelled, the original timing applies — the credit is forfeited. Emergency situations are handled at our discretion on a case-by-case basis.",
   },
   {
     heading: "6. Payments & Refunds",
