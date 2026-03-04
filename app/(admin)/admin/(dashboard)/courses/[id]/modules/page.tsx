@@ -4,20 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Plus, Trash2, BookOpen, HelpCircle, ArrowLeft } from "lucide-react";
-import { deleteModule } from "./actions";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, BookOpen, ArrowLeft } from "lucide-react";
+import { SortableModuleList } from "./sortable-module-list";
 
 export default async function ModulesPage({
   params,
@@ -39,6 +28,13 @@ export default async function ModulesPage({
   });
 
   if (!course) notFound();
+
+  const modules = course.modules.map((mod) => ({
+    id: mod.id,
+    title: mod.title,
+    lectureCount: mod.lectures.length,
+    hasQuiz: !!mod.quiz,
+  }));
 
   return (
     <div className="space-y-6">
@@ -77,104 +73,8 @@ export default async function ModulesPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {course.modules.map((mod, index) => (
-            <Card key={mod.id}>
-              <CardHeader className="flex flex-row items-center justify-between py-4">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <CardTitle className="text-base">{mod.title}</CardTitle>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <BookOpen className="h-3 w-3" />
-                        {mod.lectures.length} lecture
-                        {mod.lectures.length !== 1 && "s"}
-                      </span>
-                      {mod.quiz && (
-                        <span className="flex items-center gap-1">
-                          <HelpCircle className="h-3 w-3" />
-                          Quiz
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link
-                      href={`/admin/courses/${course.id}/modules/${mod.id}/lectures`}
-                    >
-                      Lectures
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link
-                      href={`/admin/courses/${course.id}/modules/${mod.id}/quiz`}
-                    >
-                      Quiz
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link
-                      href={`/admin/courses/${course.id}/modules/${mod.id}`}
-                    >
-                      Edit
-                    </Link>
-                  </Button>
-                  <DeleteModuleButton
-                    courseId={course.id}
-                    moduleId={mod.id}
-                    title={mod.title}
-                  />
-                </div>
-              </CardHeader>
-            </Card>
-          ))}
-        </div>
+        <SortableModuleList modules={modules} courseId={course.id} />
       )}
     </div>
-  );
-}
-
-function DeleteModuleButton({
-  courseId,
-  moduleId,
-  title,
-}: {
-  courseId: string;
-  moduleId: string;
-  title: string;
-}) {
-  async function handleDelete() {
-    "use server";
-    await deleteModule(courseId, moduleId);
-  }
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete module?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently delete &ldquo;{title}&rdquo; and all its
-            lectures and quizzes.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <form action={handleDelete}>
-            <AlertDialogAction type="submit">Delete</AlertDialogAction>
-          </form>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }
