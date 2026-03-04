@@ -43,9 +43,14 @@ export default function LoginPage() {
   // Auto-redirect if already authenticated
   useEffect(() => {
     const supabase = createBrowserClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
-        redirectByRole(router);
+        const redirected = await redirectByRole(router);
+        if (!redirected) {
+          // Stale session — server doesn't recognize this user
+          await supabase.auth.signOut({ scope: "local" });
+          setCheckingAuth(false);
+        }
       } else {
         setCheckingAuth(false);
       }

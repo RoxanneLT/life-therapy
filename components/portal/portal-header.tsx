@@ -36,8 +36,15 @@ export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, 
 
   async function handleSignOut() {
     const supabase = createBrowserClient();
-    await supabase.auth.signOut();
-    router.push("/portal/login");
+    await supabase.auth.signOut({ scope: "local" });
+    // Clear ALL Supabase chunked auth cookies to prevent stale fragments
+    document.cookie.split(";").forEach((c) => {
+      const name = c.trim().split("=")[0];
+      if (name.startsWith("sb-")) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      }
+    });
+    router.push("/login");
     router.refresh();
   }
 
