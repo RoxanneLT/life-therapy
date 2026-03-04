@@ -44,8 +44,7 @@ export const courseSchema = z.object({
   priceEur: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
   priceGbp: z.union([z.coerce.number().int().min(0), z.literal("")]).optional().transform((v) => (v === "" || v === undefined ? undefined : v)),
   category: z.string().optional(),
-  modulesCount: z.coerce.number().int().min(0).default(0),
-  hours: z.string().optional(),
+  // modulesCount and hours are auto-computed by recalculateCourseStats
   level: z.string().optional(),
   isPublished: z.boolean().default(false),
   isFeatured: z.boolean().default(false),

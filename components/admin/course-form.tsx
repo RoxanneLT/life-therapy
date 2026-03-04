@@ -200,25 +200,22 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label htmlFor="modulesCount">Modules</Label>
-          <Input
-            id="modulesCount"
-            name="modulesCount"
-            type="number"
-            defaultValue={initialData?.modulesCount ?? 0}
-            min={0}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="hours">Duration</Label>
-          <Input
-            id="hours"
-            name="hours"
-            defaultValue={initialData?.hours || ""}
-            placeholder="~6 Hours"
-          />
-        </div>
+        {initialData && (
+          <>
+            <div className="space-y-2">
+              <Label>Modules</Label>
+              <p className="pt-2 text-sm text-muted-foreground">
+                {initialData.modulesCount} (auto-counted)
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Duration</Label>
+              <p className="pt-2 text-sm text-muted-foreground">
+                {initialData.hours || "No lectures yet"}
+              </p>
+            </div>
+          </>
+        )}
         <div className="space-y-2">
           <Label htmlFor="sortOrder">Sort Order</Label>
           <Input

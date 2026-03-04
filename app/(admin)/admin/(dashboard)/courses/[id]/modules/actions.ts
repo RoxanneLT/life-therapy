@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { moduleSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { recalculateCourseStats } from "@/lib/course-stats";
 
 export async function createModule(courseId: string, formData: FormData) {
   await requireRole("super_admin", "editor");
@@ -24,6 +25,7 @@ export async function createModule(courseId: string, formData: FormData) {
     data: { ...parsed, courseId },
   });
 
+  await recalculateCourseStats(courseId);
   revalidatePath(`/admin/courses/${courseId}/modules`);
   redirect(`/admin/courses/${courseId}/modules`);
 }
@@ -53,6 +55,7 @@ export async function deleteModule(courseId: string, moduleId: string) {
   await requireRole("super_admin", "editor");
   await prisma.module.delete({ where: { id: moduleId } });
 
+  await recalculateCourseStats(courseId);
   revalidatePath(`/admin/courses/${courseId}/modules`);
 }
 

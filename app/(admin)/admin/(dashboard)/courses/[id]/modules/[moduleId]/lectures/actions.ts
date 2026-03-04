@@ -6,6 +6,7 @@ import { lectureSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { deleteFromStorage, deleteStreamVideo, extractStreamGuid } from "@/lib/bunny";
+import { recalculateCourseStats } from "@/lib/course-stats";
 
 function basePath(courseId: string, moduleId: string) {
   return `/admin/courses/${courseId}/modules/${moduleId}/lectures`;
@@ -32,6 +33,7 @@ export async function createLecture(
     data: { ...parsed, moduleId },
   });
 
+  await recalculateCourseStats(courseId);
   revalidatePath(basePath(courseId, moduleId));
   redirect(basePath(courseId, moduleId));
 }
@@ -54,6 +56,7 @@ export async function updateLecture(
     data: parsed,
   });
 
+  await recalculateCourseStats(courseId);
   revalidatePath(basePath(courseId, moduleId));
   redirect(basePath(courseId, moduleId));
 }
@@ -81,5 +84,6 @@ export async function deleteLecture(
     deleteFromStorage(lecture.worksheetUrl).catch(console.error);
   }
 
+  await recalculateCourseStats(courseId);
   revalidatePath(basePath(courseId, moduleId));
 }
