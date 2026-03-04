@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import confetti from "canvas-confetti";
 import { CoursePlayerLayout } from "@/components/portal/course-player-layout";
 import { LectureSidebar } from "@/components/portal/lecture-sidebar";
 import { VideoPlayer } from "@/components/portal/video-player";
@@ -13,6 +15,8 @@ import {
   ChevronRight,
   Download,
   Loader2,
+  PartyPopper,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -111,6 +115,8 @@ export function LecturePlayerClient(props: LecturePlayerProps) {
           lecture={props.lecture}
           nextLectureId={props.nextLectureId}
           nextLectureTitle={props.nextLectureTitle}
+          sidebarModules={sidebarModules}
+          currentLectureId={currentLectureId}
         />
       )}
     </CoursePlayerLayout>
@@ -122,17 +128,59 @@ function LectureContent({
   lecture,
   nextLectureId,
   nextLectureTitle,
+  sidebarModules,
+  currentLectureId,
 }: {
   courseSlug: string;
   lecture: LectureData;
   nextLectureId?: string | null;
   nextLectureTitle?: string | null;
+  sidebarModules: SidebarModule[];
+  currentLectureId: string;
 }) {
+  const router = useRouter();
   const [completed, setCompleted] = useState(lecture.completed);
   const [markingComplete, setMarkingComplete] = useState(false);
   const [note, setNote] = useState(lecture.note);
   const [savingNote, setSavingNote] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Module completion celebration
+  const [showModuleBanner, setShowModuleBanner] = useState(false);
+  const currentModule = sidebarModules.find((m) =>
+    m.lectures.some((l) => l.id === currentLectureId)
+  );
+
+  // Auto-advance countdown
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function startAutoAdvance(delaySec = 5) {
+    if (!nextLectureId) return;
+    setCountdown(delaySec);
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          router.push(`/portal/courses/${courseSlug}/learn/${nextLectureId}`);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  function cancelAutoAdvance() {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setCountdown(null);
+  }
+
+  // Cleanup countdown on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
 
   const handlePositionChange = useCallback(
     (position: number) => {
@@ -147,6 +195,28 @@ function LectureContent({
       const result = await markLectureCompleteAction(lecture.id, courseSlug);
       if (!("error" in result)) {
         setCompleted(true);
+
+        // Check if this completes the module
+        const otherLectures = currentModule?.lectures.filter(
+          (l) => l.id !== currentLectureId
+        );
+        const moduleNowComplete = otherLectures?.every((l) => l.completed);
+
+        if (moduleNowComplete && currentModule) {
+          // Module complete — celebrate!
+          setShowModuleBanner(true);
+          confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 } });
+          setTimeout(() => {
+            confetti({ particleCount: 100, spread: 60, origin: { x: 0.2, y: 0.5 } });
+          }, 300);
+          setTimeout(() => {
+            confetti({ particleCount: 100, spread: 60, origin: { x: 0.8, y: 0.5 } });
+          }, 600);
+          // Longer delay before auto-advance to enjoy the moment
+          startAutoAdvance(8);
+        } else {
+          startAutoAdvance(5);
+        }
       }
     } finally {
       setMarkingComplete(false);
@@ -155,7 +225,6 @@ function LectureContent({
 
   function handleNoteChange(value: string) {
     setNote(value);
-    // Debounce save
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       setSavingNote(true);
@@ -163,6 +232,32 @@ function LectureContent({
       setSavingNote(false);
     }, 1500);
   }
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT") return;
+
+      switch (e.key.toLowerCase()) {
+        case "n":
+          if (nextLectureId) {
+            e.preventDefault();
+            router.push(`/portal/courses/${courseSlug}/learn/${nextLectureId}`);
+          }
+          break;
+        case "c":
+          if (!completed && !markingComplete) {
+            e.preventDefault();
+            handleMarkComplete();
+          }
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completed, markingComplete, nextLectureId, courseSlug]);
 
   return (
     <div className="space-y-6">
@@ -183,6 +278,25 @@ function LectureContent({
           className="prose prose-sm max-w-none dark:prose-invert"
           dangerouslySetInnerHTML={{ __html: lecture.textContent }}
         />
+      )}
+
+      {/* Module complete banner */}
+      {showModuleBanner && (
+        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
+          <PartyPopper className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium">Module Complete!</p>
+            <p className="text-sm text-green-600">
+              You&apos;ve finished all lectures in &quot;{currentModule?.title}&quot;
+            </p>
+          </div>
+          <button
+            onClick={() => setShowModuleBanner(false)}
+            className="text-green-600 hover:text-green-800"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
       {/* Tabs: Overview + Notes + Worksheet */}
@@ -257,7 +371,7 @@ function LectureContent({
           </Button>
         )}
 
-        {nextLectureId && (
+        {nextLectureId && countdown === null && (
           <Button variant="outline" asChild>
             <Link href={`/portal/courses/${courseSlug}/learn/${nextLectureId}`}>
               {nextLectureTitle || "Next Lecture"}
@@ -265,7 +379,36 @@ function LectureContent({
             </Link>
           </Button>
         )}
+
+        {/* Auto-advance countdown */}
+        {countdown !== null && nextLectureId && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                router.push(`/portal/courses/${courseSlug}/learn/${nextLectureId}`)
+              }
+            >
+              <ChevronRight className="mr-1 h-4 w-4" />
+              Next in {countdown}s
+            </Button>
+            <Button variant="ghost" size="sm" onClick={cancelAutoAdvance}>
+              Stay here
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Keyboard shortcut hint */}
+      <p className="text-xs text-muted-foreground">
+        Shortcuts: <kbd className="rounded border px-1">C</kbd> complete
+        {nextLectureId && (
+          <>
+            {" "}
+            <kbd className="rounded border px-1">N</kbd> next
+          </>
+        )}
+      </p>
     </div>
   );
 }

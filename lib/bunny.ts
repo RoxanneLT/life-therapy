@@ -55,7 +55,7 @@ export async function uploadToStorage(
       AccessKey: STORAGE_API_KEY,
       "Content-Type": mimeType,
     },
-    body: buffer,
+    body: buffer as unknown as BodyInit,
   });
 
   if (!res.ok) {
@@ -144,7 +144,7 @@ export async function uploadStreamVideo(
         AccessKey: STREAM_API_KEY,
         "Content-Type": "video/*",
       },
-      body: buffer,
+      body: buffer as unknown as BodyInit,
     }
   );
 

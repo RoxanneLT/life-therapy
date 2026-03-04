@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/admin/image-upload";
+import { PreviewVideoUpload } from "@/components/admin/preview-video-upload";
 import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { SeoFields } from "@/components/admin/seo-fields";
@@ -68,6 +69,9 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
   const [isFeatured, setIsFeatured] = useState(
     initialData?.isFeatured ?? false
   );
+  const [previewVideoUrl, setPreviewVideoUrl] = useState(
+    initialData?.previewVideoUrl || ""
+  );
   const [submitting, setSubmitting] = useState(false);
 
   function handleTitleChange(value: string) {
@@ -87,6 +91,7 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
     formData.set("level", level);
     formData.set("isPublished", String(isPublished));
     formData.set("isFeatured", String(isFeatured));
+    formData.set("previewVideoUrl", previewVideoUrl);
     await onSubmit(formData);
     setSubmitting(false);
   }
@@ -231,15 +236,7 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
         <h3 className="font-medium">Preview Video (Sofia Hart)</h3>
         <div className="space-y-2">
           <Label htmlFor="previewVideoUrl">Preview Video URL</Label>
-          <Input
-            id="previewVideoUrl"
-            name="previewVideoUrl"
-            defaultValue={initialData?.previewVideoUrl || ""}
-            placeholder="https://www.youtube.com/watch?v=... or Vimeo URL"
-          />
-          <p className="text-xs text-muted-foreground">
-            Short intro video shown on the course page before purchase
-          </p>
+          <PreviewVideoUpload value={previewVideoUrl} onChange={setPreviewVideoUrl} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="facilitatorScript">Facilitator Script</Label>

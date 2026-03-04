@@ -46,5 +46,10 @@ function getPreviewEmbedUrl(url: string): string | null {
     return `https://player.vimeo.com/video/${vimeoMatch[1]}?byline=0&portrait=0`;
   }
 
+  // Bunny Stream embed URL
+  if (url.includes("iframe.mediadelivery.net/embed")) {
+    return url;
+  }
+
   return null;
 }

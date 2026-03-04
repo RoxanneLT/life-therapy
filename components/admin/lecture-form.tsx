@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Upload, CheckCircle2, AlertCircle, Video, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Video, FileText } from "lucide-react";
 
 const LECTURE_TYPES = [
   { value: "video", label: "Video" },

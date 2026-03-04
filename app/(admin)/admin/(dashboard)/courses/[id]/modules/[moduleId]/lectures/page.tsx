@@ -43,6 +43,12 @@ export default async function LecturesPage({
   if (!mod) notFound();
   const base = `/admin/courses/${id}/modules/${moduleId}/lectures`;
 
+  const totalSeconds = mod.lectures.reduce(
+    (sum, l) => sum + (l.durationSeconds || 0),
+    0
+  );
+  const totalMin = Math.round(totalSeconds / 60);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -59,6 +65,7 @@ export default async function LecturesPage({
           </h1>
           <p className="text-sm text-muted-foreground">
             {mod.lectures.length} lecture{mod.lectures.length !== 1 && "s"}
+            {totalMin > 0 && ` · ${totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m` : `${totalMin}m`} total`}
           </p>
         </div>
         <Button asChild>

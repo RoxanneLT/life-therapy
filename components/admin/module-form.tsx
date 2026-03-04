@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/admin/image-upload";
+import { PreviewVideoUpload } from "@/components/admin/preview-video-upload";
 import { slugify } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { PppPriceFields } from "@/components/admin/ppp-price-fields";
@@ -64,6 +65,9 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
   const [standaloneCategory, setStandaloneCategory] = useState(
     initialData?.standaloneCategory || ""
   );
+  const [previewVideoUrl, setPreviewVideoUrl] = useState(
+    initialData?.previewVideoUrl || ""
+  );
 
   function handleStandaloneTitleChange(value: string) {
     if (!initialData?.standaloneSlug) {
@@ -79,6 +83,7 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
     formData.set("standaloneSlug", standaloneSlug);
     formData.set("standaloneImageUrl", standaloneImageUrl);
     formData.set("standaloneCategory", standaloneCategory);
+    formData.set("previewVideoUrl", previewVideoUrl);
     await onSubmit(formData);
     setSubmitting(false);
   }
@@ -232,15 +237,7 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
         <h3 className="font-medium">Preview Video (Sofia Hart)</h3>
         <div className="space-y-2">
           <Label htmlFor="previewVideoUrl">Preview Video URL</Label>
-          <Input
-            id="previewVideoUrl"
-            name="previewVideoUrl"
-            defaultValue={initialData?.previewVideoUrl || ""}
-            placeholder="https://www.youtube.com/watch?v=... or Vimeo URL"
-          />
-          <p className="text-xs text-muted-foreground">
-            Short intro video shown on the module/short course page
-          </p>
+          <PreviewVideoUpload value={previewVideoUrl} onChange={setPreviewVideoUrl} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="facilitatorScript">Facilitator Script</Label>

@@ -40,10 +40,46 @@ export function VideoPlayer({
     };
   }, []);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Keyboard shortcuts for direct video playback
+  useEffect(() => {
+    if (!isDirectVideo) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      const video = videoRef.current;
+      if (!video) return;
+
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          if (video.paused) { video.play(); } else { video.pause(); }
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          video.currentTime = Math.max(0, video.currentTime - 10);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          video.currentTime = Math.min(video.duration, video.currentTime + 10);
+          break;
+        case "m":
+        case "M":
+          e.preventDefault();
+          video.muted = !video.muted;
+          break;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDirectVideo]);
+
   if (isDirectVideo) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
         <video
+          ref={videoRef}
           src={videoUrl}
           controls
           className="h-full w-full"

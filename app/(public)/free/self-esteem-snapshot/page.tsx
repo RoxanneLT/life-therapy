@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { buildStaticPageMetadata } from "@/lib/metadata";
-import { Download, CheckCircle2, ArrowRight, BookOpen } from "lucide-react";
+import { Download, ArrowRight, BookOpen } from "lucide-react";
 import Link from "next/link";
 
 export async function generateMetadata(): Promise<Metadata> {

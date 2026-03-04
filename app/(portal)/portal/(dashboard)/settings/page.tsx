@@ -150,7 +150,7 @@ export default async function SettingsPage({ searchParams }: Props) {
     direction: "incoming" | "outgoing";
     createdAt: string;
   }[] = [];
-  let billingInfo: { individualBilledTo: string | null; couplesBilledTo: string | null } = {
+  const billingInfo: { individualBilledTo: string | null; couplesBilledTo: string | null } = {
     individualBilledTo: null,
     couplesBilledTo: null,
   };

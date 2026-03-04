@@ -263,6 +263,11 @@ export default async function CourseOverviewPage({
           const modCompleted = modLectureIds.filter((id) =>
             completedIds.has(id)
           ).length;
+          const modDuration = mod.lectures.reduce(
+            (s, l) => s + (l.durationSeconds || 0),
+            0
+          );
+          const modMin = Math.round(modDuration / 60);
 
           return (
             <Card key={mod.id}>
@@ -275,6 +280,7 @@ export default async function CourseOverviewPage({
                   </span>
                   <span className="text-xs font-normal text-muted-foreground">
                     {modCompleted}/{mod.lectures.length} complete
+                    {modMin > 0 && ` · ${modMin >= 60 ? `${Math.floor(modMin / 60)}h ${modMin % 60}m` : `${modMin}m`}`}
                   </span>
                 </CardTitle>
               </CardHeader>
