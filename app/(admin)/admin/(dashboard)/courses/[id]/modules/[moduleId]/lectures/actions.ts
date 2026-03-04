@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { lectureSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
+import { deleteFromStorage, deleteStreamVideo, extractStreamGuid } from "@/lib/bunny";
 
 function basePath(courseId: string, moduleId: string) {
   return `/admin/courses/${courseId}/modules/${moduleId}/lectures`;
@@ -63,7 +64,22 @@ export async function deleteLecture(
   lectureId: string
 ) {
   await requireRole("super_admin", "editor");
+
+  const lecture = await prisma.lecture.findUnique({
+    where: { id: lectureId },
+    select: { videoUrl: true, worksheetUrl: true },
+  });
+
   await prisma.lecture.delete({ where: { id: lectureId } });
+
+  // Clean up Bunny resources (best-effort, don't block on failure)
+  if (lecture?.videoUrl) {
+    const guid = extractStreamGuid(lecture.videoUrl);
+    if (guid) deleteStreamVideo(guid).catch(console.error);
+  }
+  if (lecture?.worksheetUrl) {
+    deleteFromStorage(lecture.worksheetUrl).catch(console.error);
+  }
 
   revalidatePath(basePath(courseId, moduleId));
 }

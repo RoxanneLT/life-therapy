@@ -31,6 +31,8 @@ export function ReviewDocumentsClient({ documents }: ReviewDocumentsClientProps)
         const slugs = documents.map((d) => d.slug as LegalDocumentSlug);
         await acceptUpdatedDocumentsAction(slugs);
       } catch (err) {
+        const digest = (err as { digest?: string })?.digest;
+        if (typeof digest === "string" && digest.includes("NEXT_REDIRECT")) return;
         setError(err instanceof Error ? err.message : "Something went wrong");
       }
     });

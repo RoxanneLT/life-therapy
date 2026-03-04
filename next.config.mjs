@@ -8,6 +8,16 @@ const nextConfig = {
         hostname: "ocqucplcdotvewddfmmw.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
+      // Bunny CDN — course thumbnails & images
+      {
+        protocol: "https",
+        hostname: "*.b-cdn.net",
+      },
+      // Custom Bunny CDN hostname (cdn.life-therapy.co.za)
+      {
+        protocol: "https",
+        hostname: "cdn.life-therapy.co.za",
+      },
     ],
   },
   async redirects() {
@@ -54,7 +64,7 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",
               "connect-src 'self' https://www.google-analytics.com https://*.supabase.co",
-              "frame-src 'self' https://teams.microsoft.com",
+              "frame-src 'self' https://teams.microsoft.com https://iframe.mediadelivery.net https://*.b-cdn.net",
             ].join("; "),
           },
         ],

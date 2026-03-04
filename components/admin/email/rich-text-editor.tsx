@@ -47,14 +47,27 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const isInternalChange = useRef(false);
+  const hasMounted = useRef(false);
 
+  // Set initial content on mount
   useEffect(() => {
-    if (editorRef.current && !isInternalChange.current) {
-      if (editorRef.current.innerHTML !== value) {
-        editorRef.current.innerHTML = value;
-      }
+    if (editorRef.current && !hasMounted.current) {
+      editorRef.current.innerHTML = value;
+      hasMounted.current = true;
     }
-    isInternalChange.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync external value changes only (not our own edits)
+  useEffect(() => {
+    if (!hasMounted.current) return;
+    if (isInternalChange.current) {
+      isInternalChange.current = false;
+      return;
+    }
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value;
+    }
   }, [value]);
 
   const handleInput = useCallback(() => {
@@ -194,7 +207,6 @@ export function RichTextEditor({
         data-placeholder={placeholder}
         className="rounded-md border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground/50"
         style={{ minHeight, lineHeight: 1.6 }}
-        dangerouslySetInnerHTML={{ __html: value }}
         suppressContentEditableWarning
       />
     </div>

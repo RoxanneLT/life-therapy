@@ -741,7 +741,7 @@ function RescheduleBookingDialog({
         {isLastReschedule && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>This is your <strong>last available reschedule</strong> for this session.</p>
+            <p>This is your <strong>last available reschedule</strong> for this session. If you need to make further changes after this, please contact us directly.</p>
           </div>
         )}
         {error && (

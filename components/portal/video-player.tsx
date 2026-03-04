@@ -97,6 +97,15 @@ function getEmbedUrl(
     return `https://player.vimeo.com/video/${vimeoMatch[1]}?byline=0&portrait=0${time}`;
   }
 
+  // Bunny Stream (embed URL — append resume position if available)
+  if (url.includes("iframe.mediadelivery.net/embed")) {
+    if (startSeconds > 0) {
+      const sep = url.includes("?") ? "&" : "?";
+      return `${url}${sep}t=${Math.floor(startSeconds)}`;
+    }
+    return url;
+  }
+
   // Not a known embed provider — treat as direct video
   return null;
 }

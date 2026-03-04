@@ -15,10 +15,15 @@ export default async function NewLecturePage({
   const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
     where: { id: moduleId },
-    include: { course: { select: { title: true } } },
+    include: { course: { select: { title: true, slug: true } } },
   });
 
   if (!mod) notFound();
+
+  const moduleSlug = (mod.standaloneSlug || mod.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
   async function handleCreate(formData: FormData) {
     "use server";
@@ -37,7 +42,11 @@ export default async function NewLecturePage({
         </Link>
         <h1 className="font-heading text-2xl font-bold">New Lecture</h1>
       </div>
-      <LectureForm onSubmit={handleCreate} />
+      <LectureForm
+        courseSlug={mod.course.slug}
+        moduleSlug={moduleSlug}
+        onSubmit={handleCreate}
+      />
     </div>
   );
 }

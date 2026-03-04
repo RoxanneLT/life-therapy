@@ -16,12 +16,18 @@ export default async function EditLecturePage({
   const [mod, lecture] = await Promise.all([
     prisma.module.findUnique({
       where: { id: moduleId },
-      include: { course: { select: { title: true } } },
+      include: { course: { select: { title: true, slug: true } } },
     }),
     prisma.lecture.findUnique({ where: { id: lectureId } }),
   ]);
 
   if (!mod || !lecture) notFound();
+
+  // slugify module title for Bunny storage path
+  const moduleSlug = (mod.standaloneSlug || mod.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
   async function handleUpdate(formData: FormData) {
     "use server";
@@ -46,7 +52,12 @@ export default async function EditLecturePage({
         <h1 className="font-heading text-2xl font-bold">Edit Lecture</h1>
         <p className="text-sm text-muted-foreground">{lecture.title}</p>
       </div>
-      <LectureForm initialData={lecture} onSubmit={handleUpdate} />
+      <LectureForm
+        initialData={lecture}
+        courseSlug={mod.course.slug}
+        moduleSlug={moduleSlug}
+        onSubmit={handleUpdate}
+      />
     </div>
   );
 }

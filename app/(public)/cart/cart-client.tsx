@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import type { CartProductInfo } from "@/lib/cart";
 import { getCartProducts, applyCoupon } from "./actions";
@@ -29,31 +29,37 @@ export function CartPageClient() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
 
-  // Fetch product info when items change
-  const fetchProducts = useCallback(async () => {
+  // Build a stable key that only changes when the *product identity* of the
+  // cart changes (add / remove / swap items).  Gift-field edits don't alter
+  // this key, so we won't re-fetch products on every keystroke.
+  const structuralKey = items
+    .map((i) => `${i.id}:${i.courseId || ""}:${i.hybridPackageId || ""}:${i.moduleId || ""}:${i.digitalProductId || ""}:${i.quantity}`)
+    .join("|");
+
+  // Fetch product info only when the structural cart changes
+  useEffect(() => {
     if (items.length === 0) {
       setProducts(new Map());
       setLoading(false);
       return;
     }
+    let cancelled = false;
     setLoading(true);
-    try {
-      const resolved = await getCartProducts(items);
+    getCartProducts(items).then((resolved) => {
+      if (cancelled) return;
       const map = new Map<string, CartProductInfo>();
       for (const r of resolved) {
         map.set(r.localId, r.product);
       }
       setProducts(map);
-    } catch {
+    }).catch(() => {
       // Products will remain empty, items won't render
-    } finally {
-      setLoading(false);
-    }
-  }, [items]);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [structuralKey]);
 
   // Calculate totals
   const subtotalCents = items.reduce((sum, item) => {
