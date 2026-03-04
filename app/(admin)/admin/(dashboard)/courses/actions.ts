@@ -46,3 +46,19 @@ export async function deleteCourse(id: string) {
   revalidatePath("/admin/courses");
   revalidatePath("/");
 }
+
+export async function reorderCourses(orderedIds: string[]) {
+  await requireRole("super_admin", "editor");
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.course.update({
+        where: { id },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  revalidatePath("/admin/courses");
+  revalidatePath("/");
+}

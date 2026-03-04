@@ -2,22 +2,23 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatPrice } from "@/lib/utils";
-import { Plus, Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
+import { SortableCourseList } from "./sortable-course-list";
 
 export default async function AdminCoursesPage() {
   const courses = await prisma.course.findMany({
     orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      title: true,
+      subtitle: true,
+      category: true,
+      price: true,
+      modulesCount: true,
+      isPublished: true,
+      isFeatured: true,
+    },
   });
 
   return (
@@ -37,59 +38,8 @@ export default async function AdminCoursesPage() {
         </Button>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Modules</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {courses.map((course) => (
-              <TableRow key={course.id}>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">{course.title}</p>
-                    {course.subtitle && (
-                      <p className="text-xs text-muted-foreground">
-                        {course.subtitle}
-                      </p>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {course.category?.replaceAll("_", " ") || "—"}
-                </TableCell>
-                <TableCell>{formatPrice(course.price)}</TableCell>
-                <TableCell>{course.modulesCount}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Badge
-                      variant={course.isPublished ? "default" : "secondary"}
-                    >
-                      {course.isPublished ? "Published" : "Draft"}
-                    </Badge>
-                    {course.isFeatured && (
-                      <Badge variant="outline">Featured</Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" asChild>
-                    <Link href={`/admin/courses/${course.id}`}>
-                      <Pencil className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="rounded-lg border bg-card p-4">
+        <SortableCourseList courses={courses} />
       </div>
     </div>
   );
