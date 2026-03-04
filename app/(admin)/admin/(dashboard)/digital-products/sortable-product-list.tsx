@@ -20,6 +20,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatPrice } from "@/lib/utils";
 import { GripVertical, Loader2, Check, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -35,7 +46,7 @@ interface Product {
   isPublished: boolean;
 }
 
-function SortableRow({ product }: { product: Product }) {
+function SortableRow({ product, onDelete }: { readonly product: Product; readonly onDelete: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -88,25 +99,41 @@ function SortableRow({ product }: { product: Product }) {
               <Pencil className="h-4 w-4" />
             </Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={() => {
-              if (confirm(`Delete "${product.title}"? This cannot be undone.`)) {
-                deleteDigitalProduct(product.id);
-              }
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete product?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete &ldquo;{product.title}&rdquo;. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => onDelete(product.id)}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </td>
     </tr>
   );
 }
 
-export function SortableProductList({ products: initial }: { products: Product[] }) {
+export function SortableProductList({ products: initial }: { readonly products: Product[] }) {
   const [products, setProducts] = useState(initial);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -130,6 +157,11 @@ export function SortableProductList({ products: initial }: { products: Product[]
     });
     setDirty(true);
     setSaved(false);
+  }
+
+  function handleDelete(id: string) {
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    deleteDigitalProduct(id);
   }
 
   async function handleSave() {
@@ -188,7 +220,7 @@ export function SortableProductList({ products: initial }: { products: Product[]
             >
               <tbody>
                 {products.map((p) => (
-                  <SortableRow key={p.id} product={p} />
+                  <SortableRow key={p.id} product={p} onDelete={handleDelete} />
                 ))}
                 {products.length === 0 && (
                   <tr>

@@ -377,17 +377,6 @@ export function LectureForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label htmlFor="sortOrder">Sort Order</Label>
-          <Input
-            id="sortOrder"
-            name="sortOrder"
-            type="number"
-            defaultValue={initialData?.sortOrder ?? 0}
-            min={0}
-            className="w-24"
-          />
-        </div>
         <div className="flex items-end gap-2 pb-1">
           <Switch checked={isPreview} onCheckedChange={setIsPreview} />
           <Label>Free Preview</Label>

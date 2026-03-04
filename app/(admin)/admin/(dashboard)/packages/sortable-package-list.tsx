@@ -20,6 +20,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatPrice } from "@/lib/utils";
 import { GripVertical, Loader2, Check, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -44,7 +55,7 @@ function getPackageContents(pkg: { credits: number; courseSlots: number; digital
   return parts.length > 0 ? parts.join(" + ") : "Empty";
 }
 
-function SortableRow({ pkg }: { pkg: Package }) {
+function SortableRow({ pkg, onDelete }: { readonly pkg: Package; readonly onDelete: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -99,25 +110,41 @@ function SortableRow({ pkg }: { pkg: Package }) {
               <Pencil className="h-4 w-4" />
             </Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={() => {
-              if (confirm(`Delete "${pkg.title}"? This cannot be undone.`)) {
-                deletePackage(pkg.id);
-              }
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete package?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete &ldquo;{pkg.title}&rdquo;. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => onDelete(pkg.id)}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </td>
     </tr>
   );
 }
 
-export function SortablePackageList({ packages: initial }: { packages: Package[] }) {
+export function SortablePackageList({ packages: initial }: { readonly packages: Package[] }) {
   const [packages, setPackages] = useState(initial);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,6 +168,11 @@ export function SortablePackageList({ packages: initial }: { packages: Package[]
     });
     setDirty(true);
     setSaved(false);
+  }
+
+  function handleDelete(id: string) {
+    setPackages((prev) => prev.filter((p) => p.id !== id));
+    deletePackage(id);
   }
 
   async function handleSave() {
@@ -199,7 +231,7 @@ export function SortablePackageList({ packages: initial }: { packages: Package[]
             >
               <tbody>
                 {packages.map((p) => (
-                  <SortableRow key={p.id} pkg={p} />
+                  <SortableRow key={p.id} pkg={p} onDelete={handleDelete} />
                 ))}
                 {packages.length === 0 && (
                   <tr>

@@ -20,6 +20,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatPrice } from "@/lib/utils";
 import { GripVertical, Loader2, Check, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -36,7 +47,13 @@ interface Course {
   isFeatured: boolean;
 }
 
-function SortableRow({ course }: { course: Course }) {
+function SortableRow({
+  course,
+  onDelete,
+}: {
+  readonly course: Course;
+  readonly onDelete: (id: string) => void;
+}) {
   const {
     attributes,
     listeners,
@@ -91,25 +108,42 @@ function SortableRow({ course }: { course: Course }) {
               <Pencil className="h-4 w-4" />
             </Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            onClick={() => {
-              if (confirm(`Delete "${course.title}"? This will also delete all modules and lectures.`)) {
-                deleteCourse(course.id);
-              }
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete course?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete &ldquo;{course.title}&rdquo; and
+                  all its modules, lectures, and quizzes.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => onDelete(course.id)}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </td>
     </tr>
   );
 }
 
-export function SortableCourseList({ courses: initial }: { courses: Course[] }) {
+export function SortableCourseList({ courses: initial }: { readonly courses: Course[] }) {
   const [courses, setCourses] = useState(initial);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -133,6 +167,11 @@ export function SortableCourseList({ courses: initial }: { courses: Course[] }) 
     });
     setDirty(true);
     setSaved(false);
+  }
+
+  function handleDelete(id: string) {
+    setCourses((prev) => prev.filter((c) => c.id !== id));
+    deleteCourse(id);
   }
 
   async function handleSave() {
@@ -191,7 +230,7 @@ export function SortableCourseList({ courses: initial }: { courses: Course[] }) 
             >
               <tbody>
                 {courses.map((c) => (
-                  <SortableRow key={c.id} course={c} />
+                  <SortableRow key={c.id} course={c} onDelete={handleDelete} />
                 ))}
                 {courses.length === 0 && (
                   <tr>

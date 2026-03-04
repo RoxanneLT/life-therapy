@@ -15,6 +15,10 @@ export async function createCourse(formData: FormData) {
     isFeatured: raw.isFeatured === "true",
   });
 
+  // Always add new courses at the end of the list
+  const count = await prisma.course.count();
+  parsed.sortOrder = count;
+
   await prisma.course.create({ data: parsed });
 
   revalidatePath("/admin/courses");

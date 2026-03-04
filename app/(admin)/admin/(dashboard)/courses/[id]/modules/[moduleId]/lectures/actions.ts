@@ -24,10 +24,9 @@ export async function createLecture(
     isPreview: raw.isPreview === "true",
   });
 
-  if (!raw.sortOrder) {
-    const count = await prisma.lecture.count({ where: { moduleId } });
-    parsed.sortOrder = count;
-  }
+  // Always add new lectures at the end of the list
+  const count = await prisma.lecture.count({ where: { moduleId } });
+  parsed.sortOrder = count;
 
   await prisma.lecture.create({
     data: { ...parsed, moduleId },

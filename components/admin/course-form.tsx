@@ -216,16 +216,6 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
             </div>
           </>
         )}
-        <div className="space-y-2">
-          <Label htmlFor="sortOrder">Sort Order</Label>
-          <Input
-            id="sortOrder"
-            name="sortOrder"
-            type="number"
-            defaultValue={initialData?.sortOrder ?? 0}
-            min={0}
-          />
-        </div>
       </div>
 
       {/* Preview Video & Facilitator Script */}

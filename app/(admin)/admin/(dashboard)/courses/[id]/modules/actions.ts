@@ -15,11 +15,9 @@ export async function createModule(courseId: string, formData: FormData) {
     isStandalonePublished: raw.isStandalonePublished === "true",
   });
 
-  // Auto-set sortOrder to end of list if not specified
-  if (!raw.sortOrder) {
-    const count = await prisma.module.count({ where: { courseId } });
-    parsed.sortOrder = count;
-  }
+  // Always add new modules at the end of the list
+  const count = await prisma.module.count({ where: { courseId } });
+  parsed.sortOrder = count;
 
   await prisma.module.create({
     data: { ...parsed, courseId },

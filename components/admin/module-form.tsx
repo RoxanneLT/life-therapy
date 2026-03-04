@@ -112,18 +112,6 @@ export function ModuleForm({ initialData, onSubmit }: ModuleFormProps) {
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="sortOrder">Sort Order</Label>
-        <Input
-          id="sortOrder"
-          name="sortOrder"
-          type="number"
-          defaultValue={initialData?.sortOrder ?? 0}
-          min={0}
-          className="w-24"
-        />
-      </div>
-
       {/* Sell as Short Course — collapsible */}
       <div className="rounded-lg border">
         <button

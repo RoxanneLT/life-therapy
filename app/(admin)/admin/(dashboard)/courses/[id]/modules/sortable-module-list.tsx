@@ -21,6 +21,17 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   GripVertical,
   Loader2,
   Check,
@@ -42,10 +53,12 @@ function SortableModuleCard({
   mod,
   index,
   courseId,
+  onDelete,
 }: {
-  mod: Module;
-  index: number;
-  courseId: string;
+  readonly mod: Module;
+  readonly index: number;
+  readonly courseId: string;
+  readonly onDelete: (id: string) => void;
 }) {
   const {
     attributes,
@@ -108,18 +121,35 @@ function SortableModuleCard({
               Edit
             </Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:text-destructive"
-            onClick={() => {
-              if (confirm(`Delete "${mod.title}"? This will permanently delete all its lectures and quizzes.`)) {
-                deleteModule(courseId, mod.id);
-              }
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete module?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete &ldquo;{mod.title}&rdquo; and all
+                  its lectures and quizzes.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => onDelete(mod.id)}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </CardHeader>
     </Card>
@@ -130,8 +160,8 @@ export function SortableModuleList({
   modules: initial,
   courseId,
 }: {
-  modules: Module[];
-  courseId: string;
+  readonly modules: Module[];
+  readonly courseId: string;
 }) {
   const [modules, setModules] = useState(initial);
   const [dirty, setDirty] = useState(false);
@@ -156,6 +186,11 @@ export function SortableModuleList({
     });
     setDirty(true);
     setSaved(false);
+  }
+
+  function handleDelete(id: string) {
+    setModules((prev) => prev.filter((m) => m.id !== id));
+    deleteModule(courseId, id);
   }
 
   async function handleSave() {
@@ -206,6 +241,7 @@ export function SortableModuleList({
                 mod={mod}
                 index={index}
                 courseId={courseId}
+                onDelete={handleDelete}
               />
             ))}
           </div>
