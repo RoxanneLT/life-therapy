@@ -95,5 +95,4 @@ export async function deleteDigitalProduct(id: string) {
   await prisma.digitalProduct.delete({ where: { id } });
 
   revalidatePath("/admin/digital-products");
-  redirect("/admin/digital-products");
 }

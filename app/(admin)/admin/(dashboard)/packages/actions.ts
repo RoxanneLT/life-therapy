@@ -94,5 +94,4 @@ export async function deletePackage(id: string) {
   await prisma.hybridPackage.delete({ where: { id } });
 
   revalidatePath("/admin/packages");
-  redirect("/admin/packages");
 }
