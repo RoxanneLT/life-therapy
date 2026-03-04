@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: z.email("Invalid email address"),
   password: z.string().min(12, "Password must be at least 12 characters"),
 });
 
@@ -75,17 +75,17 @@ export const siteSettingsSchema = z.object({
   tagline: z.string().optional(),
   logoUrl: z.string().optional(),
   // Contact
-  email: z.string().email().optional().or(z.literal("")),
+  email: z.email().optional().or(z.literal("")),
   phone: z.string().optional(),
   whatsappNumber: z.string().optional(),
   businessHours: z.any().optional(),
   locationText: z.string().optional(),
   // Social Links
-  facebookUrl: z.string().url().optional().or(z.literal("")),
-  linkedinUrl: z.string().url().optional().or(z.literal("")),
-  instagramUrl: z.string().url().optional().or(z.literal("")),
-  tiktokUrl: z.string().url().optional().or(z.literal("")),
-  youtubeUrl: z.string().url().optional().or(z.literal("")),
+  facebookUrl: z.url().optional().or(z.literal("")),
+  linkedinUrl: z.url().optional().or(z.literal("")),
+  instagramUrl: z.url().optional().or(z.literal("")),
+  tiktokUrl: z.url().optional().or(z.literal("")),
+  youtubeUrl: z.url().optional().or(z.literal("")),
   // SEO
   metaTitle: z.string().optional(),
   metaDescription: z.string().optional(),
@@ -97,7 +97,7 @@ export const siteSettingsSchema = z.object({
   smtpUser: z.string().optional(),
   smtpPass: z.string().optional(),
   smtpFromName: z.string().optional(),
-  smtpFromEmail: z.string().email().optional().or(z.literal("")),
+  smtpFromEmail: z.email().optional().or(z.literal("")),
   // Footer
   copyrightText: z.string().optional(),
   footerTagline: z.string().optional(),
@@ -117,7 +117,7 @@ export const bookingFormSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   clientName: z.string().min(2, "Name is required"),
-  clientEmail: z.string().email("Valid email is required"),
+  clientEmail: z.email("Valid email is required"),
   clientPhone: z.string().optional(),
   clientNotes: z.string().max(1000).optional(),
 });
@@ -138,7 +138,7 @@ export const bookingSettingsSchema = z.object({
   msGraphTenantId: z.string().optional().or(z.literal("")),
   msGraphClientId: z.string().optional().or(z.literal("")),
   msGraphClientSecret: z.string().optional().or(z.literal("")),
-  msGraphUserEmail: z.string().email().optional().or(z.literal("")),
+  msGraphUserEmail: z.email().optional().or(z.literal("")),
 });
 
 // ============================================================
@@ -255,12 +255,12 @@ export const pageSeoSchema = z.object({
 export const studentRegisterSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Valid email is required"),
+  email: z.email("Valid email is required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 export const studentLoginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: z.email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
