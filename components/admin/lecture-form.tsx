@@ -126,33 +126,37 @@ export function LectureForm({
     }
   }
 
-  // ── Worksheet: upload to Bunny Storage via our API ───────────────────────
+  // ── Worksheet: direct browser → Bunny Storage upload ────────────────────
   async function handleWorksheetUpload(file: File) {
     setWorksheetState("uploading");
     setWorksheetProgress(0);
     setWorksheetMessage(`Uploading "${file.name}" (${formatBytes(file.size)})…`);
 
     try {
-      const formData = new FormData();
-      formData.set("file", file);
-      formData.set("courseSlug", courseSlug);
-      formData.set("moduleSlug", moduleSlug);
+      // Step 1: Get upload credentials from our API (tiny JSON request)
+      const credRes = await fetch("/api/bunny/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, courseSlug, moduleSlug }),
+      });
+      if (!credRes.ok) {
+        const err = await credRes.json().catch(() => ({ error: credRes.statusText }));
+        throw new Error(err.error || "Failed to get upload credentials");
+      }
+      const { uploadUrl, apiKey, cdnUrl } = await credRes.json();
 
+      // Step 2: PUT directly from browser to Bunny Storage
       await xhrUpload({
-        url: "/api/bunny/upload",
+        url: uploadUrl,
         file,
-        formData,
+        headers: { AccessKey: apiKey },
         onProgress: (pct) => {
           setWorksheetProgress(pct);
           setWorksheetMessage(`Uploading "${file.name}" — ${pct}%`);
         },
-        parseResponse: async (xhr) => {
-          const data = JSON.parse(xhr.responseText);
-          if (data.error) throw new Error(data.error);
-          setWorksheetUrl(data.url);
-        },
       });
 
+      setWorksheetUrl(cdnUrl);
       setWorksheetState("done");
       setWorksheetProgress(100);
       setWorksheetMessage("Uploaded ✓ — file is live on the CDN");
