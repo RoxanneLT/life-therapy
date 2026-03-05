@@ -65,7 +65,7 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "connect-src 'self' https://www.google-analytics.com https://*.supabase.co https://video.bunnycdn.com https://*.bunnycdn.com",
               "media-src 'self' blob: https://*.bunnycdn.com https://iframe.mediadelivery.net",
-              "frame-src 'self' https://teams.microsoft.com https://iframe.mediadelivery.net https://*.b-cdn.net",
+              "frame-src 'self' https://teams.microsoft.com https://iframe.mediadelivery.net https://*.b-cdn.net https://www.youtube.com https://player.vimeo.com",
             ].join("; "),
           },
         ],
