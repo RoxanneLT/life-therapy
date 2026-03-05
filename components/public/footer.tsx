@@ -224,11 +224,20 @@ export function PublicFooter({
             </div>
           </div>
 
-          {copyrightText && (
-            <div className="mt-8 border-t pt-8 text-center text-xs text-muted-foreground">
-              {copyrightText}
-            </div>
-          )}
+          <div className="mt-8 border-t pt-8 text-center text-xs text-muted-foreground">
+            {copyrightText && <p>{copyrightText}</p>}
+            <p className="mt-1">
+              Powered by{" "}
+              <a
+                href="https://yoros.co.za"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-foreground underline underline-offset-2"
+              >
+                Yoros
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </footer>
