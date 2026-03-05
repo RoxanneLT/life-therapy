@@ -1,41 +1,29 @@
 /**
  * POST /api/bunny/stream
  *
- * Admin-only endpoint to upload course videos to Bunny Stream.
+ * Creates a Bunny Stream video entry and returns the direct upload URL +
+ * API key so the browser can PUT the file straight to Bunny, bypassing
+ * Vercel's 4.5 MB serverless payload limit entirely.
  *
- * Step 1 — Create video entry (returns GUID + upload instructions)
- *   Body: { action: "create", title: string }
- *   Returns: { guid: string, embedUrl: string }
+ * Body: { title: string }
+ * Returns: { guid, uploadUrl, apiKey, embedUrl }
  *
- * Step 2 — Upload video bytes (proxies file to Bunny)
- *   Accepts multipart/form-data with fields:
- *     file - The video file (mp4, mov, etc.)
- *     guid - The GUID from Step 1
- *   Returns: { success: true, embedUrl: string }
- *
- * For videos > 500 MB, use direct TUS upload from the client side
- * (Bunny supports tus.io resumable uploads natively).
+ * The client then does:
+ *   PUT uploadUrl  (headers: { AccessKey: apiKey, Content-Type: video/* })
+ *   body: raw file bytes
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import {
   createStreamVideo,
-  uploadStreamVideo,
   getStreamEmbedUrl,
   extractStreamGuid,
   deleteStreamVideo,
 } from "@/lib/bunny";
 
-export const maxDuration = 120; // 2 minutes for video proxying
-
-const VIDEO_TYPES = [
-  "video/mp4",
-  "video/quicktime",
-  "video/x-msvideo",
-  "video/webm",
-  "video/mpeg",
-];
+const STREAM_LIBRARY_ID = process.env.BUNNY_STREAM_LIBRARY_ID!;
+const STREAM_API_KEY = process.env.BUNNY_STREAM_API_KEY!;
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,61 +32,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
-  const contentType = req.headers.get("content-type") || "";
-
-  // ── JSON: create video entry ─────────────────────────────────────────────
-  if (contentType.includes("application/json")) {
-    const { action, title } = await req.json();
-
-    if (action !== "create" || !title) {
-      return NextResponse.json(
-        { error: "Provide { action: 'create', title: string }" },
-        { status: 400 }
-      );
-    }
-
-    const { guid } = await createStreamVideo(title as string);
-    return NextResponse.json({ guid, embedUrl: getStreamEmbedUrl(guid) });
+  const { title } = await req.json();
+  if (!title) {
+    return NextResponse.json({ error: "Provide { title: string }" }, { status: 400 });
   }
 
-  // ── Multipart: upload video bytes ────────────────────────────────────────
-  if (contentType.includes("multipart/form-data")) {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const guid = formData.get("guid") as string | null;
+  const { guid } = await createStreamVideo(title as string);
 
-    if (!file || !guid) {
-      return NextResponse.json(
-        { error: "Provide file and guid" },
-        { status: 400 }
-      );
-    }
-
-    if (!VIDEO_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: `File type not allowed: ${file.type}` },
-        { status: 400 }
-      );
-    }
-
-    // 500 MB proxy limit — larger files should use direct TUS upload
-    if (file.size > 500 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "Video too large to proxy (max 500 MB). Use direct TUS upload." },
-        { status: 400 }
-      );
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await uploadStreamVideo(guid, buffer);
-
-    return NextResponse.json({ success: true, embedUrl: getStreamEmbedUrl(guid) });
-  }
-
-  return NextResponse.json(
-    { error: "Unsupported content-type" },
-    { status: 400 }
-  );
+  return NextResponse.json({
+    guid,
+    uploadUrl: `https://video.bunnycdn.com/library/${STREAM_LIBRARY_ID}/videos/${guid}`,
+    apiKey: STREAM_API_KEY,
+    embedUrl: getStreamEmbedUrl(guid),
+  });
 }
 
 /**
