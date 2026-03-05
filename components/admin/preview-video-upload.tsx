@@ -3,7 +3,25 @@
 import { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Loader2, Video, CheckCircle2, AlertCircle } from "lucide-react";
+
+function StatusMessage({ state, message }: { readonly state: UploadState; readonly message: string }) {
+  let Icon = Loader2;
+  if (state === "done") Icon = CheckCircle2;
+  if (state === "error") Icon = AlertCircle;
+
+  let color = "text-muted-foreground";
+  if (state === "done") color = "text-green-600";
+  if (state === "error") color = "text-destructive";
+
+  return (
+    <p className={`flex items-center gap-1.5 text-xs ${color}`}>
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${state === "uploading" ? "animate-spin" : ""}`} />
+      {message}
+    </p>
+  );
+}
 
 type UploadState = "idle" | "uploading" | "done" | "error";
 
@@ -16,7 +34,7 @@ interface PreviewVideoUploadProps {
 
 /**
  * Preview video URL field with optional Bunny Stream upload.
- * Supports pasting a YouTube/Vimeo/Bunny URL or uploading directly.
+ * Uploads directly from the browser to Bunny — bypasses Vercel's 4.5 MB limit.
  */
 export function PreviewVideoUpload({
   value,
@@ -32,40 +50,52 @@ export function PreviewVideoUpload({
   async function handleUpload(file: File) {
     setUploadState("uploading");
     setProgress(0);
-    setUploadMessage(`Creating video entry…`);
+    setUploadMessage("Creating video entry…");
 
     try {
-      // Step 1: Create video entry
+      // Step 1: Create video entry — Vercel only handles this tiny JSON request
       const createRes = await fetch("/api/bunny/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", title: file.name }),
+        body: JSON.stringify({ title: file.name }),
       });
-      if (!createRes.ok) throw new Error(await createRes.text());
-      const { guid } = await createRes.json();
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({ error: createRes.statusText }));
+        throw new Error(err.error || "Failed to create video entry");
+      }
+      const { uploadUrl, apiKey, embedUrl } = await createRes.json();
 
-      setUploadMessage(`Uploading "${file.name}" (${formatBytes(file.size)})…`);
+      setUploadMessage(`Uploading "${file.name}" (${formatBytes(file.size)}) directly to Bunny…`);
 
-      // Step 2: Upload with progress via XHR
-      const form = new FormData();
-      form.set("file", file);
-      form.set("guid", guid);
-
-      const responseText = await new Promise<string>((resolve, reject) => {
+      // Step 2: PUT directly from browser to Bunny — Vercel never sees the bytes
+      await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/bunny/stream");
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setProgress(pct);
+            setUploadMessage(`Uploading "${file.name}" — ${pct}% (${formatBytes(file.size)})`);
+          }
         };
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
-          else reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else {
+            let msg = `Upload failed (${xhr.status})`;
+            try {
+              const body = JSON.parse(xhr.responseText);
+              if (body?.error) msg = body.error;
+            } catch {
+              if (xhr.responseText) msg = xhr.responseText.slice(0, 200);
+            }
+            reject(new Error(msg));
+          }
         };
         xhr.onerror = () => reject(new Error("Network error during upload"));
-        xhr.send(form);
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("AccessKey", apiKey);
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.send(file);
       });
-
-      const { embedUrl } = JSON.parse(responseText);
 
       // Delete old Bunny video if replacing
       if (value && value.includes("iframe.mediadelivery.net/embed") && value !== embedUrl) {
@@ -78,11 +108,11 @@ export function PreviewVideoUpload({
 
       onChange(embedUrl);
       setUploadState("done");
-      setUploadMessage("Video uploaded — encoding in progress on Bunny");
+      setProgress(100);
+      setUploadMessage("Uploaded ✓ — Bunny is encoding the video (takes a minute)");
     } catch (err: unknown) {
       setUploadState("error");
-      const message = err instanceof Error ? err.message : String(err);
-      setUploadMessage(message || "Upload failed");
+      setUploadMessage(err instanceof Error ? err.message : "Upload failed");
     }
   }
 
@@ -113,7 +143,7 @@ export function PreviewVideoUpload({
         <input
           ref={fileRef}
           type="file"
-          accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
+          accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/mpeg"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -122,39 +152,15 @@ export function PreviewVideoUpload({
           }}
         />
       </div>
-      {uploadState !== "idle" && uploadMessage && (
-        <div className="space-y-1">
-          <p
-            className={`flex items-center gap-1.5 text-xs ${
-              uploadState === "done"
-                ? "text-green-600"
-                : uploadState === "error"
-                ? "text-destructive"
-                : "text-muted-foreground"
-            }`}
-          >
-            {uploadState === "done" ? (
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            ) : uploadState === "error" ? (
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            ) : (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-            )}
-            {uploadMessage}
-            {uploadState === "uploading" && progress > 0 && (
-              <span className="font-medium">{progress}%</span>
-            )}
-          </p>
-          {uploadState === "uploading" && progress > 0 && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-brand-600 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          )}
-        </div>
+
+      {uploadState === "uploading" && progress > 0 && (
+        <Progress value={progress} className="h-2" />
       )}
+
+      {uploadState !== "idle" && uploadMessage && (
+        <StatusMessage state={uploadState} message={uploadMessage} />
+      )}
+
       <p className="text-xs text-muted-foreground">
         Paste a URL or click the <Video className="inline h-3 w-3" /> button to
         upload directly to Bunny Stream.
