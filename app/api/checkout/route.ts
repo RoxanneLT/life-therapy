@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { initializeTransaction } from "@/lib/paystack";
 import { resolveCartItems, validateCoupon } from "@/lib/cart";
-import { createOrderNumber } from "@/lib/order";
+import { createOrderNumber, processCheckoutCompleted } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
 import { getBaseUrl } from "@/lib/get-region";
 import type { CartItemLocal } from "@/lib/cart-store";
@@ -141,6 +141,7 @@ export async function POST(request: Request) {
 
     // Create order in our DB
     const orderNumber = await createOrderNumber();
+    const reference = `${orderNumber}-${Date.now()}`;
     const order = await prisma.order.create({
       data: {
         orderNumber,
@@ -150,6 +151,7 @@ export async function POST(request: Request) {
         discountCents,
         totalCents,
         couponId,
+        paystackReference: reference,
         items: {
           create: resolved.map((r) => ({
             courseId: r.product.type === "course" ? r.product.id : null,
@@ -167,10 +169,15 @@ export async function POST(request: Request) {
       },
     });
 
-    // Create Paystack transaction
     const baseUrl = await getBaseUrl();
-    const reference = `${order.orderNumber}-${Date.now()}`;
 
+    // Free order (100% coupon) — skip Paystack, fulfill immediately
+    if (totalCents === 0) {
+      await processCheckoutCompleted(order.id);
+      return NextResponse.json({ url: `${baseUrl}/checkout/success?reference=${reference}` });
+    }
+
+    // Create Paystack transaction
     const paystack = await initializeTransaction({
       email: auth.student.email,
       amount: totalCents,
@@ -186,7 +193,6 @@ export async function POST(request: Request) {
     await prisma.order.update({
       where: { id: order.id },
       data: {
-        paystackReference: reference,
         paystackAccessCode: paystack.access_code,
       },
     });
