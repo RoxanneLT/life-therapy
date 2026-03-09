@@ -89,6 +89,7 @@ export async function createCalendarEvent(params: {
   clientName: string;
   clientEmail: string;
   description?: string;
+  isOnlineMeeting?: boolean;
 }): Promise<{ eventId: string; teamsMeetingUrl: string } | null> {
   const config = getGraphConfig();
   if (!config) return null;
@@ -115,8 +116,10 @@ export async function createCalendarEvent(params: {
             type: "required",
           },
         ],
-        isOnlineMeeting: true,
-        onlineMeetingProvider: "teamsForBusiness",
+        ...(params.isOnlineMeeting !== false && {
+          isOnlineMeeting: true,
+          onlineMeetingProvider: "teamsForBusiness",
+        }),
       });
 
     return {

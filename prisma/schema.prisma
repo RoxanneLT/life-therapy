@@ -234,6 +234,11 @@ enum SessionType {
   couples
 }
 
+enum SessionMode {
+  online
+  in_person
+}
+
 model Booking {
   id                 String        @id @default(cuid())
   sessionType        SessionType
@@ -249,6 +254,7 @@ model Booking {
   clientNotes        String?       @db.Text
   status             BookingStatus @default(pending)
   adminNotes         String?       @db.Text
+  sessionMode        SessionMode   @default(online)
   graphEventId       String?
   teamsMeetingUrl    String?
   confirmationToken  String?       @unique

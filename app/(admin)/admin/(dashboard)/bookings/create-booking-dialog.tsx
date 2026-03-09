@@ -39,8 +39,10 @@ import {
   Check,
   Repeat,
   ChevronDown,
+  MapPin,
+  Video,
 } from "lucide-react";
-import type { SessionType } from "@/lib/generated/prisma/client";
+import type { SessionMode, SessionType } from "@/lib/generated/prisma/client";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 
@@ -59,6 +61,7 @@ interface PartnerOption {
 }
 
 type BookingMode = "single" | "recurring";
+type SessionLocation = "online" | "in_person";
 
 const DURATION_OPTIONS = [
   { value: 3, label: "3 months" },
@@ -87,6 +90,9 @@ export function CreateBookingDialog() {
 
   // Booking mode
   const [bookingMode, setBookingMode] = useState<BookingMode>("single");
+
+  // Session location
+  const [sessionLocation, setSessionLocation] = useState<SessionLocation>("online");
 
   // Credits
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
@@ -196,6 +202,7 @@ export function CreateBookingDialog() {
     setSelectedClient(null);
     setSessionType("individual");
     setBookingMode("single");
+    setSessionLocation("online");
     setCreditBalance(null);
     setUseCredit(true);
     setAdminNotes("");
@@ -239,6 +246,7 @@ export function CreateBookingDialog() {
         const result = await adminCreateBookingAction({
           studentId: selectedClient.id,
           sessionType,
+          sessionMode: sessionLocation as SessionMode,
           date,
           startTime,
           endTime,
@@ -276,6 +284,7 @@ export function CreateBookingDialog() {
         const result = await adminCreateRecurringBookingsAction({
           studentId: selectedClient.id,
           sessionType,
+          sessionMode: sessionLocation as SessionMode,
           startDate: recurringDate,
           startTime: recurringStartTime,
           endTime: recurringEndTime,
@@ -552,6 +561,38 @@ export function CreateBookingDialog() {
                   Recurring Series
                 </Button>
               </div>
+            </div>
+
+            {/* Session location */}
+            <div className="space-y-2">
+              <Label>Session Location</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={sessionLocation === "online" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSessionLocation("online")}
+                  className="flex-1"
+                >
+                  <Video className="mr-1.5 h-4 w-4" />
+                  Online (Teams)
+                </Button>
+                <Button
+                  type="button"
+                  variant={sessionLocation === "in_person" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSessionLocation("in_person")}
+                  className="flex-1"
+                >
+                  <MapPin className="mr-1.5 h-4 w-4" />
+                  In Person
+                </Button>
+              </div>
+              {sessionLocation === "in_person" && (
+                <p className="text-xs text-muted-foreground">
+                  Brown House Unit 2, 13 Station Street, Paarl
+                </p>
+              )}
             </div>
 
             {/* Recurring options (visible in step 1) */}

@@ -14,7 +14,7 @@ import { format } from "date-fns";
 import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { generateRecurringDates, type RecurringPattern } from "@/lib/recurring-dates";
-import type { BookingStatus, SessionType } from "@/lib/generated/prisma/client";
+import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   await requireRole("super_admin", "editor");
@@ -146,9 +146,12 @@ export async function rescheduleBooking(
 // Admin: Create booking on behalf of a client
 // ────────────────────────────────────────────────────────────
 
+const IN_PERSON_ADDRESS = "Brown House Unit 2, 13 Station Street, Paarl";
+
 interface AdminCreateBookingData {
   studentId: string;
   sessionType: SessionType;
+  sessionMode: SessionMode;
   date: string;
   startTime: string;
   endTime: string;
@@ -186,19 +189,21 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
   const bookingDate = new Date(`${data.date}T00:00:00Z`);
   const confirmationToken = randomUUID();
 
-  // Create calendar event
+  // Create calendar event (in-person: block calendar but no Teams link)
   const calResult = await createCalendarEvent({
-    subject: `${config.label} — ${clientName}`,
+    subject: `${config.label} — ${clientName}${data.sessionMode === "in_person" ? " (In Person)" : ""}`,
     startDateTime: `${data.date}T${data.startTime}:00`,
     endDateTime: `${data.date}T${data.endTime}:00`,
     clientName,
     clientEmail: student.email,
+    isOnlineMeeting: data.sessionMode !== "in_person",
   }).catch(() => null);
 
   // Create booking record
   const booking = await prisma.booking.create({
     data: {
       sessionType: data.sessionType,
+      sessionMode: data.sessionMode,
       date: bookingDate,
       startTime: data.startTime,
       endTime: data.endTime,
@@ -236,12 +241,17 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     const dateStr = format(bookingDate, "EEEE, d MMMM yyyy");
     const timeStr = `${data.startTime} – ${data.endTime} (SAST)`;
 
-    const teamsSection = calResult?.teamsMeetingUrl
+    const teamsSection = data.sessionMode === "in_person"
       ? `<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;">
-          <p style="margin: 0 0 8px; font-weight: 600; color: #333;">Join your session:</p>
-          <a href="${calResult.teamsMeetingUrl}" style="color: #8BA889; font-weight: 600; word-break: break-all;">${calResult.teamsMeetingUrl}</a>
+          <p style="margin: 0 0 8px; font-weight: 600; color: #333;">Session location:</p>
+          <p style="margin: 0; color: #555;">${IN_PERSON_ADDRESS}</p>
         </div>`
-      : "";
+      : calResult?.teamsMeetingUrl
+        ? `<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0 0 8px; font-weight: 600; color: #333;">Join your session:</p>
+            <a href="${calResult.teamsMeetingUrl}" style="color: #8BA889; font-weight: 600; word-break: break-all;">${calResult.teamsMeetingUrl}</a>
+          </div>`
+        : "";
 
     const confirmEmail = await renderEmail("booking_confirmation", {
       clientName,
@@ -263,6 +273,12 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     });
 
     // Notify admin
+    let adminTeamsLink = "";
+    if (data.sessionMode === "in_person") {
+      adminTeamsLink = `<p><strong>Location:</strong> ${IN_PERSON_ADDRESS}</p>`;
+    } else if (calResult?.teamsMeetingUrl) {
+      adminTeamsLink = `<p><strong>Teams link:</strong> <a href="${calResult.teamsMeetingUrl}">${calResult.teamsMeetingUrl}</a></p>`;
+    }
     const notifyEmail = await renderEmail("booking_notification", {
       sessionType: config.label,
       clientName,
@@ -270,9 +286,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
       time: timeStr,
       duration: String(config.durationMinutes),
       clientDetails: `<p style="margin: 4px 0;"><strong>Client:</strong> ${clientName}</p><p style="margin: 4px 0;"><strong>Email:</strong> ${student.email}</p>` + (student.phone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${student.phone}</p>` : ""),
-      teamsLink: calResult?.teamsMeetingUrl
-        ? `<p><strong>Teams link:</strong> <a href="${calResult.teamsMeetingUrl}">${calResult.teamsMeetingUrl}</a></p>`
-        : "",
+      teamsLink: adminTeamsLink,
     }, baseUrl);
 
     await sendEmail({
@@ -301,6 +315,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
 interface AdminCreateRecurringData {
   studentId: string;
   sessionType: SessionType;
+  sessionMode: SessionMode;
   startDate: string;
   startTime: string;
   endTime: string;
@@ -348,19 +363,21 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     const bookingDate = new Date(`${dateStr}T00:00:00Z`);
     const confirmationToken = randomUUID();
 
-    // Create calendar event
+    // Create calendar event (in-person: block calendar but no Teams link)
     const calResult = await createCalendarEvent({
-      subject: `${config.label} — ${clientName}`,
+      subject: `${config.label} — ${clientName}${data.sessionMode === "in_person" ? " (In Person)" : ""}`,
       startDateTime: `${dateStr}T${data.startTime}:00`,
       endDateTime: `${dateStr}T${data.endTime}:00`,
       clientName,
       clientEmail: student.email,
+      isOnlineMeeting: data.sessionMode !== "in_person",
     }).catch(() => null);
 
     // Create booking record
     const booking = await prisma.booking.create({
       data: {
         sessionType: data.sessionType,
+        sessionMode: data.sessionMode,
         date: bookingDate,
         startTime: data.startTime,
         endTime: data.endTime,

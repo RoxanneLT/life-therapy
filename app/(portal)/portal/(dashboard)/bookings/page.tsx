@@ -27,6 +27,7 @@ export default async function PortalBookingsPage() {
       endTime: true,
       durationMinutes: true,
       status: true,
+      sessionMode: true,
       teamsMeetingUrl: true,
       rescheduleCount: true,
       rescheduledAt: true,
@@ -46,6 +47,7 @@ export default async function PortalBookingsPage() {
   const serialized = bookings.map((b) => ({
     id: b.id,
     sessionType: b.sessionType,
+    sessionMode: b.sessionMode,
     date: b.date.toISOString().slice(0, 10),
     startTime: b.startTime,
     endTime: b.endTime,

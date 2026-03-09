@@ -41,6 +41,7 @@ import {
   ArrowLeft,
   Repeat,
   ShieldCheck,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
@@ -209,23 +210,28 @@ export default async function BookingDetailPage({ params }: Props) {
                 {booking.status.replace("_", " ")}
               </Badge>
             </div>
-            {booking.teamsMeetingUrl && (
-              <>
-                <Separator />
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Teams Meeting</span>
-                  <a
-                    href={booking.teamsMeetingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-sm text-brand-600 hover:underline"
-                  >
-                    <Video className="h-4 w-4" />
-                    Join
-                  </a>
-                </div>
-              </>
-            )}
+            <Separator />
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Location</span>
+              {booking.sessionMode === "in_person" ? (
+                <span className="flex items-center gap-1 text-sm font-medium">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  In Person — Paarl
+                </span>
+              ) : booking.teamsMeetingUrl ? (
+                <a
+                  href={booking.teamsMeetingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-sm text-brand-600 hover:underline"
+                >
+                  <Video className="h-4 w-4" />
+                  Teams — Join
+                </a>
+              ) : (
+                <span className="text-sm text-muted-foreground">Online</span>
+              )}
+            </div>
             {booking.recurringSeriesId && (
               <>
                 <Separator />

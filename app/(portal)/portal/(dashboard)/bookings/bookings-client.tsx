@@ -26,6 +26,7 @@ import {
   Loader2,
   Check,
   ChevronRight,
+  MapPin,
 } from "lucide-react";
 import { format, isPast, differenceInHours } from "date-fns";
 import { ReschedulePicker } from "@/components/booking/reschedule-picker";
@@ -45,9 +46,12 @@ import { formatPrice } from "@/lib/utils";
 // Types
 // ---------------------------------------------------------------------------
 
+const IN_PERSON_ADDRESS = "Brown House Unit 2, 13 Station Street, Paarl";
+
 interface SerializedBooking {
   id: string;
   sessionType: string;
+  sessionMode: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -212,7 +216,12 @@ function UpcomingBookingCard({
 
           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-            {b.teamsMeetingUrl && (
+            {b.sessionMode === "in_person" ? (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5" />
+                In Person
+              </span>
+            ) : b.teamsMeetingUrl && (
               <Button variant="outline" size="sm" asChild>
                 <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
                   <Video className="mr-2 h-4 w-4" />
@@ -601,8 +610,17 @@ function SessionDetailDialog({
             )}
           </div>
 
-          {/* Teams link for upcoming */}
-          {isUpcoming && b.teamsMeetingUrl && (
+          {/* Location / Teams link for upcoming */}
+          {isUpcoming && b.sessionMode === "in_person" && (
+            <div className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-sm">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="font-medium">In-Person Session</p>
+                <p className="text-muted-foreground">{IN_PERSON_ADDRESS}</p>
+              </div>
+            </div>
+          )}
+          {isUpcoming && b.sessionMode !== "in_person" && b.teamsMeetingUrl && (
             <Button variant="outline" size="sm" className="w-full" asChild>
               <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
                 <Video className="mr-2 h-4 w-4" />
