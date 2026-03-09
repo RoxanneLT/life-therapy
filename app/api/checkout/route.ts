@@ -70,7 +70,7 @@ async function checkGiftRecipientOwnership(resolved: ResolvedItem[]): Promise<st
         })));
 
     if (alreadyOwns) {
-      return `${recipient.firstName} already owns "${item.product.title}". Please select a different course to gift.`;
+      return `${recipient.firstName} already owns "${item.product.title}". Why not gift them a different course from our catalog instead?`;
     }
   }
 
