@@ -8,7 +8,6 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getSiteSettings } from "@/lib/settings";
 import {
   getEffectiveBillingDate,
   getReminderDate,
@@ -44,7 +43,6 @@ export async function processMonthlyBilling(): Promise<{
   dueToday: { sent: number } | null;
   overdue: { sent: number } | null;
 }> {
-  const settings = await getSiteSettings();
   const today = getSASTToday();
   const year = today.getFullYear();
   const month = today.getMonth() + 1;

@@ -161,9 +161,9 @@ async function resolveStudentPhone(
 
 async function processBillingReminders(
   settings: Awaited<ReturnType<typeof getSiteSettings>>,
-): Promise<{ sentRequest: number; sentReminder: number; sentOverdue: number }> {
+): Promise<{ sentRequest: number; sentReminder: number; sentDueToday: number; sentOverdue: number }> {
   if (!settings.whatsappEnabled || !settings.whatsappBillingReminders) {
-    return { sentRequest: 0, sentReminder: 0, sentOverdue: 0 };
+    return { sentRequest: 0, sentReminder: 0, sentDueToday: 0, sentOverdue: 0 };
   }
 
   const today = getSASTToday();
@@ -435,7 +435,7 @@ async function processCreditExpiryReminders(
 
 export async function processWhatsAppReminders(): Promise<{
   sessionReminders: { sent24h: number; sentMorning: number };
-  billingReminders: { sentRequest: number; sentReminder: number; sentOverdue: number };
+  billingReminders: { sentRequest: number; sentReminder: number; sentDueToday: number; sentOverdue: number };
   creditReminders: { sent14d: number; sent3d: number };
 }> {
   const settings = await getSiteSettings();
