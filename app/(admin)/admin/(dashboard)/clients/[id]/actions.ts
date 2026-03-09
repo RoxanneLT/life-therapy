@@ -824,6 +824,7 @@ export async function billToDateAction(studentId: string) {
     && ((indivContact.billingEntityId && indivContact.billingEntityId === couplesContact.billingEntityId)
       || (!indivContact.billingEntityId && !couplesContact.billingEntityId && indivContact.studentId === couplesContact.studentId));
 
+  const settings = await getSiteSettings();
   const billingMonth = `${year}-${String(month).padStart(2, "0")}`;
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 7);
