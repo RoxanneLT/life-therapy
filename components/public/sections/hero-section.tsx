@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 interface HeroSectionProps {
-  section: PageSection;
+  readonly section: PageSection;
 }
 
 export function HeroSection({ section }: HeroSectionProps) {
@@ -54,7 +54,7 @@ export function HeroSection({ section }: HeroSectionProps) {
             {section.ctaText && section.ctaLink && (
               <Button
                 size="lg"
-                className={section.imageUrl ? "bg-terracotta-500 text-white hover:bg-terracotta-600" : ""}
+                className={section.imageUrl ? "bg-terracotta-600 text-white hover:bg-terracotta-700" : ""}
                 asChild
               >
                 <Link href={section.ctaLink}>{section.ctaText}</Link>
