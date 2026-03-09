@@ -118,6 +118,7 @@ export default async function LecturePlayerPage({
       courseSlug={slug}
       sidebarModules={sidebarData}
       currentLectureId={lectureId}
+      isStandalone={access.type === "module"}
       type="lecture"
       lecture={{
         id: lecture.id,

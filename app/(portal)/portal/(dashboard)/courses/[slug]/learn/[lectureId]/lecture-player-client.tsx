@@ -74,6 +74,7 @@ type LecturePlayerProps =
       courseSlug: string;
       sidebarModules: SidebarModule[];
       currentLectureId: string;
+      isStandalone?: boolean;
       type: "lecture";
       lecture: LectureData;
       nextLectureId?: string | null;
@@ -83,12 +84,13 @@ type LecturePlayerProps =
       courseSlug: string;
       sidebarModules: SidebarModule[];
       currentLectureId: string;
+      isStandalone?: boolean;
       type: "quiz";
       quiz: QuizData;
     };
 
 export function LecturePlayerClient(props: LecturePlayerProps) {
-  const { courseSlug, sidebarModules, currentLectureId } = props;
+  const { courseSlug, sidebarModules, currentLectureId, isStandalone = false } = props;
 
   const sidebar = (
     <LectureSidebar
@@ -117,6 +119,7 @@ export function LecturePlayerClient(props: LecturePlayerProps) {
           nextLectureTitle={props.nextLectureTitle}
           sidebarModules={sidebarModules}
           currentLectureId={currentLectureId}
+          isStandalone={isStandalone}
         />
       )}
     </CoursePlayerLayout>
@@ -130,6 +133,7 @@ function LectureContent({
   nextLectureTitle,
   sidebarModules,
   currentLectureId,
+  isStandalone,
 }: {
   courseSlug: string;
   lecture: LectureData;
@@ -137,6 +141,7 @@ function LectureContent({
   nextLectureTitle?: string | null;
   sidebarModules: SidebarModule[];
   currentLectureId: string;
+  isStandalone: boolean;
 }) {
   const router = useRouter();
   const [completed, setCompleted] = useState(lecture.completed);
@@ -280,14 +285,16 @@ function LectureContent({
         />
       )}
 
-      {/* Module complete banner */}
+      {/* Module / short course complete banner */}
       {showModuleBanner && (
         <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-800">
           <PartyPopper className="h-5 w-5 shrink-0" />
           <div className="flex-1">
-            <p className="font-medium">Module Complete!</p>
+            <p className="font-medium">{isStandalone ? "Short Course Complete!" : "Module Complete!"}</p>
             <p className="text-sm text-green-600">
-              You&apos;ve finished all lectures in &quot;{currentModule?.title}&quot;
+              {isStandalone
+                ? "You've completed this short course. Well done!"
+                : `You've finished all lectures in "${currentModule?.title}"`}
             </p>
           </div>
           <button
@@ -409,6 +416,27 @@ function LectureContent({
           </>
         )}
       </p>
+
+      {/* Short course end: upsell / explore more */}
+      {isStandalone && !nextLectureId && completed && (
+        <div className="rounded-lg border border-brand-200 bg-brand-50 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-brand-700">
+            <PartyPopper className="h-5 w-5 shrink-0" />
+            <p className="font-semibold">You&apos;ve completed this short course!</p>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Want to go deeper? Explore more short courses or upgrade to the full course for comprehensive coverage.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href={`/courses/${courseSlug}`}>Upgrade to Full Course</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/courses">Browse More Courses</Link>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
