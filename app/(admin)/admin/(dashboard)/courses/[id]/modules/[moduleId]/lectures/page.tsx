@@ -4,27 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Video, FileText, HelpCircle, ArrowLeft, Eye } from "lucide-react";
-import { deleteLecture } from "./actions";
-import { Badge } from "@/components/ui/badge";
-
-const TYPE_ICONS: Record<string, typeof Video> = {
-  video: Video,
-  text: FileText,
-  quiz: HelpCircle,
-};
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, Video, ArrowLeft } from "lucide-react";
+import { SortableLectureList } from "./sortable-lecture-list";
 
 export default async function LecturesPage({
   params,
@@ -89,92 +71,18 @@ export default async function LecturesPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {mod.lectures.map((lec, index) => {
-            const Icon = TYPE_ICONS[lec.lectureType] || FileText;
-            return (
-              <Card key={lec.id}>
-                <CardHeader className="flex flex-row items-center justify-between py-4">
-                  <div className="flex items-center gap-4">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                    </span>
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        {index + 1}. {lec.title}
-                        {lec.isPreview && (
-                          <Badge variant="secondary" className="text-xs">
-                            <Eye className="mr-1 h-3 w-3" />
-                            Preview
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {lec.lectureType}
-                        {lec.durationSeconds
-                          ? ` · ${Math.floor(lec.durationSeconds / 60)}m`
-                          : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`${base}/${lec.id}`}>Edit</Link>
-                    </Button>
-                    <DeleteLectureButton
-                      courseId={id}
-                      moduleId={moduleId}
-                      lectureId={lec.id}
-                      title={lec.title}
-                    />
-                  </div>
-                </CardHeader>
-              </Card>
-            );
-          })}
-        </div>
+        <SortableLectureList
+          lectures={mod.lectures.map((l) => ({
+            id: l.id,
+            title: l.title,
+            lectureType: l.lectureType,
+            durationSeconds: l.durationSeconds,
+            isPreview: l.isPreview,
+          }))}
+          courseId={id}
+          moduleId={moduleId}
+        />
       )}
     </div>
-  );
-}
-
-function DeleteLectureButton({
-  courseId,
-  moduleId,
-  lectureId,
-  title,
-}: {
-  courseId: string;
-  moduleId: string;
-  lectureId: string;
-  title: string;
-}) {
-  async function handleDelete() {
-    "use server";
-    await deleteLecture(courseId, moduleId, lectureId);
-  }
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete lecture?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently delete &ldquo;{title}&rdquo;.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <form action={handleDelete}>
-            <AlertDialogAction type="submit">Delete</AlertDialogAction>
-          </form>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }

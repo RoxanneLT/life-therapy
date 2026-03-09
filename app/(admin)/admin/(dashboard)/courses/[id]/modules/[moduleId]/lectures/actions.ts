@@ -60,6 +60,25 @@ export async function updateLecture(
   redirect(basePath(courseId, moduleId));
 }
 
+export async function reorderLectures(
+  courseId: string,
+  moduleId: string,
+  orderedIds: string[]
+) {
+  await requireRole("super_admin", "editor");
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.lecture.update({
+        where: { id },
+        data: { sortOrder: index },
+      })
+    )
+  );
+
+  revalidatePath(basePath(courseId, moduleId));
+}
+
 export async function deleteLecture(
   courseId: string,
   moduleId: string,
