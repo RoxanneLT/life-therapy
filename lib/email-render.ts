@@ -163,6 +163,11 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     dueDate: "28 February 2026",
     paymentUrl: "https://paystack.com/pay/sample",
   },
+  payment_request_due_today: {
+    billingName: "Jane Doe",
+    total: "R1,700.00",
+    paymentUrl: "https://paystack.com/pay/sample",
+  },
   payment_request_overdue: {
     billingName: "Jane Doe",
     month: "February 2026",
@@ -205,6 +210,7 @@ const TEMPLATE_TITLES: Record<string, string> = {
   invoice: "Invoice",
   payment_request: "Payment Request",
   payment_request_reminder: "Payment Reminder",
+  payment_request_due_today: "Payment Due Today",
   payment_request_overdue: "Payment Overdue",
   relationship_invite: "Relationship Link Request",
   relationship_invite_signup: "You've Been Invited to Life-Therapy",
@@ -516,6 +522,21 @@ function renderFallback(
           "Payment Reminder",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>Just a friendly reminder that your payment of <strong>${variables.total || ""}</strong> is due on <strong>${variables.dueDate || ""}</strong>.</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          </div>
+          <p>If you&rsquo;ve already made payment, please disregard this message.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+          baseUrl, unsubscribeUrl
+        ),
+      };
+    case "payment_request_due_today":
+      return {
+        subject: `Payment due today — Life Therapy`,
+        html: baseTemplate(
+          "Payment Due Today",
+          `<p>Hi ${variables.billingName || ""},</p>
+          <p>This is a reminder that your payment of <strong>${variables.total || ""}</strong> is <strong>due today</strong>.</p>
           <div style="text-align: center; margin: 24px 0;">
             <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
           </div>

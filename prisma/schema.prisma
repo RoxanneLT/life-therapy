@@ -1008,10 +1008,12 @@ model PaymentRequest {
   // Tracking
   sentAt             DateTime?       // When payment request email was sent
   reminderSentAt     DateTime?       // When reminder email was sent
+  dueTodaySentAt     DateTime?       // When "due today" email was sent
   overdueSentAt      DateTime?       // When overdue notice was sent
   // WhatsApp reminders
   whatsappSentAt             DateTime?
   whatsappReminderSentAt     DateTime?
+  whatsappDueTodaySentAt     DateTime?
   whatsappOverdueSentAt      DateTime?
 
   // Link to invoice (created only after payment)

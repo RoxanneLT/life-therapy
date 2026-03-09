@@ -205,6 +205,58 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
   });
 }
 
+// ─── Send Due Today Notice ───────────────────────────────────
+
+/**
+ * Send a "due today" notice on the actual due date.
+ */
+export async function sendDueTodayNotice(paymentRequestId: string): Promise<void> {
+  const pr = await prisma.paymentRequest.findUniqueOrThrow({
+    where: { id: paymentRequestId },
+  });
+
+  if (pr.dueTodaySentAt) return; // Already sent
+
+  let billingName = "Client";
+  let to = "";
+
+  if (pr.studentId) {
+    const student = await prisma.student.findUnique({ where: { id: pr.studentId } });
+    if (student) {
+      billingName = `${student.firstName} ${student.lastName}`;
+      to = student.billingEmail ?? student.email;
+    }
+  } else if (pr.billingEntityId) {
+    const entity = await prisma.billingEntity.findUnique({ where: { id: pr.billingEntityId } });
+    if (entity) {
+      billingName = entity.contactPerson || entity.name;
+      to = entity.email;
+    }
+  }
+
+  if (!to) return;
+
+  const { subject, html } = await renderEmail("payment_request_due_today", {
+    billingName,
+    total: fmt(pr.totalCents, pr.currency),
+    paymentUrl: pr.paymentUrl || "#",
+  });
+
+  await sendEmail({
+    to,
+    subject,
+    html,
+    templateKey: "payment_request_due_today",
+    studentId: pr.studentId ?? undefined,
+    metadata: { paymentRequestId: pr.id },
+  });
+
+  await prisma.paymentRequest.update({
+    where: { id: paymentRequestId },
+    data: { dueTodaySentAt: new Date() },
+  });
+}
+
 // ─── Send Overdue Notice ─────────────────────────────────────
 
 /**

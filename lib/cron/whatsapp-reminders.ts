@@ -255,7 +255,47 @@ async function processBillingReminders(
     }
   }
 
-  // 3. Overdue notice — 1 business day after due
+  // 3. Due today notice — on the actual due date
+  let sentDueToday = 0;
+  const dueTodayPending = await prisma.paymentRequest.findMany({
+    where: {
+      status: "pending",
+      whatsappDueTodaySentAt: null,
+      studentId: { not: null },
+    },
+  });
+
+  for (const pr of dueTodayPending) {
+    if (!isSameDay(today, pr.dueDate)) continue;
+
+    const contact = await resolveStudentPhone(pr.studentId);
+    if (!contact) continue;
+
+    const result = await sendAndLogTemplate({
+      studentId: contact.studentId,
+      phone: contact.phone,
+      templateName: "billing_due_today",
+      components: [{
+        type: "body",
+        parameters: [
+          { type: "text", text: contact.firstName },
+          { type: "text", text: formatCents(pr.totalCents, pr.currency) },
+          { type: "text", text: pr.paymentUrl || "" },
+        ],
+      }],
+      metadata: { paymentRequestId: pr.id },
+    });
+
+    if (result.success) {
+      await prisma.paymentRequest.update({
+        where: { id: pr.id },
+        data: { whatsappDueTodaySentAt: new Date() },
+      });
+      sentDueToday++;
+    }
+  }
+
+  // 4. Overdue notice — 1 business day after due
   let sentOverdue = 0;
   const stillUnpaid = await prisma.paymentRequest.findMany({
     where: {
@@ -298,7 +338,7 @@ async function processBillingReminders(
     }
   }
 
-  return { sentRequest, sentReminder, sentOverdue };
+  return { sentRequest, sentReminder, sentDueToday, sentOverdue };
 }
 
 // ─── Credit Expiry Reminders ─────────────────────────────────

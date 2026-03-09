@@ -18,6 +18,7 @@ import { generateMonthlyPaymentRequests } from "@/lib/generate-payment-requests"
 import {
   sendPaymentRequestEmail,
   sendPaymentReminder,
+  sendDueTodayNotice,
   sendOverdueNotice,
 } from "@/lib/send-invoice";
 import { formatInTimeZone } from "date-fns-tz";
@@ -40,6 +41,7 @@ function getSASTToday(): Date {
 export async function processMonthlyBilling(): Promise<{
   billing: { generated: number } | null;
   reminders: { sent: number } | null;
+  dueToday: { sent: number } | null;
   overdue: { sent: number } | null;
 }> {
   const settings = await getSiteSettings();
@@ -50,8 +52,9 @@ export async function processMonthlyBilling(): Promise<{
   const result: {
     billing: { generated: number } | null;
     reminders: { sent: number } | null;
+    dueToday: { sent: number } | null;
     overdue: { sent: number } | null;
-  } = { billing: null, reminders: null, overdue: null };
+  } = { billing: null, reminders: null, dueToday: null, overdue: null };
 
   // 1. Is today the effective billing date?
   const billingDate = getEffectiveBillingDate(year, month);
@@ -98,7 +101,30 @@ export async function processMonthlyBilling(): Promise<{
     result.reminders = { sent: remindersSent };
   }
 
-  // 3. Overdue check (1 business day after due for any still-unpaid request)
+  // 3. Due today check (on the actual due date)
+  const dueTodayRequests = await prisma.paymentRequest.findMany({
+    where: {
+      status: "pending",
+      dueTodaySentAt: null,
+    },
+  });
+
+  let dueTodaySent = 0;
+  for (const req of dueTodayRequests) {
+    if (isSameDay(today, req.dueDate)) {
+      try {
+        await sendDueTodayNotice(req.id);
+        dueTodaySent++;
+      } catch (err) {
+        console.error(`[monthly-billing] Failed to send due-today notice for request ${req.id}:`, err);
+      }
+    }
+  }
+  if (dueTodaySent > 0) {
+    result.dueToday = { sent: dueTodaySent };
+  }
+
+  // 4. Overdue check (1 business day after due for any still-unpaid request)
   const stillUnpaid = await prisma.paymentRequest.findMany({
     where: {
       status: "pending",

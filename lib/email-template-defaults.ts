@@ -317,6 +317,16 @@ const defaults: Record<string, TemplateDefault> = {
 <p>If you&rsquo;ve already made payment, please disregard this message.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
+  payment_request_due_today: {
+    subject: "Payment due today — Life Therapy",
+    bodyHtml: `<p>Hi {{billingName}},</p>
+<p>This is a reminder that your payment of <strong>{{total}}</strong> is <strong>due today</strong>.</p>
+<div style="text-align: center; margin: 24px 0;">
+  <a href="{{paymentUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+</div>
+<p>If you&rsquo;ve already made payment, please disregard this message.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
   payment_request_overdue: {
     subject: "Payment overdue — Life Therapy {{month}}",
     bodyHtml: `<p>Hi {{billingName}},</p>
