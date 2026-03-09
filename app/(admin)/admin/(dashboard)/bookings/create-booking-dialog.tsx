@@ -21,7 +21,7 @@ import {
 import { ReschedulePicker } from "@/components/booking/reschedule-picker";
 import { SESSION_TYPES } from "@/lib/booking-config";
 import {
-  generateRecurringDates,
+  generateRecurringDatesUntil,
   RECURRING_PATTERNS,
   type RecurringPattern,
 } from "@/lib/recurring-dates";
@@ -63,12 +63,12 @@ interface PartnerOption {
 type BookingMode = "single" | "recurring";
 type SessionLocation = "online" | "in_person";
 
-const DURATION_OPTIONS = [
-  { value: 3, label: "3 months" },
-  { value: 6, label: "6 months" },
-  { value: 9, label: "9 months" },
-  { value: 12, label: "12 months" },
-];
+/** Default "repeat until" date: 3 months from today */
+function defaultEndDate(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 3);
+  return d.toISOString().slice(0, 10);
+}
 
 export function CreateBookingDialog() {
   const router = useRouter();
@@ -108,7 +108,7 @@ export function CreateBookingDialog() {
 
   // Recurring options
   const [recurringPattern, setRecurringPattern] = useState<RecurringPattern>("weekly");
-  const [recurringMonths, setRecurringMonths] = useState(6);
+  const [recurringEndDate, setRecurringEndDate] = useState(defaultEndDate);
 
   // Recurring: selected first date + time from picker (captured when user confirms in picker)
   const [recurringDate, setRecurringDate] = useState("");
@@ -134,9 +134,9 @@ export function CreateBookingDialog() {
 
   // Generate recurring dates preview
   const recurringDates = useMemo(() => {
-    if (!recurringDate) return [];
-    return generateRecurringDates(recurringDate, recurringPattern, recurringMonths);
-  }, [recurringDate, recurringPattern, recurringMonths]);
+    if (!recurringDate || !recurringEndDate) return [];
+    return generateRecurringDatesUntil(recurringDate, recurringPattern, recurringEndDate);
+  }, [recurringDate, recurringPattern, recurringEndDate]);
 
   // Search clients with debounce
   const searchClients = useCallback(async (q: string) => {
@@ -210,7 +210,7 @@ export function CreateBookingDialog() {
     setSelectedPartnerName("");
     setCustomPartnerName("");
     setRecurringPattern("weekly");
-    setRecurringMonths(6);
+    setRecurringEndDate(defaultEndDate());
     setRecurringDate("");
     setRecurringStartTime("");
     setRecurringEndTime("");
@@ -289,7 +289,7 @@ export function CreateBookingDialog() {
           startTime: recurringStartTime,
           endTime: recurringEndTime,
           pattern: recurringPattern,
-          months: recurringMonths,
+          endDate: recurringEndDate,
           useCredits: useCredit && !config.isFree,
           adminNotes: adminNotes.trim() || undefined,
           couplesPartnerName: effectivePartnerName,
@@ -618,22 +618,14 @@ export function CreateBookingDialog() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Duration</Label>
-                    <Select
-                      value={String(recurringMonths)}
-                      onValueChange={(v) => setRecurringMonths(Number(v))}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DURATION_OPTIONS.map((d) => (
-                          <SelectItem key={d.value} value={String(d.value)}>
-                            {d.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-xs">Repeat until</Label>
+                    <input
+                      type="date"
+                      value={recurringEndDate}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setRecurringEndDate(e.target.value)}
+                      className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
                   </div>
                 </div>
               </div>
@@ -729,7 +721,7 @@ export function CreateBookingDialog() {
               extra={
                 <span className="text-xs text-muted-foreground">
                   <Repeat className="mr-0.5 inline h-3 w-3" />
-                  {RECURRING_PATTERNS.find((p) => p.value === recurringPattern)?.label} for {recurringMonths} months
+                  {RECURRING_PATTERNS.find((p) => p.value === recurringPattern)?.label} until {recurringEndDate ? format(new Date(recurringEndDate + "T12:00:00"), "d MMM yyyy") : "—"}
                 </span>
               }
             />
@@ -773,6 +765,8 @@ export function CreateBookingDialog() {
               </p>
               <p className="text-sm text-muted-foreground">
                 Every {RECURRING_PATTERNS.find((p) => p.value === recurringPattern)?.label.toLowerCase()} on {dayOfWeek}s at {recurringStartTime} – {recurringEndTime}
+                {" "}· until {recurringEndDate ? format(new Date(recurringEndDate + "T12:00:00"), "d MMM yyyy") : ""}
+                {" "}· public holidays excluded
               </p>
               {!config.isFree && useCredit && creditBalance !== null && (
                 <p className="text-sm text-muted-foreground">

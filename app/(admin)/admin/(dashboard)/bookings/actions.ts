@@ -13,7 +13,7 @@ import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
 import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
-import { generateRecurringDates, type RecurringPattern } from "@/lib/recurring-dates";
+import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
@@ -320,7 +320,7 @@ interface AdminCreateRecurringData {
   startTime: string;
   endTime: string;
   pattern: RecurringPattern;
-  months: number;
+  endDate: string;
   useCredits: boolean;
   adminNotes?: string;
   couplesPartnerName?: string;
@@ -338,7 +338,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
   const config = getSessionTypeConfig(data.sessionType);
   const isPostpaid = student.billingType === "postpaid";
   const clientName = `${student.firstName} ${student.lastName}`.trim();
-  const dates = generateRecurringDates(data.startDate, data.pattern, data.months);
+  const dates = generateRecurringDatesUntil(data.startDate, data.pattern, data.endDate);
 
   // Check credits (skip for postpaid — sessions will be invoiced monthly)
   let creditsRemaining = 0;
