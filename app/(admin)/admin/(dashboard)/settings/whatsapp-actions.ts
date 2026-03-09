@@ -79,7 +79,8 @@ const DEFAULT_TEMPLATES = [
   { name: "session_reminder_today", bodyText: "Hi {{1}}, your session is today at {{2}}. Join here: {{3}}", description: "Sent morning of session", sortOrder: 2 },
   { name: "billing_request", bodyText: "Hi {{1}}, your {{2}} invoice of {{3}} is due by {{4}}. Pay here: {{5}}", description: "Sent when payment request is created", sortOrder: 3 },
   { name: "billing_reminder", bodyText: "Hi {{1}}, a friendly reminder that {{2}} is due by {{3}}. Pay here: {{4}}", description: "Sent 2 days before due date", sortOrder: 4 },
-  { name: "billing_overdue", bodyText: "Hi {{1}}, your payment of {{2}} for {{3}} is overdue. Please pay here: {{4}}", description: "Sent 1 day after due date", sortOrder: 5 },
+  { name: "billing_due_today", bodyText: "Hi {{1}}, your payment of {{2}} is due today. Pay here: {{3}}", description: "Sent on the due date", sortOrder: 5 },
+  { name: "billing_overdue", bodyText: "Hi {{1}}, your payment of {{2}} for {{3}} is overdue. Please pay here: {{4}}", description: "Sent 1 day after due date", sortOrder: 6 },
   { name: "credit_expiry_14d", bodyText: "Hi {{1}}, you have {{2}} session credit(s) expiring on {{3}}. Book now to use them!", description: "Sent 14 days before credits expire", sortOrder: 6 },
   { name: "credit_expiry_3d", bodyText: "Hi {{1}}, your {{2}} session credit(s) expire on {{3}} — only 3 days left!", description: "Sent 3 days before credits expire", sortOrder: 7 },
 ];
@@ -91,9 +92,11 @@ export async function getWhatsAppTemplatesAction() {
     orderBy: { sortOrder: "asc" },
   });
 
-  // Seed defaults if empty
-  if (templates.length === 0) {
-    await prisma.whatsAppTemplate.createMany({ data: DEFAULT_TEMPLATES });
+  // Ensure all default templates exist (upsert by name)
+  const existingNames = new Set(templates.map((t) => t.name));
+  const missing = DEFAULT_TEMPLATES.filter((t) => !existingNames.has(t.name));
+  if (missing.length > 0) {
+    await prisma.whatsAppTemplate.createMany({ data: missing });
     return prisma.whatsAppTemplate.findMany({ orderBy: { sortOrder: "asc" } });
   }
 
