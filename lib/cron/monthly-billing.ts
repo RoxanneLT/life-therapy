@@ -54,7 +54,7 @@ export async function processMonthlyBilling(): Promise<{
   } = { billing: null, reminders: null, overdue: null };
 
   // 1. Is today the effective billing date?
-  const billingDate = getEffectiveBillingDate(year, month, settings.postpaidBillingDay);
+  const billingDate = getEffectiveBillingDate(year, month);
   if (isSameDay(today, billingDate)) {
     try {
       const requests = await generateMonthlyPaymentRequests(billingDate);

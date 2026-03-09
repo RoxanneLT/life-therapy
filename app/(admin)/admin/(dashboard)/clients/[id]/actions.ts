@@ -798,12 +798,10 @@ export async function billToDateAction(studentId: string) {
     throw new Error("Bill to date is only available for postpaid clients");
   }
 
-  const settings = await getSiteSettings();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-  const billingDay = settings.postpaidBillingDay;
-  const { start: periodStart } = getBillingPeriod(year, month, billingDay);
+  const { start: periodStart } = getBillingPeriod(year, month);
 
   const bookings = await getUnbilledBookings(studentId, periodStart, now);
   if (bookings.length === 0) {

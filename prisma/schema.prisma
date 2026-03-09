@@ -188,8 +188,8 @@ model SiteSetting {
   bankAccountHolder          String?
   bankAccountNumber          String?
   bankBranchCode             String?
-  postpaidBillingDay         Int      @default(20)
-  postpaidDueDay             Int      @default(28)
+  postpaidDueDays            Int      @default(7)
+  postpaidDueDaysType        String   @default("business")
   businessAddress            String?  @db.Text
   // WhatsApp Cloud API
   whatsappEnabled           Boolean  @default(false)

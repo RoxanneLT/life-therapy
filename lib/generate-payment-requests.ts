@@ -16,7 +16,7 @@ import {
   getSessionRate,
   calculateInvoiceTotals,
   getBillingPeriod,
-  getEffectiveDueDate,
+  calculateDueDate,
   type BillingContact,
 } from "@/lib/billing";
 import type { InvoiceLineItem } from "@/lib/billing-types";
@@ -223,13 +223,15 @@ export async function generateMonthlyPaymentRequests(
   billingDate: Date,
 ) {
   const settings = await getSiteSettings();
-  const billingDay = settings.postpaidBillingDay;
-  const dueDay = settings.postpaidDueDay;
   const year = billingDate.getFullYear();
   const month = billingDate.getMonth() + 1; // 1-indexed
 
-  const { start: periodStart, end: periodEnd } = getBillingPeriod(year, month, billingDay);
-  const dueDate = getEffectiveDueDate(year, month, dueDay);
+  const { start: periodStart, end: periodEnd } = getBillingPeriod(year, month);
+  const dueDate = calculateDueDate(
+    billingDate,
+    settings.postpaidDueDays,
+    settings.postpaidDueDaysType as "business" | "calendar",
+  );
   const billingMonth = `${year}-${String(month).padStart(2, "0")}`;
 
   // 1. Get all postpaid students

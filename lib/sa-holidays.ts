@@ -163,3 +163,13 @@ export function subtractBusinessDays(date: Date, days: number): Date {
   }
   return d;
 }
+
+/**
+ * Returns the last business day of the given month.
+ * month is 1-indexed (1 = Jan, 12 = Dec).
+ */
+export function getLastBusinessDayOfMonth(year: number, month: number): Date {
+  // new Date(year, month, 0) = last calendar day of the month (month is 1-indexed here)
+  const lastCalendarDay = new Date(year, month, 0);
+  return getPrecedingBusinessDay(lastCalendarDay);
+}

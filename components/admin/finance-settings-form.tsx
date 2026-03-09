@@ -51,16 +51,11 @@ const SECTIONS: Section[] = [
   { id: "invoice", label: "Invoice Template", icon: FileText },
 ];
 
-// ─── Day options ──────────────────────────────────────────────
-
-const DAY_OPTIONS = Array.from({ length: 28 }, (_, i) => i + 1);
-
-function ordinalSuffix(n: number): string {
-  if (n === 1 || n === 21) return "st";
-  if (n === 2 || n === 22) return "nd";
-  if (n === 3 || n === 23) return "rd";
-  return "th";
-}
+const DUE_DAYS_OPTIONS = [
+  { value: "5", label: "5 days" },
+  { value: "7", label: "7 days" },
+  { value: "14", label: "14 days" },
+];
 
 // ─── Component ────────────────────────────────────────────────
 
@@ -146,11 +141,11 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
   );
 
   // Billing schedule
-  const [postpaidBillingDay, setPostpaidBillingDay] = useState(
-    initialSettings.postpaidBillingDay?.toString() || "20",
+  const [postpaidDueDays, setPostpaidDueDays] = useState(
+    initialSettings.postpaidDueDays?.toString() || "7",
   );
-  const [postpaidDueDay, setPostpaidDueDay] = useState(
-    initialSettings.postpaidDueDay?.toString() || "28",
+  const [postpaidDueDaysType, setPostpaidDueDaysType] = useState<"business" | "calendar">(
+    (initialSettings.postpaidDueDaysType as "business" | "calendar") || "business",
   );
 
   // Banking
@@ -204,8 +199,8 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
       formData.set("sessionPriceCouplesGbp", sessionPriceCouplesGbp);
 
       // Billing schedule
-      formData.set("postpaidBillingDay", postpaidBillingDay);
-      formData.set("postpaidDueDay", postpaidDueDay);
+      formData.set("postpaidDueDays", postpaidDueDays);
+      formData.set("postpaidDueDaysType", postpaidDueDaysType);
 
       // Banking
       formData.set("bankName", bankName);
@@ -611,82 +606,80 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm font-medium">Billing Day</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Payment requests are generated on the{" "}
+                  <span className="font-medium text-foreground">last business day of each month</span>{" "}
+                  (Mon–Fri, excluding SA public holidays). This is automatic and not configurable.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Billing Day</Label>
+                  <Label>Due In</Label>
                   <Select
-                    value={postpaidBillingDay}
-                    onValueChange={(v) => { setPostpaidBillingDay(v); markDirty(); }}
+                    value={postpaidDueDays}
+                    onValueChange={(v) => { setPostpaidDueDays(v); markDirty(); }}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {DAY_OPTIONS.map((d) => (
-                        <SelectItem key={d} value={d.toString()}>
-                          {d}{ordinalSuffix(d)}
+                      {DUE_DAYS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Day of the month when payment requests are generated
+                    Days after billing date when payment is due
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Due Day</Label>
-                  <Select
-                    value={postpaidDueDay}
-                    onValueChange={(v) => { setPostpaidDueDay(v); markDirty(); }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DAY_OPTIONS.map((d) => (
-                        <SelectItem key={d} value={d.toString()}>
-                          {d}{ordinalSuffix(d)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Day Type</Label>
+                  <div className="flex rounded-md border overflow-hidden">
+                    {(["business", "calendar"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => { setPostpaidDueDaysType(type); markDirty(); }}
+                        className={cn(
+                          "flex-1 px-3 py-2 text-sm font-medium transition-colors",
+                          postpaidDueDaysType === type
+                            ? "bg-brand-600 text-white"
+                            : "bg-background text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {type === "business" ? "Business days" : "Calendar days"}
+                      </button>
+                    ))}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Day of the month when payment is due
+                    {postpaidDueDaysType === "business"
+                      ? "Skips weekends and SA public holidays"
+                      : "Calendar days; if due date falls on a weekend, shifts to Monday"}
                   </p>
                 </div>
               </div>
-
-              {Number.parseInt(postpaidDueDay) <= Number.parseInt(postpaidBillingDay) && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  Due day must be after billing day. Please adjust.
-                </div>
-              )}
 
               <div className="rounded-lg bg-muted/50 p-4 text-sm">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">
                   Schedule
                 </p>
                 <ul className="space-y-1 text-muted-foreground">
+                  <li>Payment requests sent on the <span className="font-medium text-foreground">last business day of each month</span></li>
                   <li>
-                    Payment requests sent on the{" "}
+                    Payment due{" "}
                     <span className="font-medium text-foreground">
-                      {postpaidBillingDay}{ordinalSuffix(Number.parseInt(postpaidBillingDay))}
+                      {postpaidDueDays} {postpaidDueDaysType} day{postpaidDueDays === "1" ? "" : "s"}
                     </span>{" "}
-                    of each month
-                  </li>
-                  <li>
-                    Payment due by the{" "}
-                    <span className="font-medium text-foreground">
-                      {postpaidDueDay}{ordinalSuffix(Number.parseInt(postpaidDueDay))}
-                    </span>
+                    after billing date
                   </li>
                   <li>Friendly reminder sent 2 business days before due date</li>
                   <li>Overdue notice sent 1 business day after due date</li>
                 </ul>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Dates falling on weekends or SA public holidays are
-                  automatically shifted to the preceding business day.
-                </p>
               </div>
 
               {nextDates && (

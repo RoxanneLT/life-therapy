@@ -6,38 +6,43 @@
 import { getSiteSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 import {
-  getPrecedingBusinessDay,
   subtractBusinessDays,
   getNextBusinessDay,
+  addBusinessDays,
+  getLastBusinessDayOfMonth,
 } from "@/lib/sa-holidays";
 
 // ─── Date utilities ──────────────────────────────────────────
 
 /**
- * Returns the effective billing date for a month, shifted to the
- * preceding business day if it falls on a weekend or SA public holiday.
+ * Returns the effective billing date for a month: the last business day of the month.
+ * month is 1-indexed (1 = Jan).
  */
-export function getEffectiveBillingDate(
-  year: number,
-  month: number,
-  billingDay: number,
-): Date {
-  // month is 1-indexed (1 = Jan)
-  const raw = new Date(year, month - 1, billingDay);
-  return getPrecedingBusinessDay(raw);
+export function getEffectiveBillingDate(year: number, month: number): Date {
+  return getLastBusinessDayOfMonth(year, month);
 }
 
 /**
- * Returns the effective due date for a month, shifted to the
- * preceding business day if it falls on a weekend or SA public holiday.
+ * Returns the due date by adding N days to the billing date.
+ *
+ * type "business": skip weekends and SA public holidays.
+ * type "calendar": add calendar days; if result lands on Sat/Sun, shift to next Monday.
  */
-export function getEffectiveDueDate(
-  year: number,
-  month: number,
-  dueDay: number,
+export function calculateDueDate(
+  billingDate: Date,
+  days: number,
+  type: "business" | "calendar",
 ): Date {
-  const raw = new Date(year, month - 1, dueDay);
-  return getPrecedingBusinessDay(raw);
+  if (type === "business") {
+    return addBusinessDays(billingDate, days);
+  }
+  // Calendar days
+  const d = new Date(billingDate);
+  d.setDate(d.getDate() + days);
+  const dow = d.getDay();
+  if (dow === 6) d.setDate(d.getDate() + 2); // Sat → Mon
+  else if (dow === 0) d.setDate(d.getDate() + 1); // Sun → Mon
+  return d;
 }
 
 /**
@@ -70,9 +75,8 @@ export function getOverdueDate(dueDate: Date): Date {
 export function getBillingPeriod(
   year: number,
   month: number,
-  billingDay: number,
 ): { start: Date; end: Date } {
-  const end = getEffectiveBillingDate(year, month, billingDay);
+  const end = getEffectiveBillingDate(year, month);
 
   // Previous month
   let prevMonth = month - 1;
@@ -81,7 +85,7 @@ export function getBillingPeriod(
     prevMonth = 12;
     prevYear = year - 1;
   }
-  const prevBillingDate = getEffectiveBillingDate(prevYear, prevMonth, billingDay);
+  const prevBillingDate = getEffectiveBillingDate(prevYear, prevMonth);
   const start = new Date(prevBillingDate);
   start.setDate(start.getDate() + 1);
 

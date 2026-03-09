@@ -9,7 +9,7 @@ import { SettingsTabs } from "./settings-tabs";
 import { UsersPanel } from "./users-panel";
 import {
   getEffectiveBillingDate,
-  getEffectiveDueDate,
+  calculateDueDate,
   getReminderDate,
   getOverdueDate,
 } from "@/lib/billing";
@@ -68,8 +68,12 @@ export default async function AdminSettingsPage({ searchParams }: Props) {
     const nextMonth = now.getMonth() + 2;
     const year = nextMonth > 12 ? now.getFullYear() + 1 : now.getFullYear();
     const month = nextMonth > 12 ? 1 : nextMonth;
-    const billingDate = getEffectiveBillingDate(year, month, settings.postpaidBillingDay);
-    const dueDate = getEffectiveDueDate(year, month, settings.postpaidDueDay);
+    const billingDate = getEffectiveBillingDate(year, month);
+    const dueDate = calculateDueDate(
+      billingDate,
+      settings.postpaidDueDays,
+      settings.postpaidDueDaysType as "business" | "calendar",
+    );
     const reminderDate = getReminderDate(dueDate);
     const overdueDate = getOverdueDate(dueDate);
     nextDates = {

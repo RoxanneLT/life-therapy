@@ -20,16 +20,12 @@ export async function updateFinanceSettings(formData: FormData): Promise<{ succe
     return Number.isNaN(n) ? null : n;
   };
 
-  const postpaidBillingDay = raw.postpaidBillingDay
-    ? Number.parseInt(raw.postpaidBillingDay as string, 10) || 20
-    : 20;
-  const postpaidDueDay = raw.postpaidDueDay
-    ? Number.parseInt(raw.postpaidDueDay as string, 10) || 28
-    : 28;
-
-  if (postpaidDueDay <= postpaidBillingDay) {
-    return { success: false, error: "Due day must be after billing day" };
-  }
+  const postpaidDueDays = raw.postpaidDueDays
+    ? Number.parseInt(raw.postpaidDueDays as string, 10) || 7
+    : 7;
+  const postpaidDueDaysType = (raw.postpaidDueDaysType as string) === "calendar"
+    ? "calendar"
+    : "business";
 
   const data = {
     // Business details
@@ -53,8 +49,8 @@ export async function updateFinanceSettings(formData: FormData): Promise<{ succe
     sessionPriceCouplesGbp: toInt(raw.sessionPriceCouplesGbp),
 
     // Billing schedule
-    postpaidBillingDay,
-    postpaidDueDay,
+    postpaidDueDays,
+    postpaidDueDaysType,
 
     // Banking
     bankName: toNullable(raw.bankName),

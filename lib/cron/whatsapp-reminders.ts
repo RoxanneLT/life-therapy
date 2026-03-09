@@ -178,11 +178,7 @@ async function processBillingReminders(
     },
   });
 
-  const billingDate = getEffectiveBillingDate(
-    today.getFullYear(),
-    today.getMonth() + 1,
-    settings.postpaidBillingDay,
-  );
+  const billingDate = getEffectiveBillingDate(today.getFullYear(), today.getMonth() + 1);
 
   if (isSameDay(today, billingDate)) {
     for (const pr of pendingNew) {
