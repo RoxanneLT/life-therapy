@@ -14,43 +14,109 @@ async function checkDuplicatePurchases(
   studentId: string,
   resolved: ResolvedItem[],
 ): Promise<string | null> {
-  const checks: { type: string; ids: string[]; lookup: () => Promise<string[]> }[] = [
-    {
-      type: "course",
-      ids: resolved.filter((r) => r.product.type === "course" && !r.isGift).map((r) => r.product.id),
-      lookup: async () => {
-        const rows = await prisma.enrollment.findMany({ where: { studentId, courseId: { in: checks[0].ids } }, select: { courseId: true } });
-        return rows.map((r) => r.courseId);
-      },
-    },
-    {
-      type: "module",
-      ids: resolved.filter((r) => r.product.type === "module" && !r.isGift).map((r) => r.product.id),
-      lookup: async () => {
-        const rows = await prisma.moduleAccess.findMany({ where: { studentId, moduleId: { in: checks[1].ids } }, select: { moduleId: true } });
-        return rows.map((r) => r.moduleId);
-      },
-    },
-    {
-      type: "digital_product",
-      ids: resolved.filter((r) => r.product.type === "digital_product" && !r.isGift).map((r) => r.product.id),
-      lookup: async () => {
-        const rows = await prisma.digitalProductAccess.findMany({ where: { studentId, digitalProductId: { in: checks[2].ids } }, select: { digitalProductId: true } });
-        return rows.map((r) => r.digitalProductId);
-      },
-    },
-  ];
+  const courseIds = resolved.filter((r) => r.product.type === "course" && !r.isGift).map((r) => r.product.id);
+  const moduleIds = resolved.filter((r) => r.product.type === "module" && !r.isGift).map((r) => r.product.id);
+  const digitalProductIds = resolved.filter((r) => r.product.type === "digital_product" && !r.isGift).map((r) => r.product.id);
 
-  for (const check of checks) {
-    if (check.ids.length === 0) continue;
-    const ownedIds = new Set(await check.lookup());
-    if (ownedIds.size > 0) {
-      const ownedTitles = resolved.filter((r) => ownedIds.has(r.product.id)).map((r) => r.product.title);
-      return `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.`;
+  const [ownedCourses, ownedModules, ownedDigital] = await Promise.all([
+    courseIds.length ? prisma.enrollment.findMany({ where: { studentId, courseId: { in: courseIds } }, select: { courseId: true } }) : [],
+    moduleIds.length ? prisma.moduleAccess.findMany({ where: { studentId, moduleId: { in: moduleIds } }, select: { moduleId: true } }) : [],
+    digitalProductIds.length ? prisma.digitalProductAccess.findMany({ where: { studentId, digitalProductId: { in: digitalProductIds } }, select: { digitalProductId: true } }) : [],
+  ]);
+
+  const ownedIds = new Set([
+    ...ownedCourses.map((r) => r.courseId),
+    ...ownedModules.map((r) => r.moduleId),
+    ...ownedDigital.map((r) => r.digitalProductId),
+  ]);
+
+  if (ownedIds.size > 0) {
+    const ownedTitles = resolved.filter((r) => ownedIds.has(r.product.id)).map((r) => r.product.title);
+    return `You already own: ${ownedTitles.join(", ")}. Please remove ${ownedTitles.length === 1 ? "it" : "them"} from your cart.`;
+  }
+
+  return null;
+}
+
+/**
+ * For gift items, check if the recipient (looked up by email) already owns the item.
+ * Returns an error message if any recipient already has what's being gifted.
+ */
+async function checkGiftRecipientOwnership(resolved: ResolvedItem[]): Promise<string | null> {
+  const giftItems = resolved.filter((r) => r.isGift && r.giftRecipientEmail);
+  if (giftItems.length === 0) return null;
+
+  const recipientEmails = [...new Set(giftItems.map((r) => r.giftRecipientEmail!.toLowerCase()))];
+  const recipients = await prisma.student.findMany({
+    where: { email: { in: recipientEmails } },
+    select: { id: true, email: true, firstName: true },
+  });
+  if (recipients.length === 0) return null;
+
+  const recipientMap = new Map(recipients.map((s) => [s.email.toLowerCase(), s]));
+
+  for (const item of giftItems) {
+    const recipient = recipientMap.get(item.giftRecipientEmail!.toLowerCase());
+    if (!recipient) continue;
+
+    const alreadyOwns =
+      (item.product.type === "course" &&
+        (await prisma.enrollment.findUnique({
+          where: { studentId_courseId: { studentId: recipient.id, courseId: item.product.id } },
+        }))) ||
+      (item.product.type === "module" &&
+        (await prisma.moduleAccess.findUnique({
+          where: { studentId_moduleId: { studentId: recipient.id, moduleId: item.product.id } },
+        })));
+
+    if (alreadyOwns) {
+      return `${recipient.firstName} already owns "${item.product.title}". Please select a different course to gift.`;
     }
   }
 
   return null;
+}
+
+/**
+ * Calculate upgrade discounts for full-course purchases where the buyer/recipient
+ * already owns short courses (standalone modules) from that course.
+ * Deducts the amount already paid for those modules from the full course price.
+ * Returns the total upgrade discount in cents.
+ */
+async function calculateUpgradeDiscounts(studentId: string, resolved: ResolvedItem[]): Promise<number> {
+  let totalUpgradeDiscount = 0;
+
+  for (const item of resolved) {
+    if (item.product.type !== "course") continue;
+
+    const courseId = item.product.id;
+    let checkStudentId = studentId;
+
+    // For gifts, check the recipient's ownership
+    if (item.isGift && item.giftRecipientEmail) {
+      const recipient = await prisma.student.findUnique({
+        where: { email: item.giftRecipientEmail.toLowerCase() },
+        select: { id: true },
+      });
+      if (!recipient) continue;
+      checkStudentId = recipient.id;
+    }
+
+    // Find any standalone module access the student/recipient already has for this course
+    const existingAccess = await prisma.moduleAccess.findMany({
+      where: { studentId: checkStudentId, courseId },
+      select: { pricePaid: true, module: { select: { title: true } } },
+    });
+
+    if (existingAccess.length === 0) continue;
+
+    const alreadyPaid = existingAccess.reduce((sum, a) => sum + (a.pricePaid ?? 0), 0);
+    // Discount = what they already paid, capped at the full course price
+    const discount = Math.min(alreadyPaid, item.product.priceCents);
+    totalUpgradeDiscount += discount;
+  }
+
+  return totalUpgradeDiscount;
 }
 
 /** Persist gift cart items to DB so the webhook can access recipient details */
@@ -113,17 +179,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No valid items in cart" }, { status: 400 });
     }
 
-    // Duplicate purchase prevention
+    // Duplicate purchase prevention (self)
     const duplicateError = await checkDuplicatePurchases(auth.student.id, resolved);
     if (duplicateError) {
       return NextResponse.json({ error: duplicateError }, { status: 400 });
     }
 
+    // Duplicate purchase prevention (gift recipients)
+    const giftOwnershipError = await checkGiftRecipientOwnership(resolved);
+    if (giftOwnershipError) {
+      return NextResponse.json({ error: giftOwnershipError }, { status: 400 });
+    }
+
     // Calculate subtotal from server-verified prices
     const subtotalCents = resolved.reduce((sum, r) => sum + r.product.priceCents * r.quantity, 0);
 
+    // Upgrade discount: buyer/recipient already owns short courses from this full course
+    const upgradeDiscountCents = await calculateUpgradeDiscounts(auth.student.id, resolved);
+
     // Validate coupon if provided
-    let discountCents = 0;
+    let discountCents = upgradeDiscountCents;
     let couponId: string | null = null;
     if (couponCode) {
       const courseIds = resolved.filter((r) => r.product.type === "course").map((r) => r.product.id);

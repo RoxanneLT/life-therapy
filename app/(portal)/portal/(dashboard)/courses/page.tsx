@@ -45,11 +45,9 @@ export default async function MyCoursesPage() {
     }),
   ]);
 
-  // Filter out module access for courses where student has full enrollment
-  const enrolledCourseIds = new Set(enrollments.map((e) => e.course.id));
-  const standaloneAccess = moduleAccessRecords.filter(
-    (ma) => !enrolledCourseIds.has(ma.module.courseId)
-  );
+  // Show all standalone module access — even if student also has full course enrollment,
+  // they paid for it separately and should see it as its own item.
+  const standaloneAccess = moduleAccessRecords;
 
   // Get completed lecture counts per enrollment
   const enrichedCourses = await Promise.all(
