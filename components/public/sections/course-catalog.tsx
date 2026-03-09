@@ -80,6 +80,7 @@ export async function CourseCatalog({
       ? prisma.module.findMany({
           where: {
             isStandalonePublished: true,
+            course: { isPublished: true },
             ...(categoryFilter !== "all"
               ? { standaloneCategory: categoryFilter }
               : {}),

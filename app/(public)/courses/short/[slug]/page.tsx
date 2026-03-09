@@ -50,6 +50,7 @@ export default async function ShortCourseDetailPage({
           id: true,
           title: true,
           slug: true,
+          isPublished: true,
           price: true,
           priceUsd: true,
           priceEur: true,
@@ -64,7 +65,7 @@ export default async function ShortCourseDetailPage({
     },
   });
 
-  if (!mod || !mod.isStandalonePublished) {
+  if (!mod || !mod.isStandalonePublished || !mod.course.isPublished) {
     notFound();
   }
 
