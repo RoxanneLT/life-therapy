@@ -48,6 +48,7 @@ export const courseSchema = z.object({
   level: z.string().optional(),
   isPublished: z.boolean().default(false),
   isFeatured: z.boolean().default(false),
+  isShortCourse: z.boolean().default(false),
   sortOrder: z.coerce.number().int().default(0),
   previewVideoUrl: z.string().optional().or(z.literal("")),
   facilitatorScript: z.string().optional(),

@@ -27,7 +27,7 @@ export default async function EditPackagePage({
     }),
     prisma.course.findMany({
       where: { isPublished: true },
-      select: { id: true, title: true },
+      select: { id: true, title: true, isShortCourse: true },
       orderBy: { title: "asc" },
     }),
     prisma.digitalProduct.findMany({

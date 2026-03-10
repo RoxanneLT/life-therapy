@@ -52,7 +52,7 @@ export default async function PackageDetailPage({
   const [fixedCourses, fixedDigitalProducts] = pkg.isFixed
     ? await Promise.all([
         fixedCourseIds.length > 0
-          ? prisma.course.findMany({ where: { id: { in: fixedCourseIds } }, select: { id: true, title: true } })
+          ? prisma.course.findMany({ where: { id: { in: fixedCourseIds } }, select: { id: true, title: true, isShortCourse: true } })
           : Promise.resolve([]),
         fixedDigitalProductIds.length > 0
           ? prisma.digitalProduct.findMany({ where: { id: { in: fixedDigitalProductIds } }, select: { id: true, title: true } })
@@ -96,6 +96,9 @@ export default async function PackageDetailPage({
                   <div key={c.id} className="flex items-center gap-3">
                     <CheckCircle2 className="h-5 w-5 text-brand-500 shrink-0" />
                     <span>{c.title}</span>
+                    <span className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${c.isShortCourse ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400"}`}>
+                      {c.isShortCourse ? "Short Course" : "Full Course"}
+                    </span>
                   </div>
                 ))}
                 {fixedDigitalProducts.map((p) => (

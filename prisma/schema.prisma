@@ -70,6 +70,7 @@ model Course {
   level            String?        // Beginner, Intermediate, Advanced
   isPublished      Boolean        @default(false)
   isFeatured       Boolean        @default(false)
+  isShortCourse    Boolean        @default(false) // Short/mini course vs full course
   sortOrder        Int            @default(0)
   previewVideoUrl  String?        // Sofia Hart intro video (YouTube/Vimeo/direct URL)
   facilitatorScript String?       @db.Text  // Script for Sofia Hart to introduce this course

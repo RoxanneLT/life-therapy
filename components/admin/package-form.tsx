@@ -23,6 +23,7 @@ import { PppPriceFields } from "@/components/admin/ppp-price-fields";
 interface SelectOption {
   id: string;
   title: string;
+  isShortCourse?: boolean;
 }
 
 interface PackageFormProps {
@@ -172,14 +173,13 @@ export function PackageForm({
 
         {isFixed ? (
           <div className="space-y-4 pt-2 border-t">
-            {/* Fixed courses */}
-            {availableCourses.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Included Courses
-                </Label>
+            {/* Fixed courses — grouped by type */}
+            {availableCourses.length > 0 && (() => {
+              const fullCourses = availableCourses.filter((c) => !c.isShortCourse);
+              const shortCourses = availableCourses.filter((c) => c.isShortCourse);
+              const CourseCheckboxList = ({ courses }: { courses: SelectOption[] }) => (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {availableCourses.map((c) => (
+                  {courses.map((c) => (
                     <label
                       key={c.id}
                       className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-accent/50"
@@ -192,8 +192,28 @@ export function PackageForm({
                     </label>
                   ))}
                 </div>
-              </div>
-            )}
+              );
+              return (
+                <div className="space-y-3">
+                  {fullCourses.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Full Courses
+                      </Label>
+                      <CourseCheckboxList courses={fullCourses} />
+                    </div>
+                  )}
+                  {shortCourses.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Short Courses
+                      </Label>
+                      <CourseCheckboxList courses={shortCourses} />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Fixed digital products */}
             {availableDigitalProducts.length > 0 && (
