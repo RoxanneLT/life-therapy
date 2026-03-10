@@ -6,8 +6,17 @@ import type { Booking, Order, OrderItem, Student } from "@/lib/generated/prisma/
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
-export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE_URL, unsubscribeUrl?: string): string {
+export function baseTemplate(
+  title: string,
+  body: string,
+  baseUrl = DEFAULT_BASE_URL,
+  unsubscribeUrl?: string,
+  contactEmail?: string,
+  contactPhone?: string,
+): string {
   const domain = baseUrl.replace(/^https?:\/\//, "");
+  const email = contactEmail || "hello@life-therapy.co.za";
+  const phone = contactPhone || "+27 71 017 0353";
   const unsubLine = unsubscribeUrl
     ? `<p style="margin: 8px 0 0;"><a href="${unsubscribeUrl}" style="color: #9ca3af; text-decoration: underline;">Unsubscribe from marketing emails</a></p>`
     : "";
@@ -27,7 +36,7 @@ export function baseTemplate(title: string, body: string, baseUrl = DEFAULT_BASE
     </div>
     <div style="border-top: 1px solid #e5e7eb; padding: 20px 24px; font-size: 12px; color: #6b7280; text-align: center;">
       <p style="margin: 0 0 4px;"><a href="${baseUrl}" style="color: #8BA889; text-decoration: none; font-weight: 600;">${domain}</a></p>
-      <p style="margin: 0;">hello@life-therapy.co.za &middot; +27 71 017 0353</p>
+      <p style="margin: 0;">${email} &middot; ${phone}</p>
       ${unsubLine}
     </div>
   </div>

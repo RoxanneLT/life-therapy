@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSiteSettings } from "@/lib/settings";
 import { baseTemplate } from "@/lib/email-templates";
 import * as fallback from "@/lib/email-templates";
 
@@ -9,7 +10,7 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
   portal_welcome: {
     firstName: "Jane",
     email: "jane@example.com",
-    tempPassword: "LT-Xk9mP2!",
+    tempPassword: "LT-Xk9mP2!", // NOSONAR — sample data for admin preview, not a real credential
     loginUrl: "https://life-therapy.co.za/login",
     sessionDate: "Tuesday, 11 March 2025",
     sessionTime: "10:00 – 10:30 (SAST)",
@@ -80,7 +81,7 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
   },
   account_provisioned: {
     firstName: "Jane",
-    tempPassword: "TempPass#2025",
+    tempPassword: "TempPass#2025", // NOSONAR — sample data for admin preview, not a real credential
     loginUrl: "https://life-therapy.co.za/portal/login",
   },
   password_reset: {
@@ -243,6 +244,17 @@ export async function renderEmail(
     ? `${baseUrl}/api/unsubscribe?token=${unsubscribeToken}`
     : undefined;
 
+  // Fetch site settings for footer contact details — graceful if DB unavailable
+  let contactEmail: string | undefined;
+  let contactPhone: string | undefined;
+  try {
+    const settings = await getSiteSettings();
+    contactEmail = settings.email ?? undefined;
+    contactPhone = settings.phone ?? undefined;
+  } catch {
+    // DB unavailable — fall through with hardcoded defaults in baseTemplate
+  }
+
   try {
     const template = await prisma.emailTemplate.findUnique({
       where: { key },
@@ -252,7 +264,7 @@ export async function renderEmail(
       const subject = replacePlaceholders(template.subject, variables);
       const bodyHtml = replacePlaceholders(template.bodyHtml, variables);
       const title = TEMPLATE_TITLES[key] || template.name;
-      const html = baseTemplate(title, bodyHtml, baseUrl, unsubscribeUrl);
+      const html = baseTemplate(title, bodyHtml, baseUrl, unsubscribeUrl, contactEmail, contactPhone);
       return { subject, html };
     }
   } catch {
@@ -260,7 +272,7 @@ export async function renderEmail(
   }
 
   // Fallback: use hardcoded templates
-  return renderFallback(key, variables, baseUrl, unsubscribeUrl);
+  return renderFallback(key, variables, baseUrl, unsubscribeUrl, contactEmail, contactPhone);
 }
 
 /**
@@ -273,11 +285,21 @@ export async function previewEmail(
 ): Promise<{ subject: string; html: string }> {
   const sampleVars = SAMPLE_DATA[key] || {};
 
+  let contactEmail: string | undefined;
+  let contactPhone: string | undefined;
+  try {
+    const settings = await getSiteSettings();
+    contactEmail = settings.email ?? undefined;
+    contactPhone = settings.phone ?? undefined;
+  } catch {
+    // DB unavailable — fall through with hardcoded defaults
+  }
+
   if (overrides?.subject && overrides?.bodyHtml) {
     const subject = replacePlaceholders(overrides.subject, sampleVars);
     const bodyHtml = replacePlaceholders(overrides.bodyHtml, sampleVars);
     const title = TEMPLATE_TITLES[key] || key;
-    const html = baseTemplate(title, bodyHtml);
+    const html = baseTemplate(title, bodyHtml, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
     return { subject, html };
   }
 
@@ -289,12 +311,12 @@ export async function previewEmail(
     const subject = replacePlaceholders(template.subject, sampleVars);
     const bodyHtml = replacePlaceholders(template.bodyHtml, sampleVars);
     const title = TEMPLATE_TITLES[key] || template.name;
-    const html = baseTemplate(title, bodyHtml);
+    const html = baseTemplate(title, bodyHtml, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
     return { subject, html };
   }
 
   // Fallback
-  return renderFallback(key, sampleVars);
+  return renderFallback(key, sampleVars, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
 }
 
 /**
@@ -309,8 +331,13 @@ function renderFallback(
   key: string,
   variables: Record<string, string>,
   baseUrl = DEFAULT_BASE_URL,
-  unsubscribeUrl?: string
+  unsubscribeUrl?: string,
+  contactEmail?: string,
+  contactPhone?: string,
 ): { subject: string; html: string } {
+  // Convenience wrapper that injects contact details into every baseTemplate call
+  const bt = (title: string, body: string) =>
+    baseTemplate(title, body, baseUrl, unsubscribeUrl, contactEmail, contactPhone);
   switch (key) {
     case "portal_welcome":
       return fallback.portalWelcomeEmail({
@@ -325,10 +352,9 @@ function renderFallback(
     case "booking_confirmation":
       return {
         subject: `Booking Confirmed: ${variables.sessionType || "Session"} on ${variables.date || ""}`,
-        html: baseTemplate(
+        html: bt(
           "Your Session is Confirmed!",
           `<p>Hi ${variables.clientName || ""},</p><p>Your session has been confirmed.</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "account_created":
@@ -371,7 +397,7 @@ function renderFallback(
     case "client_welcome":
       return {
         subject: "Welcome to Life-Therapy — You're All Set!",
-        html: baseTemplate(
+        html: bt(
           "Welcome to Life-Therapy!",
           `<p>Hi ${variables.clientName || ""},</p>
           <p>Welcome! You are now an active client at Life-Therapy. We're looking forward to supporting you on your journey.</p>
@@ -388,13 +414,12 @@ function renderFallback(
           </div>
           <p>If you have any questions, feel free to reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "password_reset":
       return {
         subject: "Reset Your Password — Life-Therapy",
-        html: baseTemplate(
+        html: bt(
           "Reset Your Password",
           `<p>Hi there,</p>
           <p>We received a request to reset your password. Click the button below to choose a new one:</p>
@@ -403,19 +428,17 @@ function renderFallback(
           </div>
           <p style="color: #6b7280; font-size: 13px;">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "password_changed":
       return {
         subject: "Your Life-Therapy password has been changed",
-        html: baseTemplate(
+        html: bt(
           "Password Changed",
           `<p>Hi ${variables.firstName || ""},</p>
           <p>Your password has been successfully changed.</p>
-          <p>If you did not make this change, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
+          <p>If you did not make this change, please contact us immediately at <a href="mailto:${contactEmail || "hello@life-therapy.co.za"}" style="color: #8BA889;">${contactEmail || "hello@life-therapy.co.za"}</a>.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "booking_reschedule": {
@@ -424,7 +447,7 @@ function renderFallback(
         : "";
       return {
         subject: `Session Rescheduled: ${variables.sessionType || "Session"} — New Date ${variables.newDate || ""}`,
-        html: baseTemplate(
+        html: bt(
           "Session Rescheduled",
           `<p>Hi ${variables.clientName || ""},</p>
           <p>Your session has been rescheduled. Here are the updated details:</p>
@@ -436,14 +459,13 @@ function renderFallback(
           ${teamsSection}
           <p>If you have any questions, feel free to reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     }
     case "booking_recurring_series":
       return {
         subject: `Your Upcoming ${variables.sessionType || "Sessions"} with Life-Therapy`,
-        html: baseTemplate(
+        html: bt(
           "Your Upcoming Sessions",
           `<p>Hi ${variables.clientName || ""},</p>
           <p>Your ${variables.pattern || ""} <strong>${variables.sessionType || ""}</strong> sessions have been scheduled. Here are your upcoming dates:</p>
@@ -455,13 +477,12 @@ function renderFallback(
           </div>
           <p>If you need to reschedule any individual session, you can do so from your portal or contact me directly.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "legal_document_updated":
       return {
         subject: `Updated ${variables.documentTitle || "Document"} — Please Review`,
-        html: baseTemplate(
+        html: bt(
           "Document Updated",
           `<p>Hi ${variables.firstName || ""},</p>
           <p>We've updated our <strong>${variables.documentTitle || "document"}</strong>. Here's a summary of what changed:</p>
@@ -474,13 +495,12 @@ function renderFallback(
           </div>
           <p style="color: #dc2626; font-weight: 600;">This is required to continue booking sessions.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "invoice":
       return {
         subject: `Life Therapy Invoice ${variables.invoiceNumber || ""}`,
-        html: baseTemplate(
+        html: bt(
           "Invoice",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>Please find your invoice attached.</p>
@@ -492,13 +512,12 @@ function renderFallback(
           <p>Your invoice is attached as a PDF to this email.</p>
           <p>If you have any questions about this invoice, please reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "payment_request":
       return {
         subject: `Your Life Therapy sessions for ${variables.month || ""}`,
-        html: baseTemplate(
+        html: bt(
           "Payment Request",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>Here is a summary of sessions for <strong>${variables.month || ""}</strong>:</p>
@@ -512,13 +531,12 @@ function renderFallback(
           </div>
           <p>If you have any questions, please reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "payment_request_reminder":
       return {
         subject: `Friendly reminder — payment due ${variables.dueDate || ""}`,
-        html: baseTemplate(
+        html: bt(
           "Payment Reminder",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>Just a friendly reminder that your payment of <strong>${variables.total || ""}</strong> is due on <strong>${variables.dueDate || ""}</strong>.</p>
@@ -527,13 +545,12 @@ function renderFallback(
           </div>
           <p>If you&rsquo;ve already made payment, please disregard this message.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "payment_request_due_today":
       return {
         subject: `Payment due today — Life Therapy`,
-        html: baseTemplate(
+        html: bt(
           "Payment Due Today",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>This is a reminder that your payment of <strong>${variables.total || ""}</strong> is <strong>due today</strong>.</p>
@@ -542,13 +559,12 @@ function renderFallback(
           </div>
           <p>If you&rsquo;ve already made payment, please disregard this message.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "payment_request_overdue":
       return {
         subject: `Payment overdue — Life Therapy ${variables.month || ""}`,
-        html: baseTemplate(
+        html: bt(
           "Payment Overdue",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>We notice that your payment of <strong>${variables.total || ""}</strong> for <strong>${variables.month || ""}</strong> is now overdue.</p>
@@ -558,13 +574,12 @@ function renderFallback(
           </div>
           <p>If you&rsquo;ve already made payment or have any questions, please reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "relationship_invite":
       return {
         subject: `${variables.fromName || "Someone"} wants to link with you on Life-Therapy`,
-        html: baseTemplate(
+        html: bt(
           "Relationship Link Request",
           `<p>Hi ${variables.toName || ""},</p>
           <p><strong>${variables.fromName || "Someone"}</strong> would like to link with you as their <strong>${variables.relationshipLabel || "partner"}</strong> on Life-Therapy.</p>
@@ -574,13 +589,12 @@ function renderFallback(
           </div>
           <p>If you don&rsquo;t recognise this request, you can safely ignore it.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     case "relationship_invite_signup":
       return {
         subject: `${variables.fromName || "Someone"} has invited you to Life-Therapy`,
-        html: baseTemplate(
+        html: bt(
           "You've Been Invited to Life-Therapy",
           `<p>Hi ${variables.toName || ""},</p>
           <p><strong>${variables.fromName || "Someone"}</strong> would like to link with you as their <strong>${variables.relationshipLabel || "partner"}</strong> on Life-Therapy.</p>
@@ -590,17 +604,12 @@ function renderFallback(
           </div>
           <p>Once you&rsquo;ve created your account, you&rsquo;ll be able to accept the link request from your settings.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
-          baseUrl, unsubscribeUrl
         ),
       };
     default:
       return {
         subject: `Email: ${key}`,
-        html: baseTemplate(
-          key,
-          "<p>Template not found.</p>",
-          baseUrl, unsubscribeUrl
-        ),
+        html: bt(key, "<p>Template not found.</p>"),
       };
   }
 }

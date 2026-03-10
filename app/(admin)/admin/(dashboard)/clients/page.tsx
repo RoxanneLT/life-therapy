@@ -93,6 +93,7 @@ export default async function ClientsPage({
   const [clients, counts] = await Promise.all([
     prisma.student.findMany({
       where,
+      take: 500,
       orderBy: getOrderBy(sortField, sortDir) as never,
       include: {
         _count: { select: { bookings: true, enrollments: true } },
