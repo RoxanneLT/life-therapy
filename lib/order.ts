@@ -107,9 +107,11 @@ async function processPackageItem(
   }
 
   for (const moduleId of selections?.moduleIds || []) {
+    const mod = await prisma.module.findUnique({ where: { id: moduleId }, select: { courseId: true } });
+    if (!mod) continue;
     await prisma.moduleAccess.upsert({
       where: { studentId_moduleId: { studentId, moduleId } },
-      create: { studentId, moduleId, source: "purchase", orderId },
+      create: { studentId, moduleId, courseId: mod.courseId, source: "purchase", orderId },
       update: {},
     });
   }
