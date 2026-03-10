@@ -19,7 +19,7 @@ const navItems = [
   { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portal/bookings", label: "My Sessions", icon: CalendarDays, sessionsOnly: true },
   { href: "/portal/courses", label: "My Courses", icon: GraduationCap },
-  { href: "/portal/downloads", label: "My Downloads", icon: FileDown },
+  { href: "/portal/downloads", label: "Digital Products", icon: FileDown },
   { href: "/portal/purchases", label: "My Purchases", icon: ShoppingBag },
   { href: "/portal/credits", label: "Credits", icon: Coins, sessionsOnly: true },
   { href: "/portal/invoices", label: "Invoices", icon: Receipt },
