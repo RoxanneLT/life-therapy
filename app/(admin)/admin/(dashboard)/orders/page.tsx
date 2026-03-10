@@ -18,7 +18,6 @@ import { ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ORDER_STATUS_BADGE } from "@/lib/status-styles";
-import type { OrderStatus } from "@/lib/generated/prisma/enums";
 
 export default async function OrdersPage({
   searchParams,
@@ -29,7 +28,7 @@ export default async function OrdersPage({
   const params = await searchParams;
 
   const where = params.status
-    ? { status: params.status as OrderStatus }
+    ? { status: params.status as "pending" | "paid" | "failed" | "refunded" | "partially_refunded" }
     : {};
 
   const [orders, counts] = await Promise.all([
