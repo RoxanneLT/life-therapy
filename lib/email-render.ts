@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { baseTemplate } from "@/lib/email-templates";
 import * as fallback from "@/lib/email-templates";
 
-const DEFAULT_BASE_URL = "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
 // Sample data for each template (used in admin preview)
 const SAMPLE_DATA: Record<string, Record<string, string>> = {

@@ -283,6 +283,7 @@ export function PageEditor({ initialPage, seo, activeTab }: PageEditorProps) {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={section.isVisible ? "Hide section" : "Show section"}
                       onClick={() => handleToggleVisibility(section.id)}
                     >
                       {section.isVisible ? (
@@ -294,6 +295,7 @@ export function PageEditor({ initialPage, seo, activeTab }: PageEditorProps) {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Edit section"
                       onClick={() => {
                         setEditingSection(section);
                         setEditDialogOpen(true);
@@ -303,7 +305,7 @@ export function PageEditor({ initialPage, seo, activeTab }: PageEditorProps) {
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" aria-label="Delete section">
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </AlertDialogTrigger>

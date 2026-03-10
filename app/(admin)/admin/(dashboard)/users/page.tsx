@@ -85,7 +85,7 @@ export default async function UsersPage() {
                 {user.createdAt.toLocaleDateString()}
               </TableCell>
               <TableCell>
-                <Button variant="ghost" size="icon" asChild>
+                <Button variant="ghost" size="icon" asChild aria-label="Edit user">
                   <Link href={`/admin/users/${user.id}`}>
                     <Pencil className="h-4 w-4" />
                   </Link>

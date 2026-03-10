@@ -52,7 +52,7 @@ async function sendOrderConfirmation(orderId: string) {
     subtotal: fmt(fullOrder.subtotalCents),
     discountRow,
     total: fmt(fullOrder.totalCents),
-    portalUrl: "https://life-therapy.co.za/portal",
+    portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal`,
   });
 
   await sendEmail({

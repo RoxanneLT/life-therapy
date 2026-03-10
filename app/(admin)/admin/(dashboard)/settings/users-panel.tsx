@@ -194,7 +194,7 @@ export function UsersPanel({ users }: UsersPanelProps) {
                         {new Date(user.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="px-4">
-                        <Button variant="ghost" size="icon" asChild>
+                        <Button variant="ghost" size="icon" asChild aria-label="Edit user">
                           <Link href={`/admin/users/${user.id}`}>
                             <Pencil className="h-4 w-4" />
                           </Link>

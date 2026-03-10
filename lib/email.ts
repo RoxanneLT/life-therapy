@@ -5,7 +5,7 @@ import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
 
-const DEFAULT_BASE_URL = "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
 export interface EmailAttachment {
   filename: string;

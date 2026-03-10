@@ -103,7 +103,7 @@ function SortableRow({
       </td>
       <td className="p-3">
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" asChild aria-label="Edit course">
             <Link href={`/admin/courses/${course.id}`}>
               <Pencil className="h-4 w-4" />
             </Link>
@@ -114,6 +114,7 @@ function SortableRow({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-destructive hover:text-destructive"
+                aria-label="Delete course"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>

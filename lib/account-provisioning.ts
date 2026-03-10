@@ -51,7 +51,7 @@ export async function findOrCreateStudent(
   renderEmail("account_provisioned", {
     firstName,
     tempPassword,
-    loginUrl: "https://life-therapy.co.za/portal/login",
+    loginUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/login`,
   }).then(({ subject, html }) =>
     sendEmail({ to: email, subject, html, templateKey: "account_provisioned", studentId: student.id })
   ).catch((err) =>

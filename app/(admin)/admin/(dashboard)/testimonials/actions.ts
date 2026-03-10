@@ -15,7 +15,12 @@ export async function createTestimonial(formData: FormData) {
     isFeatured: raw.isFeatured === "true",
   });
 
-  await prisma.testimonial.create({ data: parsed });
+  try {
+    await prisma.testimonial.create({ data: parsed });
+  } catch (err) {
+    console.error("[create-testimonial]", err);
+    throw new Error("Failed to create testimonial. Please try again.");
+  }
 
   revalidatePath("/admin/testimonials");
   revalidatePath("/");
@@ -31,7 +36,12 @@ export async function updateTestimonial(id: string, formData: FormData) {
     isFeatured: raw.isFeatured === "true",
   });
 
-  await prisma.testimonial.update({ where: { id }, data: parsed });
+  try {
+    await prisma.testimonial.update({ where: { id }, data: parsed });
+  } catch (err) {
+    console.error("[update-testimonial]", err);
+    throw new Error("Failed to update testimonial. Please try again.");
+  }
 
   revalidatePath("/admin/testimonials");
   revalidatePath("/");
@@ -40,7 +50,12 @@ export async function updateTestimonial(id: string, formData: FormData) {
 
 export async function deleteTestimonial(id: string) {
   await requireRole("super_admin", "editor", "marketing");
-  await prisma.testimonial.delete({ where: { id } });
+  try {
+    await prisma.testimonial.delete({ where: { id } });
+  } catch (err) {
+    console.error("[delete-testimonial]", err);
+    throw new Error("Failed to delete testimonial. Please try again.");
+  }
 
   revalidatePath("/admin/testimonials");
   revalidatePath("/");

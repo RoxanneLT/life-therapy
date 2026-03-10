@@ -56,7 +56,7 @@ export default async function AdminPagesPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" asChild>
+                  <Button variant="ghost" size="icon" asChild aria-label="Edit page">
                     <Link href={`/admin/pages/${page.slug}`}>
                       <Pencil className="h-4 w-4" />
                     </Link>
