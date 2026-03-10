@@ -79,7 +79,7 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
       {/* Right side */}
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <Button variant="ghost" size="sm" asChild>
+        <Button size="sm" className="bg-terracotta-500 text-white hover:bg-terracotta-600" asChild>
           <a href="/" target="_blank" rel="noopener noreferrer">
             <ExternalLink className="mr-1 h-3 w-3" />
             View Site

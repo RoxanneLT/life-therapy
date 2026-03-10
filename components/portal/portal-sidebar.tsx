@@ -94,18 +94,6 @@ export function PortalSidebar({ className, upcomingSessionCount, isSessionsClien
           ))}
         </nav>
 
-        {!collapsed && (
-          <div className="border-t p-4">
-            <Link
-              href="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Visit Website &rarr;
-            </Link>
-          </div>
-        )}
       </div>
     </aside>
   );

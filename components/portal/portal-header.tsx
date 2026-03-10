@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut } from "lucide-react";
+import { Menu, LogOut, ExternalLink } from "lucide-react";
 import { PortalSidebar } from "./portal-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -77,6 +77,13 @@ export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, 
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
+
+        <Button size="sm" className="bg-terracotta-500 text-white hover:bg-terracotta-600" asChild>
+          <a href="/" target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="mr-1 h-3 w-3" />
+            View Site
+          </a>
+        </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

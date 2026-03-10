@@ -146,17 +146,6 @@ export function AdminSidebar({ className, role }: AdminSidebarProps) {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="border-t p-4">
-          <Link
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            View Public Site &rarr;
-          </Link>
-        </div>
       </div>
     </aside>
   );
