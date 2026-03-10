@@ -18,7 +18,8 @@ import {
   Code,
 } from "lucide-react";
 
-// Strip browser-injected font-family / font-size from inline styles and unwrap <font> tags
+// Strip browser-injected font-family / font-size from inline styles, unwrap <font> tags,
+// and unwrap variable chip spans so {{variable}} saves as plain text without styling.
 function sanitizeHtml(html: string): string {
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
@@ -30,6 +31,14 @@ function sanitizeHtml(html: string): string {
   tmp.querySelectorAll<HTMLElement>("font").forEach((font) => {
     while (font.firstChild) font.parentNode!.insertBefore(font.firstChild, font);
     font.remove();
+  });
+  // Unwrap variable chip spans — keeps {{variable}} text but removes the styled wrapper
+  // so the chip styling doesn't appear in the actual sent email.
+  tmp.querySelectorAll<HTMLElement>("span").forEach((span) => {
+    if (/^\{\{[^}]+\}\}$/.test(span.textContent?.trim() ?? "")) {
+      while (span.firstChild) span.parentNode!.insertBefore(span.firstChild, span);
+      span.remove();
+    }
   });
   return tmp.innerHTML;
 }
@@ -217,6 +226,7 @@ export function RichTextEditor({
                 editorRef.current.style.fontFamily = "";
                 editorRef.current.style.fontSize = "";
                 editorRef.current.style.whiteSpace = "";
+                handleInput(); // persist any source edits
               } else {
                 editorRef.current.innerText = editorRef.current.innerHTML;
                 editorRef.current.setAttribute("data-source", "true");
@@ -256,7 +266,7 @@ export function RichTextEditor({
         onInput={handleInput}
         onPaste={handlePaste}
         data-placeholder={placeholder}
-        className="rounded-md border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground/50 [&_p]:mb-[1em] [&_p:last-child]:mb-0 [&_ul]:mb-[1em] [&_ol]:mb-[1em] [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
+        className="rounded-md border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground/50 [&_p]:mb-[1em] [&_p:last-child]:mb-0 [&_ul]:mb-[1em] [&_ol]:mb-[1em] [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-[0.75em] [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mb-[0.5em]"
         style={{ minHeight, lineHeight: 1.6 }}
         suppressContentEditableWarning
       />
