@@ -20,19 +20,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDeleteButton } from "@/components/admin/confirm-delete-button";
+import { SortableOrderBar } from "@/components/admin/sortable-order-bar";
 import { formatPrice } from "@/lib/utils";
-import { GripVertical, Loader2, Check, Pencil, Trash2 } from "lucide-react";
+import { GripVertical, Pencil } from "lucide-react";
 import Link from "next/link";
 import { reorderDigitalProducts, deleteDigitalProduct } from "./actions";
 
@@ -99,35 +90,7 @@ function SortableRow({ product, onDelete }: { readonly product: Product; readonl
               <Pencil className="h-4 w-4" />
             </Link>
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                aria-label="Delete product"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete product?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete &ldquo;{product.title}&rdquo;. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => onDelete(product.id)}
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <ConfirmDeleteButton itemLabel="product" itemName={product.title} onDelete={() => onDelete(product.id)} />
         </div>
       </td>
     </tr>
@@ -176,26 +139,7 @@ export function SortableProductList({ products: initial }: { readonly products: 
 
   return (
     <div>
-      {(dirty || saved) && (
-        <div className="mb-4 flex items-center gap-3">
-          {dirty && (
-            <Button onClick={handleSave} disabled={saving} size="sm">
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Order
-            </Button>
-          )}
-          {saved && (
-            <span className="flex items-center gap-1 text-sm text-green-600">
-              <Check className="h-4 w-4" /> Order saved
-            </span>
-          )}
-          {dirty && (
-            <span className="text-sm text-muted-foreground">
-              Drag rows to reorder, then save
-            </span>
-          )}
-        </div>
-      )}
+      <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
 
       <DndContext
         sensors={sensors}

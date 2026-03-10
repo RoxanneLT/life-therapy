@@ -20,24 +20,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDeleteButton } from "@/components/admin/confirm-delete-button";
+import { SortableOrderBar } from "@/components/admin/sortable-order-bar";
 import {
   GripVertical,
-  Loader2,
-  Check,
   BookOpen,
   HelpCircle,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { reorderModules, deleteModule } from "./actions";
@@ -121,35 +109,7 @@ function SortableModuleCard({
               Edit
             </Link>
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete module?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete &ldquo;{mod.title}&rdquo; and all
-                  its lectures and quizzes.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  onClick={() => onDelete(mod.id)}
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <ConfirmDeleteButton itemLabel="module" itemName={mod.title} onDelete={() => onDelete(mod.id)} />
         </div>
       </CardHeader>
     </Card>
@@ -204,26 +164,7 @@ export function SortableModuleList({
 
   return (
     <div>
-      {(dirty || saved) && (
-        <div className="mb-4 flex items-center gap-3">
-          {dirty && (
-            <Button onClick={handleSave} disabled={saving} size="sm">
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Order
-            </Button>
-          )}
-          {saved && (
-            <span className="flex items-center gap-1 text-sm text-green-600">
-              <Check className="h-4 w-4" /> Order saved
-            </span>
-          )}
-          {dirty && (
-            <span className="text-sm text-muted-foreground">
-              Drag modules to reorder, then save
-            </span>
-          )}
-        </div>
-      )}
+      <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
 
       <DndContext
         sensors={sensors}
