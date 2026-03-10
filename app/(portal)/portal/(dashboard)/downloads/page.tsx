@@ -20,7 +20,6 @@ export default async function DownloadsPage() {
           title: true,
           description: true,
           imageUrl: true,
-          fileName: true,
         },
       },
     },
@@ -30,7 +29,7 @@ export default async function DownloadsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold">My Downloads</h1>
+        <h1 className="font-heading text-2xl font-bold">Digital Products</h1>
         <p className="text-sm text-muted-foreground">
           Your purchased digital products are available for download here.
         </p>
@@ -66,17 +65,12 @@ export default async function DownloadsPage() {
                 </div>
               )}
               <CardContent className="pt-4">
-                <h3 className="font-heading font-semibold">
+                <h3 className="font-heading text-lg font-semibold">
                   {access.digitalProduct.title}
                 </h3>
                 {access.digitalProduct.description && (
                   <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                     {access.digitalProduct.description}
-                  </p>
-                )}
-                {access.digitalProduct.fileName && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {access.digitalProduct.fileName}
                   </p>
                 )}
                 <Button className="mt-4 w-full gap-2" size="sm" asChild>
