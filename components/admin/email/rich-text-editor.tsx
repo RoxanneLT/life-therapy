@@ -18,6 +18,22 @@ import {
   Code,
 } from "lucide-react";
 
+// Strip browser-injected font-family / font-size from inline styles and unwrap <font> tags
+function sanitizeHtml(html: string): string {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  tmp.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
+    el.style.removeProperty("font-family");
+    el.style.removeProperty("font-size");
+    if (!el.getAttribute("style")) el.removeAttribute("style");
+  });
+  tmp.querySelectorAll<HTMLElement>("font").forEach((font) => {
+    while (font.firstChild) font.parentNode!.insertBefore(font.firstChild, font);
+    font.remove();
+  });
+  return tmp.innerHTML;
+}
+
 const DEFAULT_VARIABLE_CHIPS = [
   { key: "firstName", label: "First Name", description: "Client\u2019s first name (falls back to \u2018there\u2019)" },
   { key: "unsubscribeUrl", label: "Unsubscribe URL", description: "One-click unsubscribe link" },
@@ -73,13 +89,44 @@ export function RichTextEditor({
   const handleInput = useCallback(() => {
     if (editorRef.current) {
       isInternalChange.current = true;
-      onChange(editorRef.current.innerHTML);
+      onChange(sanitizeHtml(editorRef.current.innerHTML));
     }
-  }, [onChange]);
+  }, [onChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function exec(command: string, val?: string) {
+    // Use semantic tags (e.g. <b>) instead of <span style="font-weight:bold">
+    document.execCommand("styleWithCSS", false, "false");
     document.execCommand(command, false, val);
+    if (editorRef.current) {
+      // Sanitize DOM in place so what you see matches what gets saved
+      const clean = sanitizeHtml(editorRef.current.innerHTML);
+      if (clean !== editorRef.current.innerHTML) {
+        editorRef.current.innerHTML = clean;
+      }
+    }
     editorRef.current?.focus();
+    handleInput();
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    // Prefer plain text to avoid pasting external font/size styles
+    const plain = e.clipboardData.getData("text/plain");
+    const htmlToInsert = plain
+      ? plain
+          .split(/\n\n+/)
+          .map((para) => `<p>${para.replaceAll("\n", "<br>")}</p>`)
+          .join("")
+      : sanitizeHtml(e.clipboardData.getData("text/html"));
+
+    const selection = globalThis.getSelection();
+    if (selection?.rangeCount) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const frag = range.createContextualFragment(htmlToInsert);
+      range.insertNode(frag);
+      range.collapse(false);
+    }
     handleInput();
   }
 
@@ -204,6 +251,7 @@ export function RichTextEditor({
         ref={editorRef}
         contentEditable
         onInput={handleInput}
+        onPaste={handlePaste}
         data-placeholder={placeholder}
         className="rounded-md border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground/50"
         style={{ minHeight, lineHeight: 1.6 }}
