@@ -63,6 +63,10 @@
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
   },
+  "overrides": {
+    "hono": "^4.12.7",
+    "@hono/node-server": "^1.19.11"
+  },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
