@@ -27,12 +27,7 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "des
   paused: "outline",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: "bg-blue-100 text-blue-800 hover:bg-blue-100",
-  active: "bg-green-100 text-green-800 hover:bg-green-100",
-  completed: "bg-teal-100 text-teal-800 hover:bg-teal-100",
-  paused: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-};
+import { CAMPAIGN_STATUS_BADGE } from "@/lib/status-styles";
 
 export default async function CampaignsPage() {
   await requireRole("super_admin", "marketing");
@@ -87,7 +82,7 @@ export default async function CampaignsPage() {
               </TableHeader>
               <TableBody>
                 {manualCampaigns.map((campaign) => {
-                  const statusColor = STATUS_COLORS[campaign.status];
+                  const statusColor = CAMPAIGN_STATUS_BADGE[campaign.status];
                   return (
                     <TableRow key={campaign.id}>
                       <TableCell>
@@ -168,7 +163,7 @@ export default async function CampaignsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {automatedCampaigns.map((campaign) => {
-              const statusColor = STATUS_COLORS[campaign.status];
+              const statusColor = CAMPAIGN_STATUS_BADGE[campaign.status];
               return (
                 <div
                   key={campaign.id}

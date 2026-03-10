@@ -56,6 +56,7 @@ import {
   getSessionRatesAction,
 } from "../actions";
 import type { InvoiceLineItem } from "@/lib/billing-types";
+import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL, PR_STATUS_BADGE, PR_STATUS_LABEL } from "@/lib/status-styles";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -146,20 +147,6 @@ function formatCurrency(cents: number, currency: string): string {
   return `${symbol}${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`;
 }
 
-const INVOICE_STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-gray-100 text-gray-600" },
-  sent: { label: "Sent", className: "bg-blue-100 text-blue-700" },
-  paid: { label: "Paid", className: "bg-green-100 text-green-700" },
-  void: { label: "Void", className: "bg-red-100 text-red-700" },
-};
-
-const PR_STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  pending: { label: "Pending", className: "bg-yellow-100 text-yellow-700" },
-  sent: { label: "Sent", className: "bg-blue-100 text-blue-700" },
-  paid: { label: "Paid", className: "bg-green-100 text-green-700" },
-  overdue: { label: "Overdue", className: "bg-red-100 text-red-700" },
-  cancelled: { label: "Voided", className: "bg-red-100 text-red-700" },
-};
 
 // ─── Main Component ──────────────────────────────────────────
 
@@ -673,10 +660,6 @@ function InvoiceHistorySection({
                 </thead>
                 <tbody>
                   {invoices.map((inv) => {
-                    const statusStyle = INVOICE_STATUS_STYLES[inv.status] || {
-                      label: inv.status,
-                      className: "bg-gray-100 text-gray-600",
-                    };
                     return (
                       <tr key={inv.id} className="border-b last:border-0">
                         <td className="whitespace-nowrap px-4 py-2.5 font-medium">
@@ -694,8 +677,8 @@ function InvoiceHistorySection({
                           {formatCurrency(inv.totalCents, inv.currency)}
                         </td>
                         <td className="px-4 py-2.5">
-                          <Badge className={statusStyle.className}>
-                            {statusStyle.label}
+                          <Badge className={INVOICE_STATUS_BADGE[inv.status] ?? ""}>
+                            {INVOICE_STATUS_LABEL[inv.status] ?? inv.status}
                           </Badge>
                         </td>
                         <td className="px-4 py-2.5">
@@ -832,10 +815,6 @@ function PaymentRequestsSection({
                 </thead>
                 <tbody>
                   {paymentRequests.map((pr) => {
-                    const statusStyle = PR_STATUS_STYLES[pr.status] || {
-                      label: pr.status,
-                      className: "bg-gray-100 text-gray-600",
-                    };
                     return (
                       <tr key={pr.id} className="border-b last:border-0">
                         <td className="whitespace-nowrap px-4 py-2.5 font-medium">
@@ -845,8 +824,8 @@ function PaymentRequestsSection({
                           {formatCurrency(pr.totalCents, pr.currency)}
                         </td>
                         <td className="px-4 py-2.5">
-                          <Badge className={statusStyle.className}>
-                            {statusStyle.label}
+                          <Badge className={PR_STATUS_BADGE[pr.status] ?? ""}>
+                            {PR_STATUS_LABEL[pr.status] ?? pr.status}
                           </Badge>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">

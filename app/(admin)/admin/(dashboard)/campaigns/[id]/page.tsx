@@ -44,12 +44,7 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "des
   paused: "outline",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: "bg-blue-100 text-blue-800 hover:bg-blue-100",
-  active: "bg-green-100 text-green-800 hover:bg-green-100",
-  completed: "bg-teal-100 text-teal-800 hover:bg-teal-100",
-  paused: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-};
+import { CAMPAIGN_STATUS_BADGE } from "@/lib/status-styles";
 
 export default async function CampaignDetailPage({
   params,
@@ -128,7 +123,7 @@ export default async function CampaignDetailPage({
   const showActions = ["draft", "scheduled", "active", "paused"].includes(campaign.status);
   const canEdit = campaign.status === "draft" || campaign.campaignType === "birthday";
   const canDelete = campaign.status === "draft";
-  const statusColor = STATUS_COLORS[campaign.status];
+  const statusColor = CAMPAIGN_STATUS_BADGE[campaign.status];
 
   return (
     <div className="mx-auto max-w-4xl">

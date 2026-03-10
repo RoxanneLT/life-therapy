@@ -22,6 +22,7 @@ import {
 import { format, isAfter, startOfDay } from "date-fns";
 import { markNoShowAction, adminCancelBookingAction } from "../actions";
 import { RescheduleDialog } from "../../../bookings/[id]/reschedule-dialog";
+import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 
 interface BookingData {
   id: string;
@@ -60,13 +61,6 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   free_consultation: "Free Consultation",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
-  confirmed: "bg-green-100 text-green-700",
-  completed: "bg-blue-100 text-blue-700",
-  cancelled: "bg-gray-100 text-gray-600",
-  no_show: "bg-red-100 text-red-700",
-};
 
 const STATUS_ICONS: Record<string, string> = {
   completed: "\u2713",
@@ -184,7 +178,7 @@ function BookingCard({
             {/* Status line */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground">Status:</span>
-              <Badge variant="secondary" className={STATUS_COLORS[b.status] || ""}>
+              <Badge variant="secondary" className={BOOKING_STATUS_BADGE[b.status] || ""}>
                 {STATUS_ICONS[b.status] || ""} {b.status.replace("_", " ")}
               </Badge>
               {b.teamsMeetingUrl && (

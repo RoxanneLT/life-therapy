@@ -18,19 +18,12 @@ import {
 } from "@/components/ui/table";
 import { CalendarDays, Settings, ShieldOff, Repeat, X } from "lucide-react";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
+import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { ViewSwitcher } from "./view-switcher";
 import { DayView } from "./day-view";
 import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
 import { CreateBookingDialog } from "./create-booking-dialog";
-
-const STATUS_STYLES: Record<BookingStatus, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  no_show: "bg-gray-100 text-gray-800",
-};
 
 const VALID_VIEWS = ["list", "day", "week", "month"] as const;
 type ViewMode = (typeof VALID_VIEWS)[number];
@@ -285,7 +278,7 @@ export default async function BookingsPage({ searchParams }: Props) {
                         <TableCell>
                           <Badge
                             variant="secondary"
-                            className={STATUS_STYLES[booking.status]}
+                            className={BOOKING_STATUS_BADGE[booking.status]}
                           >
                             {booking.status.replace("_", " ")}
                           </Badge>

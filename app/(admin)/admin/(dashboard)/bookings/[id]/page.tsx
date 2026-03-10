@@ -45,20 +45,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
+import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { RescheduleDialog } from "./reschedule-dialog";
 
 const PATTERN_LABELS: Record<string, string> = {
   weekly: "Weekly",
   bimonthly: "Bi-monthly",
   monthly: "Monthly",
-};
-
-const STATUS_STYLES: Record<BookingStatus, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  no_show: "bg-gray-100 text-gray-800",
 };
 
 interface Props {
@@ -205,7 +198,7 @@ export default async function BookingDetailPage({ params }: Props) {
               <span className="text-muted-foreground">Status</span>
               <Badge
                 variant="secondary"
-                className={STATUS_STYLES[booking.status]}
+                className={BOOKING_STATUS_BADGE[booking.status]}
               >
                 {booking.status.replace("_", " ")}
               </Badge>

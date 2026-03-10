@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, X, ExternalLink, AlertTriangle, CalendarClock } from "lucide-react";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import type { BusinessHours } from "@/lib/settings";
+import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 
 interface BookingData {
   id: string;
@@ -36,14 +37,6 @@ interface DayViewProps {
   businessHours: BusinessHours | null;
   override: OverrideData | null;
 }
-
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-  completed: "bg-blue-100 text-blue-800",
-  no_show: "bg-gray-100 text-gray-800",
-};
 
 const SESSION_COLORS: Record<string, string> = {
   individual: "border-l-green-500 bg-green-50",
@@ -181,7 +174,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
                             </span>
                             <Badge
                               variant="secondary"
-                              className={`text-xs ${STATUS_STYLES[booking.status] || ""}`}
+                              className={`text-xs ${BOOKING_STATUS_BADGE[booking.status] || ""}`}
                             >
                               {booking.status.replace("_", " ")}
                             </Badge>
@@ -246,7 +239,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
                 <DetailRow label="Status">
                   <Badge
                     variant="secondary"
-                    className={STATUS_STYLES[selected.status] || ""}
+                    className={BOOKING_STATUS_BADGE[selected.status] || ""}
                   >
                     {selected.status.replace("_", " ")}
                   </Badge>

@@ -82,7 +82,7 @@ export default async function GiftsPage() {
                     <TableCell className="text-sm">{itemTitle}</TableCell>
                     <TableCell>
                       <Badge
-                        className={STATUS_STYLES[g.status] || ""}
+                        className={GIFT_STATUS_BADGE[g.status] || ""}
                         variant="outline"
                       >
                         {g.status}

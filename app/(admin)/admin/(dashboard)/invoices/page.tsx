@@ -19,25 +19,9 @@ import { InvoiceRowActions } from "./invoice-row-actions";
 import { ExportDialog } from "./export-dialog";
 import { SortableHeader } from "@/components/admin/sortable-header";
 
+import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
+
 const STATUS_TABS = ["all", "draft", "payment_requested", "paid", "overdue", "cancelled"] as const;
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-700",
-  payment_requested: "bg-yellow-100 text-yellow-700",
-  paid: "bg-green-100 text-green-700",
-  overdue: "bg-red-100 text-red-700",
-  cancelled: "bg-gray-100 text-gray-500",
-  credited: "bg-blue-100 text-blue-700",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  payment_requested: "Requested",
-  paid: "Paid",
-  overdue: "Overdue",
-  cancelled: "Cancelled",
-  credited: "Credited",
-};
 
 const TYPE_LABELS: Record<string, string> = {
   monthly_postpaid: "Monthly",
@@ -257,9 +241,9 @@ export default async function InvoicesPage({
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={STATUS_COLORS[inv.status] || ""}
+                        className={INVOICE_STATUS_BADGE[inv.status] || ""}
                       >
-                        {STATUS_LABELS[inv.status] || inv.status}
+                        {INVOICE_STATUS_LABEL[inv.status] || inv.status}
                       </Badge>
                     </TableCell>
                     <TableCell>

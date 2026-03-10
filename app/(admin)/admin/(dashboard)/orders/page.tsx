@@ -114,7 +114,7 @@ export default async function OrdersPage({
                   </TableCell>
                   <TableCell>
                     <Badge
-                      className={STATUS_STYLES[o.status] || ""}
+                      className={ORDER_STATUS_BADGE[o.status] || ""}
                       variant="outline"
                     >
                       {o.status}

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BusinessHours } from "@/lib/settings";
+import { BOOKING_STATUS_DOT } from "@/lib/status-styles";
 
 interface BookingData {
   id: string;
@@ -37,13 +38,6 @@ interface WeekViewProps {
   overrides: OverrideData[];
 }
 
-const STATUS_DOT: Record<string, string> = {
-  pending: "bg-yellow-400",
-  confirmed: "bg-green-400",
-  cancelled: "bg-red-400",
-  completed: "bg-blue-400",
-  no_show: "bg-gray-400",
-};
 
 const SESSION_COLORS: Record<string, string> = {
   individual: "border-l-green-500 bg-green-50 hover:bg-green-100",
@@ -208,7 +202,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: WeekViewP
                           >
                             <div className="flex items-center gap-1">
                               <span
-                                className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[booking.status] || "bg-gray-400"}`}
+                                className={`inline-block h-1.5 w-1.5 rounded-full ${BOOKING_STATUS_DOT[booking.status] || "bg-gray-400"}`}
                               />
                               <span className="font-medium">
                                 {booking.startTime}

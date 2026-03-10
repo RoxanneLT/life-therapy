@@ -17,14 +17,9 @@ import { Users, Upload } from "lucide-react";
 import { ClientListFilters } from "./client-list-filters";
 import { SortableHeader } from "@/components/admin/sortable-header";
 
-const STATUS_TABS = ["all", "active", "potential", "inactive", "archived"] as const;
+import { CLIENT_STATUS_BADGE } from "@/lib/status-styles";
 
-const STATUS_COLORS: Record<string, string> = {
-  potential: "bg-blue-100 text-blue-700",
-  active: "bg-green-100 text-green-700",
-  inactive: "bg-gray-100 text-gray-600",
-  archived: "bg-red-100 text-red-700",
-};
+const STATUS_TABS = ["all", "active", "potential", "inactive", "archived"] as const;
 
 const ONBOARDING_LABELS: Record<number, string> = {
   0: "Not started",
@@ -188,7 +183,7 @@ export default async function ClientsPage({
                     <div className="flex items-center gap-2">
                       <Badge
                         variant="secondary"
-                        className={STATUS_COLORS[c.clientStatus] || ""}
+                        className={CLIENT_STATUS_BADGE[c.clientStatus] || ""}
                       >
                         {c.clientStatus}
                       </Badge>
