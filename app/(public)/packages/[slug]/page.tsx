@@ -6,11 +6,12 @@ import { formatPrice } from "@/lib/utils";
 import { getCurrency } from "@/lib/get-region";
 import { getPackagePrice } from "@/lib/pricing";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, GraduationCap, FileDown, Sparkles, Package } from "lucide-react";
+import { ArrowLeft, GraduationCap, FileDown, Sparkles, Package, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/metadata";
 import { breadcrumbJsonLd, JsonLdScript } from "@/lib/json-ld";
+import { FixedAddToCart } from "./fixed-add-to-cart";
 
 export async function generateMetadata({
   params,
@@ -44,6 +45,21 @@ export default async function PackageDetailPage({
 
   const price = getPackagePrice(pkg, currency);
 
+  const fixedCourseIds = Array.isArray(pkg.fixedCourseIds) ? pkg.fixedCourseIds.map(String) : [];
+  const fixedDigitalProductIds = Array.isArray(pkg.fixedDigitalProductIds) ? pkg.fixedDigitalProductIds.map(String) : [];
+
+  // For fixed packages, fetch the actual items by ID
+  const [fixedCourses, fixedDigitalProducts] = pkg.isFixed
+    ? await Promise.all([
+        fixedCourseIds.length > 0
+          ? prisma.course.findMany({ where: { id: { in: fixedCourseIds } }, select: { id: true, title: true } })
+          : Promise.resolve([]),
+        fixedDigitalProductIds.length > 0
+          ? prisma.digitalProduct.findMany({ where: { id: { in: fixedDigitalProductIds } }, select: { id: true, title: true } })
+          : Promise.resolve([]),
+      ])
+    : [[], []];
+
   const breadcrumbLd = await breadcrumbJsonLd([
     { name: "Home", href: "/" },
     { name: "Packages", href: "/packages" },
@@ -74,22 +90,41 @@ export default async function PackageDetailPage({
         <div className="rounded-lg border p-6 space-y-4">
           <h2 className="font-heading text-lg font-semibold">What&apos;s Included</h2>
           <div className="space-y-3">
-            {pkg.courseSlots > 0 && (
-              <div className="flex items-center gap-3">
-                <GraduationCap className="h-5 w-5 text-brand-500" />
-                <span>
-                  Choose {pkg.courseSlots} course{pkg.courseSlots !== 1 && "s"} from our full catalog
-                </span>
-              </div>
-            )}
-            {pkg.digitalProductSlots > 0 && (
-              <div className="flex items-center gap-3">
-                <FileDown className="h-5 w-5 text-brand-500" />
-                <span>
-                  Choose {pkg.digitalProductSlots} digital product
-                  {pkg.digitalProductSlots !== 1 && "s"}
-                </span>
-              </div>
+            {pkg.isFixed ? (
+              <>
+                {fixedCourses.map((c) => (
+                  <div key={c.id} className="flex items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-brand-500 shrink-0" />
+                    <span>{c.title}</span>
+                  </div>
+                ))}
+                {fixedDigitalProducts.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-brand-500 shrink-0" />
+                    <span>{p.title}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                {pkg.courseSlots > 0 && (
+                  <div className="flex items-center gap-3">
+                    <GraduationCap className="h-5 w-5 text-brand-500" />
+                    <span>
+                      Choose {pkg.courseSlots} course{pkg.courseSlots !== 1 && "s"} from our full catalog
+                    </span>
+                  </div>
+                )}
+                {pkg.digitalProductSlots > 0 && (
+                  <div className="flex items-center gap-3">
+                    <FileDown className="h-5 w-5 text-brand-500" />
+                    <span>
+                      Choose {pkg.digitalProductSlots} digital product
+                      {pkg.digitalProductSlots !== 1 && "s"}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
             {pkg.credits > 0 && (
               <div className="flex items-center gap-3">
@@ -106,11 +141,19 @@ export default async function PackageDetailPage({
           <p className="text-3xl font-bold text-brand-600">
             {formatPrice(price, currency)}
           </p>
-          <Button size="lg" asChild>
-            <Link href={`/packages/${pkg.slug}/build`}>
-              Build Your Package
-            </Link>
-          </Button>
+          {pkg.isFixed ? (
+            <FixedAddToCart
+              packageId={pkg.id}
+              fixedCourseIds={fixedCourseIds}
+              fixedDigitalProductIds={fixedDigitalProductIds}
+            />
+          ) : (
+            <Button size="lg" asChild>
+              <Link href={`/packages/${pkg.slug}/build`}>
+                Build Your Package
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
     </div>

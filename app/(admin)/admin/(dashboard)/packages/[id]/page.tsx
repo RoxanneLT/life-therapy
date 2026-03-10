@@ -17,13 +17,23 @@ export default async function EditPackagePage({
   await requireRole("super_admin");
   const { id } = await params;
 
-  const [pkg, categoryRows] = await Promise.all([
+  const [pkg, categoryRows, courses, digitalProducts] = await Promise.all([
     prisma.hybridPackage.findUnique({ where: { id } }),
     prisma.hybridPackage.findMany({
       where: { category: { not: null } },
       select: { category: true },
       distinct: ["category"],
       orderBy: { category: "asc" },
+    }),
+    prisma.course.findMany({
+      where: { isPublished: true },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.digitalProduct.findMany({
+      where: { isPublished: true },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
     }),
   ]);
 
@@ -60,6 +70,8 @@ export default async function EditPackagePage({
       <PackageForm
         initialData={pkg}
         categories={categoryRows.map((c) => c.category!)}
+        availableCourses={courses}
+        availableDigitalProducts={digitalProducts}
         onSubmit={handleSubmit}
       />
     </div>

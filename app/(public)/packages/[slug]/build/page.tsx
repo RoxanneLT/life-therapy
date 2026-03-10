@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrency } from "@/lib/get-region";
 import { getCoursePrice, getDigitalProductPrice, getPackagePrice } from "@/lib/pricing";
 import { PackageBuilder } from "./package-builder";
@@ -31,6 +31,7 @@ export default async function PackageBuildPage({
   });
 
   if (!pkg || !pkg.isPublished) notFound();
+  if (pkg.isFixed) redirect(`/packages/${slug}`);
 
   // Fetch available items for selection
   const [courses, digitalProducts] = await Promise.all([

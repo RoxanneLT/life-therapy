@@ -8,12 +8,24 @@ import { createPackage } from "../actions";
 export default async function NewPackagePage() {
   await requireRole("super_admin");
 
-  const categories = await prisma.hybridPackage.findMany({
-    where: { category: { not: null } },
-    select: { category: true },
-    distinct: ["category"],
-    orderBy: { category: "asc" },
-  });
+  const [categoryRows, courses, digitalProducts] = await Promise.all([
+    prisma.hybridPackage.findMany({
+      where: { category: { not: null } },
+      select: { category: true },
+      distinct: ["category"],
+      orderBy: { category: "asc" },
+    }),
+    prisma.course.findMany({
+      where: { isPublished: true },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.digitalProduct.findMany({
+      where: { isPublished: true },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -24,7 +36,9 @@ export default async function NewPackagePage() {
         </p>
       </div>
       <PackageForm
-        categories={categories.map((c) => c.category!)}
+        categories={categoryRows.map((c) => c.category!)}
+        availableCourses={courses}
+        availableDigitalProducts={digitalProducts}
         onSubmit={createPackage}
       />
     </div>

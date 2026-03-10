@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -18,6 +19,11 @@ import { slugify } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { SeoFields } from "@/components/admin/seo-fields";
 import { PppPriceFields } from "@/components/admin/ppp-price-fields";
+
+interface SelectOption {
+  id: string;
+  title: string;
+}
 
 interface PackageFormProps {
   initialData?: {
@@ -33,20 +39,43 @@ interface PackageFormProps {
     credits: number;
     courseSlots: number;
     digitalProductSlots: number;
+    isFixed: boolean;
+    fixedCourseIds: unknown;
+    fixedDigitalProductIds: unknown;
     category?: string | null;
     isPublished: boolean;
     metaTitle?: string | null;
     metaDescription?: string | null;
   };
   categories?: string[];
+  availableCourses?: SelectOption[];
+  availableDigitalProducts?: SelectOption[];
   onSubmit: (formData: FormData) => Promise<void>;
 }
 
-export function PackageForm({ initialData, categories = [], onSubmit }: PackageFormProps) {
+function toStringArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val.map(String);
+  return [];
+}
+
+export function PackageForm({
+  initialData,
+  categories = [],
+  availableCourses = [],
+  availableDigitalProducts = [],
+  onSubmit,
+}: PackageFormProps) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");
   const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || "");
   const [isPublished, setIsPublished] = useState(initialData?.isPublished ?? false);
+  const [isFixed, setIsFixed] = useState(initialData?.isFixed ?? false);
+  const [fixedCourseIds, setFixedCourseIds] = useState<string[]>(
+    toStringArray(initialData?.fixedCourseIds)
+  );
+  const [fixedDigitalProductIds, setFixedDigitalProductIds] = useState<string[]>(
+    toStringArray(initialData?.fixedDigitalProductIds)
+  );
   const [category, setCategory] = useState(initialData?.category || "");
   const [addingCategory, setAddingCategory] = useState(false);
   const [localCategories, setLocalCategories] = useState<string[]>(categories);
@@ -59,6 +88,10 @@ export function PackageForm({ initialData, categories = [], onSubmit }: PackageF
     }
   }
 
+  function toggleId(ids: string[], setIds: (v: string[]) => void, id: string) {
+    setIds(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
@@ -67,6 +100,11 @@ export function PackageForm({ initialData, categories = [], onSubmit }: PackageF
     formData.set("imageUrl", imageUrl);
     formData.set("category", category);
     formData.set("isPublished", String(isPublished));
+    formData.set("isFixed", String(isFixed));
+    formData.delete("fixedCourseIds");
+    for (const id of fixedCourseIds) formData.append("fixedCourseIds", id);
+    formData.delete("fixedDigitalProductIds");
+    for (const id of fixedDigitalProductIds) formData.append("fixedDigitalProductIds", id);
     await onSubmit(formData);
     setSubmitting(false);
   }
@@ -120,46 +158,118 @@ export function PackageForm({ initialData, categories = [], onSubmit }: PackageF
         defaultGbp={initialData?.priceCentsGbp}
       />
 
-      <div className="rounded-md border bg-muted/30 p-4">
-        <h3 className="mb-3 text-sm font-semibold">Bundle Contents</h3>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Define how many items the customer can pick. They choose from the published catalog at purchase time.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-2">
-            <Label htmlFor="courseSlots">Course Slots</Label>
-            <Input
-              id="courseSlots"
-              name="courseSlots"
-              type="number"
-              defaultValue={initialData?.courseSlots ?? 0}
-              min={0}
-            />
-            <p className="text-xs text-muted-foreground">Full courses the customer picks</p>
+      {/* Package type toggle */}
+      <div className="rounded-md border bg-muted/30 p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Curated Package</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Admin picks exact contents — customer cannot change them
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="digitalProductSlots">Digital Product Slots</Label>
-            <Input
-              id="digitalProductSlots"
-              name="digitalProductSlots"
-              type="number"
-              defaultValue={initialData?.digitalProductSlots ?? 0}
-              min={0}
-            />
-            <p className="text-xs text-muted-foreground">Digital products the customer picks</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="credits">Session Credits</Label>
-            <Input
-              id="credits"
-              name="credits"
-              type="number"
-              defaultValue={initialData?.credits ?? 0}
-              min={0}
-            />
-            <p className="text-xs text-muted-foreground">Auto-granted on purchase</p>
-          </div>
+          <Switch checked={isFixed} onCheckedChange={setIsFixed} />
         </div>
+
+        {isFixed ? (
+          <div className="space-y-4 pt-2 border-t">
+            {/* Fixed courses */}
+            {availableCourses.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Included Courses
+                </Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {availableCourses.map((c) => (
+                    <label
+                      key={c.id}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-accent/50"
+                    >
+                      <Checkbox
+                        checked={fixedCourseIds.includes(c.id)}
+                        onCheckedChange={() => toggleId(fixedCourseIds, setFixedCourseIds, c.id)}
+                      />
+                      {c.title}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Fixed digital products */}
+            {availableDigitalProducts.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Included Digital Products
+                </Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {availableDigitalProducts.map((p) => (
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-accent/50"
+                    >
+                      <Checkbox
+                        checked={fixedDigitalProductIds.includes(p.id)}
+                        onCheckedChange={() =>
+                          toggleId(fixedDigitalProductIds, setFixedDigitalProductIds, p.id)
+                        }
+                      />
+                      {p.title}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Credits for curated packages */}
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="credits">Session Credits</Label>
+              <Input
+                id="credits"
+                name="credits"
+                type="number"
+                defaultValue={initialData?.credits ?? 0}
+                min={0}
+              />
+              <p className="text-xs text-muted-foreground">Auto-granted on purchase</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3 pt-2 border-t">
+            <div className="space-y-2">
+              <Label htmlFor="courseSlots">Course Slots</Label>
+              <Input
+                id="courseSlots"
+                name="courseSlots"
+                type="number"
+                defaultValue={initialData?.courseSlots ?? 0}
+                min={0}
+              />
+              <p className="text-xs text-muted-foreground">Full courses the customer picks</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="digitalProductSlots">Digital Product Slots</Label>
+              <Input
+                id="digitalProductSlots"
+                name="digitalProductSlots"
+                type="number"
+                defaultValue={initialData?.digitalProductSlots ?? 0}
+                min={0}
+              />
+              <p className="text-xs text-muted-foreground">Digital products the customer picks</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="credits">Session Credits</Label>
+              <Input
+                id="credits"
+                name="credits"
+                type="number"
+                defaultValue={initialData?.credits ?? 0}
+                min={0}
+              />
+              <p className="text-xs text-muted-foreground">Auto-granted on purchase</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

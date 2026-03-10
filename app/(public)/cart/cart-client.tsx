@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import type { CartProductInfo } from "@/lib/cart";
-import { getCartProducts, applyCoupon } from "./actions";
+import { getCartProducts, applyCoupon, checkFixedPackageOwnership } from "./actions";
 import { CartItemRow } from "@/components/public/cart/cart-item-row";
 import { CouponInput } from "@/components/public/cart/coupon-input";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ export function CartPageClient() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string[] | null>(null);
 
   // Build a stable key that only changes when the *product identity* of the
   // cart changes (add / remove / swap items).  Gift-field edits don't alter
@@ -106,8 +107,8 @@ export function CartPageClient() {
     }
   }
 
-  // Checkout handler
-  async function handleCheckout() {
+  async function proceedToCheckout() {
+    setDuplicateWarning(null);
     setCheckingOut(true);
     setCheckoutError(null);
     try {
@@ -139,6 +140,23 @@ export function CartPageClient() {
     } finally {
       setCheckingOut(false);
     }
+  }
+
+  // Checkout handler — soft-blocks on fixed package duplicates
+  async function handleCheckout() {
+    setCheckoutError(null);
+    const fixedPackageIds = items
+      .filter((i) => i.hybridPackageId && i.packageSelections)
+      .map((i) => i.hybridPackageId!);
+
+    if (fixedPackageIds.length > 0) {
+      const duplicates = await checkFixedPackageOwnership(fixedPackageIds);
+      if (duplicates.length > 0) {
+        setDuplicateWarning(duplicates);
+        return;
+      }
+    }
+    await proceedToCheckout();
   }
 
   // Valid items (those that resolved to a real product)
@@ -240,6 +258,31 @@ export function CartPageClient() {
                   appliedCoupon={coupon}
                   onRemove={() => setCoupon(null)}
                 />
+
+                {duplicateWarning && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-900/20">
+                    <p className="font-medium text-amber-800 dark:text-amber-300">
+                      You already own:
+                    </p>
+                    <ul className="mt-1 list-inside list-disc text-amber-700 dark:text-amber-400">
+                      {duplicateWarning.map((title) => (
+                        <li key={title}>{title}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-amber-700 dark:text-amber-400">
+                      You can still purchase this package if you&apos;d like the deal.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button size="sm" onClick={proceedToCheckout} disabled={checkingOut} className="flex-1 gap-1">
+                        {checkingOut ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                        Continue anyway
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setDuplicateWarning(null)} className="flex-1">
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <Button
                   className="w-full gap-2"

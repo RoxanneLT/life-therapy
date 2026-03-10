@@ -2,6 +2,8 @@
 
 import { resolveCartItems, validateCoupon } from "@/lib/cart";
 import type { CartItemLocal } from "@/lib/cart-store";
+import { getAuthenticatedStudent } from "@/lib/student-auth";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Resolve cart items to real product info (prices, titles, images).
@@ -13,6 +15,51 @@ export async function getCartProducts(items: CartItemLocal[]) {
     localId: r.id,
     product: r.product,
   }));
+}
+
+/**
+ * Check if the logged-in student already owns any items inside fixed packages.
+ * Returns titles of already-owned items, or an empty array if none / not logged in.
+ */
+export async function checkFixedPackageOwnership(
+  packageIds: string[]
+): Promise<string[]> {
+  if (packageIds.length === 0) return [];
+
+  const auth = await getAuthenticatedStudent().catch(() => null);
+  if (!auth) return [];
+
+  const packages = await prisma.hybridPackage.findMany({
+    where: { id: { in: packageIds }, isFixed: true },
+    select: { fixedCourseIds: true, fixedDigitalProductIds: true },
+  });
+
+  const allCourseIds = packages.flatMap((p) =>
+    Array.isArray(p.fixedCourseIds) ? p.fixedCourseIds.map(String) : []
+  );
+  const allProductIds = packages.flatMap((p) =>
+    Array.isArray(p.fixedDigitalProductIds) ? p.fixedDigitalProductIds.map(String) : []
+  );
+
+  const [ownedCourses, ownedProducts] = await Promise.all([
+    allCourseIds.length
+      ? prisma.enrollment.findMany({
+          where: { studentId: auth.student.id, courseId: { in: allCourseIds } },
+          select: { course: { select: { title: true } } },
+        })
+      : [],
+    allProductIds.length
+      ? prisma.digitalProductAccess.findMany({
+          where: { studentId: auth.student.id, digitalProductId: { in: allProductIds } },
+          select: { digitalProduct: { select: { title: true } } },
+        })
+      : [],
+  ]);
+
+  return [
+    ...ownedCourses.map((e) => e.course.title),
+    ...ownedProducts.map((a) => a.digitalProduct.title),
+  ];
 }
 
 /**

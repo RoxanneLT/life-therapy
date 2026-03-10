@@ -6,14 +6,21 @@ import { packageSchema } from "@/lib/validations";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 
-export async function createPackage(formData: FormData) {
-  await requireRole("super_admin");
+function parsePackageFormData(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
-
-  const parsed = packageSchema.parse({
+  return packageSchema.parse({
     ...raw,
     isPublished: raw.isPublished === "true",
+    isFixed: raw.isFixed === "true",
+    fixedCourseIds: formData.getAll("fixedCourseIds").map(String),
+    fixedDigitalProductIds: formData.getAll("fixedDigitalProductIds").map(String),
   });
+}
+
+export async function createPackage(formData: FormData) {
+  await requireRole("super_admin");
+
+  const parsed = parsePackageFormData(formData);
 
   const maxOrder = await prisma.hybridPackage.aggregate({
     _max: { sortOrder: true },
@@ -32,12 +39,8 @@ export async function createPackage(formData: FormData) {
 
 export async function updatePackage(id: string, formData: FormData) {
   await requireRole("super_admin");
-  const raw = Object.fromEntries(formData.entries());
 
-  const parsed = packageSchema.parse({
-    ...raw,
-    isPublished: raw.isPublished === "true",
-  });
+  const parsed = parsePackageFormData(formData);
 
   await prisma.hybridPackage.update({
     where: { id },

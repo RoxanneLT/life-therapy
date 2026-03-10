@@ -1114,6 +1114,9 @@ model HybridPackage {
   credits             Int      @default(0)
   courseSlots          Int      @default(0) // How many full courses the customer picks
   digitalProductSlots Int      @default(0) // How many digital products the customer picks
+  isFixed             Boolean  @default(false) // Curated: admin specifies exact contents
+  fixedCourseIds      Json     @default("[]") // String[] of Course ids (used when isFixed=true)
+  fixedDigitalProductIds Json  @default("[]") // String[] of DigitalProduct ids (used when isFixed=true)
   category            String?
   isPublished         Boolean  @default(false)
   sortOrder           Int      @default(0)
