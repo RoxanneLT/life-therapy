@@ -196,24 +196,24 @@ export function SortableProductList({ products: initial }: { readonly products: 
         </div>
       )}
 
-      <div className="rounded-md border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-muted/50 text-left text-sm">
-              <th className="w-10 p-3" />
-              <th className="p-3 font-medium">Title</th>
-              <th className="p-3 font-medium">Price (ZAR)</th>
-              <th className="p-3 font-medium">Category</th>
-              <th className="p-3 font-medium">File</th>
-              <th className="p-3 font-medium">Status</th>
-              <th className="p-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="rounded-md border">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b bg-muted/50 text-left text-sm">
+                <th className="w-10 p-3" />
+                <th className="p-3 font-medium">Title</th>
+                <th className="p-3 font-medium">Price (ZAR)</th>
+                <th className="p-3 font-medium">Category</th>
+                <th className="p-3 font-medium">File</th>
+                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 font-medium">Actions</th>
+              </tr>
+            </thead>
             <SortableContext
               items={products.map((p) => p.id)}
               strategy={verticalListSortingStrategy}
@@ -231,9 +231,9 @@ export function SortableProductList({ products: initial }: { readonly products: 
                 )}
               </tbody>
             </SortableContext>
-          </DndContext>
-        </table>
-      </div>
+          </table>
+        </div>
+      </DndContext>
     </div>
   );
 }
