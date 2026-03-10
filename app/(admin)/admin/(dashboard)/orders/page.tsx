@@ -18,6 +18,7 @@ import { ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ORDER_STATUS_BADGE } from "@/lib/status-styles";
+import type { OrderStatus } from "@/lib/generated/prisma/enums";
 
 export default async function OrdersPage({
   searchParams,

@@ -5,9 +5,10 @@ import { getCurrency } from "@/lib/get-region";
 import { getPackagePrice } from "@/lib/pricing";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { GraduationCap, FileDown, Sparkles, Package } from "lucide-react";
+import { GraduationCap, FileDown, Sparkles, Package, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { FixedAddToCart } from "@/app/(public)/packages/[slug]/fixed-add-to-cart";
 
 interface PackageGridSectionProps {
   section: PageSection;
@@ -20,6 +21,27 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
   });
 
   const currency = await getCurrency();
+
+  // Batch-fetch titles for fixed package contents
+  const allCourseIds = [...new Set(packages.flatMap((p) => p.fixedCourseIds as string[]))];
+  const allModuleIds = [...new Set(packages.flatMap((p) => p.fixedModuleIds as string[]))];
+  const allProductIds = [...new Set(packages.flatMap((p) => p.fixedDigitalProductIds as string[]))];
+
+  const [courses, modules, products] = await Promise.all([
+    allCourseIds.length
+      ? prisma.course.findMany({ where: { id: { in: allCourseIds } }, select: { id: true, title: true } })
+      : [],
+    allModuleIds.length
+      ? prisma.module.findMany({ where: { id: { in: allModuleIds } }, select: { id: true, title: true } })
+      : [],
+    allProductIds.length
+      ? prisma.digitalProduct.findMany({ where: { id: { in: allProductIds } }, select: { id: true, title: true } })
+      : [],
+  ]);
+
+  const courseMap = Object.fromEntries(courses.map((c) => [c.id, c.title]));
+  const moduleMap = Object.fromEntries(modules.map((m) => [m.id, m.title]));
+  const productMap = Object.fromEntries(products.map((p) => [p.id, p.title]));
 
   return (
     <section className="px-4 py-12">
@@ -46,6 +68,16 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
             {packages.map((pkg) => {
               const pkgPrice = getPackagePrice(pkg, currency);
+              const fixedCourseIds = pkg.fixedCourseIds as string[];
+              const fixedModuleIds = pkg.fixedModuleIds as string[];
+              const fixedDigitalProductIds = pkg.fixedDigitalProductIds as string[];
+              const hasFixedContents =
+                fixedCourseIds.length > 0 ||
+                fixedModuleIds.length > 0 ||
+                fixedDigitalProductIds.length > 0;
+              const hasSlots =
+                pkg.courseSlots > 0 || pkg.digitalProductSlots > 0 || pkg.credits > 0;
+
               return (
                 <Card key={pkg.id} className="overflow-hidden">
                   <CardContent className="pt-6">
@@ -56,8 +88,14 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                           {pkg.title}
                         </h3>
                       </div>
-                      <Badge className="bg-brand-100 text-brand-700">
-                        Pick Your Own
+                      <Badge
+                        className={
+                          pkg.isFixed
+                            ? "shrink-0 whitespace-nowrap bg-terracotta-100 text-terracotta-700"
+                            : "shrink-0 whitespace-nowrap bg-brand-100 text-brand-700"
+                        }
+                      >
+                        {pkg.isFixed ? "Curated Bundle" : "Pick Your Own"}
                       </Badge>
                     </div>
 
@@ -67,48 +105,90 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                       </p>
                     )}
 
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Bundle includes:
-                      </p>
-                      {pkg.courseSlots > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <GraduationCap className="h-4 w-4 flex-shrink-0 text-brand-500" />
-                          <span>
-                            Choose {pkg.courseSlots} course
-                            {pkg.courseSlots !== 1 && "s"}
-                          </span>
-                        </div>
-                      )}
-                      {pkg.digitalProductSlots > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <FileDown className="h-4 w-4 flex-shrink-0 text-brand-500" />
-                          <span>
-                            Choose {pkg.digitalProductSlots} digital product
-                            {pkg.digitalProductSlots !== 1 && "s"}
-                          </span>
-                        </div>
-                      )}
-                      {pkg.credits > 0 && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Sparkles className="h-4 w-4 flex-shrink-0 text-brand-500" />
-                          <span>
-                            {pkg.credits} session credit
-                            {pkg.credits !== 1 && "s"}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                    {(hasFixedContents || hasSlots) && (
+                      <div className="mt-4 space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Bundle includes:
+                        </p>
+
+                        {/* Fixed: show exact item titles */}
+                        {fixedCourseIds.map(
+                          (id) =>
+                            courseMap[id] && (
+                              <div key={id} className="flex items-center gap-2 text-sm">
+                                <GraduationCap className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                                <span>{courseMap[id]}</span>
+                              </div>
+                            ),
+                        )}
+                        {fixedModuleIds.map(
+                          (id) =>
+                            moduleMap[id] && (
+                              <div key={id} className="flex items-center gap-2 text-sm">
+                                <BookOpen className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                                <span>{moduleMap[id]}</span>
+                              </div>
+                            ),
+                        )}
+                        {fixedDigitalProductIds.map(
+                          (id) =>
+                            productMap[id] && (
+                              <div key={id} className="flex items-center gap-2 text-sm">
+                                <FileDown className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                                <span>{productMap[id]}</span>
+                              </div>
+                            ),
+                        )}
+
+                        {/* Pick-your-own: show slot counts */}
+                        {pkg.courseSlots > 0 && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <GraduationCap className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                            <span>
+                              Choose {pkg.courseSlots} course
+                              {pkg.courseSlots !== 1 && "s"}
+                            </span>
+                          </div>
+                        )}
+                        {pkg.digitalProductSlots > 0 && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <FileDown className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                            <span>
+                              Choose {pkg.digitalProductSlots} digital product
+                              {pkg.digitalProductSlots !== 1 && "s"}
+                            </span>
+                          </div>
+                        )}
+                        {pkg.credits > 0 && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Sparkles className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                            <span>
+                              {pkg.credits} session credit
+                              {pkg.credits !== 1 && "s"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="mt-6 flex items-end justify-between border-t pt-4">
                       <p className="text-2xl font-bold text-brand-600">
                         {formatPrice(pkgPrice, currency)}
                       </p>
-                      <Button asChild>
-                        <Link href={`/packages/${pkg.slug}/build`}>
-                          Build Your Package
-                        </Link>
-                      </Button>
+                      {pkg.isFixed ? (
+                        <FixedAddToCart
+                          packageId={pkg.id}
+                          fixedCourseIds={fixedCourseIds}
+                          fixedModuleIds={fixedModuleIds}
+                          fixedDigitalProductIds={fixedDigitalProductIds}
+                        />
+                      ) : (
+                        <Button asChild>
+                          <Link href={`/packages/${pkg.slug}/build`}>
+                            Build Your Package
+                          </Link>
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
