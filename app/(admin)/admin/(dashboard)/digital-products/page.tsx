@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { SortableProductList } from "./sortable-product-list";
 import { CategoryManager } from "./category-manager";
+import { PageHeader } from "@/components/admin/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -37,15 +38,17 @@ export default async function AdminDigitalProductsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Digital Products</h1>
-        <Button asChild>
-          <Link href="/admin/digital-products/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Product
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Digital Products"
+        action={
+          <Button asChild>
+            <Link href="/admin/digital-products/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Product
+            </Link>
+          </Button>
+        }
+      />
 
       <CategoryManager categories={categories} />
       <SortableProductList products={products} />

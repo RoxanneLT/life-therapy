@@ -9,6 +9,7 @@ import {
   type LegalDocumentSlug,
 } from "@/lib/legal-documents";
 import { LegalDocumentsClient } from "./legal-documents-client";
+import { PageHeader } from "@/components/admin/page-header";
 
 const ALL_SLUGS: LegalDocumentSlug[] = ["commitment", "terms", "privacy"];
 
@@ -53,14 +54,10 @@ export default async function LegalDocumentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Legal Documents</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage commitment agreements, terms &amp; conditions, and privacy
-          policy. Publishing a new version will require active clients to
-          re-accept.
-        </p>
-      </div>
+      <PageHeader
+        title="Legal Documents"
+        description="Manage commitment agreements, terms & conditions, and privacy policy. Publishing a new version will require active clients to re-accept."
+      />
       <LegalDocumentsClient
         documents={documents}
         adminUserId={adminUser.id}

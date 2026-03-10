@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, Plus, Key } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -36,28 +37,26 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Users</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage admin users and their roles.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/admin/users/change-password">
-              <Key className="mr-2 h-4 w-4" />
-              Change Password
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/admin/users/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Invite User
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Users"
+        description="Manage admin users and their roles."
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/admin/users/change-password">
+                <Key className="mr-2 h-4 w-4" />
+                Change Password
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/admin/users/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Invite User
+              </Link>
+            </Button>
+          </div>
+        }
+      />
 
       <Table>
         <TableHeader>

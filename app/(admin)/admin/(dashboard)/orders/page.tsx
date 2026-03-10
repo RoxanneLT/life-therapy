@@ -15,15 +15,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ShoppingCart } from "lucide-react";
-import type { OrderStatus } from "@/lib/generated/prisma/client";
-
-const STATUS_STYLES: Record<OrderStatus, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  paid: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-  refunded: "bg-gray-100 text-gray-800",
-  partially_refunded: "bg-orange-100 text-orange-800",
-};
+import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
+import { ORDER_STATUS_BADGE } from "@/lib/status-styles";
 
 export default async function OrdersPage({
   searchParams,
@@ -60,12 +54,10 @@ export default async function OrdersPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Orders</h1>
-        <p className="text-sm text-muted-foreground">
-          Total revenue: {formatPrice(totalRevenue._sum.totalCents || 0)}
-        </p>
-      </div>
+      <PageHeader
+        title="Orders"
+        description={`Total revenue: ${formatPrice(totalRevenue._sum.totalCents || 0)}`}
+      />
 
       {/* Status filters */}
       <div className="flex flex-wrap gap-2">
@@ -86,10 +78,10 @@ export default async function OrdersPage({
       </div>
 
       {orders.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <ShoppingCart className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No orders yet.</p>
-        </div>
+        <EmptyState
+          icon={ShoppingCart}
+          message="No orders yet."
+        />
       ) : (
         <div className="rounded-md border">
           <Table>

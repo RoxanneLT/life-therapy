@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Pencil, Star } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function AdminTestimonialsPage() {
   const testimonials = await prisma.testimonial.findMany({
@@ -14,20 +15,18 @@ export default async function AdminTestimonialsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Testimonials</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage client testimonials and reviews.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/admin/testimonials/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Testimonial
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Testimonials"
+        description="Manage client testimonials and reviews."
+        action={
+          <Button asChild>
+            <Link href="/admin/testimonials/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Testimonial
+            </Link>
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {testimonials.map((testimonial) => (

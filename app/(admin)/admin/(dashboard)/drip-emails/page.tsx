@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DeleteDripEmailButton } from "./delete-button";
+import { PageHeader } from "@/components/admin/page-header";
 import { DRIP_LINK_ISSUES, getWorstStatus, countIssues } from "@/lib/drip-link-audit";
 import type { LinkAuditItem, EmailAudit } from "@/lib/drip-link-audit";
 
@@ -47,12 +48,10 @@ export default async function DripEmailsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Drip Email Sequence</h1>
-        <p className="text-sm text-muted-foreground">
-          {totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.
-        </p>
-      </div>
+      <PageHeader
+        title="Drip Email Sequence"
+        description={`${totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.`}
+      />
 
       {/* ── Smart Behaviour Panel ── */}
       <Card className="border-brand-200 bg-gradient-to-br from-brand-50/50 to-white">

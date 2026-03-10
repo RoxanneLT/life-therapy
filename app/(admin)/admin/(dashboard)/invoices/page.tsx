@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Receipt } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { InvoiceListFilters } from "./invoice-list-filters";
 import { InvoiceRowActions } from "./invoice-row-actions";
 import { ExportDialog } from "./export-dialog";
@@ -165,15 +167,11 @@ export default async function InvoicesPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Invoices</h1>
-          <p className="text-sm text-muted-foreground">
-            {totalCount} total invoices
-          </p>
-        </div>
-        <ExportDialog />
-      </div>
+      <PageHeader
+        title="Invoices"
+        description={`${totalCount} total invoices`}
+        action={<ExportDialog />}
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -194,12 +192,10 @@ export default async function InvoicesPage({
 
       {/* Table */}
       {invoices.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <Receipt className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            {params.q ? "No invoices match your search." : "No invoices found."}
-          </p>
-        </div>
+        <EmptyState
+          icon={Receipt}
+          message={params.q ? "No invoices match your search." : "No invoices found."}
+        />
       ) : (
         <div className="rounded-md border">
           <Table>

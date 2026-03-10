@@ -14,15 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Gift } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 import { resendGiftEmailAction } from "./actions";
-import type { GiftStatus } from "@/lib/generated/prisma/client";
-
-const STATUS_STYLES: Record<GiftStatus, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  delivered: "bg-blue-100 text-blue-800",
-  redeemed: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-};
+import { GIFT_STATUS_BADGE } from "@/lib/status-styles";
 
 export default async function GiftsPage() {
   await requireRole("super_admin");
@@ -39,18 +34,16 @@ export default async function GiftsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Gifts</h1>
-        <p className="text-sm text-muted-foreground">
-          {gifts.length} gift records
-        </p>
-      </div>
+      <PageHeader
+        title="Gifts"
+        description={`${gifts.length} gift records`}
+      />
 
       {gifts.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <Gift className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No gifts yet.</p>
-        </div>
+        <EmptyState
+          icon={Gift}
+          message="No gifts yet."
+        />
       ) : (
         <div className="rounded-md border">
           <Table>

@@ -15,6 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Tag } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
+import { EmptyState } from "@/components/admin/empty-state";
 
 export default async function CouponsPage() {
   await requireRole("super_admin");
@@ -25,26 +27,24 @@ export default async function CouponsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Coupons</h1>
-          <p className="text-sm text-muted-foreground">
-            {coupons.length} coupon codes
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/admin/coupons/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Coupon
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Coupons"
+        description={`${coupons.length} coupon codes`}
+        action={
+          <Button asChild>
+            <Link href="/admin/coupons/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Coupon
+            </Link>
+          </Button>
+        }
+      />
 
       {coupons.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <Tag className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No coupons yet.</p>
-        </div>
+        <EmptyState
+          icon={Tag}
+          message="No coupons yet."
+        />
       ) : (
         <div className="rounded-md border">
           <Table>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mail, Pencil, CalendarDays, ShoppingCart, UserPlus, GraduationCap, Gift, Receipt } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -32,14 +33,10 @@ export default async function EmailTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Email Templates</h1>
-          <p className="text-sm text-muted-foreground">
-            View and edit all email templates sent by the system.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Email Templates"
+        description="View and edit all email templates sent by the system."
+      />
 
       {templates.length === 0 ? (
         <Card>
