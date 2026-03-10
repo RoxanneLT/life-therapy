@@ -65,11 +65,14 @@ export function RichTextEditor({
   const isInternalChange = useRef(false);
   const hasMounted = useRef(false);
 
-  // Set initial content on mount
+  // Set initial content on mount — sanitize immediately to clean any legacy injected styles
   useEffect(() => {
     if (editorRef.current && !hasMounted.current) {
-      editorRef.current.innerHTML = value;
+      const clean = sanitizeHtml(value);
+      editorRef.current.innerHTML = clean;
       hasMounted.current = true;
+      // Propagate cleaned HTML so saving will persist the clean version
+      if (clean !== value) onChange(clean);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
