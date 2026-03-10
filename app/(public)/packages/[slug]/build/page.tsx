@@ -47,7 +47,6 @@ export default async function PackageBuildPage({
             priceUsd: true,
             priceEur: true,
             priceGbp: true,
-            isShortCourse: true,
           },
           orderBy: { sortOrder: "asc" },
         })
@@ -76,7 +75,6 @@ export default async function PackageBuildPage({
     title: c.title,
     imageUrl: c.imageUrl,
     priceCents: getCoursePrice(c, currency),
-    isShortCourse: c.isShortCourse,
   }));
 
   const productOptions = digitalProducts.map((d) => ({

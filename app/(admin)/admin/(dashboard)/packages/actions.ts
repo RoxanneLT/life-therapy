@@ -13,6 +13,7 @@ function parsePackageFormData(formData: FormData) {
     isPublished: raw.isPublished === "true",
     isFixed: raw.isFixed === "true",
     fixedCourseIds: formData.getAll("fixedCourseIds").map(String),
+    fixedModuleIds: formData.getAll("fixedModuleIds").map(String),
     fixedDigitalProductIds: formData.getAll("fixedDigitalProductIds").map(String),
   });
 }

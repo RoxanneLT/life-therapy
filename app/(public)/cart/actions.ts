@@ -31,21 +31,30 @@ export async function checkFixedPackageOwnership(
 
   const packages = await prisma.hybridPackage.findMany({
     where: { id: { in: packageIds }, isFixed: true },
-    select: { fixedCourseIds: true, fixedDigitalProductIds: true },
+    select: { fixedCourseIds: true, fixedModuleIds: true, fixedDigitalProductIds: true },
   });
 
   const allCourseIds = packages.flatMap((p) =>
     Array.isArray(p.fixedCourseIds) ? p.fixedCourseIds.map(String) : []
   );
+  const allModuleIds = packages.flatMap((p) =>
+    Array.isArray(p.fixedModuleIds) ? p.fixedModuleIds.map(String) : []
+  );
   const allProductIds = packages.flatMap((p) =>
     Array.isArray(p.fixedDigitalProductIds) ? p.fixedDigitalProductIds.map(String) : []
   );
 
-  const [ownedCourses, ownedProducts] = await Promise.all([
+  const [ownedCourses, ownedModules, ownedProducts] = await Promise.all([
     allCourseIds.length
       ? prisma.enrollment.findMany({
           where: { studentId: auth.student.id, courseId: { in: allCourseIds } },
           select: { course: { select: { title: true } } },
+        })
+      : [],
+    allModuleIds.length
+      ? prisma.moduleAccess.findMany({
+          where: { studentId: auth.student.id, moduleId: { in: allModuleIds } },
+          select: { module: { select: { standaloneTitle: true, title: true } } },
         })
       : [],
     allProductIds.length
@@ -58,6 +67,7 @@ export async function checkFixedPackageOwnership(
 
   return [
     ...ownedCourses.map((e) => e.course.title),
+    ...ownedModules.map((a) => a.module.standaloneTitle || a.module.title),
     ...ownedProducts.map((a) => a.digitalProduct.title),
   ];
 }

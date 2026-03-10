@@ -23,7 +23,6 @@ import { PppPriceFields } from "@/components/admin/ppp-price-fields";
 interface SelectOption {
   id: string;
   title: string;
-  isShortCourse?: boolean;
 }
 
 interface PackageFormProps {
@@ -42,6 +41,7 @@ interface PackageFormProps {
     digitalProductSlots: number;
     isFixed: boolean;
     fixedCourseIds: unknown;
+    fixedModuleIds: unknown;
     fixedDigitalProductIds: unknown;
     category?: string | null;
     isPublished: boolean;
@@ -50,6 +50,7 @@ interface PackageFormProps {
   };
   categories?: string[];
   availableCourses?: SelectOption[];
+  availableModules?: SelectOption[];
   availableDigitalProducts?: SelectOption[];
   onSubmit: (formData: FormData) => Promise<void>;
 }
@@ -63,6 +64,7 @@ export function PackageForm({
   initialData,
   categories = [],
   availableCourses = [],
+  availableModules = [],
   availableDigitalProducts = [],
   onSubmit,
 }: PackageFormProps) {
@@ -73,6 +75,9 @@ export function PackageForm({
   const [isFixed, setIsFixed] = useState(initialData?.isFixed ?? false);
   const [fixedCourseIds, setFixedCourseIds] = useState<string[]>(
     toStringArray(initialData?.fixedCourseIds)
+  );
+  const [fixedModuleIds, setFixedModuleIds] = useState<string[]>(
+    toStringArray(initialData?.fixedModuleIds)
   );
   const [fixedDigitalProductIds, setFixedDigitalProductIds] = useState<string[]>(
     toStringArray(initialData?.fixedDigitalProductIds)
@@ -104,6 +109,8 @@ export function PackageForm({
     formData.set("isFixed", String(isFixed));
     formData.delete("fixedCourseIds");
     for (const id of fixedCourseIds) formData.append("fixedCourseIds", id);
+    formData.delete("fixedModuleIds");
+    for (const id of fixedModuleIds) formData.append("fixedModuleIds", id);
     formData.delete("fixedDigitalProductIds");
     for (const id of fixedDigitalProductIds) formData.append("fixedDigitalProductIds", id);
     await onSubmit(formData);
@@ -173,13 +180,14 @@ export function PackageForm({
 
         {isFixed ? (
           <div className="space-y-4 pt-2 border-t">
-            {/* Fixed courses — grouped by type */}
-            {availableCourses.length > 0 && (() => {
-              const fullCourses = availableCourses.filter((c) => !c.isShortCourse);
-              const shortCourses = availableCourses.filter((c) => c.isShortCourse);
-              const CourseCheckboxList = ({ courses }: { courses: SelectOption[] }) => (
+            {/* Full courses */}
+            {availableCourses.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Full Courses
+                </Label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {courses.map((c) => (
+                  {availableCourses.map((c) => (
                     <label
                       key={c.id}
                       className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-accent/50"
@@ -192,28 +200,31 @@ export function PackageForm({
                     </label>
                   ))}
                 </div>
-              );
-              return (
-                <div className="space-y-3">
-                  {fullCourses.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Full Courses
-                      </Label>
-                      <CourseCheckboxList courses={fullCourses} />
-                    </div>
-                  )}
-                  {shortCourses.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Short Courses
-                      </Label>
-                      <CourseCheckboxList courses={shortCourses} />
-                    </div>
-                  )}
+              </div>
+            )}
+
+            {/* Short courses (standalone modules) */}
+            {availableModules.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Short Courses
+                </Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {availableModules.map((m) => (
+                    <label
+                      key={m.id}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-accent/50"
+                    >
+                      <Checkbox
+                        checked={fixedModuleIds.includes(m.id)}
+                        onCheckedChange={() => toggleId(fixedModuleIds, setFixedModuleIds, m.id)}
+                      />
+                      {m.title}
+                    </label>
+                  ))}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {/* Fixed digital products */}
             {availableDigitalProducts.length > 0 && (

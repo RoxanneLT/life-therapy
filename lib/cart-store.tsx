@@ -15,7 +15,7 @@ export interface CartItemLocal {
   hybridPackageId?: string;
   moduleId?: string;
   digitalProductId?: string;
-  packageSelections?: { courseIds: string[]; digitalProductIds: string[] };
+  packageSelections?: { courseIds: string[]; moduleIds?: string[]; digitalProductIds: string[] };
   quantity: number;
   isGift: boolean;
   giftRecipientName?: string;

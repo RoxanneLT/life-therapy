@@ -23,7 +23,6 @@ interface SelectableItem {
   title: string;
   imageUrl: string | null;
   priceCents: number;
-  isShortCourse?: boolean;
 }
 
 interface PackageBuilderProps {
@@ -162,11 +161,6 @@ export function PackageBuilder({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <p className="text-sm font-medium truncate">{course.title}</p>
-                          {course.isShortCourse && (
-                            <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                              Short
-                            </span>
-                          )}
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Value: {formatPrice(course.priceCents, currency)}

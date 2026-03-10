@@ -70,7 +70,6 @@ model Course {
   level            String?        // Beginner, Intermediate, Advanced
   isPublished      Boolean        @default(false)
   isFeatured       Boolean        @default(false)
-  isShortCourse    Boolean        @default(false) // Short/mini course vs full course
   sortOrder        Int            @default(0)
   previewVideoUrl  String?        // Sofia Hart intro video (YouTube/Vimeo/direct URL)
   facilitatorScript String?       @db.Text  // Script for Sofia Hart to introduce this course
@@ -1117,6 +1116,7 @@ model HybridPackage {
   digitalProductSlots Int      @default(0) // How many digital products the customer picks
   isFixed             Boolean  @default(false) // Curated: admin specifies exact contents
   fixedCourseIds      Json     @default("[]") // String[] of Course ids (used when isFixed=true)
+  fixedModuleIds      Json     @default("[]") // String[] of Module ids / short courses (used when isFixed=true)
   fixedDigitalProductIds Json  @default("[]") // String[] of DigitalProduct ids (used when isFixed=true)
   category            String?
   isPublished         Boolean  @default(false)

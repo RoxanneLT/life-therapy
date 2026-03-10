@@ -8,12 +8,14 @@ import { ShoppingCart, CheckCircle2 } from "lucide-react";
 interface FixedAddToCartProps {
   packageId: string;
   fixedCourseIds: string[];
+  fixedModuleIds: string[];
   fixedDigitalProductIds: string[];
 }
 
 export function FixedAddToCart({
   packageId,
   fixedCourseIds,
+  fixedModuleIds,
   fixedDigitalProductIds,
 }: FixedAddToCartProps) {
   const { addItem, items } = useCart();
@@ -26,6 +28,7 @@ export function FixedAddToCart({
       hybridPackageId: packageId,
       packageSelections: {
         courseIds: fixedCourseIds,
+        moduleIds: fixedModuleIds,
         digitalProductIds: fixedDigitalProductIds,
       },
       isGift: false,

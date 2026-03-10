@@ -13,7 +13,6 @@ export async function createCourse(formData: FormData) {
     ...raw,
     isPublished: raw.isPublished === "true",
     isFeatured: raw.isFeatured === "true",
-    isShortCourse: raw.isShortCourse === "true",
   });
 
   // Always add new courses at the end of the list
@@ -34,7 +33,6 @@ export async function updateCourse(id: string, formData: FormData) {
     ...raw,
     isPublished: raw.isPublished === "true",
     isFeatured: raw.isFeatured === "true",
-    isShortCourse: raw.isShortCourse === "true",
   });
 
   await prisma.course.update({ where: { id }, data: parsed });

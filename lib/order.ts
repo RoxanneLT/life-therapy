@@ -96,12 +96,20 @@ async function processPackageItem(
   const pkg = await prisma.hybridPackage.findUnique({ where: { id: item.hybridPackageId! } });
   if (!pkg) return;
 
-  const selections = item.packageSelections as { courseIds?: string[]; digitalProductIds?: string[] } | null;
+  const selections = item.packageSelections as { courseIds?: string[]; moduleIds?: string[]; digitalProductIds?: string[] } | null;
 
   for (const courseId of selections?.courseIds || []) {
     await prisma.enrollment.upsert({
       where: { studentId_courseId: { studentId, courseId } },
       create: { studentId, courseId, source: "purchase", orderId },
+      update: {},
+    });
+  }
+
+  for (const moduleId of selections?.moduleIds || []) {
+    await prisma.moduleAccess.upsert({
+      where: { studentId_moduleId: { studentId, moduleId } },
+      create: { studentId, moduleId, source: "purchase", orderId },
       update: {},
     });
   }

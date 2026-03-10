@@ -48,7 +48,6 @@ interface CourseFormProps {
     level?: string | null;
     isPublished: boolean;
     isFeatured: boolean;
-    isShortCourse: boolean;
     sortOrder: number;
     previewVideoUrl?: string | null;
     facilitatorScript?: string | null;
@@ -69,9 +68,6 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
   );
   const [isFeatured, setIsFeatured] = useState(
     initialData?.isFeatured ?? false
-  );
-  const [isShortCourse, setIsShortCourse] = useState(
-    initialData?.isShortCourse ?? false
   );
   const [previewVideoUrl, setPreviewVideoUrl] = useState(
     initialData?.previewVideoUrl || ""
@@ -95,7 +91,6 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
     formData.set("level", level);
     formData.set("isPublished", String(isPublished));
     formData.set("isFeatured", String(isFeatured));
-    formData.set("isShortCourse", String(isShortCourse));
     formData.set("previewVideoUrl", previewVideoUrl);
     await onSubmit(formData);
     setSubmitting(false);
@@ -250,7 +245,7 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
         metaDescription={initialData?.metaDescription || ""}
       />
 
-      <div className="flex flex-wrap gap-6">
+      <div className="flex gap-6">
         <div className="flex items-center gap-2">
           <Switch checked={isPublished} onCheckedChange={setIsPublished} />
           <Label>Published</Label>
@@ -258,13 +253,6 @@ export function CourseForm({ initialData, onSubmit }: CourseFormProps) {
         <div className="flex items-center gap-2">
           <Switch checked={isFeatured} onCheckedChange={setIsFeatured} />
           <Label>Featured</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch checked={isShortCourse} onCheckedChange={setIsShortCourse} />
-          <div>
-            <Label>Short Course</Label>
-            <p className="text-xs text-muted-foreground">Mini/short course (not a full program)</p>
-          </div>
         </div>
       </div>
 
