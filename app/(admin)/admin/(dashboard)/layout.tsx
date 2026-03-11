@@ -13,7 +13,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <AdminSidebar className="hidden lg:block" role={adminUser.role} />
+      <AdminSidebar role={adminUser.role} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <AdminHeader
           adminName={adminUser.name}

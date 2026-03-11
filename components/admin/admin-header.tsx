@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, ExternalLink } from "lucide-react";
-import { AdminSidebar } from "./admin-sidebar";
+import { Menu, LogOut, ExternalLink, UserCog } from "lucide-react";
+import Link from "next/link";
+import { AdminSidebarContent } from "./admin-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 
@@ -66,15 +67,9 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
-          <AdminSidebar className="h-full" role={role} />
+          <AdminSidebarContent role={role} onNavClick={() => setSheetOpen(false)} />
         </SheetContent>
       </Sheet>
-
-      <div className="hidden lg:block">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          Admin Panel
-        </h2>
-      </div>
 
       {/* Right side */}
       <div className="flex items-center gap-2">
@@ -105,6 +100,13 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
                 <p className="text-xs text-muted-foreground">{adminEmail}</p>
               )}
             </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/admin/settings" className="flex items-center">
+                <UserCog className="mr-2 h-4 w-4" />
+                My Account
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />

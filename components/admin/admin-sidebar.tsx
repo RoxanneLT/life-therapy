@@ -20,8 +20,10 @@ import {
   Send,
   Timer,
   Receipt,
+  Menu,
 } from "lucide-react";
 import Image from "next/image";
+import { useState } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 
 interface NavItem {
@@ -80,12 +82,14 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-interface AdminSidebarProps {
-  readonly className?: string;
+interface SidebarContentProps {
   readonly role: AdminRole;
+  readonly onNavClick?: () => void;
+  readonly collapsed?: boolean;
+  readonly onToggleCollapse?: () => void;
 }
 
-export function AdminSidebar({ className, role }: AdminSidebarProps) {
+export function AdminSidebarContent({ role, onNavClick, collapsed = false, onToggleCollapse }: SidebarContentProps) {
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -94,59 +98,100 @@ export function AdminSidebar({ className, role }: AdminSidebarProps) {
     return pathname.startsWith(href);
   }
 
-  // Filter groups to only show items visible to the current role
   const visibleGroups = navGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => item.roles.includes(role)),
-    }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.roles.includes(role)) }))
     .filter((group) => group.items.length > 0);
 
   return (
-    <aside className={cn("w-64 flex-shrink-0 border-r bg-card", className)}>
-      <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center border-b px-6">
-          <Image
-            src="/logo.png"
-            alt="Life-Therapy"
-            width={200}
-            height={50}
-            className="h-10 w-auto"
-          />
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-4">
-          {visibleGroups.map((group, groupIndex) => (
-            <div key={group.label || "overview"} className={groupIndex > 0 ? "mt-4" : ""}>
-              {group.label && (
-                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  {group.label}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                      isActive(item.href)
-                        ? "bg-brand-50 text-brand-700"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
+    <div className="flex h-full flex-col bg-card text-card-foreground">
+      {/* Logo / brand */}
+      <div className={cn(
+        "flex h-16 items-center border-b",
+        collapsed ? "justify-center px-3" : "justify-between px-4"
+      )}>
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted transition-colors"
+            aria-label="Expand sidebar"
+          >
+            <Menu className="h-5 w-5 text-muted-foreground" />
+          </button>
+        ) : (
+          <>
+            <Link href="/admin" onClick={onNavClick}>
+              <Image
+                src="/logo.png"
+                alt="Life-Therapy"
+                width={160}
+                height={40}
+                className="h-9 w-auto"
+                priority
+              />
+            </Link>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              aria-label="Collapse sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+          </>
+        )}
       </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto p-2 py-4">
+        {visibleGroups.map((group, groupIndex) => (
+          <div key={group.label || "overview"} className="mb-4">
+            {!collapsed && group.label && (
+              <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                {group.label}
+              </p>
+            )}
+            {collapsed && groupIndex > 0 && <div className="my-2 border-t border-border/50" />}
+            <div className="space-y-0.5">
+              {group.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavClick}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
+                    collapsed ? "justify-center px-2" : "gap-3 px-3",
+                    isActive(item.href)
+                      ? "bg-brand-50 text-brand-700"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+export function AdminSidebar({ role }: { readonly role: AdminRole }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <aside className={cn(
+      "sticky top-0 hidden h-screen shrink-0 flex-col border-r lg:flex transition-all duration-200",
+      collapsed ? "w-14" : "w-64"
+    )}>
+      <AdminSidebarContent
+        role={role}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((c) => !c)}
+      />
     </aside>
   );
 }
