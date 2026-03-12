@@ -72,7 +72,7 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
       </Sheet>
 
       {/* Right side */}
-      <div className="flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
         <Button size="sm" className="bg-terracotta-500 text-white hover:bg-terracotta-600" asChild>
           <a href="/" target="_blank" rel="noopener noreferrer">
