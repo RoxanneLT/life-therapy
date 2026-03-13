@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
 import { getCurrency } from "@/lib/get-region";
-import { getCoursePrice } from "@/lib/pricing";
+import { getCoursePrice, getModulePrice } from "@/lib/pricing";
 import Link from "next/link";
 import Image from "next/image";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
@@ -14,22 +14,75 @@ interface CourseGridProps {
   section: PageSection;
 }
 
+interface GridItem {
+  id: string;
+  type: "full" | "short";
+  title: string;
+  subtitle?: string | null;
+  imageUrl?: string | null;
+  category?: string | null;
+  level?: string | null;
+  price: number;
+  slug: string;
+  modulesCount?: number;
+  hours?: string | null;
+  courseId?: string;
+  moduleId?: string;
+}
+
 export async function CourseGrid({ section }: CourseGridProps) {
   const currency = await getCurrency();
   const config = (section.config as Record<string, unknown>) || {};
   const featuredOnly = config.featuredOnly === true;
   const maxCount = (config.maxCount as number) || 6;
 
-  const courses = await prisma.course.findMany({
-    where: {
-      isPublished: true,
-      ...(featuredOnly ? { isFeatured: true } : {}),
-    },
-    orderBy: { sortOrder: "asc" },
-    take: maxCount,
-  });
+  const [courses, standaloneModules] = await Promise.all([
+    prisma.course.findMany({
+      where: {
+        isPublished: true,
+        ...(featuredOnly ? { isFeatured: true } : {}),
+      },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.module.findMany({
+      where: {
+        isStandalonePublished: true,
+        course: { isPublished: true },
+      },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
 
-  if (courses.length === 0) return null;
+  const items: GridItem[] = [
+    ...courses.map((c) => ({
+      id: c.id,
+      type: "full" as const,
+      title: c.title,
+      subtitle: c.subtitle,
+      imageUrl: c.imageUrl,
+      category: c.category,
+      level: c.level,
+      price: getCoursePrice(c, currency),
+      slug: c.slug,
+      modulesCount: c.modulesCount,
+      hours: c.hours,
+      courseId: c.id,
+    })),
+    ...standaloneModules.map((m) => ({
+      id: m.id,
+      type: "short" as const,
+      title: m.standaloneTitle || m.title,
+      subtitle: m.standaloneDescription,
+      imageUrl: m.standaloneImageUrl,
+      category: m.standaloneCategory,
+      level: null,
+      price: getModulePrice(m, currency),
+      slug: `short/${m.standaloneSlug}`,
+      moduleId: m.id,
+    })),
+  ].slice(0, maxCount);
+
+  if (items.length === 0) return null;
 
   return (
     <section className="px-4 py-10">
@@ -48,13 +101,13 @@ export async function CourseGrid({ section }: CourseGridProps) {
           </p>
         )}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((course) => (
-            <Card key={course.id} className="overflow-hidden">
+          {items.map((item) => (
+            <Card key={`${item.type}-${item.id}`} className="overflow-hidden">
               <div className="relative aspect-video bg-brand-800">
-                {course.imageUrl && (
+                {item.imageUrl && (
                   <Image
-                    src={course.imageUrl}
-                    alt={course.title}
+                    src={item.imageUrl}
+                    alt={item.title}
                     width={400}
                     height={225}
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -63,45 +116,47 @@ export async function CourseGrid({ section }: CourseGridProps) {
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent px-4 pb-3 pt-10">
                   <div className="mb-1.5 flex items-center gap-2">
-                    {course.category && (
-                      <Badge variant="outline" className="border-white/40 bg-white/10 text-xs text-white">
-                        {course.category.replaceAll("_", " ")}
-                      </Badge>
-                    )}
-                    {course.level && (
+                    <Badge
+                      variant={item.type === "short" ? "secondary" : "outline"}
+                      className="border-white/40 bg-white/10 text-xs text-white"
+                    >
+                      {item.type === "short" ? "Short Course" : "Full Course"}
+                    </Badge>
+                    {item.category && (
                       <span className="text-xs text-white/80">
-                        {course.level}
+                        {item.category.replaceAll("_", " ")}
                       </span>
                     )}
                   </div>
                   <h3 className="font-heading text-lg font-semibold text-white">
-                    {course.title}
+                    {item.title}
                   </h3>
                 </div>
               </div>
               <CardContent className="pt-3">
-                {course.subtitle && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {course.subtitle}
+                {item.subtitle && (
+                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                    {item.subtitle}
                   </p>
                 )}
                 <div className="mt-3 flex items-center justify-between">
                   <div className="text-sm text-muted-foreground">
-                    {course.modulesCount > 0 && (
-                      <span>{course.modulesCount} Modules</span>
+                    {item.modulesCount != null && item.modulesCount > 0 && (
+                      <span>{item.modulesCount} Modules</span>
                     )}
-                    {course.hours && <span> | {course.hours}</span>}
+                    {item.hours && <span> | {item.hours}</span>}
                   </div>
                   <span className="font-semibold text-brand-600">
-                    {formatPrice(getCoursePrice(course, currency), currency)}
+                    {formatPrice(item.price, currency)}
                   </span>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <Button className="flex-1" variant="outline" asChild>
-                    <Link href={`/courses/${course.slug}`}>Learn More<span className="sr-only"> about {course.title}</span></Link>
+                    <Link href={`/courses/${item.slug}`}>Learn More<span className="sr-only"> about {item.title}</span></Link>
                   </Button>
                   <AddToCartButton
-                    courseId={course.id}
+                    courseId={item.courseId}
+                    moduleId={item.moduleId}
                     size="default"
                     variant="default"
                     label="Add"
