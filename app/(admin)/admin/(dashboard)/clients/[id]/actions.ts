@@ -13,6 +13,21 @@ import { format } from "date-fns";
 import { initializeTransaction } from "@/lib/paystack";
 import type { Booking, Student } from "@/lib/generated/prisma/client";
 
+/** Auto-activate a payer if they're inactive but the billed client is active */
+async function autoActivatePayerIfNeeded(billedClientId: string, payerId: string) {
+  const [billedClient, payer] = await Promise.all([
+    prisma.student.findUnique({ where: { id: billedClientId }, select: { clientStatus: true } }),
+    prisma.student.findUnique({ where: { id: payerId }, select: { clientStatus: true } }),
+  ]);
+  if (billedClient?.clientStatus === "active" && payer?.clientStatus === "inactive") {
+    await prisma.student.update({
+      where: { id: payerId },
+      data: { clientStatus: "active" },
+    });
+    revalidatePath(`/admin/clients/${payerId}`);
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // Create an empty intake assessment for a client
 // ────────────────────────────────────────────────────────────
@@ -523,6 +538,12 @@ export async function updateBillingAssignmentAction(
     });
     if (rel.relatedStudentId !== studentId && rel.studentId !== studentId) {
       throw new Error("Invalid relationship for this client");
+    }
+
+    // Auto-activate the payer if they're inactive and the billed client is active
+    const payerId = rel.studentId === studentId ? rel.relatedStudentId : rel.studentId;
+    if (payerId) {
+      await autoActivatePayerIfNeeded(studentId, payerId);
     }
   }
 

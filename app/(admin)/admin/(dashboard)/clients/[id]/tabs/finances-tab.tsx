@@ -167,6 +167,19 @@ export function FinancesTab({ client }: FinancesTabProps) {
   const billedToMe = (client._billedToMe as BilledToMeEntry[]) || [];
 
   // Build relationship options from BOTH directions + corporate entities
+  // Invert relationship type when showing the other person's role
+  const INVERSE_RELATIONSHIP: Record<string, string> = {
+    parent: "child",
+    child: "parent",
+    guardian: "dependent",
+    dependent: "guardian",
+    partner: "partner",
+    sibling: "sibling",
+    spouse: "spouse",
+    corporate: "corporate",
+    other: "other",
+  };
+
   const relationshipsFrom = (client.relationshipsFrom as {
     id: string;
     relatedStudentId?: string | null;
@@ -174,22 +187,26 @@ export function FinancesTab({ client }: FinancesTabProps) {
     billingEntityId?: string | null;
     billingEntity?: { name: string } | null;
     relationshipType: string;
+    relationshipLabel?: string | null;
   }[]) || [];
   const relationshipsTo = (client.relationshipsTo as {
     id: string;
     student?: { firstName: string; lastName: string } | null;
     relationshipType: string;
+    relationshipLabel?: string | null;
   }[]) || [];
 
   const billingRelationships: RelationshipOption[] = [
     // "From" relationships: this client created them → relatedStudent is the option
+    // relationshipType describes THIS client's role, so invert it for the related person
     ...relationshipsFrom
       .filter((r) => r.relatedStudentId && r.relatedStudent)
       .map((r) => ({
         id: r.id,
-        label: `${r.relatedStudent!.firstName} ${r.relatedStudent!.lastName} (${r.relationshipType})`,
+        label: `${r.relatedStudent!.firstName} ${r.relatedStudent!.lastName} (${INVERSE_RELATIONSHIP[r.relationshipType] || r.relationshipType})`,
       })),
     // "To" relationships: someone else created them → student is the option
+    // relationshipType describes the OTHER client's role, so use it directly
     ...relationshipsTo
       .filter((r) => r.student)
       .map((r) => ({
