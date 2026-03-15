@@ -494,7 +494,7 @@ export async function getClientsForBookingAction(search?: string) {
 
   return prisma.student.findMany({
     where,
-    select: { id: true, firstName: true, lastName: true, email: true, clientStatus: true },
+    select: { id: true, firstName: true, lastName: true, email: true, clientStatus: true, billingType: true },
     take: 20,
     orderBy: { firstName: "asc" },
   });

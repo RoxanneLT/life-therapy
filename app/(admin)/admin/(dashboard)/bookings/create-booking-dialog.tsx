@@ -52,6 +52,7 @@ interface ClientOption {
   lastName: string;
   email: string;
   clientStatus: string;
+  billingType: string | null;
 }
 
 interface PartnerOption {
@@ -173,8 +174,18 @@ export function CreateBookingDialog() {
       setCreditBalance(null);
       return;
     }
+    // Postpaid clients don't use credits — auto-uncheck
+    if (selectedClient.billingType === "postpaid") {
+      setUseCredit(false);
+      setCreditBalance(null);
+      return;
+    }
     getClientCreditBalance(selectedClient.id)
-      .then(setCreditBalance)
+      .then((balance) => {
+        setCreditBalance(balance);
+        // Auto-uncheck if no credits available
+        if (balance < 1) setUseCredit(false);
+      })
       .catch(() => setCreditBalance(null));
   }, [selectedClient]);
 
@@ -631,30 +642,39 @@ export function CreateBookingDialog() {
               </div>
             )}
 
-            {/* Credit option */}
+            {/* Credit / billing option */}
             {selectedClient && !config.isFree && (
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="useCredit"
-                    checked={useCredit}
-                    onChange={(e) => setUseCredit(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <Label htmlFor="useCredit" className="cursor-pointer">
-                    Deduct session credit{bookingMode === "recurring" ? "s" : ""}
-                  </Label>
-                </div>
-                {creditBalance !== null && (
-                  <p className="text-xs text-muted-foreground">
-                    Client balance: {creditBalance} credit{creditBalance !== 1 ? "s" : ""}
-                    {bookingMode === "single" && useCredit && creditBalance < 1 && (
-                      <span className="ml-1 text-destructive">
-                        (insufficient — booking will still be created)
-                      </span>
-                    )}
+                {selectedClient.billingType === "postpaid" ? (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                    Post-paid client — session will be added to monthly invoice
                   </p>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="useCredit"
+                        checked={useCredit}
+                        onChange={(e) => setUseCredit(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300"
+                        disabled={creditBalance !== null && creditBalance < 1}
+                      />
+                      <Label htmlFor="useCredit" className="cursor-pointer">
+                        Deduct session credit{bookingMode === "recurring" ? "s" : ""}
+                      </Label>
+                    </div>
+                    {creditBalance !== null && creditBalance < 1 && (
+                      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                        No credits available — session will be post-paid
+                      </p>
+                    )}
+                    {creditBalance !== null && creditBalance >= 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        Client balance: {creditBalance} credit{creditBalance !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
