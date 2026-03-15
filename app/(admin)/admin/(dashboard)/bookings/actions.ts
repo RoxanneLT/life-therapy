@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { cancelCalendarEvent, createCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
@@ -71,6 +72,7 @@ export async function deleteBooking(id: string) {
 
   await prisma.booking.delete({ where: { id } });
   revalidatePath("/admin/bookings");
+  redirect("/admin/bookings");
 }
 
 export async function rescheduleBooking(
