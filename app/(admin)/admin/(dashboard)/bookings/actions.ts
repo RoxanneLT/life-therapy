@@ -11,6 +11,7 @@ import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
+import { getSessionPrice } from "@/lib/pricing";
 import { format } from "date-fns";
 import { randomUUID } from "node:crypto";
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
@@ -172,9 +173,10 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
 
   const config = getSessionTypeConfig(data.sessionType);
   const isPostpaid = student.billingType === "postpaid";
+  const settings = await getSiteSettings();
 
   // Validate slot availability (race condition guard)
-  const slots = await getAvailableSlots(data.date, config);
+  const slots = await getAvailableSlots(data.date, config, { skipMinNotice: true });
   const slotAvailable = slots.some((s) => s.start === data.startTime);
   if (!slotAvailable) {
     throw new Error("This time slot is no longer available. Please choose another.");
@@ -185,6 +187,14 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     const balance = await getBalance(student.id);
     if (balance < 1) throw new Error("Client has insufficient session credits.");
   }
+
+  // Determine price: free sessions = 0, credit-paid = 0 (already paid via credit purchase), postpaid/unpaid = session rate
+  const sessionPriceType = data.sessionType === "couples" ? "couples" : "individual";
+  const priceZarCents = config.isFree
+    ? 0
+    : (data.useCredit && !isPostpaid)
+      ? 0
+      : getSessionPrice(sessionPriceType, "ZAR", settings);
 
   const clientName = `${student.firstName} ${student.lastName}`.trim();
   const bookingDate = new Date(`${data.date}T00:00:00Z`);
@@ -209,7 +219,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
       startTime: data.startTime,
       endTime: data.endTime,
       durationMinutes: config.durationMinutes,
-      priceZarCents: 0,
+      priceZarCents,
       priceCurrency: "ZAR",
       clientName,
       clientEmail: student.email,
@@ -237,7 +247,6 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
 
   // Send confirmation email
   try {
-    const settings = await getSiteSettings();
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
     const dateStr = format(bookingDate, "EEEE, d MMMM yyyy");
     const timeStr = `${data.startTime} – ${data.endTime} (SAST)`;
@@ -338,6 +347,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 
   const config = getSessionTypeConfig(data.sessionType);
   const isPostpaid = student.billingType === "postpaid";
+  const settings = await getSiteSettings();
   const clientName = `${student.firstName} ${student.lastName}`.trim();
   const dates = generateRecurringDatesUntil(data.startDate, data.pattern, data.endDate);
 
@@ -346,6 +356,10 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
   if (data.useCredits && !config.isFree && !isPostpaid) {
     creditsRemaining = await getBalance(student.id);
   }
+
+  // Session price for postpaid/non-credit bookings
+  const sessionPriceType = data.sessionType === "couples" ? "couples" : "individual";
+  const sessionRate = config.isFree ? 0 : getSessionPrice(sessionPriceType, "ZAR", settings);
 
   const recurringSeriesId = randomUUID();
   const createdDates: string[] = [];
@@ -383,7 +397,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         startTime: data.startTime,
         endTime: data.endTime,
         durationMinutes: config.durationMinutes,
-        priceZarCents: 0,
+        priceZarCents: (data.useCredits && !isPostpaid && creditsRemaining > 0) ? 0 : sessionRate,
         priceCurrency: "ZAR",
         clientName,
         clientEmail: student.email,
