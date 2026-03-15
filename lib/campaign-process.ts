@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
-import { baseTemplate } from "@/lib/email-templates";
+import { baseTemplate, normalizeEmailHtml } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 
@@ -340,7 +340,7 @@ async function processSingleCampaignContact(
     variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
   }
 
-  let bodyHtml = replacePlaceholders(campaignEmail.bodyHtml, variables);
+  let bodyHtml = normalizeEmailHtml(replacePlaceholders(campaignEmail.bodyHtml, variables));
 
   // Add CTA button if defined
   if (campaignEmail.ctaText && campaignEmail.ctaUrl) {
@@ -352,7 +352,7 @@ async function processSingleCampaignContact(
   }
 
   const subject = replacePlaceholders(campaignEmail.subject, variables);
-  const html = baseTemplate(subject, bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
+  const html = baseTemplate("", bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
 
   const emailResult = await sendEmail({
     to: student.email,

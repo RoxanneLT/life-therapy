@@ -43,6 +43,51 @@ function sanitizeHtml(html: string): string {
   return tmp.innerHTML;
 }
 
+// Deep-clean pasted HTML from Word/Docs/web — keeps semantic tags, strips everything else.
+function sanitizePastedHtml(html: string): string {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+
+  // Remove all <style>, <meta>, <link>, <title>, <script> tags (Word/Docs inject these)
+  tmp.querySelectorAll("style, meta, link, title, script, xml, o\\:p").forEach((el) => el.remove());
+
+  // Remove ALL inline styles and classes — we want clean semantic HTML only
+  tmp.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    el.removeAttribute("style");
+    el.removeAttribute("class");
+    el.removeAttribute("id");
+    el.removeAttribute("dir");
+    el.removeAttribute("lang");
+  });
+
+  // Unwrap <font> and <span> tags (keep children)
+  tmp.querySelectorAll<HTMLElement>("font, span").forEach((el) => {
+    while (el.firstChild) el.parentNode!.insertBefore(el.firstChild, el);
+    el.remove();
+  });
+
+  // Remove empty <p> elements
+  tmp.querySelectorAll("p").forEach((p) => {
+    if (!p.textContent?.trim() && !p.querySelector("img, br")) {
+      p.remove();
+    }
+  });
+
+  // Normalize <b> to <strong>, <i> to <em> for consistency
+  tmp.querySelectorAll("b").forEach((b) => {
+    const strong = document.createElement("strong");
+    strong.innerHTML = b.innerHTML;
+    b.replaceWith(strong);
+  });
+  tmp.querySelectorAll("i").forEach((i) => {
+    const em = document.createElement("em");
+    em.innerHTML = i.innerHTML;
+    i.replaceWith(em);
+  });
+
+  return sanitizeHtml(tmp.innerHTML);
+}
+
 const DEFAULT_VARIABLE_CHIPS = [
   { key: "firstName", label: "First Name", description: "Client\u2019s first name (falls back to \u2018there\u2019)" },
   { key: "unsubscribeUrl", label: "Unsubscribe URL", description: "One-click unsubscribe link" },
@@ -140,13 +185,23 @@ export function RichTextEditor({
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     e.preventDefault();
+    const clipHtml = e.clipboardData.getData("text/html");
     const plain = e.clipboardData.getData("text/plain");
-    const htmlToInsert = plain
-      ? plain
-          .split(/\n\n+/)
-          .map((para) => `<p>${para.replaceAll("\n", "<br>")}</p>`)
-          .join("")
-      : sanitizeHtml(e.clipboardData.getData("text/html"));
+
+    let htmlToInsert: string;
+
+    if (clipHtml) {
+      // Prefer HTML to preserve bold/italic/links, but clean it aggressively
+      htmlToInsert = sanitizePastedHtml(clipHtml);
+    } else if (plain) {
+      // Plain text fallback — wrap in <p> tags
+      htmlToInsert = plain
+        .split(/\n\n+/)
+        .map((para) => `<p>${para.replaceAll("\n", "<br>")}</p>`)
+        .join("");
+    } else {
+      return;
+    }
 
     const selection = globalThis.getSelection();
     if (selection?.rangeCount) {

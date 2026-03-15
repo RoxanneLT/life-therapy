@@ -6,6 +6,49 @@ import type { Booking, Order, OrderItem, Student } from "@/lib/generated/prisma/
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
+/**
+ * Normalize user-authored campaign HTML for consistent email rendering.
+ * Cleans up messy paste artifacts: empty paragraphs, inconsistent styles,
+ * bare <br> runs, leftover font/color overrides.
+ */
+export function normalizeEmailHtml(html: string): string {
+  let s = html;
+
+  // Remove empty <p></p> and <p> </p> (with optional whitespace/nbsp)
+  s = s.replace(/<p[^>]*>\s*(<br\s*\/?>)?\s*<\/p>/gi, "");
+
+  // Convert double <br> sequences into paragraph breaks
+  s = s.replace(/(<br\s*\/?\s*>){2,}/gi, "</p><p>");
+
+  // Strip font-family, font-size, and color from inline styles (preserve other styles like text-align, margin)
+  s = s.replace(/\bfont-family\s*:[^;"]+;?/gi, "");
+  s = s.replace(/\bfont-size\s*:[^;"]+;?/gi, "");
+  s = s.replace(/\bcolor\s*:[^;"]+;?/gi, "");
+
+  // Clean up empty style attributes left behind
+  s = s.replace(/\sstyle="\s*"/gi, "");
+
+  // Ensure <p> tags have consistent email-safe styling
+  // First, normalize <p> tags that already have a style attribute
+  s = s.replace(/<p\s+style="([^"]*)"/gi, (_match, existingStyle: string) => {
+    // Keep text-align if present, drop everything else
+    const alignMatch = existingStyle.match(/text-align\s*:\s*[^;"]+/i);
+    const align = alignMatch ? `${alignMatch[0]}; ` : "";
+    return `<p style="${align}margin: 0 0 16px; line-height: 1.6"`;
+  });
+
+  // Then add style to bare <p> tags (no existing style attribute)
+  s = s.replace(/<p(?=[\s>])(?![^>]*style=)/gi, '<p style="margin: 0 0 16px; line-height: 1.6"');
+
+  // Unwrap <font> tags
+  s = s.replace(/<\/?font[^>]*>/gi, "");
+
+  // Remove <span> wrappers that have no meaningful attributes left
+  s = s.replace(/<span(?:\s+style="\s*")?\s*>([\s\S]*?)<\/span>/gi, "$1");
+
+  return s.trim();
+}
+
 export function baseTemplate(
   title: string,
   body: string,

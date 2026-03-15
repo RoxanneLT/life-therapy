@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
-import { baseTemplate } from "@/lib/email-templates";
+import { baseTemplate, normalizeEmailHtml } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 
@@ -147,9 +147,9 @@ export async function sendCampaign(campaignId: string): Promise<{
             variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
           }
 
-          const bodyHtml = replacePlaceholders(campaignBody, variables);
+          const bodyHtml = normalizeEmailHtml(replacePlaceholders(campaignBody, variables));
           const subject = replacePlaceholders(campaignSubject, variables);
-          const html = baseTemplate(subject, bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
+          const html = baseTemplate("", bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
 
           return sendEmail({
             to: recipient.email,
