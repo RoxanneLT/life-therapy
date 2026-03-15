@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 8;
 const INTERVAL_MS = 3000;
 
 export function AutoRefresh({ url }: { readonly url: string }) {

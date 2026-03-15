@@ -131,9 +131,10 @@ export function CartPageClient() {
         return;
       }
       if (data.url) {
-        // Clear local cart (order is now in DB) and redirect to Paystack
-        clearCart();
+        // Redirect to Paystack first, then clear cart after navigation starts
+        // (prevents "cart is empty" flash on back-navigation)
         globalThis.location.href = data.url;
+        setTimeout(() => clearCart(), 500);
       }
     } catch {
       setCheckoutError("Something went wrong. Please try again.");
