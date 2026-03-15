@@ -149,7 +149,7 @@ export async function sendCampaign(campaignId: string): Promise<{
 
           const bodyHtml = replacePlaceholders(campaignBody, variables);
           const subject = replacePlaceholders(campaignSubject, variables);
-          const html = baseTemplate(campaign.name, bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
+          const html = baseTemplate(subject, bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
 
           return sendEmail({
             to: recipient.email,
