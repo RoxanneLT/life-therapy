@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAvailableSlots } from "@/lib/availability";
 import { SESSION_TYPES } from "@/lib/booking-config";
 import { rateLimitApi } from "@/lib/rate-limit";
-import { getSession } from "@/lib/auth";
+import { getAuthenticatedAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
@@ -29,8 +29,8 @@ export async function GET(request: NextRequest) {
   // Admin users can bypass minimum notice requirement
   let skipMinNotice = false;
   if (adminMode) {
-    const session = await getSession();
-    if (session?.role === "super_admin" || session?.role === "marketing") {
+    const admin = await getAuthenticatedAdmin().catch(() => null);
+    if (admin?.adminUser?.role === "super_admin" || admin?.adminUser?.role === "marketing") {
       skipMinNotice = true;
     }
   }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAvailableDates } from "@/lib/availability";
 import { SESSION_TYPES } from "@/lib/booking-config";
 import { rateLimitApi } from "@/lib/rate-limit";
-import { getSession } from "@/lib/auth";
+import { getAuthenticatedAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
   // Admin users can see today's date and bypass min notice
   let includeToday = false;
   if (adminMode) {
-    const session = await getSession();
-    if (session?.role === "super_admin" || session?.role === "marketing") {
+    const admin = await getAuthenticatedAdmin().catch(() => null);
+    if (admin?.adminUser?.role === "super_admin" || admin?.adminUser?.role === "marketing") {
       includeToday = true;
     }
   }
