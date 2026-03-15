@@ -38,7 +38,6 @@ import {
   Search,
   Check,
   Repeat,
-  ChevronDown,
   MapPin,
   Video,
 } from "lucide-react";
@@ -123,9 +122,6 @@ export function CreateBookingDialog() {
     creditsUsed: number;
     seriesId: string;
   } | null>(null);
-
-  // Dates preview expand
-  const [previewExpanded, setPreviewExpanded] = useState(false);
 
   // Error
   const [error, setError] = useState("");
@@ -226,7 +222,6 @@ export function CreateBookingDialog() {
     setRecurringStartTime("");
     setRecurringEndTime("");
     setRecurringResult(null);
-    setPreviewExpanded(false);
     setError("");
   }
 
@@ -762,7 +757,7 @@ export function CreateBookingDialog() {
           </div>
         )}
 
-        {/* Step 2: Recurring — preview + confirm */}
+        {/* Step 2: Recurring — confirmation popup with all dates */}
         {!recurringResult && step === 2 && bookingMode === "recurring" && recurringDate && (
           <div className="space-y-4">
             <SummaryBar
@@ -778,51 +773,55 @@ export function CreateBookingDialog() {
               backLabel="Change date"
             />
 
-            {/* Preview summary */}
-            <div className="rounded-md border bg-muted/30 p-4 space-y-2">
-              <p className="text-sm">
-                <strong>{recurringDates.length} sessions</strong> from{" "}
-                {format(new Date(recurringDates[0] + "T12:00:00"), "d MMM yyyy")} to{" "}
-                {format(new Date(recurringDates[recurringDates.length - 1] + "T12:00:00"), "d MMM yyyy")}
+            {/* Confirmation banner */}
+            <div className="rounded-md border-2 border-brand-200 bg-brand-50/50 p-4 space-y-1 dark:border-brand-800 dark:bg-brand-950/20">
+              <p className="text-sm font-semibold text-brand-900 dark:text-brand-100">
+                Confirm {recurringDates.length} bookings
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-brand-700 dark:text-brand-300">
                 Every {RECURRING_PATTERNS.find((p) => p.value === recurringPattern)?.label.toLowerCase()} on {dayOfWeek}s at {recurringStartTime} – {recurringEndTime}
-                {" "}· until {recurringEndDate ? format(new Date(recurringEndDate + "T12:00:00"), "d MMM yyyy") : ""}
-                {" "}· public holidays excluded
+              </p>
+              <p className="text-xs text-brand-600 dark:text-brand-400">
+                {format(new Date(recurringDates[0] + "T12:00:00"), "d MMM yyyy")} → {format(new Date(recurringDates[recurringDates.length - 1] + "T12:00:00"), "d MMM yyyy")} · public holidays excluded
               </p>
               {!config.isFree && useCredit && creditBalance !== null && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-brand-600 dark:text-brand-400">
                   Credits: {creditsAvailable} available, {creditsWillUse} will be used
                   {sessionsWithoutCredit > 0 && (
                     <span className="text-yellow-600">
-                      , {sessionsWithoutCredit} session{sessionsWithoutCredit !== 1 ? "s" : ""} without credit
+                      {" "}· {sessionsWithoutCredit} session{sessionsWithoutCredit !== 1 ? "s" : ""} without credit
                     </span>
                   )}
                 </p>
               )}
             </div>
 
-            {/* Expandable date list */}
+            {/* Full date list — always visible */}
             <div className="rounded-md border">
-              <button
-                type="button"
-                onClick={() => setPreviewExpanded(!previewExpanded)}
-                className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium hover:bg-muted/50"
-              >
-                <span>All dates ({recurringDates.length})</span>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${previewExpanded ? "rotate-180" : ""}`}
-                />
-              </button>
-              {previewExpanded && (
-                <div className="max-h-48 overflow-y-auto border-t px-3 py-2">
-                  {recurringDates.map((d) => (
-                    <p key={d} className="py-0.5 text-sm text-muted-foreground">
-                      {format(new Date(d + "T12:00:00"), "EEE, d MMM yyyy")} at {recurringStartTime} – {recurringEndTime}
-                    </p>
-                  ))}
-                </div>
-              )}
+              <div className="border-b bg-muted/50 px-3 py-2">
+                <p className="text-sm font-medium">
+                  All scheduled dates ({recurringDates.length})
+                </p>
+              </div>
+              <div className="max-h-56 overflow-y-auto px-1 py-1">
+                {recurringDates.map((d, i) => (
+                  <div
+                    key={d}
+                    className="flex items-center gap-2.5 rounded px-2 py-1.5 text-sm odd:bg-muted/30"
+                  >
+                    <span className="w-5 shrink-0 text-right text-xs text-muted-foreground">
+                      {i + 1}.
+                    </span>
+                    <Check className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                    <span>
+                      {format(new Date(d + "T12:00:00"), "EEE, d MMM yyyy")}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {recurringStartTime} – {recurringEndTime}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
@@ -846,7 +845,10 @@ export function CreateBookingDialog() {
                     Creating {recurringDates.length} sessions...
                   </>
                 ) : (
-                  `Create ${recurringDates.length} Sessions`
+                  <>
+                    <Check className="mr-1.5 h-4 w-4" />
+                    Confirm & Create {recurringDates.length} Sessions
+                  </>
                 )}
               </Button>
             </div>
