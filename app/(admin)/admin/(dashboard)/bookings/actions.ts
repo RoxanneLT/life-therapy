@@ -11,7 +11,6 @@ import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
-import { getSessionPrice } from "@/lib/pricing";
 import { format } from "date-fns";
 import { randomUUID } from "node:crypto";
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
@@ -188,13 +187,13 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     if (balance < 1) throw new Error("Client has insufficient session credits.");
   }
 
-  // Determine price: free sessions = 0, credit-paid = 0 (already paid via credit purchase), postpaid/unpaid = session rate
-  const sessionPriceType = data.sessionType === "couples" ? "couples" : "individual";
-  const priceZarCents = config.isFree
-    ? 0
-    : (data.useCredit && !isPostpaid)
-      ? 0
-      : getSessionPrice(sessionPriceType, "ZAR", settings);
+  // Determine price: free sessions = 0, credit-paid = 0 (already paid via credit purchase), postpaid/unpaid = session rate from settings
+  let priceZarCents = 0;
+  if (!config.isFree && !(data.useCredit && !isPostpaid)) {
+    priceZarCents = data.sessionType === "couples"
+      ? (settings.sessionPriceCouplesZar ?? 0)
+      : (settings.sessionPriceIndividualZar ?? 0);
+  }
 
   const clientName = `${student.firstName} ${student.lastName}`.trim();
   const bookingDate = new Date(`${data.date}T00:00:00Z`);
@@ -357,9 +356,12 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     creditsRemaining = await getBalance(student.id);
   }
 
-  // Session price for postpaid/non-credit bookings
-  const sessionPriceType = data.sessionType === "couples" ? "couples" : "individual";
-  const sessionRate = config.isFree ? 0 : getSessionPrice(sessionPriceType, "ZAR", settings);
+  // Session price from settings (single source of truth)
+  const sessionRate = config.isFree
+    ? 0
+    : data.sessionType === "couples"
+      ? (settings.sessionPriceCouplesZar ?? 0)
+      : (settings.sessionPriceIndividualZar ?? 0);
 
   const recurringSeriesId = randomUUID();
   const createdDates: string[] = [];
