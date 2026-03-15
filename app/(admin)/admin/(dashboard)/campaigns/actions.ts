@@ -54,7 +54,7 @@ function mapEmailSteps(emails: ReturnType<typeof parseCampaignEmailsJson>) {
   }));
 }
 
-async function saveMultiStepCampaign(id: string | null, filters: CampaignFilters, formData: FormData) {
+async function saveMultiStepCampaign(id: string | null, filters: CampaignFilters, formData: FormData): Promise<string> {
   const emails = parseCampaignEmailsJson(formData);
 
   if (id) {
@@ -67,17 +67,17 @@ async function saveMultiStepCampaign(id: string | null, filters: CampaignFilters
 
     revalidatePath("/admin/campaigns");
     revalidatePath(`/admin/campaigns/${id}`);
-    redirect(`/admin/campaigns/${id}`);
+    return id;
   }
 
   const campaign = await prisma.campaign.create({
     data: { ...toPrismaData(filters), isMultiStep: true, status: "draft", emails: { create: mapEmailSteps(emails) } },
   });
   revalidatePath("/admin/campaigns");
-  redirect(`/admin/campaigns/${campaign.id}`);
+  return campaign.id;
 }
 
-async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilters, formData: FormData) {
+async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilters, formData: FormData): Promise<string> {
   const subject = (formData.get("subject") as string)?.trim();
   const bodyHtml = (formData.get("bodyHtml") as string)?.trim();
   if (!subject || !bodyHtml) throw new Error("Subject and body are required for single-email campaigns");
@@ -89,17 +89,17 @@ async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilte
     await prisma.campaign.update({ where: { id }, data: { ...toPrismaData(filters), subject, bodyHtml, isMultiStep: false } });
     revalidatePath("/admin/campaigns");
     revalidatePath(`/admin/campaigns/${id}`);
-    redirect(`/admin/campaigns/${id}`);
+    return id;
   }
 
   const campaign = await prisma.campaign.create({
     data: { ...toPrismaData(filters), subject, bodyHtml, isMultiStep: false, status: "draft" },
   });
   revalidatePath("/admin/campaigns");
-  redirect(`/admin/campaigns/${campaign.id}`);
+  return campaign.id;
 }
 
-export async function saveCampaignAction(formData: FormData) {
+export async function saveCampaignAction(formData: FormData): Promise<string> {
   await requireRole("super_admin", "marketing");
 
   const id = formData.get("id") as string | null;
@@ -115,9 +115,9 @@ export async function saveCampaignAction(formData: FormData) {
   const filters: CampaignFilters = { name, filterSource, filterClientStatus, filterTags, audienceFilters };
 
   if (formData.get("isMultiStep") === "true") {
-    await saveMultiStepCampaign(id, filters, formData);
+    return saveMultiStepCampaign(id, filters, formData);
   } else {
-    await saveSingleEmailCampaign(id, filters, formData);
+    return saveSingleEmailCampaign(id, filters, formData);
   }
 }
 
@@ -271,7 +271,7 @@ export async function sendTestCampaignAction(campaignId: string, step?: number) 
     testSubject = `[TEST] ${(campaign.subject || "").replaceAll("{{firstName}}", "Test User")}`;
   }
 
-  const html = baseTemplate(campaign.name, testBody);
+  const html = baseTemplate("", testBody);
 
   const result = await sendEmail({
     to: adminUser.email,
@@ -309,7 +309,7 @@ export async function deleteCampaignAction(formData: FormData) {
 // Birthday campaign save
 // ────────────────────────────────────────────────────────────
 
-export async function saveBirthdayCampaignAction(formData: FormData) {
+export async function saveBirthdayCampaignAction(formData: FormData): Promise<string> {
   await requireRole("super_admin", "marketing");
 
   const id = formData.get("id") as string | null;
@@ -347,7 +347,7 @@ export async function saveBirthdayCampaignAction(formData: FormData) {
 
     revalidatePath("/admin/campaigns");
     revalidatePath(`/admin/campaigns/${id}`);
-    redirect(`/admin/campaigns/${id}`);
+    return id;
   }
 
   // Create new
@@ -362,7 +362,7 @@ export async function saveBirthdayCampaignAction(formData: FormData) {
   });
 
   revalidatePath("/admin/campaigns");
-  redirect(`/admin/campaigns/${campaign.id}`);
+  return campaign.id;
 }
 
 // ────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Save, ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, Cake } from "lucide-react";
 import { RichTextEditor } from "./rich-text-editor";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { saveBirthdayCampaignAction } from "../actions";
 
 export interface BirthdayEmailData {
@@ -60,6 +61,8 @@ function getDefaultBirthdayBody(gender: "female" | "male" | "unknown"): string {
 }
 
 export function BirthdayCampaignEditor({ campaign }: Readonly<BirthdayCampaignEditorProps>) {
+  const router = useRouter();
+  const [campaignId, setCampaignId] = useState(campaign?.id || null);
   const [name, setName] = useState(campaign?.name || "Happy Birthday");
   const [activeGender, setActiveGender] = useState<"female" | "male" | "unknown">("female");
   const [saving, setSaving] = useState(false);
@@ -182,16 +185,21 @@ export function BirthdayCampaignEditor({ campaign }: Readonly<BirthdayCampaignEd
       }
 
       const formData = new FormData();
-      if (campaign?.id) formData.set("id", campaign.id);
+      if (campaignId) formData.set("id", campaignId);
       formData.set("name", name);
       formData.set("emails", JSON.stringify(allEmails));
 
-      await saveBirthdayCampaignAction(formData);
+      const savedId = await saveBirthdayCampaignAction(formData);
+      toast.success("Birthday campaign saved.");
+
+      if (!campaignId) {
+        setCampaignId(savedId);
+        router.replace(`/admin/campaigns/${savedId}/edit`);
+      }
     } catch (err: unknown) {
-      const errDigest = (err as { digest?: string })?.digest;
-      if (typeof errDigest === "string" && errDigest.includes("NEXT_REDIRECT")) return;
       toast.error("Failed to save birthday campaign.");
       console.error(err);
+    } finally {
       setSaving(false);
     }
   }

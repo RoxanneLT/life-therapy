@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Save, ArrowLeft, Plus, ListOrdered, Mail } from "lucide-react";
 import { RichTextEditor } from "./rich-text-editor";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StepEditor, type StepData } from "./step-editor";
 
 const VARIABLE_CHIPS = [
@@ -55,6 +56,8 @@ function createDefaultStep(dayOffset = 0): StepData {
 }
 
 export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
+  const router = useRouter();
+  const [campaignId, setCampaignId] = useState(campaign?.id || null);
   const [activeTab, setActiveTab] = useState<"details" | "emails">("details");
   const [name, setName] = useState(campaign?.name || "");
   const [isMultiStep, setIsMultiStep] = useState(campaign?.isMultiStep || false);
@@ -181,7 +184,7 @@ export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
     setSaving(true);
     try {
       const formData = new FormData();
-      if (campaign?.id) formData.set("id", campaign.id);
+      if (campaignId) formData.set("id", campaignId);
       formData.set("name", name);
       formData.set("isMultiStep", String(isMultiStep));
       formData.set("audienceFilters", JSON.stringify(audienceFilters));
@@ -193,12 +196,18 @@ export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
         formData.set("bodyHtml", bodyHtml);
       }
 
-      await saveCampaignAction(formData);
+      const savedId = await saveCampaignAction(formData);
+      toast.success("Draft saved.");
+
+      // If this was a new campaign, update URL so subsequent saves are updates
+      if (!campaignId) {
+        setCampaignId(savedId);
+        router.replace(`/admin/campaigns/${savedId}/edit`);
+      }
     } catch (err: unknown) {
-      const errDigest = (err as { digest?: string })?.digest;
-      if (typeof errDigest === "string" && errDigest.includes("NEXT_REDIRECT")) return;
       toast.error("Failed to save campaign.");
       console.error(err);
+    } finally {
       setSaving(false);
     }
   }
