@@ -2,9 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { getSessionTypeConfig } from "@/lib/booking-config";
+import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getSiteSettings, getBusinessHours } from "@/lib/settings";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,30 @@ import { CreateBookingDialog } from "./create-booking-dialog";
 const VALID_VIEWS = ["list", "day", "week", "month"] as const;
 type ViewMode = (typeof VALID_VIEWS)[number];
 
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/** Return the next open business day (SAST). Skips closed days and past-close today. */
+async function getNextBusinessDate(): Promise<string> {
+  const now = new Date();
+  const nowSast = formatInTimeZone(now, TIMEZONE, "yyyy-MM-dd");
+  const nowTimeSast = formatInTimeZone(now, TIMEZONE, "HH:mm");
+  const settings = await getSiteSettings();
+  const bh = getBusinessHours(settings);
+  const candidate = new Date(`${nowSast}T12:00:00Z`);
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(candidate.getTime() + i * 86400000);
+    const dayHours = bh[DAY_NAMES[d.getUTCDay()]];
+
+    if (!dayHours || dayHours.closed) continue;
+    // If today but past closing time, skip to next day
+    if (i === 0 && nowTimeSast >= dayHours.close) continue;
+    return format(d, "yyyy-MM-dd");
+  }
+
+  return nowSast;
+}
+
 interface Props {
   readonly searchParams: Promise<{
     status?: string;
@@ -46,7 +71,12 @@ export default async function BookingsPage({ searchParams }: Props) {
   const view: ViewMode = VALID_VIEWS.includes(sp.view as ViewMode)
     ? (sp.view as ViewMode)
     : "list";
-  const selectedDate = sp.date || format(new Date(), "yyyy-MM-dd");
+
+  const selectedDate = sp.date || (
+    (view === "day" || view === "week")
+      ? await getNextBusinessDate()
+      : format(new Date(), "yyyy-MM-dd")
+  );
 
   // Build status filter
   const statusWhere = statusFilter
