@@ -10,6 +10,77 @@ import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 
 // ────────────────────────────────────────────────────────────
+// Create new client
+// ────────────────────────────────────────────────────────────
+
+interface CreateClientData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  clientStatus: string;
+  billingType: string;
+  dateOfBirth?: string;
+  gender?: string;
+  relationshipStatus?: string;
+  address?: string;
+  emergencyContact?: string;
+  referralSource?: string;
+  referralDetail?: string;
+  newsletterOptIn: boolean;
+  marketingOptIn: boolean;
+  smsOptIn: boolean;
+  sessionReminders: boolean;
+  adminNotes?: string;
+}
+
+export async function createClientAction(data: CreateClientData) {
+  await requireRole("super_admin");
+
+  // Check for existing email
+  const existing = await prisma.student.findUnique({
+    where: { email: data.email },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error("A client with this email already exists.");
+  }
+
+  const client = await prisma.student.create({
+    data: {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      phone: data.phone || null,
+      clientStatus: data.clientStatus,
+      billingType: data.billingType,
+      dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+      gender: data.gender || null,
+      relationshipStatus: data.relationshipStatus || null,
+      address: data.address || null,
+      emergencyContact: data.emergencyContact || null,
+      referralSource: data.referralSource || null,
+      referralDetail: data.referralDetail || null,
+      newsletterOptIn: data.newsletterOptIn,
+      marketingOptIn: data.marketingOptIn,
+      smsOptIn: data.smsOptIn,
+      sessionReminders: data.sessionReminders,
+      adminNotes: data.adminNotes || null,
+      source: "manual",
+      convertedAt: data.clientStatus === "active" ? new Date() : null,
+    },
+  });
+
+  // Initialize credit balance
+  await prisma.sessionCreditBalance.create({
+    data: { studentId: client.id, balance: 0 },
+  });
+
+  revalidatePath("/admin/clients");
+  return { clientId: client.id };
+}
+
+// ────────────────────────────────────────────────────────────
 // Update admin notes on a client
 // ────────────────────────────────────────────────────────────
 

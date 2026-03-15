@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Users, Upload } from "lucide-react";
 import { ClientListFilters } from "./client-list-filters";
 import { SortableHeader } from "@/components/admin/sortable-header";
+import { CreateClientDialog } from "./create-client-dialog";
 
 import { CLIENT_STATUS_BADGE } from "@/lib/status-styles";
 
@@ -117,12 +118,15 @@ export default async function ClientsPage({
             {totalCount} total clients
           </p>
         </div>
-        <Link href="/admin/clients/import">
-          <Button variant="outline" size="sm">
-            <Upload className="mr-2 h-4 w-4" />
-            Import CSV
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <CreateClientDialog />
+          <Link href="/admin/clients/import">
+            <Button variant="outline" size="sm">
+              <Upload className="mr-2 h-4 w-4" />
+              Import CSV
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <ClientListFilters
