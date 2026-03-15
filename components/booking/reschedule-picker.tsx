@@ -36,6 +36,8 @@ interface ReschedulePickerProps {
   isPending: boolean;
   /** "reschedule" (default) or "new" — controls header/confirm labels */
   mode?: "reschedule" | "new";
+  /** When true, bypasses minimum notice requirement for admin bookings */
+  isAdmin?: boolean;
 }
 
 export function ReschedulePicker({
@@ -45,6 +47,7 @@ export function ReschedulePicker({
   onConfirm,
   isPending,
   mode = "reschedule",
+  isAdmin = false,
 }: ReschedulePickerProps) {
   const [month, setMonth] = useState(new Date());
   const [availableDates, setAvailableDates] = useState<Set<string>>(new Set());
@@ -57,7 +60,7 @@ export function ReschedulePicker({
   const fetchDates = useCallback(async () => {
     setLoadingDates(true);
     try {
-      const res = await fetch(`/api/booking/available-dates?type=${sessionType}`);
+      const res = await fetch(`/api/booking/available-dates?type=${sessionType}${isAdmin ? "&admin=1" : ""}`);
       if (res.ok) {
         const data = await res.json();
         setAvailableDates(new Set(data.dates || []));
@@ -65,7 +68,7 @@ export function ReschedulePicker({
     } finally {
       setLoadingDates(false);
     }
-  }, [sessionType]);
+  }, [sessionType, isAdmin]);
 
   useEffect(() => {
     fetchDates();
@@ -85,7 +88,7 @@ export function ReschedulePicker({
     setSlots([]);
     try {
       const res = await fetch(
-        `/api/booking/available-slots?type=${sessionType}&date=${dateStr}`
+        `/api/booking/available-slots?type=${sessionType}&date=${dateStr}${isAdmin ? "&admin=1" : ""}`
       );
       if (res.ok) {
         const data = await res.json();

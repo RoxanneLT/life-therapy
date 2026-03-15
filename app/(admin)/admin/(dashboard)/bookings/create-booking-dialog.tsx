@@ -705,6 +705,7 @@ export function CreateBookingDialog() {
               onConfirm={handleSingleConfirm}
               isPending={isPending}
               mode="new"
+              isAdmin
             />
           </div>
         )}
@@ -736,6 +737,7 @@ export function CreateBookingDialog() {
               onConfirm={handleRecurringSlotSelect}
               isPending={false}
               mode="new"
+              isAdmin
             />
           </div>
         )}

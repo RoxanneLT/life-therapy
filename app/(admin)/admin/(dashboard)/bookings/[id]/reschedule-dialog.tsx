@@ -54,6 +54,7 @@ export function RescheduleDialog({
             currentTime={currentTime}
             onConfirm={handleConfirm}
             isPending={isPending}
+            isAdmin
           />
         )}
       </DialogContent>

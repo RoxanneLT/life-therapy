@@ -87,7 +87,8 @@ function isoToTimeString(timeStr: string): string {
  */
 export async function getAvailableSlots(
   dateStr: string,
-  sessionConfig: SessionTypeConfig
+  sessionConfig: SessionTypeConfig,
+  options?: { skipMinNotice?: boolean }
 ): Promise<TimeSlot[]> {
   const settings = await getSiteSettings();
   const businessHours = getBusinessHours(settings);
@@ -148,12 +149,12 @@ export async function getAvailableSlots(
 
   return candidates.filter((slot) => {
     const slotUtc = fromZonedTime(`${dateStr}T${slot.start}:00`, TIMEZONE);
-    if (slotUtc.getTime() - nowMs < minNoticeMs) return false;
+    if (!options?.skipMinNotice && slotUtc.getTime() - nowMs < minNoticeMs) return false;
     return !blockedRanges.some((r) => timeRangesOverlap(slot.start, slot.end, r.start, r.end));
   });
 }
 
-export async function getAvailableDates(): Promise<string[]> {
+export async function getAvailableDates(options?: { includeToday?: boolean }): Promise<string[]> {
   const settings = await getSiteSettings();
 
   if (!settings.bookingEnabled) return [];
@@ -164,8 +165,10 @@ export async function getAvailableDates(): Promise<string[]> {
   // Today in SAST — use formatInTimeZone for correct date regardless of server TZ
   const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
 
-  // Start from tomorrow SAST, span maxDays
-  const start = addDays(new Date(`${todaySast}T12:00:00Z`), 1);
+  // Start from today (admin) or tomorrow (public), span maxDays
+  const start = options?.includeToday
+    ? new Date(`${todaySast}T12:00:00Z`)
+    : addDays(new Date(`${todaySast}T12:00:00Z`), 1);
   const end = addDays(start, maxDays);
 
   // Get all overrides in range (use UTC midnight for @db.Date)

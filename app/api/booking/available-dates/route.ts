@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAvailableDates } from "@/lib/availability";
 import { SESSION_TYPES } from "@/lib/booking-config";
 import { rateLimitApi } from "@/lib/rate-limit";
+import { getSession } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
@@ -14,12 +15,22 @@ export async function GET(request: NextRequest) {
   }
 
   const sessionType = request.nextUrl.searchParams.get("type");
+  const adminMode = request.nextUrl.searchParams.get("admin") === "1";
   const config = SESSION_TYPES.find((s) => s.type === sessionType);
 
   if (!config) {
     return NextResponse.json({ error: "Invalid session type" }, { status: 400 });
   }
 
-  const dates = await getAvailableDates();
+  // Admin users can see today's date and bypass min notice
+  let includeToday = false;
+  if (adminMode) {
+    const session = await getSession();
+    if (session?.role === "super_admin" || session?.role === "marketing") {
+      includeToday = true;
+    }
+  }
+
+  const dates = await getAvailableDates({ includeToday });
   return NextResponse.json({ dates });
 }
