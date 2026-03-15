@@ -7,6 +7,7 @@ import {
   TokenCredentialAuthenticationProvider,
 } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import { TIMEZONE } from "@/lib/booking-config";
+import { formatInTimeZone } from "date-fns-tz";
 
 interface GraphConfig {
   tenantId: string;
@@ -49,16 +50,20 @@ export async function getFreeBusy(
   try {
     const client = createGraphClient(config);
 
+    // Format as local SAST datetime (no Z suffix) so Graph interprets correctly
+    const startLocal = formatInTimeZone(startDate, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss");
+    const endLocal = formatInTimeZone(endDate, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss");
+
     const response = await client
       .api(`/users/${config.userEmail}/calendar/getSchedule`)
       .post({
         schedules: [config.userEmail],
         startTime: {
-          dateTime: startDate.toISOString(),
+          dateTime: startLocal,
           timeZone: TIMEZONE,
         },
         endTime: {
-          dateTime: endDate.toISOString(),
+          dateTime: endLocal,
           timeZone: TIMEZONE,
         },
         availabilityViewInterval: 15,
@@ -72,10 +77,26 @@ export async function getFreeBusy(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter((item: any) => item.status !== "free")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((item: any) => ({
-        start: item.start.dateTime as string,
-        end: item.end.dateTime as string,
-      }));
+      .map((item: any) => {
+        const startDt = item.start.dateTime as string;
+        const startTz = (item.start.timeZone as string) || "UTC";
+        const endDt = item.end.dateTime as string;
+        const endTz = (item.end.timeZone as string) || "UTC";
+
+        // Convert to SAST so availability.ts can compare directly
+        const startSast = formatInTimeZone(
+          startTz === "UTC" ? new Date(startDt + "Z") : new Date(startDt),
+          TIMEZONE,
+          "HH:mm"
+        );
+        const endSast = formatInTimeZone(
+          endTz === "UTC" ? new Date(endDt + "Z") : new Date(endDt),
+          TIMEZONE,
+          "HH:mm"
+        );
+
+        return { start: startSast, end: endSast };
+      });
   } catch (error) {
     console.error("Graph API getFreeBusy error:", error);
     return [];

@@ -74,9 +74,9 @@ function generateSlots(
     }));
 }
 
-function isoToTimeString(iso: string): string {
-  // Extract HH:mm from ISO or datetime string
-  const match = iso.match(/T?(\d{2}):(\d{2})/);
+function isoToTimeString(timeStr: string): string {
+  // Graph now returns "HH:mm" SAST strings directly, but handle legacy ISO format too
+  const match = timeStr.match(/(\d{2}):(\d{2})/);
   if (!match) return "00:00";
   return `${match[1]}:${match[2]}`;
 }
