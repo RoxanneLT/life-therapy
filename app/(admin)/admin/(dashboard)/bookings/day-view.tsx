@@ -135,10 +135,11 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
                 slotMinutes >= timeToMinutes(dayHours.open) &&
                 slotMinutes < timeToMinutes(dayHours.close);
 
-              // Find bookings that start at this slot
-              const slotBookings = bookings.filter(
-                (b) => timeToMinutes(b.startTime) === slotMinutes
-              );
+              // Find bookings that start within this 30-min slot
+              const slotBookings = bookings.filter((b) => {
+                const bMinutes = timeToMinutes(b.startTime);
+                return bMinutes >= slotMinutes && bMinutes < slotMinutes + 30;
+              });
 
               return (
                 <div

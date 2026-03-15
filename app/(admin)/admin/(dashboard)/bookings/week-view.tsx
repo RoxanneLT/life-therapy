@@ -177,9 +177,10 @@ export function WeekView({ bookings, date, businessHours, overrides }: WeekViewP
                 {weekDays.map((day) => {
                   const dateStr = format(day, "yyyy-MM-dd");
                   const dayBookings = bookingsByDate[dateStr] || [];
-                  const slotBookings = dayBookings.filter(
-                    (b) => timeToMinutes(b.startTime) === slotMinutes
-                  );
+                  const slotBookings = dayBookings.filter((b) => {
+                    const bMinutes = timeToMinutes(b.startTime);
+                    return bMinutes >= slotMinutes && bMinutes < slotMinutes + 30;
+                  });
                   const blocked = overrideByDate[dateStr]?.isBlocked;
 
                   return (
