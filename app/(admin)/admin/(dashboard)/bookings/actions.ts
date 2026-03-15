@@ -12,7 +12,6 @@ import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
-import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
