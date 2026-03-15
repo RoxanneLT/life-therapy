@@ -3,12 +3,11 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, Package, Loader2 } from "lucide-react";
+import { CheckCircle2, Package } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { getCurrency } from "@/lib/get-region";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { AutoRefresh } from "./auto-refresh";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -40,7 +39,8 @@ export default async function CheckoutSuccessPage({
     );
   }
 
-  // Look up the order via Paystack reference
+  // Look up the order via Paystack reference (finds it immediately — order
+  // is created before the Paystack redirect, regardless of webhook status)
   let order = null;
   try {
     order = await prisma.order.findUnique({
@@ -52,23 +52,26 @@ export default async function CheckoutSuccessPage({
   }
 
   if (!order) {
-    // Auto-refresh: webhook may still be processing, retry in 3 seconds (up to 5 attempts)
-    const currentUrl = `/checkout/success?reference=${encodeURIComponent(reference)}`;
+    // Reference doesn't match any order — show generic success
     return (
       <section className="px-4 py-16">
         <div className="mx-auto max-w-lg text-center">
-          <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-brand-500" />
+          <CheckCircle2 className="mx-auto mb-4 h-16 w-16 text-green-500" />
           <h1 className="font-heading text-2xl font-bold">
-            Processing your order...
+            Payment received!
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Your payment was received. We&apos;re confirming your order &mdash;
-            this usually takes a few seconds.
+            Your payment was successful. A confirmation email will be sent
+            to you shortly.
           </p>
-          <AutoRefresh url={currentUrl} />
-          <Button className="mt-6" asChild>
-            <Link href="/portal">Go to My Portal</Link>
-          </Button>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Button asChild>
+              <Link href="/portal">Go to My Courses</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/courses">Browse More Courses</Link>
+            </Button>
+          </div>
         </div>
       </section>
     );
