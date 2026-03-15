@@ -98,13 +98,13 @@ async function main() {
   console.log(`\nBilling entities updated: ${entityCount}/${entities.length}\n`);
 
   // 4. Site settings
-  const settings = await prisma.siteSettings.findFirst({
+  const settings = await prisma.siteSetting.findFirst({
     select: { id: true, phone: true },
   });
   if (settings?.phone) {
     const normalized = normalizePhone(settings.phone);
     if (normalized) {
-      await prisma.siteSettings.update({
+      await prisma.siteSetting.update({
         where: { id: settings.id },
         data: { phone: normalized },
       });
