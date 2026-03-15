@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/utils";
 import { getCurrency } from "@/lib/get-region";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { ClearCart } from "./clear-cart";
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
@@ -55,6 +56,7 @@ export default async function CheckoutSuccessPage({
     // Reference doesn't match any order — show generic success
     return (
       <section className="px-4 py-16">
+        <ClearCart />
         <div className="mx-auto max-w-lg text-center">
           <CheckCircle2 className="mx-auto mb-4 h-16 w-16 text-green-500" />
           <h1 className="font-heading text-2xl font-bold">
@@ -79,6 +81,7 @@ export default async function CheckoutSuccessPage({
 
   return (
     <section className="px-4 py-16">
+      <ClearCart />
       <div className="mx-auto max-w-lg">
         <div className="text-center">
           <CheckCircle2 className="mx-auto mb-4 h-16 w-16 text-green-500" />
