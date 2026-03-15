@@ -31,7 +31,7 @@ export function baseTemplate(
       <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 13px; letter-spacing: 0.5px;">Personal Development &amp; Life Coaching</p>
     </div>
     <div style="padding: 32px 24px;">
-      <h3 style="color: #333; margin: 0 0 16px; font-size: 20px;">${title}</h3>
+      ${title ? `<h3 style="color: #333; margin: 0 0 16px; font-size: 20px;">${title}</h3>` : ""}
       ${body}
     </div>
     <div style="border-top: 1px solid #e5e7eb; padding: 20px 24px; font-size: 12px; color: #6b7280; text-align: center;">
