@@ -40,6 +40,7 @@ export function CreateClientDialog() {
   // Step 1: Basic details (required)
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [isMinor, setIsMinor] = useState(false);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [clientStatus, setClientStatus] = useState("potential");
@@ -66,6 +67,7 @@ export function CreateClientDialog() {
     setError("");
     setFirstName("");
     setLastName("");
+    setIsMinor(false);
     setEmail("");
     setPhone("");
     setClientStatus("potential");
@@ -92,8 +94,10 @@ export function CreateClientDialog() {
   function validateStep1(): boolean {
     if (!firstName.trim()) { setError("First name is required"); return false; }
     if (!lastName.trim()) { setError("Last name is required"); return false; }
-    if (!email.trim()) { setError("Email is required"); return false; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Invalid email address"); return false; }
+    if (!isMinor) {
+      if (!email.trim()) { setError("Email is required"); return false; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Invalid email address"); return false; }
+    }
     setError("");
     return true;
   }
@@ -116,7 +120,8 @@ export function CreateClientDialog() {
         const result = await createClientAction({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          email: email.trim().toLowerCase(),
+          email: email.trim().toLowerCase() || undefined,
+          isMinor,
           phone: phone.trim() || undefined,
           clientStatus,
           billingType,
@@ -190,16 +195,35 @@ export function CreateClientDialog() {
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. angela@example.com"
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isMinor}
+                onChange={(e) => {
+                  setIsMinor(e.target.checked);
+                  if (e.target.checked) setEmail("");
+                }}
+                className="h-4 w-4 rounded border-gray-300"
               />
-            </div>
+              Minor / child (no email or portal access)
+            </label>
+            {!isMinor && (
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. angela@example.com"
+                />
+              </div>
+            )}
+            {isMinor && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                Minor accounts don&apos;t require an email and cannot log in. A parent/guardian manages bookings on their behalf.
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="phone">Phone</Label>
               <Input

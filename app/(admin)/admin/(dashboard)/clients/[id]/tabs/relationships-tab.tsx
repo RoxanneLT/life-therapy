@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Pencil, Building2, Users } from "lucide-react";
+import { Plus, Trash2, Pencil, Building2, Users, UserPlus, Baby } from "lucide-react";
 import { toast } from "sonner";
 import {
   addRelationshipAction,
@@ -30,6 +30,7 @@ import {
   updateRelationshipAction,
   createBillingEntityAction,
   searchClientsAction,
+  createClientAndLinkRelationshipAction,
 } from "../actions";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -305,8 +306,8 @@ function AddRelationshipDialog({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Mode: link to existing client or create corporate entity
-  const [mode, setMode] = useState<"client" | "corporate">("client");
+  // Mode: link to existing client, create new client, or corporate entity
+  const [mode, setMode] = useState<"client" | "new_client" | "corporate">("client");
 
   // Client search
   const [search, setSearch] = useState("");
@@ -316,6 +317,14 @@ function AddRelationshipDialog({
   // Relationship fields
   const [type, setType] = useState("partner");
   const [label, setLabel] = useState("");
+
+  // New client fields
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
+  const [newIsMinor, setNewIsMinor] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newDob, setNewDob] = useState("");
+  const [newGender, setNewGender] = useState("");
 
   // Corporate entity fields
   const [entityName, setEntityName] = useState("");
@@ -346,6 +355,12 @@ function AddRelationshipDialog({
     setSelectedClient(null);
     setType("partner");
     setLabel("");
+    setNewFirstName("");
+    setNewLastName("");
+    setNewIsMinor(false);
+    setNewEmail("");
+    setNewDob("");
+    setNewGender("");
     setEntityName("");
     setEntityEmail("");
     setEntityContact("");
@@ -356,7 +371,6 @@ function AddRelationshipDialog({
     startTransition(async () => {
       try {
         if (mode === "corporate") {
-          // Create entity then link
           const entity = await createBillingEntityAction({
             name: entityName,
             email: entityEmail,
@@ -369,6 +383,18 @@ function AddRelationshipDialog({
             relationshipType: "corporate",
             relationshipLabel: label || undefined,
           });
+        } else if (mode === "new_client") {
+          await createClientAndLinkRelationshipAction({
+            parentClientId: clientId,
+            firstName: newFirstName,
+            lastName: newLastName,
+            isMinor: newIsMinor,
+            email: newEmail.trim() || undefined,
+            dateOfBirth: newDob || undefined,
+            gender: newGender.trim() || undefined,
+            relationshipType: type,
+            relationshipLabel: label || undefined,
+          });
         } else {
           if (!selectedClient) return;
           await addRelationshipAction({
@@ -378,7 +404,7 @@ function AddRelationshipDialog({
             relationshipLabel: label || undefined,
           });
         }
-        toast.success("Relationship added");
+        toast.success(mode === "new_client" ? "Client created & relationship added" : "Relationship added");
         reset();
         setOpen(false);
       } catch (err) {
@@ -387,10 +413,17 @@ function AddRelationshipDialog({
     });
   }
 
+  const canSubmitNewClient =
+    newFirstName.trim() &&
+    newLastName.trim() &&
+    (newIsMinor || (newEmail.trim() && newEmail.includes("@")));
+
   const canSubmit =
     mode === "corporate"
       ? entityName.trim() && entityEmail.trim()
-      : !!selectedClient;
+      : mode === "new_client"
+        ? canSubmitNewClient
+        : !!selectedClient;
 
   return (
     <Dialog
@@ -406,14 +439,14 @@ function AddRelationshipDialog({
           Add Relationship
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-lg">
         <DialogHeader>
           <DialogTitle>Add Relationship for {clientName}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* Mode selector */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant={mode === "client" ? "default" : "outline"}
@@ -422,6 +455,15 @@ function AddRelationshipDialog({
             >
               <Users className="mr-2 h-4 w-4" />
               Link Client
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "new_client" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMode("new_client")}
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Create New Client
             </Button>
             <Button
               type="button"
@@ -505,7 +547,108 @@ function AddRelationshipDialog({
                   </SelectContent>
                 </Select>
               </div>
+            </>
+          )}
 
+          {mode === "new_client" && (
+            <>
+              {/* Name */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>First Name *</Label>
+                  <Input
+                    value={newFirstName}
+                    onChange={(e) => setNewFirstName(e.target.value)}
+                    placeholder="e.g. Aiden"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Last Name *</Label>
+                  <Input
+                    value={newLastName}
+                    onChange={(e) => setNewLastName(e.target.value)}
+                    placeholder="e.g. Kilian"
+                  />
+                </div>
+              </div>
+
+              {/* Minor toggle */}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={newIsMinor}
+                  onChange={(e) => {
+                    setNewIsMinor(e.target.checked);
+                    if (e.target.checked) {
+                      setNewEmail("");
+                      // Auto-set relationship type to parent
+                      setType("parent");
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Baby className="h-3.5 w-3.5 text-muted-foreground" />
+                Minor / child (no email or portal access)
+              </label>
+
+              {/* Email — hidden for minors */}
+              {!newIsMinor && (
+                <div className="space-y-1.5">
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="e.g. aiden@example.com"
+                  />
+                </div>
+              )}
+
+              {newIsMinor && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                  Minor accounts don&apos;t require an email and cannot log in. {clientName} will be set as the billing contact.
+                </div>
+              )}
+
+              {/* DOB + Gender */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Date of Birth</Label>
+                  <Input
+                    type="date"
+                    value={newDob}
+                    onChange={(e) => setNewDob(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Gender</Label>
+                  <Input
+                    value={newGender}
+                    onChange={(e) => setNewGender(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+
+              {/* Relationship type */}
+              <div className="space-y-2">
+                <Label>Relationship Type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RELATIONSHIP_TYPES.filter((t) => t.value !== "corporate").map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  This describes {clientName}&apos;s role — e.g. &quot;Parent&quot; means {clientName} is the parent.
+                </p>
+              </div>
             </>
           )}
 
@@ -549,7 +692,7 @@ function AddRelationshipDialog({
             </>
           )}
 
-          {/* Label (both modes) */}
+          {/* Label (all modes) */}
           <div className="space-y-2">
             <Label>Label (optional)</Label>
             <Input
@@ -567,7 +710,11 @@ function AddRelationshipDialog({
             </Button>
           </DialogClose>
           <Button onClick={handleSubmit} disabled={isPending || !canSubmit}>
-            {isPending ? "Adding..." : "Add Relationship"}
+            {isPending
+              ? "Adding..."
+              : mode === "new_client"
+                ? "Create Client & Link"
+                : "Add Relationship"}
           </Button>
         </DialogFooter>
       </DialogContent>

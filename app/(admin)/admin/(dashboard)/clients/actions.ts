@@ -16,7 +16,8 @@ import { sendEmail } from "@/lib/email";
 interface CreateClientData {
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
+  isMinor?: boolean;
   phone?: string;
   clientStatus: string;
   billingType: string;
@@ -37,20 +38,31 @@ interface CreateClientData {
 export async function createClientAction(data: CreateClientData) {
   await requireRole("super_admin");
 
-  // Check for existing email
-  const existing = await prisma.student.findUnique({
-    where: { email: data.email },
-    select: { id: true },
-  });
-  if (existing) {
-    throw new Error("A client with this email already exists.");
+  // Determine email — minors get a placeholder
+  let email = data.email?.trim().toLowerCase();
+  if (!email && data.isMinor) {
+    email = `minor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@noemail.internal`;
+  }
+  if (!email) {
+    throw new Error("Email is required for non-minor clients.");
+  }
+
+  // Check for existing email (skip placeholder emails)
+  if (!email.endsWith("@noemail.internal")) {
+    const existing = await prisma.student.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new Error("A client with this email already exists.");
+    }
   }
 
   const client = await prisma.student.create({
     data: {
       firstName: data.firstName,
       lastName: data.lastName,
-      email: data.email,
+      email,
       phone: data.phone || null,
       clientStatus: data.clientStatus,
       billingType: data.billingType,

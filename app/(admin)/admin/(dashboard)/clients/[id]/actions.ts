@@ -429,6 +429,106 @@ export async function addRelationshipAction(data: {
 }
 
 // ────────────────────────────────────────────────────────────
+// Relationships — Create new client + link relationship
+// ────────────────────────────────────────────────────────────
+
+const INVERSE_REL: Record<string, string> = {
+  parent: "child",
+  child: "parent",
+  guardian: "dependent",
+  dependent: "guardian",
+  partner: "partner",
+  sibling: "sibling",
+  other: "other",
+};
+
+export async function createClientAndLinkRelationshipAction(data: {
+  parentClientId: string;
+  firstName: string;
+  lastName: string;
+  isMinor: boolean;
+  email?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  relationshipType: string;
+  relationshipLabel?: string;
+}) {
+  await requireRole("super_admin");
+
+  // Determine email
+  let email = data.email?.trim().toLowerCase();
+  if (!email && data.isMinor) {
+    email = `minor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@noemail.internal`;
+  }
+  if (!email) {
+    throw new Error("Email is required for non-minor clients.");
+  }
+
+  // Check for duplicates (skip placeholders)
+  if (!email.endsWith("@noemail.internal")) {
+    const existing = await prisma.student.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new Error("A client with this email already exists.");
+    }
+  }
+
+  // Create the new client
+  const newClient = await prisma.student.create({
+    data: {
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      email,
+      dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+      gender: data.gender?.trim() || null,
+      clientStatus: "active",
+      source: "manual",
+      convertedAt: new Date(),
+    },
+  });
+
+  // Initialize credit balance
+  await prisma.sessionCreditBalance.create({
+    data: { studentId: newClient.id, balance: 0 },
+  });
+
+  // Create bidirectional relationships
+  const forwardRel = await prisma.clientRelationship.create({
+    data: {
+      studentId: data.parentClientId,
+      relatedStudentId: newClient.id,
+      relationshipType: data.relationshipType,
+      relationshipLabel: data.relationshipLabel || null,
+    },
+  });
+
+  const inverseType = INVERSE_REL[data.relationshipType] || data.relationshipType;
+  await prisma.clientRelationship.create({
+    data: {
+      studentId: newClient.id,
+      relatedStudentId: data.parentClientId,
+      relationshipType: inverseType,
+      relationshipLabel: null,
+    },
+  });
+
+  // If creating a child/minor, auto-set billing to the parent
+  if (data.relationshipType === "parent" || data.relationshipType === "guardian") {
+    await prisma.student.update({
+      where: { id: newClient.id },
+      data: { individualBilledToId: forwardRel.id },
+    });
+  }
+
+  revalidatePath(`/admin/clients/${data.parentClientId}`);
+  revalidatePath(`/admin/clients/${newClient.id}`);
+  revalidatePath("/admin/clients");
+  return { clientId: newClient.id };
+}
+
+// ────────────────────────────────────────────────────────────
 // Relationships — Remove relationship
 // ────────────────────────────────────────────────────────────
 
