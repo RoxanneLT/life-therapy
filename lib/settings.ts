@@ -52,7 +52,7 @@ export async function getSiteSettings() {
       googleAnalyticsId: null,
       smtpFromName: null,
       smtpFromEmail: null,
-      bookingMaxAdvanceDays: 30,
+      bookingMaxAdvanceDays: 60,
       bookingMinNoticeHours: 24,
       bookingBufferMinutes: 15,
       bookingEnabled: false,

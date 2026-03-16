@@ -22,15 +22,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid session type" }, { status: 400 });
   }
 
-  // Admin users can see today's date and bypass min notice
+  // Admin users can see today's date, bypass min notice, and book further ahead
   let includeToday = false;
+  let maxDaysOverride: number | undefined;
   if (adminMode) {
     const admin = await getAuthenticatedAdmin().catch(() => null);
     if (admin?.adminUser?.role === "super_admin" || admin?.adminUser?.role === "marketing") {
       includeToday = true;
+      maxDaysOverride = 90; // 3 months for admin
     }
   }
 
-  const dates = await getAvailableDates({ includeToday });
+  const dates = await getAvailableDates({ includeToday, maxDaysOverride });
   return NextResponse.json({ dates });
 }

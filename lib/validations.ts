@@ -131,7 +131,7 @@ export const availabilityOverrideSchema = z.object({
 });
 
 export const bookingSettingsSchema = z.object({
-  bookingMaxAdvanceDays: z.coerce.number().int().min(1).max(365).default(30),
+  bookingMaxAdvanceDays: z.coerce.number().int().min(1).max(365).default(60),
   bookingMinNoticeHours: z.coerce.number().int().min(0).max(168).default(24),
   bookingBufferMinutes: z.coerce.number().int().min(0).max(120).default(15),
   bookingEnabled: z.boolean().default(false),

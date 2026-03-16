@@ -154,12 +154,12 @@ export async function getAvailableSlots(
   });
 }
 
-export async function getAvailableDates(options?: { includeToday?: boolean }): Promise<string[]> {
+export async function getAvailableDates(options?: { includeToday?: boolean; maxDaysOverride?: number }): Promise<string[]> {
   const settings = await getSiteSettings();
 
   if (!settings.bookingEnabled) return [];
 
-  const maxDays = settings.bookingMaxAdvanceDays ?? 30;
+  const maxDays = options?.maxDaysOverride ?? settings.bookingMaxAdvanceDays ?? 60;
   const businessHours = getBusinessHours(settings);
 
   // Today in SAST — use formatInTimeZone for correct date regardless of server TZ
