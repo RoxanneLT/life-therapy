@@ -63,7 +63,10 @@ export async function getBookingsByMonth(year: number): Promise<MonthlyBookingDa
 // ── Revenue per Month ───────────────────────────────────────
 
 export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueData[]> {
-  const [paidInvoices, upcomingBookings] = await Promise.all([
+  const yearStart = new Date(`${year}-01-01`);
+  const yearEnd   = new Date(`${year + 1}-01-01`);
+
+  const [paidInvoices, unbilledCompleted, upcomingBookings] = await Promise.all([
     // Actual revenue from paid invoices
     prisma.invoice.groupBy({
       by: ["billingMonth"],
@@ -73,18 +76,26 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
       },
       _sum: { paidAmountCents: true },
     }),
-    // Estimated revenue from upcoming uninvoiced bookings
+    // Completed sessions not yet invoiced (postpaid pool) — use actual price
+    prisma.booking.findMany({
+      where: {
+        status: { in: ["completed", "no_show"] },
+        date: { gte: yearStart, lt: yearEnd },
+        invoiceId: null,
+        paymentRequestId: null,
+        sessionType: { in: ["individual", "couples"] },
+      },
+      select: { date: true, priceZarCents: true },
+    }),
+    // Future bookings not yet invoiced — estimated
     prisma.booking.findMany({
       where: {
         status: { in: ["pending", "confirmed"] },
-        date: {
-          gte: new Date(),
-          lt: new Date(`${year + 1}-01-01`),
-        },
+        date: { gte: new Date(), lt: yearEnd },
         invoiceId: null,
         sessionType: { in: ["individual", "couples"] },
       },
-      select: { date: true, sessionType: true },
+      select: { date: true, priceZarCents: true, sessionType: true },
     }),
   ]);
 
@@ -94,19 +105,23 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     estimated: 0,
   }));
 
-  // Map paid invoices by billingMonth ("YYYY-MM" → month index)
+  // Paid invoices → actual
   for (const row of paidInvoices) {
     if (!row.billingMonth) continue;
-    const monthIdx = parseInt(row.billingMonth.split("-")[1], 10) - 1;
-    if (monthIdx >= 0 && monthIdx < 12) {
-      months[monthIdx].actual = row._sum.paidAmountCents ?? 0;
-    }
+    const idx = Number.parseInt(row.billingMonth.split("-")[1], 10) - 1;
+    if (idx >= 0 && idx < 12) months[idx].actual = row._sum.paidAmountCents ?? 0;
   }
 
-  // Estimate revenue from upcoming bookings
+  // Completed unbilled → estimated (known amount, just not yet invoiced)
+  for (const b of unbilledCompleted) {
+    const idx = b.date.getUTCMonth();
+    months[idx].estimated += b.priceZarCents ?? 0;
+  }
+
+  // Upcoming bookings → estimated
   for (const b of upcomingBookings) {
     const idx = b.date.getUTCMonth();
-    months[idx].estimated += SESSION_PRICE_CENTS[b.sessionType] ?? 0;
+    months[idx].estimated += b.priceZarCents ?? SESSION_PRICE_CENTS[b.sessionType] ?? 0;
   }
 
   return months;
