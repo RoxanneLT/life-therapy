@@ -57,7 +57,7 @@ function getDayKey(date: Date): string {
   return days[date.getDay()];
 }
 
-export function DayView({ bookings, date, businessHours, override }: DayViewProps) {
+export function DayView({ bookings, date, businessHours, override }: Readonly<DayViewProps>) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -116,7 +116,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
           </div>
         )}
 
-        <div className="relative rounded-lg border">
+        <div className="relative rounded-lg border bg-white dark:bg-zinc-900">
           {/* Time grid rows — fixed height, no booking content */}
           {slots.map((slot) => {
             const slotMinutes = timeToMinutes(slot);

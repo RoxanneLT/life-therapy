@@ -130,7 +130,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
       </div>
 
       {/* Grid */}
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border bg-white dark:bg-zinc-900">
         <div className="min-w-[700px]">
 
           {/* Header row */}
