@@ -166,6 +166,7 @@ export default async function BookingsPage({ searchParams }: Props) {
     clientName: b.clientName,
     clientEmail: b.clientEmail,
     clientPhone: b.clientPhone,
+    couplesPartnerName: b.couplesPartnerName,
     sessionType: b.sessionType,
     status: b.status,
     teamsMeetingUrl: b.teamsMeetingUrl,

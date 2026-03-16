@@ -20,6 +20,7 @@ interface BookingData {
   clientName: string;
   clientEmail: string;
   clientPhone: string | null;
+  couplesPartnerName: string | null;
   sessionType: string;
   status: string;
   teamsMeetingUrl: string | null;
@@ -175,7 +176,12 @@ export function DayView({ bookings, date, businessHours, override }: Readonly<Da
                       {booking.status.replace("_", " ")}
                     </Badge>
                   </div>
-                  <div className="mt-0.5 truncate text-sm">{booking.clientName}</div>
+                  <div className="mt-0.5 truncate text-sm">
+                    {booking.clientName}
+                    {booking.couplesPartnerName && (
+                      <span className="text-muted-foreground"> & {booking.couplesPartnerName}</span>
+                    )}
+                  </div>
                   {height >= ROW_H && (
                     <div className="truncate text-xs text-muted-foreground">{config.label}</div>
                   )}

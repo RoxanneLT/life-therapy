@@ -21,6 +21,7 @@ interface BookingData {
   endTime: string;
   clientName: string;
   clientEmail: string;
+  couplesPartnerName: string | null;
   sessionType: string;
   status: string;
 }
@@ -220,7 +221,12 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
                           />
                           <span className="font-medium">{booking.startTime} – {booking.endTime}</span>
                         </div>
-                        <div className="truncate">{booking.clientName}</div>
+                        <div className="truncate">
+                          {booking.clientName}
+                          {booking.couplesPartnerName && (
+                            <span className="text-muted-foreground"> & {booking.couplesPartnerName}</span>
+                          )}
+                        </div>
                       </Link>
                     );
                   })}
