@@ -6,8 +6,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
-const BATCH_SIZE = 10;
-const BATCH_DELAY_MS = 1000;
+const BATCH_SIZE = 2;
+const BATCH_DELAY_MS = 1200;
 
 function replacePlaceholders(
   template: string,
