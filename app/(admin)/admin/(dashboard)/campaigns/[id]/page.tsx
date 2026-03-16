@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { deleteCampaignAction } from "../actions";
 import { CampaignActions } from "./campaign-actions";
+import { DeliveryLog } from "./delivery-log";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -463,69 +464,24 @@ export default async function CampaignDetailPage({
           </Card>
         )}
 
-        {/* Delivery Log (first 100) */}
+        {/* Delivery Log */}
         {emailLogs.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Delivery Log ({emailLogs.length}{emailLogs.length >= 200 ? "+" : ""})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    {campaign.isMultiStep && <TableHead>Step</TableHead>}
-                    <TableHead>Status</TableHead>
-                    <TableHead>Opened</TableHead>
-                    <TableHead>Clicked</TableHead>
-                    <TableHead>Sent At</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {emailLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-muted-foreground">{log.to}</TableCell>
-                      {campaign.isMultiStep && (
-                        <TableCell>
-                          {log.templateKey?.split("_").pop() === undefined
-                            ? "—"
-                            : `Step ${Number(log.templateKey?.split("_").pop()) + 1}`}
-                        </TableCell>
-                      )}
-                      <TableCell>
-                        <Badge variant={log.status === "sent" ? "secondary" : "destructive"}>
-                          {log.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {log.openedAt ? (
-                          <span className="text-green-600" title={format(new Date(log.openedAt), "d MMM HH:mm")}>
-                            Yes ({log.opensCount})
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">No</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {log.clickedAt ? (
-                          <span className="text-blue-600" title={format(new Date(log.clickedAt), "d MMM HH:mm")}>
-                            Yes ({log.clicksCount})
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">No</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {format(new Date(log.sentAt), "d MMM HH:mm")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <DeliveryLog
+            logs={emailLogs.map((l) => ({
+              id: l.id,
+              to: l.to,
+              status: l.status,
+              templateKey: l.templateKey,
+              openedAt: l.openedAt,
+              opensCount: l.opensCount,
+              clickedAt: l.clickedAt,
+              clicksCount: l.clicksCount,
+              sentAt: l.sentAt,
+              error: l.error,
+            }))}
+            isMultiStep={campaign.isMultiStep}
+            totalSteps={campaign.emails.length}
+          />
         )}
 
         {/* Delete (only drafts) */}
