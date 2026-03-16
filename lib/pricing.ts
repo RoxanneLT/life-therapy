@@ -85,7 +85,7 @@ export function getDigitalProductPrice(
 
 /**
  * Get session price from SiteSetting for the given type + currency.
- * All prices are configurable via admin settings with sensible defaults.
+ * Returns 0 if the price has not been configured — no hardcoded fallbacks.
  */
 export function getSessionPrice(
   sessionType: "individual" | "couples",
@@ -101,28 +101,21 @@ export function getSessionPrice(
     sessionPriceCouplesGbp?: number | null;
   } | null
 ): number {
-  const DEFAULTS = {
-    individual: { ZAR: 85000, USD: 6500, EUR: 5900, GBP: 4900 },
-    couples:    { ZAR: 120000, USD: 9500, EUR: 8500, GBP: 7500 },
-  };
+  if (!settings) return 0;
 
-  if (settings) {
-    if (sessionType === "individual") {
-      switch (currency) {
-        case "ZAR": return settings.sessionPriceIndividualZar ?? DEFAULTS.individual.ZAR;
-        case "USD": return settings.sessionPriceIndividualUsd ?? DEFAULTS.individual.USD;
-        case "EUR": return settings.sessionPriceIndividualEur ?? DEFAULTS.individual.EUR;
-        case "GBP": return settings.sessionPriceIndividualGbp ?? DEFAULTS.individual.GBP;
-      }
-    } else {
-      switch (currency) {
-        case "ZAR": return settings.sessionPriceCouplesZar ?? DEFAULTS.couples.ZAR;
-        case "USD": return settings.sessionPriceCouplesUsd ?? DEFAULTS.couples.USD;
-        case "EUR": return settings.sessionPriceCouplesEur ?? DEFAULTS.couples.EUR;
-        case "GBP": return settings.sessionPriceCouplesGbp ?? DEFAULTS.couples.GBP;
-      }
+  if (sessionType === "individual") {
+    switch (currency) {
+      case "ZAR": return settings.sessionPriceIndividualZar ?? 0;
+      case "USD": return settings.sessionPriceIndividualUsd ?? 0;
+      case "EUR": return settings.sessionPriceIndividualEur ?? 0;
+      case "GBP": return settings.sessionPriceIndividualGbp ?? 0;
+    }
+  } else {
+    switch (currency) {
+      case "ZAR": return settings.sessionPriceCouplesZar ?? 0;
+      case "USD": return settings.sessionPriceCouplesUsd ?? 0;
+      case "EUR": return settings.sessionPriceCouplesEur ?? 0;
+      case "GBP": return settings.sessionPriceCouplesGbp ?? 0;
     }
   }
-
-  return DEFAULTS[sessionType][currency] ?? DEFAULTS[sessionType].ZAR;
 }

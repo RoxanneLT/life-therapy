@@ -589,7 +589,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
 
               <p className="text-xs text-muted-foreground">
                 Free consultations are always R0.00 regardless of currency.
-                Leave a field blank to use the default price.
+                These prices are used on the public booking page and on invoices.
               </p>
             </CardContent>
           </Card>
@@ -829,7 +829,7 @@ function InvoicePreview({
   sessionPriceZar,
 }: Readonly<InvoicePreviewProps>) {
   const vatRate = Number.parseFloat(vatPercent) || 15;
-  const priceRands = Number.parseInt(sessionPriceZar, 10) / 100 || 850;
+  const priceRands = (Number.parseInt(sessionPriceZar, 10) || 0) / 100;
   const priceFormatted = priceRands.toFixed(2);
   const sampleItems = buildSampleItems(priceFormatted);
   const subtotal = priceRands * 3;

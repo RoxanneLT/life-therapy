@@ -53,6 +53,16 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPric
       await createBooking(formData);
       // redirect happens in the server action
     } catch (err) {
+      // Next.js redirect() throws a special error — re-throw it so navigation works
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "digest" in err &&
+        typeof (err as { digest: unknown }).digest === "string" &&
+        (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+      ) {
+        throw err;
+      }
       toast.error(
         err instanceof Error ? err.message : "Booking failed. Please try again."
       );
