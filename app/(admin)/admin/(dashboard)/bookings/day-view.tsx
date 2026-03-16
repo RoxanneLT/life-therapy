@@ -39,9 +39,9 @@ interface DayViewProps {
 }
 
 const SESSION_COLORS: Record<string, string> = {
-  individual: "border-l-green-500 bg-green-50",
-  couples: "border-l-purple-500 bg-purple-50",
-  free_consultation: "border-l-blue-500 bg-blue-50",
+  individual:        "border-l-green-500  bg-green-50  hover:bg-green-100  dark:bg-green-900/50  dark:hover:bg-green-900/70  dark:text-green-100  dark:border-l-green-400",
+  couples:           "border-l-purple-500 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/50 dark:hover:bg-purple-900/70 dark:text-purple-100 dark:border-l-purple-400",
+  free_consultation: "border-l-blue-500   bg-blue-50   hover:bg-blue-100   dark:bg-blue-900/50   dark:hover:bg-blue-900/70   dark:text-blue-100   dark:border-l-blue-400",
 };
 
 /** px height per 15-minute slot */
@@ -126,7 +126,7 @@ export function DayView({ bookings, date, businessHours, override }: Readonly<Da
               slotMinutes < timeToMinutes(dayHours.close);
             const isHour = slot.endsWith(":00");
             let lineClass = "";
-            if (i > 0) lineClass = isHour ? "border-t border-t-gray-300" : "border-t border-t-gray-100";
+            if (i > 0) lineClass = isHour ? "border-t border-t-gray-300 dark:border-t-zinc-600" : "border-t border-t-gray-100 dark:border-t-zinc-700/50";
 
             return (
               <div
