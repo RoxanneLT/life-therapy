@@ -188,15 +188,13 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
                   style={{ height: totalHeight }}
                 >
                   {/* Horizontal grid lines */}
-                  {slots.map((slot, i) => (
-                    <div
-                      key={slot}
-                      className={`absolute w-full border-b ${
-                        slot.endsWith(":00") ? "border-b-gray-200" : "border-b-gray-100"
-                      }`}
-                      style={{ top: i * ROW_H, height: ROW_H }}
-                    />
-                  ))}
+                  {slots.map((slot, i) => {
+                    let lineClass = "";
+                    if (i > 0) lineClass = slot.endsWith(":00") ? "border-t border-t-gray-300" : "border-t border-t-gray-100";
+                    return (
+                      <div key={slot} className={`absolute w-full ${lineClass}`} style={{ top: i * ROW_H, height: ROW_H }} />
+                    );
+                  })}
 
                   {/* Booking blocks */}
                   {dayBookings.map((booking) => {
@@ -220,7 +218,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
                           <span
                             className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${BOOKING_STATUS_DOT[booking.status] || "bg-gray-400"}`}
                           />
-                          <span className="font-medium">{booking.startTime}</span>
+                          <span className="font-medium">{booking.startTime} – {booking.endTime}</span>
                         </div>
                         <div className="truncate">{booking.clientName}</div>
                       </Link>

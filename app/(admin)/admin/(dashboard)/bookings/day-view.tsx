@@ -118,23 +118,24 @@ export function DayView({ bookings, date, businessHours, override }: Readonly<Da
 
         <div className="relative rounded-lg border bg-white dark:bg-zinc-900">
           {/* Time grid rows — fixed height, no booking content */}
-          {slots.map((slot) => {
+          {slots.map((slot, i) => {
             const slotMinutes = timeToMinutes(slot);
             const isBusinessHour =
               dayHours && !dayHours.closed &&
               slotMinutes >= timeToMinutes(dayHours.open) &&
               slotMinutes < timeToMinutes(dayHours.close);
+            const isHour = slot.endsWith(":00");
+            let lineClass = "";
+            if (i > 0) lineClass = isHour ? "border-t border-t-gray-300" : "border-t border-t-gray-100";
 
             return (
               <div
                 key={slot}
                 style={{ height: ROW_H }}
-                className={`flex border-b last:border-b-0 ${
-                  isBusinessHour ? "bg-white" : "bg-gray-50"
-                } ${slot.endsWith(":00") ? "border-b-gray-200" : "border-b-gray-100"}`}
+                className={`flex ${lineClass} ${isBusinessHour ? "bg-white dark:bg-zinc-900" : "bg-gray-50 dark:bg-zinc-800"}`}
               >
                 <div className="flex w-16 shrink-0 items-start justify-end border-r px-2 py-1">
-                  {slot.endsWith(":00") && (
+                  {isHour && (
                     <span className="text-xs text-muted-foreground">{slot}</span>
                   )}
                 </div>
