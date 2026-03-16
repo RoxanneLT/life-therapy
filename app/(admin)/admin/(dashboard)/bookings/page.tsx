@@ -79,9 +79,13 @@ export default async function BookingsPage({ searchParams }: Props) {
   );
 
   // Build status filter
-  const statusWhere = statusFilter
-    ? { status: statusFilter as BookingStatus }
-    : {};
+  // Calendar views default to excluding cancelled/no_show; list shows everything
+  let statusWhere: Record<string, unknown> = {};
+  if (statusFilter) {
+    statusWhere = { status: statusFilter as BookingStatus };
+  } else if (view === "day" || view === "week" || view === "month") {
+    statusWhere = { status: { notIn: ["cancelled", "no_show"] as BookingStatus[] } };
+  }
 
   // Build series filter
   const seriesWhere = seriesFilter
