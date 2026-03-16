@@ -44,7 +44,7 @@ export function CreateClientDialog() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [clientStatus, setClientStatus] = useState("potential");
-  const [billingType, setBillingType] = useState("prepaid");
+  const [billingType, setBillingType] = useState("postpaid");
 
   // Step 2: Personal info (optional)
   const [dateOfBirth, setDateOfBirth] = useState("");
