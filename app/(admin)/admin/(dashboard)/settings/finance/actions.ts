@@ -70,5 +70,6 @@ export async function updateFinanceSettings(formData: FormData): Promise<{ succe
   }
 
   revalidatePath("/admin/settings/finance");
+  revalidatePath("/book");
   return { success: true };
 }
