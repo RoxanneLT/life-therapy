@@ -36,7 +36,7 @@ const DEFAULTS = {
 } as const;
 
 export async function getSiteSettings() {
-  const settings = await prisma.siteSetting.findFirst();
+  const settings = await prisma.siteSetting.findFirst({ orderBy: { updatedAt: "desc" } });
 
   if (!settings) {
     return {
