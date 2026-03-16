@@ -3,8 +3,12 @@
 import { useState, useTransition } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pencil, Save, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Pencil, Save, X, Mail } from "lucide-react";
 import { updateClientProfileAction } from "../../actions";
+import { updateClientEmailAction } from "../actions";
 import { format } from "date-fns";
 
 interface PersonalTabProps {
@@ -72,6 +76,75 @@ function CheckboxField({
   );
 }
 
+function UpdateEmailDialog({ clientId, currentEmail }: Readonly<{ clientId: string; currentEmail: string }>) {
+  const [open, setOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    startTransition(async () => {
+      const result = await updateClientEmailAction(clientId, newEmail);
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => { setOpen(false); setSuccess(false); setNewEmail(""); }, 2000);
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); setError(""); setSuccess(false); setNewEmail(""); }}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground">
+          <Mail className="h-3 w-3" />
+          Update email
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Update Email Address</DialogTitle>
+        </DialogHeader>
+        {success ? (
+          <p className="py-4 text-center text-sm text-green-600">
+            ✓ Email updated. A confirmation link has been sent to the new address.
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Current email</Label>
+              <p className="text-sm">{currentEmail}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-email">New email</Label>
+              <Input
+                id="new-email"
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="new@example.com"
+                required
+                autoFocus
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={isPending || !newEmail}>
+                {isPending ? "Updating..." : "Update & send verification"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function PersonalTab({ client }: PersonalTabProps) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -117,7 +190,6 @@ export function PersonalTab({ client }: PersonalTabProps) {
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="First Name" name="firstName" defaultValue={client.firstName as string} />
               <FormField label="Last Name" name="lastName" defaultValue={client.lastName as string} />
-              <FormField label="Email" name="email" defaultValue={client.email as string} type="email" />
               <FormField label="Phone" name="phone" defaultValue={client.phone as string} placeholder="+27..." />
               <FormField label="Date of Birth" name="dateOfBirth" defaultValue={dateOfBirth} type="date" />
               <FormField label="Gender" name="gender" defaultValue={client.gender as string} placeholder="e.g. Female" />
@@ -168,7 +240,13 @@ export function PersonalTab({ client }: PersonalTabProps) {
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <DisplayField label="First Name" value={client.firstName as string} />
           <DisplayField label="Last Name" value={client.lastName as string} />
-          <DisplayField label="Email" value={client.email as string} />
+          <div>
+            <dt className="text-xs font-medium text-muted-foreground">Email</dt>
+            <dd className="mt-0.5 flex items-center gap-2 text-sm">
+              {(client.email as string) || "—"}
+              <UpdateEmailDialog clientId={client.id as string} currentEmail={client.email as string} />
+            </dd>
+          </div>
           <DisplayField label="Phone" value={client.phone as string} />
           <DisplayField label="Date of Birth" value={dateOfBirthDisplay} />
           <DisplayField label="Gender" value={client.gender as string} />

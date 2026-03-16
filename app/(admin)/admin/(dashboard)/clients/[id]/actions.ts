@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
@@ -970,6 +971,67 @@ export async function billToDateAction(studentId: string) {
 
   revalidatePath(`/admin/clients/${studentId}`);
   return created[0]; // Return first for backward compat
+}
+
+// ────────────────────────────────────────────────────────────
+// Update client email — syncs Prisma + Supabase Auth
+// ────────────────────────────────────────────────────────────
+
+export async function updateClientEmailAction(
+  studentId: string,
+  newEmail: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await requireRole("super_admin");
+
+  const email = newEmail.trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { success: false, error: "Invalid email address." };
+  }
+
+  // Check for conflicts in students table
+  const existing = await prisma.student.findFirst({
+    where: { email, NOT: { id: studentId } },
+    select: { id: true },
+  });
+  if (existing) {
+    return { success: false, error: "That email is already used by another client." };
+  }
+
+  // Get current student (need supabaseUserId)
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { supabaseUserId: true, email: true },
+  });
+  if (!student) return { success: false, error: "Client not found." };
+
+  // Check for conflicts in Supabase Auth
+  const { data: authList } = await supabaseAdmin.auth.admin.listUsers();
+  const conflict = authList?.users?.find(
+    (u) => u.email === email && u.id !== student.supabaseUserId,
+  );
+  if (conflict) {
+    return { success: false, error: "That email already has a portal account." };
+  }
+
+  // Update Supabase Auth (sends confirmation email to new address)
+  if (student.supabaseUserId) {
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      student.supabaseUserId,
+      { email, email_confirm: false },
+    );
+    if (authError) {
+      return { success: false, error: `Auth update failed: ${authError.message}` };
+    }
+  }
+
+  // Update Prisma
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { email },
+  });
+
+  revalidatePath(`/admin/clients/${studentId}`);
+  return { success: true };
 }
 
 // ────────────────────────────────────────────────────────────
