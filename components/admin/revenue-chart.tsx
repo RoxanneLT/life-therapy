@@ -14,7 +14,7 @@ import type { MonthlyRevenueData } from "@/lib/dashboard-queries";
 const chartConfig = {
   actual: {
     label: "Actual Revenue",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(271, 81%, 40%)",
   },
   estimated: {
     label: "Estimated Revenue",
