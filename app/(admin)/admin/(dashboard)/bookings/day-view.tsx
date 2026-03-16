@@ -44,6 +44,9 @@ const SESSION_COLORS: Record<string, string> = {
   free_consultation: "border-l-blue-500 bg-blue-50",
 };
 
+/** px height per 15-minute slot */
+const ROW_H = 24;
+
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
@@ -64,12 +67,12 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
   const dayHours = businessHours?.[dayKey];
 
   // Determine time range
-  const startHour = dayHours && !dayHours.closed ? timeToMinutes(dayHours.open) : 8 * 60;
-  const endHour = dayHours && !dayHours.closed ? timeToMinutes(dayHours.close) : 18 * 60;
+  const gridStart = dayHours && !dayHours.closed ? timeToMinutes(dayHours.open) : 8 * 60;
+  const gridEnd   = dayHours && !dayHours.closed ? timeToMinutes(dayHours.close) : 18 * 60;
 
-  // Generate 30-min time slots
+  // Generate 15-min time slots
   const slots: string[] = [];
-  for (let m = startHour; m < endHour; m += 30) {
+  for (let m = gridStart; m < gridEnd; m += 15) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
     slots.push(`${hh}:${mm}`);
@@ -84,28 +87,22 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
     router.push(`/admin/bookings?${params.toString()}`);
   }
 
+  const totalHeight = slots.length * ROW_H;
+
   return (
     <div className="flex gap-6">
       {/* Left column — Timeline */}
       <div className="min-w-0 flex-1">
         {/* Date navigation */}
         <div className="mb-4 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigateDate(subDays(currentDate, 1))}
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigateDate(subDays(currentDate, 1))}>
             <ChevronLeft className="mr-1 h-4 w-4" />
             {format(subDays(currentDate, 1), "d MMM")}
           </Button>
           <h2 className="font-heading text-lg font-semibold">
             {format(currentDate, "EEEE d MMMM yyyy")}
           </h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigateDate(addDays(currentDate, 1))}
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigateDate(addDays(currentDate, 1))}>
             {format(addDays(currentDate, 1), "d MMM")}
             <ChevronRight className="ml-1 h-4 w-4" />
           </Button>
@@ -115,86 +112,77 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
         {override?.isBlocked && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>
-              This day is blocked{override.reason ? `: ${override.reason}` : ""}
-            </span>
+            <span>This day is blocked{override.reason ? `: ${override.reason}` : ""}</span>
           </div>
         )}
 
-        {bookings.length === 0 ? (
-          <div className="flex flex-col items-center rounded-lg border border-dashed py-16 text-center">
-            <p className="text-muted-foreground">No bookings on this day.</p>
-          </div>
-        ) : (
-          <div className="relative rounded-lg border">
-            {/* Time grid */}
-            {slots.map((slot, _i) => {
-              const slotMinutes = timeToMinutes(slot);
-              const isBusinessHour =
-                dayHours && !dayHours.closed &&
-                slotMinutes >= timeToMinutes(dayHours.open) &&
-                slotMinutes < timeToMinutes(dayHours.close);
+        <div className="relative rounded-lg border">
+          {/* Time grid rows — fixed height, no booking content */}
+          {slots.map((slot) => {
+            const slotMinutes = timeToMinutes(slot);
+            const isBusinessHour =
+              dayHours && !dayHours.closed &&
+              slotMinutes >= timeToMinutes(dayHours.open) &&
+              slotMinutes < timeToMinutes(dayHours.close);
 
-              // Find bookings that start within this 30-min slot
-              const slotBookings = bookings.filter((b) => {
-                const bMinutes = timeToMinutes(b.startTime);
-                return bMinutes >= slotMinutes && bMinutes < slotMinutes + 30;
-              });
+            return (
+              <div
+                key={slot}
+                style={{ height: ROW_H }}
+                className={`flex border-b last:border-b-0 ${
+                  isBusinessHour ? "bg-white" : "bg-gray-50"
+                } ${slot.endsWith(":00") ? "border-b-gray-200" : "border-b-gray-100"}`}
+              >
+                <div className="flex w-16 shrink-0 items-start justify-end border-r px-2 py-1">
+                  {slot.endsWith(":00") && (
+                    <span className="text-xs text-muted-foreground">{slot}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Absolutely positioned booking blocks */}
+          <div className="pointer-events-none absolute inset-0 left-16" style={{ height: totalHeight }}>
+            {bookings.map((booking) => {
+              const config = getSessionTypeConfig(booking.sessionType as never);
+              const colorClass = SESSION_COLORS[booking.sessionType] || "border-l-gray-400 bg-gray-50";
+              const startMins = timeToMinutes(booking.startTime);
+              const endMins   = timeToMinutes(booking.endTime);
+              const duration  = endMins - startMins;
+              const top    = ((startMins - gridStart) / 15) * ROW_H + 1;
+              const height = Math.max((duration / 15) * ROW_H - 2, ROW_H);
 
               return (
-                <div
-                  key={slot}
-                  className={`flex min-h-[3rem] border-b last:border-b-0 ${
-                    isBusinessHour ? "bg-white" : "bg-gray-50"
+                <button
+                  key={booking.id}
+                  type="button"
+                  onClick={() => setSelectedId(booking.id === selectedId ? null : booking.id)}
+                  className={`pointer-events-auto absolute cursor-pointer overflow-hidden rounded-md border-l-4 px-3 py-1.5 text-left transition-shadow hover:shadow-md ${colorClass} ${
+                    booking.id === selectedId ? "ring-2 ring-brand-500" : ""
                   }`}
+                  style={{ top, height, left: 8, right: 8 }}
                 >
-                  {/* Time label */}
-                  <div className="flex w-16 shrink-0 items-start justify-end border-r px-2 py-1">
-                    <span className="text-xs text-muted-foreground">{slot}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">
+                      {booking.startTime} – {booking.endTime}
+                    </span>
+                    <Badge
+                      variant="secondary"
+                      className={`shrink-0 text-xs ${BOOKING_STATUS_BADGE[booking.status] || ""}`}
+                    >
+                      {booking.status.replace("_", " ")}
+                    </Badge>
                   </div>
-
-                  {/* Booking blocks */}
-                  <div className="flex-1 px-2 py-1">
-                    {slotBookings.map((booking) => {
-                      const config = getSessionTypeConfig(booking.sessionType as never);
-                      const colorClass =
-                        SESSION_COLORS[booking.sessionType] || "border-l-gray-400 bg-gray-50";
-
-                      return (
-                        <button
-                          key={booking.id}
-                          type="button"
-                          onClick={() => setSelectedId(booking.id === selectedId ? null : booking.id)}
-                          className={`mb-1 w-full cursor-pointer rounded-md border-l-4 px-3 py-2 text-left transition-shadow hover:shadow-md ${colorClass} ${
-                            booking.id === selectedId ? "ring-2 ring-brand-500" : ""
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">
-                              {booking.startTime} – {booking.endTime}
-                            </span>
-                            <Badge
-                              variant="secondary"
-                              className={`text-xs ${BOOKING_STATUS_BADGE[booking.status] || ""}`}
-                            >
-                              {booking.status.replace("_", " ")}
-                            </Badge>
-                          </div>
-                          <div className="mt-0.5 text-sm">
-                            {booking.clientName}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {config.label}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                  <div className="mt-0.5 truncate text-sm">{booking.clientName}</div>
+                  {height >= ROW_H && (
+                    <div className="truncate text-xs text-muted-foreground">{config.label}</div>
+                  )}
+                </button>
               );
             })}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Right column — Detail Panel */}
@@ -203,9 +191,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
           <Card>
             <CardContent className="p-5">
               <div className="mb-4 flex items-start justify-between">
-                <h3 className="font-heading text-lg font-semibold">
-                  Booking Details
-                </h3>
+                <h3 className="font-heading text-lg font-semibold">Booking Details</h3>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -220,22 +206,12 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
                 <DetailRow label="Session">
                   {getSessionTypeConfig(selected.sessionType as never).label}
                 </DetailRow>
-                <DetailRow label="Date">
-                  {format(parseISO(date), "d MMMM yyyy")}
-                </DetailRow>
-                <DetailRow label="Time">
-                  {selected.startTime} – {selected.endTime}
-                </DetailRow>
-                <DetailRow label="Client">
-                  {selected.clientName}
-                </DetailRow>
-                <DetailRow label="Email">
-                  {selected.clientEmail}
-                </DetailRow>
+                <DetailRow label="Date">{format(parseISO(date), "d MMMM yyyy")}</DetailRow>
+                <DetailRow label="Time">{selected.startTime} – {selected.endTime}</DetailRow>
+                <DetailRow label="Client">{selected.clientName}</DetailRow>
+                <DetailRow label="Email">{selected.clientEmail}</DetailRow>
                 {selected.clientPhone && (
-                  <DetailRow label="Phone">
-                    {selected.clientPhone}
-                  </DetailRow>
+                  <DetailRow label="Phone">{selected.clientPhone}</DetailRow>
                 )}
                 <DetailRow label="Status">
                   <Badge
@@ -253,8 +229,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-brand-600 hover:underline"
                     >
-                      Join meeting
-                      <ExternalLink className="h-3 w-3" />
+                      Join meeting <ExternalLink className="h-3 w-3" />
                     </a>
                   </DetailRow>
                 )}
@@ -288,13 +263,7 @@ export function DayView({ bookings, date, businessHours, override }: DayViewProp
   );
 }
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div className="flex gap-3">
       <span className="w-16 shrink-0 text-muted-foreground">{label}</span>

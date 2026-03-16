@@ -38,7 +38,6 @@ interface WeekViewProps {
   overrides: OverrideData[];
 }
 
-
 const SESSION_COLORS: Record<string, string> = {
   individual: "border-l-green-500 bg-green-50 hover:bg-green-100",
   couples: "border-l-purple-500 bg-purple-50 hover:bg-purple-100",
@@ -47,12 +46,15 @@ const SESSION_COLORS: Record<string, string> = {
 
 const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday"];
 
+/** px height per 15-minute slot */
+const ROW_H = 20;
+
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
 
-export function WeekView({ bookings, date, businessHours, overrides }: WeekViewProps) {
+export function WeekView({ bookings, date, businessHours, overrides }: Readonly<WeekViewProps>) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -60,28 +62,30 @@ export function WeekView({ bookings, date, businessHours, overrides }: WeekViewP
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(monday, i));
 
   // Determine earliest/latest business hours across Mon-Fri
-  let earliestMinutes = 9 * 60;
-  let latestMinutes = 17 * 60;
+  let gridStart = 9 * 60;
+  let gridEnd   = 17 * 60;
 
   if (businessHours) {
     for (const key of DAY_KEYS) {
       const dh = businessHours[key];
       if (dh && !dh.closed) {
-        const open = timeToMinutes(dh.open);
+        const open  = timeToMinutes(dh.open);
         const close = timeToMinutes(dh.close);
-        if (open < earliestMinutes) earliestMinutes = open;
-        if (close > latestMinutes) latestMinutes = close;
+        if (open  < gridStart) gridStart = open;
+        if (close > gridEnd)   gridEnd   = close;
       }
     }
   }
 
-  // Generate time slots
+  // Generate 15-min time slots
   const slots: string[] = [];
-  for (let m = earliestMinutes; m < latestMinutes; m += 30) {
+  for (let m = gridStart; m < gridEnd; m += 15) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
     slots.push(`${hh}:${mm}`);
   }
+
+  const totalHeight = slots.length * ROW_H;
 
   function navigateWeek(newMonday: Date) {
     const params = new URLSearchParams(searchParams.toString());
@@ -98,7 +102,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: WeekViewP
     bookingsByDate[key].push(b);
   }
 
-  // Build override lookup: dateStr -> override
+  // Build override lookup
   const overrideByDate: Record<string, OverrideData> = {};
   for (const ov of overrides) {
     const key = typeof ov.date === "string" ? ov.date.slice(0, 10) : format(new Date(ov.date), "yyyy-MM-dd");
@@ -112,22 +116,14 @@ export function WeekView({ bookings, date, businessHours, overrides }: WeekViewP
     <div>
       {/* Week navigation */}
       <div className="mb-4 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigateWeek(prevMonday)}
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigateWeek(prevMonday)}>
           <ChevronLeft className="mr-1 h-4 w-4" />
           Week of {format(prevMonday, "d MMM")}
         </Button>
         <h2 className="font-heading text-lg font-semibold">
           Week of {format(monday, "d MMMM yyyy")}
         </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigateWeek(nextMonday)}
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigateWeek(nextMonday)}>
           Week of {format(nextMonday, "d MMM")}
           <ChevronRight className="ml-1 h-4 w-4" />
         </Button>
@@ -135,92 +131,106 @@ export function WeekView({ bookings, date, businessHours, overrides }: WeekViewP
 
       {/* Grid */}
       <div className="overflow-x-auto rounded-lg border">
-        <div
-          className="grid min-w-[800px]"
-          style={{ gridTemplateColumns: "64px repeat(5, 1fr)" }}
-        >
+        <div className="min-w-[700px]">
+
           {/* Header row */}
-          <div className="border-b border-r bg-muted/50 px-2 py-2" />
-          {weekDays.map((day) => {
-            const dateStr = format(day, "yyyy-MM-dd");
-            const blocked = overrideByDate[dateStr]?.isBlocked;
-            const isToday = isSameDay(day, new Date());
+          <div className="flex border-b">
+            <div className="w-14 shrink-0 border-r bg-muted/50" />
+            {weekDays.map((day) => {
+              const dateStr = format(day, "yyyy-MM-dd");
+              const blocked = overrideByDate[dateStr]?.isBlocked;
+              const isToday = isSameDay(day, new Date());
+              let headerBg = "bg-muted/50";
+              if (blocked) headerBg = "bg-gray-100 text-gray-400";
+              else if (isToday) headerBg = "bg-brand-50 text-brand-700";
 
-            return (
-              <div
-                key={dateStr}
-                className={`border-b border-r px-3 py-2 text-center text-sm font-medium last:border-r-0 ${
-                  blocked ? "bg-gray-100 text-gray-400" : isToday ? "bg-brand-50 text-brand-700" : "bg-muted/50"
-                }`}
-              >
-                <div>{format(day, "EEE")}</div>
-                <div className="text-xs">{format(day, "d MMM")}</div>
-                {blocked && (
-                  <div className="mt-0.5 text-xs text-amber-600">Blocked</div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Time slots */}
-          {slots.map((slot) => {
-            const slotMinutes = timeToMinutes(slot);
-
-            return (
-              <div key={slot} className="contents">
-                {/* Time label */}
-                <div className="flex items-start justify-end border-b border-r px-2 py-1">
-                  <span className="text-xs text-muted-foreground">{slot}</span>
+              return (
+                <div
+                  key={dateStr}
+                  className={`flex-1 border-r px-3 py-2 text-center text-sm font-medium last:border-r-0 ${headerBg}`}
+                >
+                  <div>{format(day, "EEE")}</div>
+                  <div className="text-xs">{format(day, "d MMM")}</div>
+                  {blocked && <div className="mt-0.5 text-xs text-amber-600">Blocked</div>}
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Day columns */}
-                {weekDays.map((day) => {
-                  const dateStr = format(day, "yyyy-MM-dd");
-                  const dayBookings = bookingsByDate[dateStr] || [];
-                  const slotBookings = dayBookings.filter((b) => {
-                    const bMinutes = timeToMinutes(b.startTime);
-                    return bMinutes >= slotMinutes && bMinutes < slotMinutes + 30;
-                  });
-                  const blocked = overrideByDate[dateStr]?.isBlocked;
+          {/* Body: time column + day columns */}
+          <div className="flex" style={{ height: totalHeight }}>
 
-                  return (
+            {/* Time label column */}
+            <div className="relative w-14 shrink-0 border-r">
+              {slots.map((slot, i) => (
+                <div
+                  key={slot}
+                  className="absolute flex w-full items-start justify-end px-1"
+                  style={{ top: i * ROW_H, height: ROW_H }}
+                >
+                  {slot.endsWith(":00") && (
+                    <span className="text-xs text-muted-foreground">{slot}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
+            {weekDays.map((day) => {
+              const dateStr  = format(day, "yyyy-MM-dd");
+              const dayBookings = bookingsByDate[dateStr] || [];
+              const blocked  = overrideByDate[dateStr]?.isBlocked;
+
+              return (
+                <div
+                  key={dateStr}
+                  className={`relative flex-1 border-r last:border-r-0 ${blocked ? "bg-gray-50" : ""}`}
+                  style={{ height: totalHeight }}
+                >
+                  {/* Horizontal grid lines */}
+                  {slots.map((slot, i) => (
                     <div
-                      key={dateStr}
-                      className={`min-h-[2.5rem] border-b border-r px-1 py-0.5 last:border-r-0 ${
-                        blocked ? "bg-gray-50" : ""
+                      key={slot}
+                      className={`absolute w-full border-b ${
+                        slot.endsWith(":00") ? "border-b-gray-200" : "border-b-gray-100"
                       }`}
-                    >
-                      {slotBookings.map((booking) => {
-                        const colorClass =
-                          SESSION_COLORS[booking.sessionType] ||
-                          "border-l-gray-400 bg-gray-50 hover:bg-gray-100";
+                      style={{ top: i * ROW_H, height: ROW_H }}
+                    />
+                  ))}
 
-                        return (
-                          <Link
-                            key={booking.id}
-                            href={`/admin/bookings/${booking.id}`}
-                            className={`mb-0.5 block rounded border-l-3 px-2 py-1 text-xs transition-colors ${colorClass}`}
-                          >
-                            <div className="flex items-center gap-1">
-                              <span
-                                className={`inline-block h-1.5 w-1.5 rounded-full ${BOOKING_STATUS_DOT[booking.status] || "bg-gray-400"}`}
-                              />
-                              <span className="font-medium">
-                                {booking.startTime}
-                              </span>
-                            </div>
-                            <div className="truncate">
-                              {booking.clientName}
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+                  {/* Booking blocks */}
+                  {dayBookings.map((booking) => {
+                    const colorClass =
+                      SESSION_COLORS[booking.sessionType] ||
+                      "border-l-gray-400 bg-gray-50 hover:bg-gray-100";
+                    const startMins = timeToMinutes(booking.startTime);
+                    const endMins   = timeToMinutes(booking.endTime);
+                    const duration  = endMins - startMins;
+                    const top    = ((startMins - gridStart) / 15) * ROW_H + 1;
+                    const height = Math.max((duration / 15) * ROW_H - 2, ROW_H);
+
+                    return (
+                      <Link
+                        key={booking.id}
+                        href={`/admin/bookings/${booking.id}`}
+                        className={`absolute overflow-hidden rounded border-l-2 px-1.5 py-0.5 text-xs transition-colors ${colorClass}`}
+                        style={{ top, height, left: 2, right: 2 }}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span
+                            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${BOOKING_STATUS_DOT[booking.status] || "bg-gray-400"}`}
+                          />
+                          <span className="font-medium">{booking.startTime}</span>
+                        </div>
+                        <div className="truncate">{booking.clientName}</div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+
         </div>
       </div>
     </div>
