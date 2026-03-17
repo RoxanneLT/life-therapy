@@ -371,7 +371,7 @@ async function processCreditExpiryReminders(
     const result = await sendAndLogTemplate({
       studentId: cb.studentId,
       phone: cb.student.phone,
-      templateName: "credit_expiry_14d",
+      templateName: "credits_expiry_14d",
       components: [{
         type: "body",
         parameters: [
@@ -408,7 +408,7 @@ async function processCreditExpiryReminders(
     const result = await sendAndLogTemplate({
       studentId: cb.studentId,
       phone: cb.student.phone,
-      templateName: "credit_expiry_3d",
+      templateName: "credits_expiry_3d",
       components: [{
         type: "body",
         parameters: [
