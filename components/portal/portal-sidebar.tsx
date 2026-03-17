@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -12,6 +13,7 @@ import {
   Coins,
   Receipt,
   Settings,
+  Menu,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -34,9 +36,11 @@ interface PortalSidebarProps {
 
 export function PortalSidebar({ className, upcomingSessionCount, isSessionsClient = true }: PortalSidebarProps) {
   const pathname = usePathname();
+  const [manualCollapsed, setManualCollapsed] = useState(false);
 
-  // Auto-collapse to icon-only when inside a course
-  const collapsed = pathname.startsWith("/portal/courses/") && pathname.includes("/learn");
+  // Auto-collapse when inside a course learning page
+  const autoCollapsed = pathname.startsWith("/portal/courses/") && pathname.includes("/learn");
+  const collapsed = manualCollapsed || autoCollapsed;
 
   const filteredNavItems = navItems.filter(
     (item) => !item.sessionsOnly || isSessionsClient,
@@ -48,19 +52,38 @@ export function PortalSidebar({ className, upcomingSessionCount, isSessionsClien
   }
 
   return (
-    <aside className={cn("flex-shrink-0 border-r bg-card transition-all duration-300", collapsed ? "w-16" : "w-64", className)}>
+    <aside className={cn("flex-shrink-0 border-r bg-card transition-all duration-200", collapsed ? "w-16" : "w-64", className)}>
       <div className="flex h-full flex-col">
-        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-6")}>
+        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "justify-between px-4")}>
           {collapsed ? (
-            <GraduationCap className="h-6 w-6 text-brand-600" />
+            <button
+              type="button"
+              onClick={() => setManualCollapsed(false)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted transition-colors"
+              aria-label="Expand sidebar"
+            >
+              <Menu className="h-5 w-5 text-muted-foreground" />
+            </button>
           ) : (
-            <Image
-              src="/logo.png"
-              alt="Life-Therapy"
-              width={200}
-              height={50}
-              className="h-10 w-auto"
-            />
+            <>
+              <Link href="/portal">
+                <Image
+                  src="/logo.png"
+                  alt="Life-Therapy"
+                  width={200}
+                  height={50}
+                  className="h-10 w-auto"
+                />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setManualCollapsed(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                aria-label="Collapse sidebar"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
+            </>
           )}
         </div>
 
@@ -71,10 +94,10 @@ export function PortalSidebar({ className, upcomingSessionCount, isSessionsClien
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "relative flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 collapsed ? "justify-center gap-0" : "gap-3",
                 isActive(item.href)
-                  ? "bg-brand-50 text-brand-700"
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
@@ -92,10 +115,16 @@ export function PortalSidebar({ className, upcomingSessionCount, isSessionsClien
                     )}
                 </>
               )}
+              {collapsed &&
+                item.href === "/portal/bookings" &&
+                isSessionsClient &&
+                upcomingSessionCount != null &&
+                upcomingSessionCount > 0 && (
+                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-brand-600" />
+                )}
             </Link>
           ))}
         </nav>
-
       </div>
     </aside>
   );
