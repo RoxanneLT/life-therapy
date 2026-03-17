@@ -37,6 +37,11 @@ const nextConfig = {
         destination: "/admin/clients",
         permanent: true,
       },
+      {
+        source: "/products/self-esteem-starter-kit",
+        destination: "/packages",
+        permanent: false,
+      },
     ];
   },
   async headers() {
