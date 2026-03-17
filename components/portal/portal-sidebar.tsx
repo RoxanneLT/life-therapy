@@ -14,6 +14,7 @@ import {
   Receipt,
   Settings,
   Menu,
+  Award,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
   { href: "/portal/bookings", label: "My Sessions", icon: CalendarDays, sessionsOnly: true },
   { href: "/portal/courses", label: "My Courses", icon: GraduationCap },
+  { href: "/portal/certificates", label: "Certificates", icon: Award, requiresCertificates: true },
   { href: "/portal/downloads", label: "Digital Products", icon: FileDown },
   { href: "/portal/purchases", label: "My Purchases", icon: ShoppingBag },
   { href: "/portal/credits", label: "Credits", icon: Coins, sessionsOnly: true },
@@ -32,9 +34,10 @@ interface PortalSidebarProps {
   readonly className?: string;
   readonly upcomingSessionCount?: number;
   readonly isSessionsClient?: boolean;
+  readonly certificateCount?: number;
 }
 
-export function PortalSidebar({ className, upcomingSessionCount, isSessionsClient = true }: PortalSidebarProps) {
+export function PortalSidebar({ className, upcomingSessionCount, isSessionsClient = true, certificateCount = 0 }: PortalSidebarProps) {
   const pathname = usePathname();
   const [manualCollapsed, setManualCollapsed] = useState(false);
 
@@ -42,9 +45,11 @@ export function PortalSidebar({ className, upcomingSessionCount, isSessionsClien
   const autoCollapsed = pathname.startsWith("/portal/courses/") && pathname.includes("/learn");
   const collapsed = manualCollapsed || autoCollapsed;
 
-  const filteredNavItems = navItems.filter(
-    (item) => !item.sessionsOnly || isSessionsClient,
-  );
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.sessionsOnly && !isSessionsClient) return false;
+    if ("requiresCertificates" in item && item.requiresCertificates && certificateCount === 0) return false;
+    return true;
+  });
 
   function isActive(href: string) {
     if (href === "/portal") return pathname === "/portal";

@@ -31,7 +31,7 @@ export default async function PortalDashboardLayout({
     }
   }
 
-  const [upcomingCount, anyBooking, creditBalance] = await Promise.all([
+  const [upcomingCount, anyBooking, creditBalance, certificateCount] = await Promise.all([
     prisma.booking.count({
       where: {
         studentId: student.id,
@@ -47,19 +47,23 @@ export default async function PortalDashboardLayout({
       where: { studentId: student.id },
       select: { balance: true },
     }),
+    prisma.certificate.count({
+      where: { studentId: student.id },
+    }),
   ]);
 
   const isSessionsClient = !!anyBooking || (creditBalance?.balance ?? 0) > 0;
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <PortalSidebar className="hidden lg:block" upcomingSessionCount={upcomingCount} isSessionsClient={isSessionsClient} />
+      <PortalSidebar className="hidden lg:block" upcomingSessionCount={upcomingCount} isSessionsClient={isSessionsClient} certificateCount={certificateCount} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <PortalHeader
           studentName={`${student.firstName} ${student.lastName}`}
           studentEmail={student.email}
           upcomingSessionCount={upcomingCount}
           isSessionsClient={isSessionsClient}
+          certificateCount={certificateCount}
         />
         <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
           {children}
