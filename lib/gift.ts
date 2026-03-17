@@ -96,7 +96,8 @@ export async function sendGiftEmail(giftId: string) {
     dp?.title ||
     "Session Credits";
   const buyerName = `${gift.buyer.firstName} ${gift.buyer.lastName}`;
-  const redeemUrl = `https://life-therapy.online/gift/redeem?token=${gift.redeemToken}`;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+  const redeemUrl = `${baseUrl}/gift/redeem?token=${gift.redeemToken}`;
 
   const messageBlock = gift.message
     ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 0 6px 6px 0; padding: 16px; margin: 16px 0; font-style: italic; color: #92400e;">
