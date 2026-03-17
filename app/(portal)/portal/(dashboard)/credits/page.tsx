@@ -4,14 +4,14 @@ import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Coins, ArrowUpRight, ArrowDownRight, CalendarDays, AlertTriangle } from "lucide-react";
+import { Coins, ArrowUpRight, ArrowDownRight, CalendarDays, AlertTriangle, ShoppingBag } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
 export default async function CreditsPage() {
   const { student } = await requirePasswordChanged();
 
-  const [balance, transactions] = await Promise.all([
+  const [balance, transactions, creditPackages] = await Promise.all([
     prisma.sessionCreditBalance.findUnique({
       where: { studentId: student.id },
     }),
@@ -19,6 +19,11 @@ export default async function CreditsPage() {
       where: { studentId: student.id },
       orderBy: { createdAt: "desc" },
       take: 50,
+    }),
+    prisma.hybridPackage.findMany({
+      where: { isPublished: true, credits: { gt: 0 } },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, title: true, slug: true, credits: true, priceCents: true, description: true },
     }),
   ]);
 
@@ -40,16 +45,62 @@ export default async function CreditsPage() {
               <p className="text-3xl font-bold">{currentBalance}</p>
             </div>
           </div>
-          {currentBalance > 0 && (
+          {currentBalance > 0 ? (
             <Button asChild>
               <Link href="/portal/book">
                 <CalendarDays className="mr-2 h-4 w-4" />
                 Book a Session
               </Link>
             </Button>
+          ) : (
+            <Button asChild variant="outline">
+              <a href="#buy-credits">
+                <ShoppingBag className="mr-2 h-4 w-4" />
+                Get Credits
+              </a>
+            </Button>
           )}
         </CardContent>
       </Card>
+
+      {/* Buy credits */}
+      {creditPackages.length > 0 && (
+        <div id="buy-credits" className="space-y-4 scroll-mt-20">
+          <h2 className="font-heading text-lg font-semibold">
+            {currentBalance > 0 ? "Top Up Credits" : "Get Session Credits"}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {creditPackages.map((pkg) => (
+              <Card key={pkg.id} className="flex flex-col">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{pkg.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-1 flex-col justify-between gap-4">
+                  <div>
+                    {pkg.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">{pkg.description}</p>
+                    )}
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="flex items-center gap-1 text-sm font-medium">
+                        <Coins className="h-4 w-4 text-amber-500" />
+                        {pkg.credits} credit{pkg.credits !== 1 && "s"}
+                      </span>
+                      <span className="text-lg font-bold">
+                        R{(pkg.priceCents / 100).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <Button asChild className="w-full">
+                    <Link href={`/packages/${pkg.slug}`}>
+                      Buy Now
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Transaction history */}
       <Card>
