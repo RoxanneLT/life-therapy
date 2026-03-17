@@ -51,6 +51,7 @@ export async function sendTestWhatsAppAction(phone: string) {
   const result = await sendWhatsAppTemplate({
     to: phone,
     templateName: "hello_world",
+    languageCode: "en_US",
   });
 
   await logWhatsAppMessage({
