@@ -14,19 +14,15 @@ export async function updateWhatsAppSettingsAction(formData: FormData) {
 
   const raw = Object.fromEntries(formData.entries());
 
-  await prisma.siteSetting.upsert({
-    where: { id: "default" },
-    create: {
-      id: "default",
-      whatsappEnabled: raw.whatsappEnabled === "true",
-      whatsappPhoneNumberId: (raw.whatsappPhoneNumberId as string) || null,
-      whatsappBusinessAccountId: (raw.whatsappBusinessAccountId as string) || null,
-      whatsappSessionReminders: raw.whatsappSessionReminders === "true",
-      whatsappBillingReminders: raw.whatsappBillingReminders === "true",
-      whatsappCreditReminders: raw.whatsappCreditReminders === "true",
-      creditExpiryDays: raw.creditExpiryDays ? Number(raw.creditExpiryDays) : null,
-    },
-    update: {
+  // Find existing settings row (never hardcode "default" — use the real row)
+  const existing = await prisma.siteSetting.findFirst({ orderBy: { updatedAt: "desc" } });
+  if (!existing) {
+    return { success: false, error: "No site settings found" };
+  }
+
+  await prisma.siteSetting.update({
+    where: { id: existing.id },
+    data: {
       whatsappEnabled: raw.whatsappEnabled === "true",
       whatsappPhoneNumberId: (raw.whatsappPhoneNumberId as string) || null,
       whatsappBusinessAccountId: (raw.whatsappBusinessAccountId as string) || null,
