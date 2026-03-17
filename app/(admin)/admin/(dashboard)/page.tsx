@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, GraduationCap, CalendarDays, UserCheck, ShoppingCart, Gift, PackageOpen, ShoppingBag } from "lucide-react";
+import { FileText, GraduationCap, CalendarDays, UserCheck, ShoppingCart, Cloud, PackageOpen, ShoppingBag } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
@@ -30,7 +30,7 @@ export default async function AdminDashboard({
     upcomingBookings,
     studentCount,
     revenue,
-    pendingGifts,
+    bunnyBalance,
     bookingsByMonth,
     revenueByMonth,
   ] = await Promise.all([
@@ -49,7 +49,19 @@ export default async function AdminDashboard({
       where: { status: "paid", paidAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
       _sum: { paidAmountCents: true },
     }),
-    prisma.gift.count({ where: { status: "pending" } }),
+    (async () => {
+      const key = process.env.BUNNY_ACCOUNT_API_KEY;
+      if (!key) return null;
+      try {
+        const res = await fetch("https://api.bunny.net/billing", {
+          headers: { AccessKey: key },
+          next: { revalidate: 3600 },
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return { balance: data.Balance as number, charges: data.ThisMonthCharges as number };
+      } catch { return null; }
+    })(),
     getBookingsByMonth(validYear),
     getRevenueByMonth(validYear),
   ]);
@@ -74,10 +86,10 @@ export default async function AdminDashboard({
       href: "/admin/bookings",
     },
     {
-      label: "Pending Gifts",
-      value: pendingGifts,
-      icon: Gift,
-      href: "/admin/gifts",
+      label: "Bunny.net Balance",
+      value: bunnyBalance ? `$${bunnyBalance.balance.toFixed(2)}` : "—",
+      icon: Cloud,
+      href: "/admin/settings",
     },
     {
       label: "Pages",
