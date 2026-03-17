@@ -161,6 +161,14 @@ async function resolveGiftRecipient(
   recipientInfo?: { firstName: string; lastName: string; password: string },
 ): Promise<{ studentId: string } | { error: string }> {
   if (gift.recipientId) return { studentId: gift.recipientId };
+
+  // Check if a student already exists for this email (existing account flow)
+  const existingStudent = await prisma.student.findUnique({
+    where: { email: gift.recipientEmail },
+    select: { id: true },
+  });
+  if (existingStudent) return { studentId: existingStudent.id };
+
   if (!recipientInfo) return { error: "Account information required" };
 
   const result = await findOrCreateStudent(

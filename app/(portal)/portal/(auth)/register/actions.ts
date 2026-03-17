@@ -36,7 +36,16 @@ export async function registerStudent(formData: FormData) {
   // Check if student already exists WITH auth (i.e. already has login)
   const existing = await prisma.student.findUnique({ where: { email } });
   if (existing?.supabaseUserId) {
-    return { error: "An account with this email already exists" };
+    // Verify the auth user still exists (could have been deleted from Supabase)
+    const { data: authCheck } = await supabaseAdmin.auth.admin.getUserById(existing.supabaseUserId);
+    if (authCheck?.user) {
+      return { error: "An account with this email already exists" };
+    }
+    // Auth user was deleted — clear the stale reference so we can re-link below
+    await prisma.student.update({
+      where: { id: existing.id },
+      data: { supabaseUserId: null },
+    });
   }
 
   // Create Supabase auth user
