@@ -4,7 +4,9 @@ import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Receipt, FileDown, AlertCircle } from "lucide-react";
+import { Receipt, FileDown, AlertCircle, ShoppingBag } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { format } from "date-fns";
 import { PayButton } from "./pay-button";
 import type { InvoiceLineItem } from "@/lib/billing-types";
@@ -244,9 +246,20 @@ export default async function PortalInvoicesPage({
       </section>
 
       {!hasContent && pendingRequests.length === 0 && invoices.length === 0 && (
-        <div className="flex flex-col items-center py-16 text-center">
-          <Receipt className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No invoices yet.</p>
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <Receipt className="h-12 w-12 text-muted-foreground" />
+          <h3 className="font-heading text-lg font-semibold">No invoices yet</h3>
+          <p className="text-sm text-muted-foreground">
+            Invoices will appear here after you make a purchase.
+          </p>
+          <div className="flex gap-3 mt-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/packages">Browse Packages</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/courses">Browse Courses</Link>
+            </Button>
+          </div>
         </div>
       )}
     </div>

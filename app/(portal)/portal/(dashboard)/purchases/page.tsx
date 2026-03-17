@@ -54,8 +54,12 @@ export default async function PurchasesPage() {
         </h2>
         {orders.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              No orders yet.
+            <CardContent className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted-foreground">
+              <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+              <p>No orders yet.</p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/packages">Browse Packages</Link>
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -155,8 +159,12 @@ export default async function PurchasesPage() {
         </h2>
         {digitalAccess.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              No digital products yet.
+            <CardContent className="flex flex-col items-center gap-3 py-8 text-center text-sm text-muted-foreground">
+              <FileDown className="h-8 w-8 text-muted-foreground" />
+              <p>No digital products yet.</p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/products">Browse Products</Link>
+              </Button>
             </CardContent>
           </Card>
         ) : (
