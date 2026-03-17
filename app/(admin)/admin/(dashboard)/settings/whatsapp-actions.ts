@@ -82,8 +82,8 @@ const DEFAULT_TEMPLATES = [
   { name: "billing_reminder", bodyText: "Hi {{1}}, a friendly reminder that {{2}} is due by {{3}}. Pay here: {{4}}", description: "Sent 2 days before due date", sortOrder: 4 },
   { name: "billing_due_today", bodyText: "Hi {{1}}, your payment of {{2}} is due today. Pay here: {{3}}", description: "Sent on the due date", sortOrder: 5 },
   { name: "billing_overdue", bodyText: "Hi {{1}}, your payment of {{2}} for {{3}} is overdue. Please pay here: {{4}}", description: "Sent 1 day after due date", sortOrder: 6 },
-  { name: "credit_expiry_14d", bodyText: "Hi {{1}}, you have {{2}} session credit(s) expiring on {{3}}. Book now to use them!", description: "Sent 14 days before credits expire", sortOrder: 6 },
-  { name: "credit_expiry_3d", bodyText: "Hi {{1}}, your {{2}} session credit(s) expire on {{3}} — only 3 days left!", description: "Sent 3 days before credits expire", sortOrder: 7 },
+  { name: "credits_expiry_14d", bodyText: "Hi {{1}}, this is a notice that your {{2}} session credits are set to expire on {{3}}. Please contact us if you have any questions. — Life Therapy", description: "Sent 14 days before credits expire", sortOrder: 7 },
+  { name: "credits_expiry_3d", bodyText: "Hi {{1}}, this is a notice that your {{2}} session credits will expire on {{3}}. Please contact us if you need assistance. — Life Therapy", description: "Sent 3 days before credits expire", sortOrder: 8 },
 ];
 
 export async function getWhatsAppTemplatesAction() {
