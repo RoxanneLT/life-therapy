@@ -75,15 +75,17 @@ export async function sendTestWhatsAppAction(phone: string) {
 // WhatsApp template management
 // ────────────────────────────────────────────────────────────
 
+const DO_NOT_REPLY = "\n\nThis is an automated message. Please do not reply.";
+
 const DEFAULT_TEMPLATES = [
-  { name: "session_reminder_24h", bodyText: "Hi {{1}}, this is a reminder that your {{2}} session is tomorrow ({{3}}) at {{4}}.", description: "Sent 24 hours before a session", sortOrder: 1 },
-  { name: "session_reminder_today", bodyText: "Hi {{1}}, your session is today at {{2}}. Join here: {{3}}", description: "Sent morning of session", sortOrder: 2 },
-  { name: "billing_request", bodyText: "Hi {{1}}, your {{2}} invoice of {{3}} is due by {{4}}. Pay here: {{5}}", description: "Sent when payment request is created", sortOrder: 3 },
-  { name: "billing_reminder", bodyText: "Hi {{1}}, a friendly reminder that {{2}} is due by {{3}}. Pay here: {{4}}", description: "Sent 2 days before due date", sortOrder: 4 },
-  { name: "billing_due_today", bodyText: "Hi {{1}}, your payment of {{2}} is due today. Pay here: {{3}}", description: "Sent on the due date", sortOrder: 5 },
-  { name: "billing_overdue", bodyText: "Hi {{1}}, your payment of {{2}} for {{3}} is overdue. Please pay here: {{4}}", description: "Sent 1 day after due date", sortOrder: 6 },
-  { name: "credits_expiry_14d", bodyText: "Hi {{1}}, this is a notice that your {{2}} session credits are set to expire on {{3}}. Please contact us if you have any questions. — Life Therapy", description: "Sent 14 days before credits expire", sortOrder: 7 },
-  { name: "credits_expiry_3d", bodyText: "Hi {{1}}, this is a notice that your {{2}} session credits will expire on {{3}}. Please contact us if you need assistance. — Life Therapy", description: "Sent 3 days before credits expire", sortOrder: 8 },
+  { name: "session_reminder_24h", bodyText: `Hi {{1}}, this is a friendly reminder that you have a {{2}} session scheduled for {{3}} at {{4}}. We look forward to seeing you! — Life Therapy${DO_NOT_REPLY}`, description: "Sent 24 hours before a session", sortOrder: 1 },
+  { name: "session_reminder_today", bodyText: `Hi {{1}}, just a reminder that your session is coming up today at {{2}}. See you soon! — Life Therapy${DO_NOT_REPLY}`, description: "Sent morning of session", sortOrder: 2 },
+  { name: "billing_request", bodyText: `Hi {{1}}, your invoice for {{2}} is ready. Amount due: {{3}}, payable by {{4}}. Pay here: {{5}} — Life Therapy${DO_NOT_REPLY}`, description: "Sent when payment request is created", sortOrder: 3 },
+  { name: "billing_reminder", bodyText: `Hi {{1}}, a friendly reminder that {{2}} is due by {{3}}. Pay here: {{4}} — Life Therapy${DO_NOT_REPLY}`, description: "Sent 2 days before due date", sortOrder: 4 },
+  { name: "billing_due_today", bodyText: `Hi {{1}}, your payment of {{2}} is due today. Pay here: {{3}} — Life Therapy${DO_NOT_REPLY}`, description: "Sent on the due date", sortOrder: 5 },
+  { name: "billing_overdue", bodyText: `Hi {{1}}, your payment of {{2}} for {{3}} is now overdue. Please settle as soon as possible: {{4}} — Life Therapy${DO_NOT_REPLY}`, description: "Sent 1 day after due date", sortOrder: 6 },
+  { name: "credits_expiry_14d", bodyText: `Hi {{1}}, this is a notice that your {{2}} session credits are set to expire on {{3}}. Please contact us if you have any questions. — Life Therapy${DO_NOT_REPLY}`, description: "Sent 14 days before credits expire", sortOrder: 7 },
+  { name: "credits_expiry_3d", bodyText: `Hi {{1}}, this is a notice that your {{2}} session credits will expire on {{3}}. Please contact us if you need assistance. — Life Therapy${DO_NOT_REPLY}`, description: "Sent 3 days before credits expire", sortOrder: 8 },
 ];
 
 export async function getWhatsAppTemplatesAction() {
