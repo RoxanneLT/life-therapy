@@ -1,8 +1,6 @@
 /**
  * Bunny.net balance check — warns via email when balance is low.
  * Runs daily as part of the combined cron.
- * Only sends one warning per day (checks a simple in-memory flag isn't enough
- * on serverless, so we use a lightweight approach: only warn if balance < threshold).
  */
 
 import { sendEmail } from "@/lib/email";
@@ -32,13 +30,15 @@ export async function checkBunnyBalance(): Promise<{ balance: number | null; war
 
       await sendEmail({
         to: WARN_EMAIL,
-        template: "admin_new_message",
-        props: {
-          clientName: "System Alert",
-          projectName: "Bunny.net Balance Warning",
-          messagePreview: `Your Bunny.net balance is critically low at $${balance.toFixed(2)}. Video streaming and file hosting may stop working if the balance reaches $0. Please top up at https://panel.bunny.net/billing`,
-          adminUrl: "https://panel.bunny.net/billing",
-        },
+        subject: `⚠️ Bunny.net Balance Low: $${balance.toFixed(2)}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+            <h2 style="color: #b91c1c;">Bunny.net Balance Warning</h2>
+            <p>Your Bunny.net balance is critically low at <strong>$${balance.toFixed(2)}</strong>.</p>
+            <p>Video streaming and file hosting may stop working if the balance reaches $0.</p>
+            <p><a href="https://panel.bunny.net/billing" style="display: inline-block; padding: 10px 20px; background: #8BA889; color: white; border-radius: 6px; text-decoration: none; font-weight: bold;">Top Up Now</a></p>
+          </div>
+        `,
       });
 
       return { balance, warned: true };
