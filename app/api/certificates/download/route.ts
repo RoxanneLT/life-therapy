@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { jsPDF } from "jspdf";
@@ -90,15 +92,27 @@ export async function GET(request: NextRequest) {
   doc.setTextColor(160, 160, 160);
   doc.text(`Certificate No: ${certificate.certificateNumber}`, w / 2, 155, { align: "center" });
 
-  // Signature line
-  doc.setDrawColor(180, 180, 180);
-  doc.setLineWidth(0.3);
-  doc.line(w / 2 - 30, 172, w / 2 + 30, 172);
+  // Signature image
+  try {
+    const sigPath = join(process.cwd(), "public", "images", "signature.png");
+    const sigBuffer = readFileSync(sigPath);
+    const sigBase64 = sigBuffer.toString("base64");
+    const sigWidth = 40;
+    const sigHeight = 30;
+    doc.addImage(`data:image/png;base64,${sigBase64}`, "PNG", w / 2 - sigWidth / 2, 155, sigWidth, sigHeight);
+  } catch {
+    // Fallback: draw a line if image not found
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.3);
+    doc.line(w / 2 - 30, 172, w / 2 + 30, 172);
+  }
+
+  // Signature text
   doc.setFontSize(10);
   doc.setTextColor(120, 120, 120);
-  doc.text("Roxanne Bouwer", w / 2, 178, { align: "center" });
+  doc.text("Roxanne Bouwer", w / 2, 190, { align: "center" });
   doc.setFontSize(8);
-  doc.text("Life Therapy — Personal Development Coach", w / 2, 183, { align: "center" });
+  doc.text("Life Therapy — Personal Development Coach", w / 2, 195, { align: "center" });
 
   const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
 
