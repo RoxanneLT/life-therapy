@@ -7,6 +7,7 @@ import { processCampaigns } from "@/lib/campaign-process";
 import { processMonthlyBilling } from "@/lib/cron/monthly-billing";
 import { processWhatsAppReminders } from "@/lib/cron/whatsapp-reminders";
 import { processBirthdayEmails } from "@/lib/birthday-process";
+import { checkBunnyBalance } from "@/lib/cron/bunny-balance-check";
 
 /**
  * Combined daily cron — runs at 08:00 SAST (06:00 UTC).
@@ -86,6 +87,14 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[daily-cron] Birthday emails failed:", err);
     results.birthdayEmails = { error: String(err) };
+  }
+
+  // 9. Bunny.net balance check
+  try {
+    results.bunnyBalance = await checkBunnyBalance();
+  } catch (err) {
+    console.error("[daily-cron] Bunny balance check failed:", err);
+    results.bunnyBalance = { error: String(err) };
   }
 
   return NextResponse.json({ ok: true, results });
