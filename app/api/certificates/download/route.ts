@@ -137,7 +137,19 @@ export async function GET(request: NextRequest) {
   drawCorner(doc, off, h - off, 1, -1, orn); // bottom-left
   drawCorner(doc, w - off, h - off, -1, -1, orn); // bottom-right
 
-  // ── 5. Logo — already included in the background image (LT_whiteBG_logo_L.png)
+  // ── 5. Logo — drawn on top of borders so it isn't covered ──
+  // The watermark bg has a logo but it sits behind the border lines.
+  // Re-draw the logo from public/logo.png on top.
+  try {
+    const logoPath = join(process.cwd(), "public", "logo.png");
+    const logoBuf = readFileSync(logoPath);
+    const logoData = `data:image/png;base64,${logoBuf.toString("base64")}`;
+    const logoW = 42;
+    const logoH = 12.4;
+    doc.addImage(logoData, "PNG", INNER + 8, INNER + 5, logoW, logoH);
+  } catch {
+    // Logo missing — background watermark still shows it faintly
+  }
 
   // ── 6. Title — centered, clearly below logo ──
   doc.setFont("helvetica", "normal");
