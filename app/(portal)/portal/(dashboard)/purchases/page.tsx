@@ -4,7 +4,8 @@ import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProgressBar } from "@/components/portal/progress-bar";
-import { ShoppingBag, GraduationCap, FileDown, Coins, ExternalLink } from "lucide-react";
+import { ShoppingBag, GraduationCap, FileDown, Coins, ExternalLink, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -33,7 +34,7 @@ export default async function PurchasesPage() {
     }),
     prisma.digitalProductAccess.findMany({
       where: { studentId: student.id },
-      include: { digitalProduct: { select: { title: true, slug: true } } },
+      include: { digitalProduct: { select: { id: true, title: true, slug: true, description: true } } },
       orderBy: { grantedAt: "desc" },
     }),
     prisma.sessionCreditBalance.findUnique({
@@ -161,21 +162,33 @@ export default async function PurchasesPage() {
         ) : (
           <div className="space-y-3">
             {digitalAccess.map((da) => (
-              <Link key={da.id} href={`/portal/downloads`}>
-                <Card className="transition-shadow hover:shadow-md">
-                  <CardContent className="flex items-center justify-between gap-4 p-4">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {da.digitalProduct.title}
+              <Card key={da.id}>
+                <CardContent className="flex items-center justify-between gap-4 p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {da.digitalProduct.title}
+                    </p>
+                    {da.digitalProduct.description && (
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                        {da.digitalProduct.description}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        Granted {format(new Date(da.grantedAt), "d MMM yyyy")}
-                      </p>
-                    </div>
-                    <FileDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </CardContent>
-                </Card>
-              </Link>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Granted {format(new Date(da.grantedAt), "d MMM yyyy")}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" className="shrink-0 gap-1.5" asChild>
+                    <a
+                      href={`/api/products/download?id=${da.digitalProduct.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download
+                    </a>
+                  </Button>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
