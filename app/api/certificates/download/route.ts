@@ -29,17 +29,7 @@ function loadImage(filename: string): string | null {
   }
 }
 
-function loadLogo(): string | null {
-  try {
-    const filePath = join(process.cwd(), "public", "logo.png");
-    const buf = readFileSync(filePath);
-    return `data:image/png;base64,${buf.toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
-
-// ─── Corner ornament helper ──────────────────────────────────
+// ─── Drawing helpers ─────────────────────────────────────────
 
 function drawCorner(
   doc: jsPDF,
@@ -53,10 +43,7 @@ function drawCorner(
   doc.line(cx, cy, cx, cy + dy * size);
 }
 
-// ─── Diamond helper ──────────────────────────────────────────
-
 function drawDiamond(doc: jsPDF, x: number, y: number, size: number) {
-  // jsPDF triangle method isn't great — use lines to form a diamond
   doc.setFillColor(...ORANGE);
   doc.triangle(x, y - size, x + size, y, x, y + size, "F");
   doc.triangle(x, y - size, x - size, y, x, y + size, "F");
@@ -103,11 +90,10 @@ export async function GET(request: NextRequest) {
   const footerText = `Life Therapy (Pty) Ltd  |  Reg: ${regNr}  |  ${email}  |  life-therapy.online`;
 
   // Load images
-  const bgImage = loadImage("LT_greenBG.png");
-  const logoImage = loadLogo();
   const sigImage = loadImage("signature.png");
 
   // ── Generate PDF — landscape A4 ────────────────────────────
+  // jsPDF coordinate system: y=0 is TOP of page, increases downward
   const doc = new jsPDF({
     orientation: "landscape",
     unit: "mm",
@@ -117,19 +103,17 @@ export async function GET(request: NextRequest) {
   const h = doc.internal.pageSize.getHeight(); // 210
 
   const MARGIN = 14;
-  const INNER = MARGIN + 4;
+  const INNER = MARGIN + 4; // 18
 
-  // ── 1. Cream background ──
-  doc.setFillColor(...CREAM);
-  doc.rect(0, 0, w, h, "F");
-
-  // ── 2. Watermark — subtle lotus pattern ──
-  if (bgImage) {
-    doc.saveGraphicsState();
-    // @ts-expect-error — jsPDF GState for opacity
-    doc.setGState(new doc.GState({ opacity: 0.05 }));
-    doc.addImage(bgImage, "PNG", 0, 0, w, h);
-    doc.restoreGraphicsState();
+  // ── 1. Background — branded lotus watermark with logo ──
+  // Uses LT_whiteBG_logo_L.png (white bg, subtle lotus pattern, logo top-left).
+  // Falls back to plain cream if the image is missing.
+  const watermarkImage = loadImage("certificate_watermark.png");
+  if (watermarkImage) {
+    doc.addImage(watermarkImage, "PNG", 0, 0, w, h);
+  } else {
+    doc.setFillColor(...CREAM);
+    doc.rect(0, 0, w, h, "F");
   }
 
   // ── 3. Borders ──
@@ -145,38 +129,24 @@ export async function GET(request: NextRequest) {
 
   // ── 4. Corner ornaments — green ──
   const orn = 7;
-  const off = INNER + 3;
+  const off = INNER + 3; // 21
   doc.setDrawColor(...GREEN);
   doc.setLineWidth(0.8);
-  drawCorner(doc, off, off, 1, 1, orn); // bottom-left
-  drawCorner(doc, w - off, off, -1, 1, orn); // bottom-right
-  drawCorner(doc, off, h - off, 1, -1, orn); // top-left
-  drawCorner(doc, w - off, h - off, -1, -1, orn); // top-right
+  drawCorner(doc, off, off, 1, 1, orn); // top-left
+  drawCorner(doc, w - off, off, -1, 1, orn); // top-right
+  drawCorner(doc, off, h - off, 1, -1, orn); // bottom-left
+  drawCorner(doc, w - off, h - off, -1, -1, orn); // bottom-right
 
-  // ── 5. Logo — top-left, inside borders ──
-  const logoTop = h - INNER - 5; // 5mm padding below inner border
-  if (logoImage) {
-    const logoW = 42;
-    const logoH = 12.4; // natural ratio 159:47
-    doc.addImage(
-      logoImage,
-      "PNG",
-      INNER + 8,
-      logoTop - logoH,
-      logoW,
-      logoH,
-    );
-  }
+  // ── 5. Logo — already included in the background image (LT_whiteBG_logo_L.png)
 
   // ── 6. Title — centered, clearly below logo ──
-  const titleY = h - 52;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(30);
   doc.setTextColor(...DARK_GREY);
-  doc.text("Certificate of Completion", w / 2, titleY, { align: "center" });
+  doc.text("Certificate of Completion", w / 2, 52, { align: "center" });
 
   // ── 7. Orange divider with diamond ──
-  const divY = titleY + 10;
+  const divY = 62;
   const lineW = 50;
   doc.setDrawColor(...ORANGE);
   doc.setLineWidth(0.8);
@@ -188,25 +158,24 @@ export async function GET(request: NextRequest) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.setTextColor(...MUTED);
-  doc.text("This certifies that", w / 2, 74, { align: "center" });
+  doc.text("This certifies that", w / 2, 76, { align: "center" });
 
   // ── 9. Student name ──
-  const nameY = 88;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(28);
   doc.setTextColor(...DARK_GREY);
-  doc.text(studentName, w / 2, nameY, { align: "center" });
+  doc.text(studentName, w / 2, 90, { align: "center" });
 
   // Subtle green underline
   doc.setDrawColor(...GREEN_LIGHT);
   doc.setLineWidth(0.4);
-  doc.line(w / 2 - 40, nameY + 3, w / 2 + 40, nameY + 3);
+  doc.line(w / 2 - 40, 93, w / 2 + 40, 93);
 
   // ── 10. "has successfully completed the course" ──
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.setTextColor(...MUTED);
-  doc.text("has successfully completed the course", w / 2, 100, {
+  doc.text("has successfully completed the course", w / 2, 103, {
     align: "center",
   });
 
@@ -214,23 +183,23 @@ export async function GET(request: NextRequest) {
   doc.setFont("helvetica", "bolditalic");
   doc.setFontSize(22);
   doc.setTextColor(...GREEN_DARK);
-  doc.text(courseTitle, w / 2, 114, { align: "center" });
+  doc.text(courseTitle, w / 2, 117, { align: "center" });
 
   // ── 12. Small orange divider ──
   doc.setDrawColor(...ORANGE);
   doc.setLineWidth(0.5);
-  doc.line(w / 2 - 20, 121, w / 2 + 20, 121);
+  doc.line(w / 2 - 20, 124, w / 2 + 20, 124);
 
   // ── 13. Date ──
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text(`Issued: ${issuedDate}`, w / 2, 129, { align: "center" });
+  doc.text(`Issued: ${issuedDate}`, w / 2, 132, { align: "center" });
 
   // ── 14. Certificate number ──
   doc.setFontSize(8);
   doc.setTextColor(176, 176, 176);
-  doc.text(`Certificate No: ${certificate.certificateNumber}`, w / 2, 135, {
+  doc.text(`Certificate No: ${certificate.certificateNumber}`, w / 2, 138, {
     align: "center",
   });
 
@@ -238,42 +207,34 @@ export async function GET(request: NextRequest) {
   if (sigImage) {
     const sigW = 34;
     const sigH = 25;
-    doc.addImage(
-      sigImage,
-      "PNG",
-      w / 2 - sigW / 2,
-      139,
-      sigW,
-      sigH,
-    );
+    doc.addImage(sigImage, "PNG", w / 2 - sigW / 2, 142, sigW, sigH);
   }
 
   // Signature line — green
   doc.setDrawColor(...GREEN);
   doc.setLineWidth(0.4);
-  doc.line(w / 2 - 25, 165, w / 2 + 25, 165);
+  doc.line(w / 2 - 25, 168, w / 2 + 25, 168);
 
   // ── 16. Signatory ──
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...DARK_GREY);
-  doc.text("Roxanne Bouwer", w / 2, 171, { align: "center" });
+  doc.text("Roxanne Bouwer", w / 2, 174, { align: "center" });
 
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text("Life Therapy  \u2014  Personal Development Coach", w / 2, 176, {
+  doc.text("Life Therapy  \u2014  Personal Development Coach", w / 2, 179, {
     align: "center",
   });
 
   // ── 17. Footer — company details from settings ──
-  const footerY = MARGIN + 10;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(160, 160, 160);
-  doc.text(footerText, w / 2, footerY, { align: "center" });
+  doc.text(footerText, w / 2, h - MARGIN - 7, { align: "center" });
 
   // ── 18. Decorative dots — orange center, green flanks ──
-  const dotY = MARGIN + 7;
+  const dotY = h - MARGIN - 4;
   for (let i = -2; i <= 2; i++) {
     if (i === 0) {
       doc.setFillColor(...ORANGE);
