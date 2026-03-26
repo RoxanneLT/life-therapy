@@ -18,10 +18,20 @@ import {
   ExternalLink,
   Video,
   AlertTriangle,
+  Pencil,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { format, isAfter, startOfDay } from "date-fns";
 import { markNoShowAction, adminCancelBookingAction, adminLateCancelWithFeeAction } from "../actions";
+import { updateBookingStatus } from "../../../bookings/actions";
 import { RescheduleDialog } from "../../../bookings/[id]/reschedule-dialog";
+import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 
 interface BookingData {
@@ -146,6 +156,71 @@ export function SessionsTab({ client }: SessionsTabProps) {
   );
 }
 
+const EDITABLE_STATUSES = [
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "no_show", label: "No Show" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "pending", label: "Pending" },
+];
+
+function QuickStatusEdit({
+  bookingId,
+  currentStatus,
+  clientId,
+}: {
+  bookingId: string;
+  currentStatus: string;
+  clientId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  function handleChange(newStatus: string) {
+    if (newStatus === currentStatus) {
+      setEditing(false);
+      return;
+    }
+    startTransition(async () => {
+      await updateBookingStatus(bookingId, newStatus as BookingStatus);
+      setEditing(false);
+    });
+  }
+
+  if (editing) {
+    return (
+      <Select
+        value={currentStatus}
+        onValueChange={handleChange}
+        disabled={isPending}
+      >
+        <SelectTrigger className="h-7 w-[130px] text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {EDITABLE_STATUSES.map((s) => (
+            <SelectItem key={s.value} value={s.value}>
+              {s.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+      onClick={() => setEditing(true)}
+      title="Edit session status"
+    >
+      <Pencil className="h-3 w-3" />
+    </Button>
+  );
+}
+
 function BookingCard({
   booking,
   clientId,
@@ -182,6 +257,13 @@ function BookingCard({
               <Badge variant="secondary" className={BOOKING_STATUS_BADGE[b.status] || ""}>
                 {STATUS_ICONS[b.status] || ""} {b.status.replace("_", " ")}
               </Badge>
+              {!isUpcoming && (
+                <QuickStatusEdit
+                  bookingId={b.id}
+                  currentStatus={b.status}
+                  clientId={clientId}
+                />
+              )}
               {b.teamsMeetingUrl && (
                 <a
                   href={b.teamsMeetingUrl}
