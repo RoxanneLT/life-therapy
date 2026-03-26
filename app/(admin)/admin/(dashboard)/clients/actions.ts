@@ -180,6 +180,48 @@ export async function updateClientStatusAction(clientId: string, status: string)
   revalidatePath("/admin/clients");
 }
 
+export async function checkClientDocumentAcceptanceAction(
+  clientId: string,
+): Promise<boolean> {
+  await requireRole("super_admin");
+
+  const [terms, commitment] = await Promise.all([
+    prisma.legalDocument.findFirst({
+      where: { slug: "terms", isActive: true },
+      select: { id: true, version: true, slug: true },
+    }),
+    prisma.legalDocument.findFirst({
+      where: { slug: "commitment", isActive: true },
+      select: { id: true, version: true, slug: true },
+    }),
+  ]);
+
+  if (!terms && !commitment) return true;
+
+  const checks = await Promise.all([
+    terms
+      ? prisma.documentAcceptance.findFirst({
+          where: {
+            studentId: clientId,
+            documentSlug: terms.slug,
+            documentVersion: terms.version,
+          },
+        })
+      : Promise.resolve(true),
+    commitment
+      ? prisma.documentAcceptance.findFirst({
+          where: {
+            studentId: clientId,
+            documentSlug: commitment.slug,
+            documentVersion: commitment.version,
+          },
+        })
+      : Promise.resolve(true),
+  ]);
+
+  return checks.every(Boolean);
+}
+
 // ────────────────────────────────────────────────────────────
 // Convert potential client → active
 // ────────────────────────────────────────────────────────────

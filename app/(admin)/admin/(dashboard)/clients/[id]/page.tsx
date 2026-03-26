@@ -8,8 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ClientProfileTabs } from "./client-profile-tabs";
-import { ConvertDialog } from "./convert-dialog";
-import { StatusSelect } from "./status-select";
+import { ClientHeader } from "./client-header";
 
 export default async function ClientDetailPage({
   params,
@@ -145,32 +144,25 @@ export default async function ClientDetailPage({
           </Link>
         </Button>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="font-heading text-2xl font-bold">
-              {client.firstName} {client.lastName}
-            </h1>
-            <StatusSelect clientId={client.id} currentStatus={client.clientStatus} />
-            {client.clientStatus === "potential" && (
-              <ConvertDialog
-                client={{
-                  id: client.id,
-                  firstName: client.firstName,
-                  lastName: client.lastName,
-                  email: client.email,
-                  phone: client.phone,
-                }}
-                existingIntake={
-                  client.intake
-                    ? {
-                        behaviours: client.intake.behaviours,
-                        feelings: client.intake.feelings,
-                        symptoms: client.intake.symptoms,
-                      }
-                    : null
-                }
-              />
-            )}
-          </div>
+          <ClientHeader
+            client={{
+              id: client.id,
+              firstName: client.firstName,
+              lastName: client.lastName,
+              email: client.email,
+              phone: client.phone,
+            }}
+            currentStatus={client.clientStatus}
+            existingIntake={
+              client.intake
+                ? {
+                    behaviours: client.intake.behaviours,
+                    feelings: client.intake.feelings,
+                    symptoms: client.intake.symptoms,
+                  }
+                : null
+            }
+          />
           <p className="text-sm text-muted-foreground">{client.email}</p>
         </div>
       </div>

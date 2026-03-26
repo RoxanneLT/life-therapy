@@ -12,6 +12,17 @@ import {
   Play,
   RotateCcw,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import {
   updateCommPrefAction,
@@ -367,17 +378,41 @@ function DripSection({
                     Pause
                   </Button>
                 ))}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(() => resetDripAction(clientId))
-                }
-              >
-                <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                Reset
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isPending}>
+                    <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                    Reset
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset Drip Sequence?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        <p>
+                          This will restart the email sequence from step 1. The client will
+                          receive all onboarding and nurture emails again from the beginning.
+                        </p>
+                        <p>
+                          Only do this if the client is genuinely starting fresh — for
+                          example, after a long break or if they joined as a new client
+                          on a different email address.
+                        </p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => startTransition(() => resetDripAction(clientId))}
+                      disabled={isPending}
+                    >
+                      Yes, Reset Sequence
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </CardContent>

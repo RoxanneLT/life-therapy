@@ -20,7 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { format, isAfter, startOfDay } from "date-fns";
-import { markNoShowAction, adminCancelBookingAction } from "../actions";
+import { markNoShowAction, adminCancelBookingAction, adminLateCancelWithFeeAction } from "../actions";
 import { RescheduleDialog } from "../../../bookings/[id]/reschedule-dialog";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 
@@ -43,6 +43,7 @@ interface BookingData {
   isLateCancel: boolean;
   creditRefunded: boolean;
   clientNotes: string | null;
+  priceZarCents: number;
 }
 
 interface SessionsTabProps {
@@ -242,7 +243,13 @@ function BookingCard({
                 currentDate={dateStr}
                 currentTime={`${b.startTime} – ${b.endTime}`}
               />
-              <CancelDialog bookingId={b.id} clientId={clientId} />
+              <CancelDialog
+                bookingId={b.id}
+                clientId={clientId}
+                bookingDate={b.date}
+                bookingStartTime={b.startTime}
+                priceZarCents={b.priceZarCents}
+              />
               <NoShowDialog bookingId={b.id} clientId={clientId} />
             </div>
           )}
@@ -309,16 +316,37 @@ function NoShowDialog({
 function CancelDialog({
   bookingId,
   clientId,
+  bookingDate,
+  bookingStartTime,
+  priceZarCents,
 }: {
   bookingId: string;
   clientId: string;
+  bookingDate: string;
+  bookingStartTime: string;
+  priceZarCents: number;
 }) {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
+  // Detect late-cancel: booking starts within 24 hours
+  const bookingDateTime = new Date(bookingDate);
+  const [hours, minutes] = bookingStartTime.split(":").map(Number);
+  bookingDateTime.setHours(hours, minutes, 0, 0);
+  const hoursUntilBooking = (bookingDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+  const isLateCancel = hoursUntilBooking < 24 && hoursUntilBooking > -2;
+  const showLateFeeOption = isLateCancel && priceZarCents > 0;
+
   function handleCancel(refund: boolean) {
     startTransition(async () => {
       await adminCancelBookingAction(bookingId, clientId, refund);
+      setOpen(false);
+    });
+  }
+
+  function handleLateFeeCancel() {
+    startTransition(async () => {
+      await adminLateCancelWithFeeAction(bookingId, clientId);
       setOpen(false);
     });
   }
@@ -334,6 +362,13 @@ function CancelDialog({
         <DialogHeader>
           <DialogTitle>Cancel Session</DialogTitle>
         </DialogHeader>
+        {showLateFeeOption && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+            ⚠️ This session starts within 24 hours. If the client agreed to the
+            late cancellation fee, use &quot;Cancel — Charge Late Fee&quot; to
+            cancel and issue an invoice automatically.
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">
           Choose whether to refund the client&apos;s session credit.
         </p>
@@ -348,11 +383,20 @@ function CancelDialog({
             onClick={() => handleCancel(false)}
             disabled={isPending}
           >
-            {isPending ? "..." : "Cancel Without Refund"}
+            {isPending ? "..." : "Cancel — No Charge"}
           </Button>
           <Button onClick={() => handleCancel(true)} disabled={isPending}>
             {isPending ? "..." : "Cancel & Refund Credit"}
           </Button>
+          {showLateFeeOption && (
+            <Button
+              variant="destructive"
+              onClick={handleLateFeeCancel}
+              disabled={isPending}
+            >
+              {isPending ? "..." : "Cancel — Charge Late Fee"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

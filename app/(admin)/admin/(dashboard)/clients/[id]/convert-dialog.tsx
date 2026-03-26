@@ -56,11 +56,17 @@ interface PackageOption {
 export function ConvertDialog({
   client,
   existingIntake,
+  externalOpen,
+  onExternalOpenChange,
 }: {
   client: ClientData;
   existingIntake?: IntakeData | null;
+  externalOpen?: boolean;
+  onExternalOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen ?? internalOpen;
+  const setOpen = onExternalOpenChange ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
   const [packages, setPackages] = useState<PackageOption[]>([]);
   const [loadingPkgs, setLoadingPkgs] = useState(false);

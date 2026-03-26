@@ -47,6 +47,7 @@ import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { RescheduleDialog } from "./reschedule-dialog";
+import { CancelBookingButton } from "./cancel-booking-button";
 
 const PATTERN_LABELS: Record<string, string> = {
   weekly: "Weekly",
@@ -303,7 +304,7 @@ export default async function BookingDetailPage({ params }: Props) {
           <CardHeader>
             <CardTitle>Update Status</CardTitle>
             <CardDescription>
-              Change the booking status. Cancelling will also notify the client.
+              Change the booking status. Cancelling notifies the client by email but <strong>does not generate an invoice</strong> — use Cancel → Charge Late Fee if a cancellation fee applies. Use No Show for clients who did not attend without cancelling.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -341,13 +342,14 @@ export default async function BookingDetailPage({ params }: Props) {
                 currentDate={format(new Date(booking.date), "d MMM yyyy")}
                 currentTime={`${booking.startTime} – ${booking.endTime}`}
               />
-              <form action={handleStatusChange}>
-                <input type="hidden" name="status" value="cancelled" />
-                <Button type="submit" variant="outline" size="sm">
-                  <XCircle className="mr-2 h-4 w-4 text-red-600" />
-                  Cancel Booking
-                </Button>
-              </form>
+              <CancelBookingButton
+                bookingId={booking.id}
+                bookingDate={booking.date}
+                bookingStartTime={booking.startTime}
+                priceZarCents={booking.priceZarCents}
+                clientName={booking.clientName}
+                isFreeSession={booking.priceZarCents === 0}
+              />
             </div>
             <Separator className="my-4" />
             <div className="flex items-center justify-between">

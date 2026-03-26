@@ -580,3 +580,78 @@ export async function togglePolicyOverrideAction(bookingId: string) {
   revalidatePath(`/admin/bookings/${bookingId}`);
   revalidatePath("/admin/bookings");
 }
+
+// ────────────────────────────────────────────────────────────
+// Cancel booking with optional late-cancellation fee
+// ────────────────────────────────────────────────────────────
+
+export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
+  await requireRole("super_admin", "editor");
+
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking) throw new Error("Booking not found");
+
+  await prisma.booking.update({
+    where: { id },
+    data: {
+      status: "cancelled",
+      cancelledAt: new Date(),
+      cancelledBy: "admin",
+      isLateCancel: chargeLateFee,
+      billingNote: chargeLateFee ? "(late cancel — fee charged)" : "(cancelled — no charge)",
+    },
+  });
+
+  if (booking.graphEventId) {
+    await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+  }
+
+  const config = getSessionTypeConfig(booking.sessionType);
+  const email = await renderEmail("booking_cancellation", {
+    clientName: booking.clientName,
+    sessionType: config.label,
+    date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
+    time: `${booking.startTime} – ${booking.endTime} (SAST)`,
+    bookUrl: "https://life-therapy.co.za/book",
+  });
+  await sendEmail({
+    to: booking.clientEmail,
+    ...email,
+    templateKey: "booking_cancellation",
+    metadata: { bookingId: id },
+  }).catch(console.error);
+
+  if (chargeLateFee && booking.studentId && booking.priceZarCents > 0) {
+    const { createManualInvoice } = await import("@/lib/create-invoice");
+    const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
+    const { sendInvoiceEmail } = await import("@/lib/send-invoice");
+    const { getSessionTypeConfig: getConfig } = await import("@/lib/booking-config");
+
+    const cfg = getConfig(booking.sessionType);
+    const dateStr = format(new Date(booking.date), "d MMM yyyy");
+
+    const invoice = await createManualInvoice({
+      type: "late_cancel",
+      studentId: booking.studentId,
+      paymentMethod: "eft",
+      lineItems: [
+        {
+          description: `Late Cancellation Fee — ${cfg.label}`,
+          subLine: `${dateStr}, ${booking.startTime}–${booking.endTime} (cancelled within 24h)`,
+          quantity: 1,
+          unitPriceCents: booking.priceZarCents,
+          discountCents: 0,
+          discountPercent: 0,
+          totalCents: booking.priceZarCents,
+        },
+      ],
+    });
+
+    await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
+    await sendInvoiceEmail(invoice.id).catch(console.error);
+  }
+
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${id}`);
+  redirect("/admin/bookings");
+}

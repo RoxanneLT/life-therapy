@@ -182,6 +182,61 @@ export async function adminCancelBookingAction(
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
+export async function adminLateCancelWithFeeAction(
+  bookingId: string,
+  studentId: string,
+) {
+  await requireRole("super_admin");
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw new Error("Booking not found");
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: "cancelled",
+      cancelledAt: new Date(),
+      cancelledBy: "admin",
+      isLateCancel: true,
+      creditRefunded: false,
+      billingNote: "(late cancel — fee charged)",
+    },
+  });
+
+  if (booking.priceZarCents > 0) {
+    const { createManualInvoice } = await import("@/lib/create-invoice");
+    const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
+    const { sendInvoiceEmail } = await import("@/lib/send-invoice");
+    const { getSessionTypeConfig } = await import("@/lib/booking-config");
+    const { format } = await import("date-fns");
+
+    const cfg = getSessionTypeConfig(booking.sessionType);
+    const dateStr = format(new Date(booking.date), "d MMM yyyy");
+
+    const invoice = await createManualInvoice({
+      type: "late_cancel",
+      studentId,
+      paymentMethod: "eft",
+      lineItems: [
+        {
+          description: `Late Cancellation Fee — ${cfg.label}`,
+          subLine: `${dateStr}, ${booking.startTime}–${booking.endTime} (cancelled within 24h)`,
+          quantity: 1,
+          unitPriceCents: booking.priceZarCents,
+          discountCents: 0,
+          discountPercent: 0,
+          totalCents: booking.priceZarCents,
+        },
+      ],
+    });
+
+    await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
+    await sendInvoiceEmail(invoice.id).catch(console.error);
+  }
+
+  revalidatePath(`/admin/clients/${studentId}`);
+}
+
 // ────────────────────────────────────────────────────────────
 // Purchases — Grant Credits
 // ────────────────────────────────────────────────────────────
