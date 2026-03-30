@@ -67,8 +67,9 @@ const LINK_STATUS: Record<string, { status: LinkAuditItem["status"]; note: strin
   "/products/30-day-self-worth-challenge": { status: "ready", note: "Free product: 30-Day Self-Worth Challenge" },
 
   // ── MISSING ROUTES (don't exist at all) ──
-  "/free/self-esteem-snapshot": { status: "ready", note: "Free assessment landing page" },
-  "/free/self-esteem-snapshot/download": { status: "ready", note: "Redirects to landing page (PDF served from /downloads/)" },
+  "/products/self-esteem-snapshot": { status: "ready", note: "Free product: Self-Esteem Snapshot" },
+  "/free/self-esteem-snapshot": { status: "ready", note: "Legacy redirect → /products/self-esteem-snapshot" },
+  "/free/self-esteem-snapshot/download": { status: "ready", note: "Legacy redirect → /products/self-esteem-snapshot" },
 
   // ── DYNAMIC VARIABLES ──
   "{{passwordResetUrl}}": { status: "dynamic", note: "Generated per-recipient at send time ✅" },
@@ -125,10 +126,10 @@ export function countIssues(audits: EmailAudit[]): {
 export const DRIP_LINK_ISSUES: Record<string, LinkAuditItem[]> = {
   // ONBOARDING
   onboarding_0: [
-    auditLink("/free/self-esteem-snapshot/download", "CTA: Download Self-Esteem Snapshot"),
+    auditLink("/products/self-esteem-snapshot", "CTA: Download Self-Esteem Snapshot"),
   ],
   onboarding_1: [
-    auditLink("/free/self-esteem-snapshot/download", "P.S. link: Self-Esteem Snapshot"),
+    auditLink("/products/self-esteem-snapshot", "P.S. link: Self-Esteem Snapshot"),
   ],
   onboarding_7: [
     auditLink("/courses", "CTA: Explore All Options"),
@@ -191,7 +192,7 @@ export const DRIP_LINK_ISSUES: Record<string, LinkAuditItem[]> = {
     auditLink("/products/values-discovery-workbook", "CTA: Values Discovery Workbook"),
   ],
   newsletter_22: [
-    auditLink("/free/self-esteem-snapshot", "CTA: Retake Self-Esteem Snapshot"),
+    auditLink("/products/self-esteem-snapshot", "CTA: Retake Self-Esteem Snapshot"),
   ],
   newsletter_23: [
     auditLink("/courses", "CTA: Explore All Courses & Products"),
@@ -220,7 +221,7 @@ export const DRIP_LINK_ISSUES: Record<string, LinkAuditItem[]> = {
     auditLink("/courses/short/building-self-trust", "CTA: Building Self-Trust"),
   ],
   newsletter_35: [
-    auditLink("/free/self-esteem-snapshot", "CTA: Retake Self-Esteem Snapshot"),
+    auditLink("/products/self-esteem-snapshot", "CTA: Retake Self-Esteem Snapshot"),
   ],
   newsletter_37: [
     auditLink("/products/daily-affirmations-planner", "CTA: Daily Affirmations Planner"),
@@ -244,7 +245,7 @@ export const DRIP_LINK_ISSUES: Record<string, LinkAuditItem[]> = {
     auditLink("/products/self-esteem-starter-kit", "CTA: Self-Esteem Starter Kit"),
   ],
   newsletter_46: [
-    auditLink("/free/self-esteem-snapshot", "CTA: Retake Self-Esteem Snapshot"),
+    auditLink("/products/self-esteem-snapshot", "CTA: Retake Self-Esteem Snapshot"),
   ],
 };
 

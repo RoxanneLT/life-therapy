@@ -119,16 +119,25 @@ export default async function ProductDetailPage({
               {formatPrice(price, currency)}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Instant digital download after purchase
+              {price === 0 ? "Free digital download" : "Instant digital download after purchase"}
             </p>
           </div>
 
-          <AddToCartButton
-            digitalProductId={product.id}
-            label="Add to Cart"
-            size="lg"
-            className="w-full"
-          />
+          {price === 0 && product.fileUrl ? (
+            <Button size="lg" className="w-full" asChild>
+              <a href={product.fileUrl} download>
+                <FileDown className="mr-2 h-4 w-4" />
+                Download Free PDF
+              </a>
+            </Button>
+          ) : (
+            <AddToCartButton
+              digitalProductId={product.id}
+              label="Add to Cart"
+              size="lg"
+              className="w-full"
+            />
+          )}
         </div>
       </div>
     </div>

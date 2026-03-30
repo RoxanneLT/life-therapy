@@ -19,7 +19,7 @@ const dripEmailDefaults: Record<string, DripEmailDefault> = {
     subject: "Welcome to Life-Therapy \u2014 Your Free Assessment Is Here",
     previewText: "Plus a quick note from Roxanne about what\u2019s ahead...",
     ctaText: "Download Your Free Self-Esteem Snapshot",
-    ctaUrl: "/free/self-esteem-snapshot/download",
+    ctaUrl: "/products/self-esteem-snapshot",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Welcome to the Life-Therapy community \u2014 I\u2019m so glad you\u2019re here.")}
 ${p("Your free <strong>Self-Esteem Snapshot</strong> is ready for you. This short assessment will help you understand where you stand right now and which areas might benefit from some focused attention.")}
@@ -41,7 +41,7 @@ ${p("That\u2019s why I created Life-Therapy \u2014 to give people the practical 
 ${p("Every course, worksheet, and session I offer comes from this belief: <strong>you already have what it takes</strong>. Sometimes you just need someone to show you where to look.")}
 ${p("I\u2019m glad you\u2019re here. And I\u2019m looking forward to sharing more with you.")}
 ${sig}
-${p('<em>P.S. Did you get a chance to complete your Self-Esteem Snapshot? If you missed it, you can <a href="/free/self-esteem-snapshot/download" style="color: #8BA889; font-weight: 600;">download it here</a>.</em>')}`,
+${p('<em>P.S. Did you get a chance to complete your Self-Esteem Snapshot? If you missed it, you can <a href="/products/self-esteem-snapshot" style="color: #8BA889; font-weight: 600;">download it here</a>.</em>')}`,
   },
 
   onboarding_2: {
@@ -638,7 +638,7 @@ ${p("You\u2019re not broken. You\u2019re evolving. And that\u2019s an entirely d
     subject: "Your Growth This Year \u2014 A Celebration",
     previewText: "Look at how far you\u2019ve come...",
     ctaText: "Retake Your Free Self-Esteem Snapshot",
-    ctaUrl: "/free/self-esteem-snapshot",
+    ctaUrl: "/products/self-esteem-snapshot",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("You\u2019ve been part of this community for almost a year now, and I want to celebrate that.")}
 ${p("Not because you should have achieved some specific milestone. But because <strong>you\u2019ve been showing up</strong>. Opening these emails. Thinking about your patterns. Considering new perspectives.")}
@@ -873,7 +873,7 @@ ${sig}`,
     subject: "18-Month Check-In: Look at Who You\u2019re Becoming",
     previewText: "It\u2019s time to see how far you\u2019ve really come...",
     ctaText: "Retake Your Free Self-Esteem Snapshot",
-    ctaUrl: "/free/self-esteem-snapshot",
+    ctaUrl: "/products/self-esteem-snapshot",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Eighteen months. You\u2019ve been part of this community for a year and a half.")}
 ${p("I want you to try something specific today. Go back to wherever you keep notes \u2014 a journal, your phone, old emails \u2014 and find something you wrote about yourself 12\u201318 months ago. A worry, a goal, a frustration. Look at it with fresh eyes.")}
@@ -1068,7 +1068,7 @@ ${sig}`,
     subject: "Two Years of Growth \u2014 A Love Letter to You",
     previewText: "You showed up. Again and again. And it changed everything...",
     ctaText: "Retake Your Free Self-Esteem Snapshot \u2014 Compare Your Growth",
-    ctaUrl: "/free/self-esteem-snapshot",
+    ctaUrl: "/products/self-esteem-snapshot",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("<strong>Two years.</strong>")}
 ${p("That\u2019s how long you\u2019ve been opening these emails, thinking about these ideas, and doing this work. Two years of showing up for yourself \u2014 sometimes with enthusiasm, sometimes with exhaustion, sometimes with doubt, but always with willingness.")}
