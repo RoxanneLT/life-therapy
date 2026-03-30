@@ -2,11 +2,11 @@
  * Invoice PDF generation and Supabase Storage upload.
  *
  * Layout matches the Life Therapy invoice template:
- *   Header  → "Tax Invoice" / "Invoice" + logo
- *   Meta    → Business details (left) + invoice details (right)
- *   Client  → Billing name / VAT / address
- *   Table   → Line items with sub-lines for dates and notes
- *   Footer  → Banking details (left) + totals stack (right)
+ *   Header  → "Invoice" title + logo (right-aligned)
+ *   Meta    → Business details + VAT + address (left) | Invoice number, date, ref, due date (right)
+ *   Client  → "Bill To" with client name, VAT, address
+ *   Table   → Line items with sub-lines for session dates
+ *   Footer  → Banking details (bottom-left) | Totals stack (bottom-right)
  */
 
 import { jsPDF } from "jspdf";
@@ -22,24 +22,26 @@ import path from "path";
 
 // ─── Constants ───────────────────────────────────────────────
 
-const PAGE_WIDTH = 210; // A4 mm
-const PAGE_HEIGHT = 297;
-const MARGIN_LEFT = 15;
-const MARGIN_RIGHT = 15;
-const MARGIN_TOP = 15;
-const MARGIN_BOTTOM = 25;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
-const BRAND_GREEN: [number, number, number] = [139, 168, 137]; // #8BA889
-const DARK_TEXT: [number, number, number] = [33, 33, 33];
-const MUTED_TEXT: [number, number, number] = [120, 120, 120];
-const LINE_COLOR: [number, number, number] = [220, 220, 220];
-const TABLE_HEADER_BG: [number, number, number] = [245, 248, 245];
+const PAGE_W = 210;
+const PAGE_H = 297;
+const ML = 18;
+const MR = 18;
+const MT = 20;
+const MB = 20;
+const CW = PAGE_W - ML - MR;
 
-// Column layout for line items table
-const COL_DESC_X = MARGIN_LEFT;
-const COL_QTY_X = 135;
-const COL_PRICE_X = 155;
-const COL_TOTAL_X = PAGE_WIDTH - MARGIN_RIGHT;
+const BRAND: [number, number, number] = [139, 168, 137];
+const DARK: [number, number, number] = [40, 40, 40];
+const MUTED: [number, number, number] = [130, 130, 130];
+const LINE_CLR: [number, number, number] = [200, 200, 200];
+const TBL_HDR_BG: [number, number, number] = [245, 248, 245];
+const BANK_BG: [number, number, number] = [248, 250, 248];
+
+// Table columns
+const COL_DESC = ML;
+const COL_QTY = 120;
+const COL_PRICE = 155;
+const COL_TOTAL = PAGE_W - MR;
 
 // ─── Logo ────────────────────────────────────────────────────
 
@@ -65,14 +67,11 @@ function fmt(cents: number, currency: string): string {
 
 function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
-  return format(new Date(d), "d MMMM yyyy");
+  return format(new Date(d), "dd/MM/yyyy");
 }
 
 // ─── PDF Generator ───────────────────────────────────────────
 
-/**
- * Fetch an invoice from the DB and generate a PDF buffer.
- */
 export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: invoiceId },
@@ -84,165 +83,152 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const isVat = settings.vatRegistered && invoice.vatPercent > 0;
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  let y = MARGIN_TOP;
+  let y = MT;
   let pageNum = 1;
 
-  // ── Utility: draw table header ──
   let inTable = false;
+
+  function hLine(yPos: number, x1 = ML, x2 = PAGE_W - MR) {
+    doc.setDrawColor(...LINE_CLR);
+    doc.setLineWidth(0.3);
+    doc.line(x1, yPos, x2, yPos);
+  }
+
   function drawTableHeader() {
-    doc.setFillColor(...TABLE_HEADER_BG);
-    doc.rect(MARGIN_LEFT, y, CONTENT_WIDTH, 7, "F");
+    doc.setFillColor(...TBL_HDR_BG);
+    doc.rect(ML, y, CW, 7, "F");
+    hLine(y);
     y += 5;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(...DARK_TEXT);
-    doc.text("Description", COL_DESC_X + 2, y);
-    doc.text("Qty", COL_QTY_X, y, { align: "center" });
-    doc.text("Excl. Price", COL_PRICE_X, y, { align: "right" });
-    doc.text("Total", COL_TOTAL_X, y, { align: "right" });
-    y += 4;
+    doc.setTextColor(...DARK);
+    doc.text("Description", COL_DESC + 3, y);
+    doc.text("Quantity", COL_QTY, y, { align: "center" });
+    doc.text("Excl. Price", COL_PRICE, y, { align: "right" });
+    doc.text("Total", COL_TOTAL, y, { align: "right" });
+    y += 3.5;
     hLine(y);
     y += 2;
   }
 
-  // ── Utility: check page break ──
   function checkPageBreak(needed: number) {
-    if (y + needed > PAGE_HEIGHT - MARGIN_BOTTOM) {
+    if (y + needed > PAGE_H - MB - 50) { // reserve 50mm for footer
       doc.addPage();
       pageNum++;
-      y = MARGIN_TOP;
+      y = MT;
       if (inTable) drawTableHeader();
     }
-  }
-
-  // ── Utility: horizontal line ──
-  function hLine(yPos: number) {
-    doc.setDrawColor(...LINE_COLOR);
-    doc.setLineWidth(0.3);
-    doc.line(MARGIN_LEFT, yPos, PAGE_WIDTH - MARGIN_RIGHT, yPos);
   }
 
   // ══════════════════════════════════════════════════════════
   // HEADER
   // ══════════════════════════════════════════════════════════
 
-  // Title
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(...BRAND_GREEN);
-  doc.text(isVat ? "Tax Invoice" : "Invoice", MARGIN_LEFT, y + 8);
+  doc.setTextColor(...DARK);
+  doc.text(isVat ? "Tax Invoice" : "Invoice", ML, y + 8);
 
-  // Logo (top right)
   const logo = getLogoBase64();
   if (logo) {
     try {
-      doc.addImage(logo, "PNG", PAGE_WIDTH - MARGIN_RIGHT - 30, y - 2, 30, 30);
-    } catch {
-      // Logo render failed — skip
-    }
+      doc.addImage(logo, "PNG", PAGE_W - MR - 32, y - 4, 32, 32);
+    } catch { /* skip */ }
   }
 
   y += 18;
   hLine(y);
-  y += 6;
+  y += 8;
 
   // ══════════════════════════════════════════════════════════
   // BUSINESS DETAILS (left) + INVOICE META (right)
   // ══════════════════════════════════════════════════════════
 
-  const leftX = MARGIN_LEFT;
-  const rightX = 120;
-  let leftY = y;
-  let rightY = y;
+  const metaX = 115;
+  let lY = y;
+  let rY = y;
 
-  // Business details
+  // Business
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(...DARK_TEXT);
-  doc.text("Life Therapy (Pty) Ltd", leftX, leftY);
-  leftY += 5;
+  doc.setFontSize(10);
+  doc.setTextColor(...DARK);
+  doc.text(settings.siteName || "Life Therapy (Pty) Ltd", ML, lY);
+  lY += 6;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED_TEXT);
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
 
-  if (settings.businessRegistrationNumber) {
-    doc.text(`Reg: ${settings.businessRegistrationNumber}`, leftX, leftY);
-    leftY += 4;
-  }
-  if (isVat && settings.vatNumber) {
-    doc.text(`VAT: ${settings.vatNumber}`, leftX, leftY);
-    leftY += 4;
-  }
+  doc.text(`VAT No: ${isVat && settings.vatNumber ? settings.vatNumber : ""}`, ML, lY);
+  lY += 4;
+
   if (settings.businessAddress) {
-    const addrLines = doc.splitTextToSize(settings.businessAddress, 90);
-    doc.text(addrLines, leftX, leftY);
-    leftY += addrLines.length * 3.5;
+    const lines = settings.businessAddress.split(",").map((s: string) => s.trim());
+    for (const line of lines) {
+      doc.text(line, ML, lY);
+      lY += 3.5;
+    }
   }
 
-  // Invoice meta (right column)
-  doc.setFontSize(8.5);
+  // Invoice meta (right)
   const initials = extractInitials(invoice.billingName);
   const prefix = settings.invoicePrefix || "LT";
-  const metaLabels = ["Number:", "Date:", "Reference:", "Page:", "Due Date:"];
-  const metaValues = [
-    invoice.invoiceNumber,
-    fmtDate(invoice.issuedAt || invoice.createdAt),
-    `${initials} - ${prefix}`,
-    `${pageNum}`,
-    invoice.dueDate ? fmtDate(invoice.dueDate) : "On receipt",
+
+  const metaRows: [string, string][] = [
+    ["Number:", invoice.invoiceNumber],
+    ["Date:", fmtDate(invoice.issuedAt || invoice.createdAt)],
+    ["Page:", `${pageNum}`],
+    ["Reference:", `${initials} - ${prefix}`],
+    ["Due Date:", invoice.dueDate ? fmtDate(invoice.dueDate) : "On receipt"],
   ];
-
   if (invoice.discountPercent > 0) {
-    metaLabels.push("Discount:");
-    metaValues.push(`${invoice.discountPercent}%`);
+    metaRows.push(["Overall Discount %:", `${invoice.discountPercent.toFixed(2)}%`]);
   }
 
-  for (let i = 0; i < metaLabels.length; i++) {
+  doc.setFontSize(8);
+  for (const [label, value] of metaRows) {
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(...MUTED_TEXT);
-    doc.text(metaLabels[i], rightX, rightY);
+    doc.setTextColor(...MUTED);
+    doc.text(label, metaX, rY);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(...DARK_TEXT);
-    doc.text(metaValues[i], rightX + 25, rightY);
-    rightY += 4.5;
+    doc.setTextColor(...DARK);
+    doc.text(value, metaX + 28, rY);
+    rY += 4.5;
   }
 
-  y = Math.max(leftY, rightY) + 4;
+  y = Math.max(lY, rY) + 4;
   hLine(y);
-  y += 6;
+  y += 8;
 
   // ══════════════════════════════════════════════════════════
-  // CLIENT DETAILS
+  // BILL TO
   // ══════════════════════════════════════════════════════════
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...MUTED_TEXT);
-  doc.text("Bill To:", MARGIN_LEFT, y);
+  doc.setTextColor(...DARK);
+  doc.text(invoice.billingName, ML, y);
   y += 5;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...DARK_TEXT);
-  doc.text(invoice.billingName, MARGIN_LEFT, y);
-  y += 4.5;
-
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED_TEXT);
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
 
   if (isVat && invoice.billingVatNumber) {
-    doc.text(`VAT: ${invoice.billingVatNumber}`, MARGIN_LEFT, y);
+    doc.text(`Customer VAT No: ${invoice.billingVatNumber}`, ML, y);
+    y += 4;
+  } else {
+    doc.text("Customer VAT No:", ML, y);
     y += 4;
   }
+
   if (invoice.billingAddress) {
-    const clientAddr = doc.splitTextToSize(invoice.billingAddress, CONTENT_WIDTH);
-    doc.text(clientAddr, MARGIN_LEFT, y);
-    y += clientAddr.length * 3.5;
+    const addr = doc.splitTextToSize(invoice.billingAddress, CW);
+    doc.text(addr, ML, y);
+    y += addr.length * 3.5;
   }
 
-  y += 4;
+  y += 6;
   hLine(y);
   y += 2;
 
@@ -253,186 +239,146 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   inTable = true;
   drawTableHeader();
 
-  // Table rows
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
 
   for (const item of lineItems) {
-    // Estimate height needed for this row
-    const rowHeight = item.subLine || item.billingNote ? 12 : 7;
-    checkPageBreak(rowHeight);
+    const rowH = item.subLine || item.billingNote ? 13 : 8;
+    checkPageBreak(rowH);
 
-    // Main line
-    doc.setTextColor(...DARK_TEXT);
-    const descLines = doc.splitTextToSize(item.description, COL_QTY_X - COL_DESC_X - 8);
-    doc.text(descLines, COL_DESC_X + 2, y + 3.5);
-    doc.text(item.quantity.toFixed(2), COL_QTY_X, y + 3.5, { align: "center" });
-    doc.text(fmt(item.unitPriceCents, currency), COL_PRICE_X, y + 3.5, { align: "right" });
-    doc.text(fmt(item.totalCents, currency), COL_TOTAL_X, y + 3.5, { align: "right" });
+    doc.setTextColor(...DARK);
+    const descLines = doc.splitTextToSize(item.description, COL_QTY - COL_DESC - 12);
+    doc.text(descLines, COL_DESC + 3, y + 4);
+    doc.text(item.quantity.toFixed(2), COL_QTY, y + 4, { align: "center" });
+    doc.text(fmt(item.unitPriceCents, currency), COL_PRICE, y + 4, { align: "right" });
+    doc.text(fmt(item.totalCents, currency), COL_TOTAL, y + 4, { align: "right" });
 
-    y += Math.max(descLines.length * 3.5 + 2, 6);
+    y += Math.max(descLines.length * 3.5 + 3, 7);
 
-    // Sub-line (session date/time) — billing note appended inline if present
     if (item.subLine) {
-      const subText = item.billingNote
-        ? `${item.subLine} ${item.billingNote}`
-        : item.subLine;
-      doc.setFontSize(7.5);
-      doc.setTextColor(...MUTED_TEXT);
-      doc.text(subText, COL_DESC_X + 4, y + 1);
-      y += 3.5;
+      const sub = item.billingNote ? `${item.subLine} ${item.billingNote}` : item.subLine;
+      doc.setFontSize(7);
+      doc.setTextColor(...MUTED);
+      doc.text(sub, COL_DESC + 5, y + 1);
+      y += 4;
     } else if (item.billingNote) {
-      // Standalone billing note for non-session line items
-      doc.setFontSize(7.5);
+      doc.setFontSize(7);
       doc.setTextColor(180, 80, 80);
-      doc.text(item.billingNote, COL_DESC_X + 4, y + 1);
-      y += 3.5;
+      doc.text(item.billingNote, COL_DESC + 5, y + 1);
+      y += 4;
     }
 
-    // Reset font
     doc.setFontSize(8.5);
-
-    // Row separator
     hLine(y);
     y += 1.5;
   }
 
   inTable = false;
-  y += 4;
 
   // ══════════════════════════════════════════════════════════
-  // FOOTER: Banking (left) + Totals (right)
+  // FOOTER — Banking (bottom-left) + Totals (bottom-right)
   // ══════════════════════════════════════════════════════════
 
-  checkPageBreak(40);
+  // Calculate footer Y — push to bottom of page if space allows
+  const footerMinY = y + 10;
+  const footerH = 42;
+  const footerY = Math.max(footerMinY, PAGE_H - MB - footerH);
 
+  // If we'd overflow, add page
+  if (footerMinY > PAGE_H - MB - footerH) {
+    if (footerMinY + footerH > PAGE_H - MB) {
+      doc.addPage();
+      pageNum++;
+    }
+  }
+
+  y = footerY;
   hLine(y);
-  y += 6;
+  y += 5;
 
-  const footerLeftX = MARGIN_LEFT;
-  const footerRightX = 130;
-  let footerLeftY = y;
-  let footerRightY = y;
+  // ── Banking (left) — subtle background box ──
+  const bankBoxW = 80;
+  const bankBoxH = 30;
+  doc.setFillColor(...BANK_BG);
+  doc.rect(ML, y - 1, bankBoxW, bankBoxH, "F");
 
-  // Banking details (left)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...DARK_TEXT);
-  doc.text("Banking Details", footerLeftX, footerLeftY);
-  footerLeftY += 5;
+  let bY = y + 2;
+  doc.setFontSize(7);
+
+  const bankRows: [string, string | null | undefined][] = [
+    ["Payment to bank :", settings.bankName],
+    ["Accountholder :", settings.bankAccountHolder],
+    ["Account number :", settings.bankAccountNumber],
+    ["Branch code :", settings.bankBranchCode],
+    ["Co Reg no. :", settings.businessRegistrationNumber],
+  ];
+
+  for (const [label, value] of bankRows) {
+    if (!value) continue;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...MUTED);
+    doc.text(label, ML + 2, bY);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...DARK);
+    doc.text(value, ML + 32, bY);
+    bY += 4;
+  }
+
+  // ── Totals (right) ──
+  const tLabelX = 125;
+  const tValueX = PAGE_W - MR;
+  let tY = y;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(...MUTED_TEXT);
 
-  const bankDetails: [string, string | null | undefined][] = [
-    ["Bank:", settings.bankName],
-    ["Account Holder:", settings.bankAccountHolder],
-    ["Account No:", settings.bankAccountNumber],
-    ["Branch:", settings.bankBranchCode],
-    ["Reg No:", settings.businessRegistrationNumber],
-  ];
-
-  for (const [label, value] of bankDetails) {
-    if (!value) continue;
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...MUTED_TEXT);
-    doc.text(label, footerLeftX, footerLeftY);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...DARK_TEXT);
-    doc.text(value, footerLeftX + 28, footerLeftY);
-    footerLeftY += 4;
-  }
-
-  // Totals stack (right)
-  const totalsLabelX = footerRightX;
-  const totalsValueX = PAGE_WIDTH - MARGIN_RIGHT;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-
-  // Subtotal (before invoice-level discount)
-  doc.setTextColor(...MUTED_TEXT);
-  doc.text("Total Exclusive:", totalsLabelX, footerRightY);
-  doc.setTextColor(...DARK_TEXT);
-  doc.text(fmt(invoice.subtotalCents, currency), totalsValueX, footerRightY, { align: "right" });
-  footerRightY += 5;
-
-  // Discount line (if applicable)
-  if (invoice.discountCents > 0) {
-    doc.setTextColor(22, 163, 74); // green-600
-    doc.text(
-      `Discount${invoice.discountPercent > 0 ? ` (${invoice.discountPercent}%)` : ""}:`,
-      totalsLabelX,
-      footerRightY,
-    );
-    doc.text(`-${fmt(invoice.discountCents, currency)}`, totalsValueX, footerRightY, { align: "right" });
-    footerRightY += 5;
-    doc.setTextColor(...MUTED_TEXT);
-  }
-
-  // VAT line (only if registered)
-  if (isVat) {
-    doc.setTextColor(...MUTED_TEXT);
-    doc.text(`VAT (${invoice.vatPercent}%):`, totalsLabelX, footerRightY);
-    doc.setTextColor(...DARK_TEXT);
-    doc.text(fmt(invoice.vatAmountCents, currency), totalsValueX, footerRightY, { align: "right" });
-    footerRightY += 5;
-  }
-
-  // Grand total
-  hLine(footerRightY - 1);
-  footerRightY += 2;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(...DARK_TEXT);
-  doc.text("Total:", totalsLabelX, footerRightY);
-  doc.text(fmt(invoice.totalCents, currency), totalsValueX, footerRightY, { align: "right" });
-
-  // ── Paid + Amount Due ──
-  footerRightY += 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED_TEXT);
-  doc.text("Paid:", totalsLabelX, footerRightY);
-  doc.setTextColor(22, 163, 74); // green-600
+  // Discount
+  doc.setTextColor(...MUTED);
+  doc.text("Total Discount:", tLabelX, tY);
+  doc.setTextColor(...DARK);
   doc.text(
-    invoice.status === "paid"
-      ? fmt(invoice.totalCents, currency)
-      : fmt(0, currency),
-    totalsValueX,
-    footerRightY,
-    { align: "right" },
+    invoice.discountCents > 0 ? fmt(invoice.discountCents, currency) : fmt(0, currency),
+    tValueX, tY, { align: "right" },
   );
-  footerRightY += 5;
+  tY += 4.5;
 
-  hLine(footerRightY - 1);
-  footerRightY += 2;
+  // Total Exclusive
+  doc.setTextColor(...MUTED);
+  doc.text("Total Exclusive:", tLabelX, tY);
+  doc.setTextColor(...DARK);
+  doc.text(fmt(invoice.subtotalCents - invoice.discountCents, currency), tValueX, tY, { align: "right" });
+  tY += 4.5;
+
+  // VAT
+  doc.setTextColor(...MUTED);
+  doc.text(`Total VAT${isVat ? ` (${invoice.vatPercent}%)` : ""}:`, tLabelX, tY);
+  doc.setTextColor(...DARK);
+  doc.text(fmt(invoice.vatAmountCents, currency), tValueX, tY, { align: "right" });
+  tY += 4.5;
+
+  // Sub Total
+  doc.setTextColor(...MUTED);
+  doc.text("Sub Total:", tLabelX, tY);
+  doc.setTextColor(...DARK);
+  doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
+  tY += 6;
+
+  // Grand Total — bold, larger
+  hLine(tY - 1, tLabelX, tValueX);
+  tY += 3;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...DARK_TEXT);
-  doc.text("Amount Due:", totalsLabelX, footerRightY);
-  doc.text(
-    invoice.status === "paid"
-      ? fmt(0, currency)
-      : fmt(invoice.totalCents, currency),
-    totalsValueX,
-    footerRightY,
-    { align: "right" },
-  );
+  doc.setFontSize(10);
+  doc.setTextColor(...DARK);
+  doc.text("Total:", tLabelX, tY);
+  doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
 
-  // ── Convert to Buffer ──
+  // ── Buffer output ──
   const arrayBuf = doc.output("arraybuffer");
   return Buffer.from(arrayBuf);
 }
 
 // ─── Generate + Store in Supabase ────────────────────────────
 
-/**
- * Generate the invoice PDF, upload to Supabase Storage (invoices bucket),
- * update the Invoice record with the storage path, and return the path.
- */
 export async function generateAndStoreInvoicePDF(
   invoiceId: string,
 ): Promise<string> {
