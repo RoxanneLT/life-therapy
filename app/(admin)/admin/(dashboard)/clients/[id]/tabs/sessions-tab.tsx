@@ -83,6 +83,7 @@ const STATUS_ICONS: Record<string, string> = {
 
 export function SessionsTab({ client }: SessionsTabProps) {
   const clientId = client.id as string;
+  const isPostpaid = client.billingType === "postpaid";
   const bookings = (client.bookings as BookingData[]) || [];
   const today = startOfDay(new Date());
 
@@ -136,6 +137,7 @@ export function SessionsTab({ client }: SessionsTabProps) {
               booking={b}
               clientId={clientId}
               isUpcoming
+              isPostpaid={isPostpaid}
             />
           ))}
         </div>
@@ -148,7 +150,7 @@ export function SessionsTab({ client }: SessionsTabProps) {
             Past
           </h3>
           {past.map((b) => (
-            <BookingCard key={b.id} booking={b} clientId={clientId} />
+            <BookingCard key={b.id} booking={b} clientId={clientId} isPostpaid={isPostpaid} />
           ))}
         </div>
       )}
@@ -225,10 +227,12 @@ function BookingCard({
   booking,
   clientId,
   isUpcoming = false,
+  isPostpaid = false,
 }: {
   booking: BookingData;
   clientId: string;
   isUpcoming?: boolean;
+  isPostpaid?: boolean;
 }) {
   const b = booking;
   const dateStr = format(new Date(b.date), "EEE d MMM yyyy");
@@ -292,10 +296,12 @@ function BookingCard({
                 {b.isLateCancel && (
                   <span> · <span className="text-red-600">Late cancel</span></span>
                 )}
-                {b.creditRefunded ? (
+                {!isPostpaid && b.creditRefunded ? (
                   <span> · Credit refunded</span>
-                ) : b.isLateCancel ? (
+                ) : !isPostpaid && b.isLateCancel ? (
                   <span> · Credit forfeited</span>
+                ) : isPostpaid && b.isLateCancel ? (
+                  <span> · Late cancel fee applies</span>
                 ) : null}
                 {b.cancellationReason && (
                   <span> · {b.cancellationReason}</span>
@@ -312,7 +318,9 @@ function BookingCard({
 
             {/* No-show details */}
             {b.status === "no_show" && (
-              <p className="text-xs text-red-600">Credit forfeited</p>
+              <p className="text-xs text-red-600">
+                {isPostpaid ? "No-show — session will be invoiced" : "Credit forfeited"}
+              </p>
             )}
           </div>
 

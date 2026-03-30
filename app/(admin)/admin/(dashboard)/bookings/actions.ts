@@ -622,33 +622,54 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   }).catch(console.error);
 
   if (chargeLateFee && booking.studentId && booking.priceZarCents > 0) {
-    const { createManualInvoice } = await import("@/lib/create-invoice");
-    const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
-    const { sendInvoiceEmail } = await import("@/lib/send-invoice");
-    const { getSessionTypeConfig: getConfig } = await import("@/lib/booking-config");
-
-    const cfg = getConfig(booking.sessionType);
-    const dateStr = format(new Date(booking.date), "d MMM yyyy");
-
-    const invoice = await createManualInvoice({
-      type: "late_cancel",
-      studentId: booking.studentId,
-      paymentMethod: "eft",
-      lineItems: [
-        {
-          description: `Late Cancellation Fee — ${cfg.label}`,
-          subLine: `${dateStr}, ${booking.startTime}–${booking.endTime} (cancelled within 24h)`,
-          quantity: 1,
-          unitPriceCents: booking.priceZarCents,
-          discountCents: 0,
-          discountPercent: 0,
-          totalCents: booking.priceZarCents,
-        },
-      ],
+    // Check if client is postpaid — late cancel fee rolls into monthly billing, no separate invoice
+    const student = await prisma.student.findUnique({
+      where: { id: booking.studentId },
+      select: { billingType: true },
     });
 
-    await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
-    await sendInvoiceEmail(invoice.id).catch(console.error);
+    if (student?.billingType === "postpaid") {
+      // Postpaid: mark for monthly billing pickup, no immediate invoice
+      await prisma.booking.update({
+        where: { id },
+        data: { billingNote: "(late cancel — included in next monthly invoice)" },
+      });
+    } else {
+      // Prepaid/credit: generate and send invoice immediately
+      const { createManualInvoice } = await import("@/lib/create-invoice");
+      const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
+      const { sendInvoiceEmail } = await import("@/lib/send-invoice");
+      const { getSessionTypeConfig: getConfig } = await import("@/lib/booking-config");
+
+      const cfg = getConfig(booking.sessionType);
+      const dateStr = format(new Date(booking.date), "d MMM yyyy");
+
+      const invoice = await createManualInvoice({
+        type: "late_cancel",
+        studentId: booking.studentId,
+        paymentMethod: "eft",
+        lineItems: [
+          {
+            description: `Late Cancellation Fee — ${cfg.label}`,
+            subLine: `${dateStr}, ${booking.startTime}–${booking.endTime} (cancelled within 24h)`,
+            quantity: 1,
+            unitPriceCents: booking.priceZarCents,
+            discountCents: 0,
+            discountPercent: 0,
+            totalCents: booking.priceZarCents,
+          },
+        ],
+      });
+
+      // Link invoice back to booking
+      await prisma.booking.update({
+        where: { id },
+        data: { invoiceId: invoice.id },
+      });
+
+      await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
+      await sendInvoiceEmail(invoice.id).catch(console.error);
+    }
   }
 
   revalidatePath("/admin/bookings");
