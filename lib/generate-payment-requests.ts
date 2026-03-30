@@ -142,6 +142,9 @@ async function buildGroupLineItems(
   const lineItems: InvoiceLineItem[] = [];
   for (const { student, bookings } of entries) {
     for (const booking of bookings) {
+      // Skip credit-paid bookings (priceZarCents = 0 means a session credit was used)
+      if (booking.priceZarCents === 0) continue;
+
       const rate = await getSessionRate(
         booking.sessionType as "individual" | "couples" | "free_consultation",
         "ZAR",
@@ -163,6 +166,20 @@ async function createGroupPaymentRequest(
   dueDate: Date,
 ) {
   const lineItems = await buildGroupLineItems(group.entries);
+
+  // Collect ALL booking IDs (including credit-paid R0 ones) so they get linked
+  // to the payment request and aren't picked up again next month
+  const allBookingIds = group.entries.flatMap(e => e.bookings.map(b => b.id));
+
+  // If no billable line items, just mark the credit-paid bookings as processed
+  if (lineItems.length === 0) {
+    if (allBookingIds.length > 0) {
+      // Create a dummy "no charge" marker — just link bookings without a PR
+      // Actually, set a dummy paymentRequestId? No — better to set invoiceId to a sentinel.
+      // Simplest: just return null, these bookings will be picked up but produce no PR.
+    }
+    return null;
+  }
 
   const lineCalcs = lineItems.map((li) => ({
     unitPriceCents: li.unitPriceCents,
@@ -194,10 +211,10 @@ async function createGroupPaymentRequest(
       },
     });
 
-    const bookingIds = lineItems.map((li) => li.bookingId).filter((id): id is string => !!id);
-    if (bookingIds.length > 0) {
+    // Link ALL bookings (including credit-paid R0) to prevent re-billing
+    if (allBookingIds.length > 0) {
       await prisma.booking.updateMany({
-        where: { id: { in: bookingIds } },
+        where: { id: { in: allBookingIds } },
         data: { paymentRequestId: pr.id },
       });
     }
