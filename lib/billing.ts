@@ -285,11 +285,20 @@ export async function resolveBillingContact(
   }
 
   // Default: student pays for themselves
+  // Fall back to decrypted address if billingAddress is not set
+  let address = student.billingAddress ?? undefined;
+  if (!address && student.address) {
+    try {
+      const { decryptOrNull } = await import("@/lib/encryption");
+      address = decryptOrNull(student.address) ?? undefined;
+    } catch { /* encryption key not available */ }
+  }
+
   return {
     type: "self",
     studentId: student.id,
     name: `${student.firstName} ${student.lastName}`,
     email: student.billingEmail ?? student.email,
-    address: student.billingAddress ?? undefined,
+    address,
   };
 }

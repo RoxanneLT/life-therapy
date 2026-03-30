@@ -50,7 +50,7 @@ let logoBase64: string | null = null;
 function getLogoBase64(): string | null {
   if (logoBase64 !== null) return logoBase64;
   try {
-    const logoPath = path.join(process.cwd(), "public", "logo.png");
+    const logoPath = path.join(process.cwd(), "public", "logo-invoice.png");
     const buf = fs.readFileSync(logoPath);
     logoBase64 = `data:image/png;base64,${buf.toString("base64")}`;
   } catch {
@@ -63,6 +63,25 @@ function getLogoBase64(): string | null {
 
 function fmt(cents: number, currency: string): string {
   return formatPrice(cents, currency);
+}
+
+/** Split formatted price into symbol and number, e.g. "R 895,00" → ["R", "895,00"] */
+function fmtParts(cents: number, currency: string): [string, string] {
+  const full = formatPrice(cents, currency);
+  // Match currency symbol(s) then space then number
+  const match = full.match(/^([^\d]+?)\s*(.+)$/);
+  if (match) return [match[1].trim(), match[2]];
+  return ["", full];
+}
+
+/** Draw a price with currency symbol at fixed X and number right-aligned */
+function drawPrice(
+  doc: jsPDF, cents: number, currency: string,
+  symbolX: number, numberRightX: number, yPos: number,
+) {
+  const [symbol, number] = fmtParts(cents, currency);
+  doc.text(symbol, symbolX, yPos);
+  doc.text(number, numberRightX, yPos, { align: "right" });
 }
 
 function fmtDate(d: Date | string | null | undefined): string {
@@ -81,6 +100,22 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const lineItems = invoice.lineItems as unknown as InvoiceLineItem[];
   const currency = invoice.currency || "ZAR";
   const isVat = settings.vatRegistered && invoice.vatPercent > 0;
+
+  // Resolve billing address — fallback to student's encrypted address if not on invoice
+  let billingAddress = invoice.billingAddress;
+  if (!billingAddress && invoice.studentId) {
+    const student = await prisma.student.findUnique({
+      where: { id: invoice.studentId },
+      select: { billingAddress: true, address: true },
+    });
+    billingAddress = student?.billingAddress ?? null;
+    if (!billingAddress && student?.address) {
+      try {
+        const { decryptOrNull } = await import("@/lib/encryption");
+        billingAddress = decryptOrNull(student.address);
+      } catch { /* skip */ }
+    }
+  }
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   let y = MT;
@@ -132,7 +167,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const logo = getLogoBase64();
   if (logo) {
     try {
-      doc.addImage(logo, "PNG", PAGE_W - MR - 32, y - 4, 32, 32);
+      doc.addImage(logo, "PNG", PAGE_W - MR - 45, y - 2, 45, 13);
     } catch { /* skip */ }
   }
 
@@ -152,15 +187,17 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
-  doc.text(settings.siteName || "Life Therapy (Pty) Ltd", ML, lY);
+  doc.text("Life Therapy (Pty) Ltd", ML, lY);
   lY += 6;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
 
-  doc.text(`VAT No: ${isVat && settings.vatNumber ? settings.vatNumber : ""}`, ML, lY);
-  lY += 4;
+  if (isVat && settings.vatNumber) {
+    doc.text(`VAT No: ${settings.vatNumber}`, ML, lY);
+    lY += 4;
+  }
 
   if (settings.businessAddress) {
     const lines = settings.businessAddress.split(",").map((s: string) => s.trim());
@@ -217,20 +254,15 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   if (isVat && invoice.billingVatNumber) {
     doc.text(`Customer VAT No: ${invoice.billingVatNumber}`, ML, y);
     y += 4;
-  } else {
-    doc.text("Customer VAT No:", ML, y);
-    y += 4;
   }
 
-  if (invoice.billingAddress) {
-    const addr = doc.splitTextToSize(invoice.billingAddress, CW);
+  if (billingAddress) {
+    const addr = doc.splitTextToSize(billingAddress, CW);
     doc.text(addr, ML, y);
     y += addr.length * 3.5;
   }
 
   y += 6;
-  hLine(y);
-  y += 2;
 
   // ══════════════════════════════════════════════════════════
   // LINE ITEMS TABLE
@@ -296,81 +328,116 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   hLine(y);
   y += 5;
 
-  // ── Banking (left) — subtle background box ──
-  const bankBoxW = 80;
-  const bankBoxH = 30;
-  doc.setFillColor(...BANK_BG);
-  doc.rect(ML, y - 1, bankBoxW, bankBoxH, "F");
+  // ── Banking (left) — subtle background box, evenly spaced ──
+  const bankRows: [string, string | null | undefined][] = [
+    ["Payment to bank", settings.bankName],
+    ["Accountholder", settings.bankAccountHolder],
+    ["Account number", settings.bankAccountNumber],
+    ["Branch code", settings.bankBranchCode],
+    ["Co Reg no.", settings.businessRegistrationNumber],
+  ];
+  const visibleBankRows = bankRows.filter(([, v]) => !!v);
 
-  let bY = y + 2;
+  const bankPadX = 6;
+  const bankPadY = 4;
+  const bankRowH = 4.5;
+  const bankBoxW = 88;
+  const bankBoxH = bankPadY * 2 + visibleBankRows.length * bankRowH;
+  const bankLabelColW = 34;
+
+  doc.setFillColor(...BANK_BG);
+  doc.setDrawColor(...LINE_CLR);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(ML, y - 1, bankBoxW, bankBoxH, 1.5, 1.5, "FD");
+
+  let bY = y - 1 + bankPadY + 2;
   doc.setFontSize(7);
 
-  const bankRows: [string, string | null | undefined][] = [
-    ["Payment to bank :", settings.bankName],
-    ["Accountholder :", settings.bankAccountHolder],
-    ["Account number :", settings.bankAccountNumber],
-    ["Branch code :", settings.bankBranchCode],
-    ["Co Reg no. :", settings.businessRegistrationNumber],
-  ];
-
-  for (const [label, value] of bankRows) {
-    if (!value) continue;
+  for (const [label, value] of visibleBankRows) {
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...MUTED);
-    doc.text(label, ML + 2, bY);
+    doc.text(`${label} :`, ML + bankPadX, bY);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...DARK);
-    doc.text(value, ML + 32, bY);
-    bY += 4;
+    doc.text(value!, ML + bankPadX + bankLabelColW, bY);
+    bY += bankRowH;
   }
 
-  // ── Totals (right) ──
-  const tLabelX = 125;
-  const tValueX = PAGE_W - MR;
-  let tY = y;
+  // ── Totals (right) — same box dimensions as banking, invisible border ──
+  const totalsBoxX = ML + bankBoxW + 6;
+  const totalsBoxW = PAGE_W - MR - totalsBoxX;
+  // Draw invisible box (same height as banking) for alignment
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(totalsBoxX, y - 1, totalsBoxW, bankBoxH, 1.5, 1.5, "F");
+
+  const tLabelX = totalsBoxX + bankPadX;
+  const tValueX = totalsBoxX + totalsBoxW - bankPadX;
+  let tY = y - 1 + bankPadY + 2; // same start as first bank row
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
 
-  // Discount
-  doc.setTextColor(...MUTED);
-  doc.text("Total Discount:", tLabelX, tY);
-  doc.setTextColor(...DARK);
-  doc.text(
-    invoice.discountCents > 0 ? fmt(invoice.discountCents, currency) : fmt(0, currency),
-    tValueX, tY, { align: "right" },
-  );
-  tY += 4.5;
+  // Discount (only if applicable)
+  if (invoice.discountCents > 0) {
+    doc.setTextColor(...MUTED);
+    doc.text("Discount:", tLabelX, tY);
+    doc.setTextColor(22, 163, 74);
+    doc.text(`-${fmt(invoice.discountCents, currency)}`, tValueX, tY, { align: "right" });
+    tY += bankRowH;
+  }
 
-  // Total Exclusive
-  doc.setTextColor(...MUTED);
-  doc.text("Total Exclusive:", tLabelX, tY);
-  doc.setTextColor(...DARK);
-  doc.text(fmt(invoice.subtotalCents - invoice.discountCents, currency), tValueX, tY, { align: "right" });
-  tY += 4.5;
+  if (isVat) {
+    // VAT registered — show full breakdown
+    doc.setTextColor(...MUTED);
+    doc.text("Total Exclusive:", tLabelX, tY);
+    doc.setTextColor(...DARK);
+    doc.text(fmt(invoice.subtotalCents - invoice.discountCents, currency), tValueX, tY, { align: "right" });
+    tY += bankRowH;
 
-  // VAT
-  doc.setTextColor(...MUTED);
-  doc.text(`Total VAT${isVat ? ` (${invoice.vatPercent}%)` : ""}:`, tLabelX, tY);
-  doc.setTextColor(...DARK);
-  doc.text(fmt(invoice.vatAmountCents, currency), tValueX, tY, { align: "right" });
-  tY += 4.5;
+    doc.setTextColor(...MUTED);
+    doc.text(`VAT (${invoice.vatPercent}%):`, tLabelX, tY);
+    doc.setTextColor(...DARK);
+    doc.text(fmt(invoice.vatAmountCents, currency), tValueX, tY, { align: "right" });
+    tY += bankRowH;
 
-  // Sub Total
-  doc.setTextColor(...MUTED);
-  doc.text("Sub Total:", tLabelX, tY);
-  doc.setTextColor(...DARK);
-  doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
-  tY += 6;
+    doc.setTextColor(...MUTED);
+    doc.text("Sub Total:", tLabelX, tY);
+    doc.setTextColor(...DARK);
+    doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
+    tY += bankRowH + 2;
+  }
 
-  // Grand Total — bold, larger
-  hLine(tY - 1, tLabelX, tValueX);
-  tY += 3;
+  // Total
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
   doc.text("Total:", tLabelX, tY);
   doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
+  tY += bankRowH + 1;
+
+  // Paid
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text("Paid:", tLabelX, tY);
+  doc.setTextColor(22, 163, 74);
+  doc.text(
+    invoice.status === "paid" ? fmt(invoice.paidAmountCents ?? invoice.totalCents, currency) : fmt(0, currency),
+    tValueX, tY, { align: "right" },
+  );
+  tY += bankRowH + 1;
+
+  // Line between Paid and Amount Due — same width as footer separator
+  hLine(tY - 1, tLabelX, tValueX);
+  tY += 3;
+
+  // Amount Due — same font/size as Total
+  const amountDue = invoice.status === "paid" ? 0 : invoice.totalCents;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...DARK);
+  doc.text("Amount Due:", tLabelX, tY);
+  doc.text(fmt(amountDue, currency), tValueX, tY, { align: "right" });
 
   // ── Buffer output ──
   const arrayBuf = doc.output("arraybuffer");
