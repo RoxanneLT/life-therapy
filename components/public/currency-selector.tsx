@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRegion } from "@/lib/region-store";
 import { REGION_CONFIG, type Currency } from "@/lib/region";
 import {
@@ -19,8 +20,10 @@ const CURRENCY_LABELS: Record<Currency, string> = {
 
 export function CurrencySelector() {
   const { region, currency, setCurrency, isInternational } = useRegion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  if (!isInternational) return null;
+  if (!mounted || !isInternational) return null;
 
   const available = REGION_CONFIG[region].currencies;
 
