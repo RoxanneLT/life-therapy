@@ -591,14 +591,24 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) throw new Error("Booking not found");
 
+  // Server-side late cancel check: is the session within 24 hours?
+  const bookingDateTime = new Date(booking.date);
+  const [h, m] = booking.startTime.split(":").map(Number);
+  bookingDateTime.setHours(h, m, 0, 0);
+  const hoursUntil = (bookingDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+  const isActuallyLate = hoursUntil < 24 && hoursUntil > -2;
+
+  // Only allow late fee if genuinely within 24h window
+  const isLateCancel = chargeLateFee && isActuallyLate;
+
   await prisma.booking.update({
     where: { id },
     data: {
       status: "cancelled",
       cancelledAt: new Date(),
       cancelledBy: "admin",
-      isLateCancel: chargeLateFee,
-      billingNote: chargeLateFee ? "(late cancel — fee charged)" : "(cancelled — no charge)",
+      isLateCancel,
+      billingNote: isLateCancel ? "(late cancel — fee applies)" : "(cancelled — no charge)",
     },
   });
 
@@ -622,7 +632,7 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   }).catch(console.error);
 
   // Late cancel fee handling
-  if (chargeLateFee && booking.studentId) {
+  if (isLateCancel && booking.studentId) {
     const student = await prisma.student.findUnique({
       where: { id: booking.studentId },
       select: { billingType: true },
