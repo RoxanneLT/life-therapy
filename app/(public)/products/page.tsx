@@ -8,7 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddToCartButton } from "@/components/public/cart/add-to-cart-button";
-import { FileDown, BookOpen, ArrowRight } from "lucide-react";
+import { HeroSection } from "@/components/public/sections/hero-section";
+import { CtaSection } from "@/components/public/sections/cta-section";
+import { FileDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -32,12 +34,22 @@ export default async function ProductsPage({
   const params = await searchParams;
   const activeCategory = params.category || "all";
 
-  const products = await prisma.digitalProduct.findMany({
-    where: { isPublished: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  const [page, products] = await Promise.all([
+    prisma.page.findUnique({
+      where: { slug: "products" },
+      include: { sections: { where: { isVisible: true }, orderBy: { sortOrder: "asc" } } },
+    }),
+    prisma.digitalProduct.findMany({
+      where: { isPublished: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
 
   const currency = await getCurrency();
+
+  // CMS sections
+  const heroSection = page?.sections.find((s) => s.sectionType === "hero");
+  const ctaSection = page?.sections.find((s) => s.sectionType === "cta");
 
   // Extract unique categories
   const categories = Array.from(
@@ -61,38 +73,22 @@ export default async function ProductsPage({
     <>
       <JsonLdScript data={[breadcrumbLd]} />
 
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-16 sm:py-24">
-        <div className="mx-auto max-w-4xl text-center">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-wider text-brand-500">
-            Digital Resources
-          </p>
-          <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-foreground sm:text-4xl lg:text-5xl">
-            Tools for Your Growth Journey
-          </h1>
-          <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
-          <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
-            Beautifully designed journals, planners, workbooks, and toolkits — created by a qualified life coach to help you build confidence, set boundaries, and create meaningful change.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Button size="lg" asChild>
-              <a href="#products">
-                <BookOpen className="mr-2 h-4 w-4" />
-                Browse Products
-              </a>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/courses">
-                Explore Courses
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+      {/* CMS Hero */}
+      {heroSection ? (
+        <HeroSection section={heroSection} />
+      ) : (
+        <section className="bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-16 sm:py-24">
+          <div className="mx-auto max-w-4xl text-center">
+            <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-foreground sm:text-4xl lg:text-5xl">
+              Digital Products
+            </h1>
+            <div className="mx-auto mt-3 h-[3px] w-16 bg-terracotta-500" />
+            <p className="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
+              Downloadable journals, planners, workbooks, and toolkits to support your growth journey.
+            </p>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">
-            {products.length} products available &middot; Instant digital download &middot; Multi-currency pricing
-          </p>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Category filter + Products grid */}
       <section id="products" className="mx-auto max-w-6xl px-4 py-12">
@@ -211,34 +207,8 @@ export default async function ProductsPage({
         )}
       </section>
 
-      {/* Bottom CTA */}
-      <section className="bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-12">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="font-heading text-2xl font-bold text-white sm:text-3xl">
-            Looking for Something More Structured?
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-white/80">
-            Our self-paced courses combine video lessons, exercises, and practical tools — with full lifetime access.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-            <Button
-              size="lg"
-              className="bg-white text-brand-700 hover:bg-white/90"
-              asChild
-            >
-              <Link href="/courses">Browse Courses</Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-white/60 bg-transparent text-white hover:bg-white/10"
-              asChild
-            >
-              <Link href="/packages">View Bundles</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+      {/* CMS Bottom CTA */}
+      {ctaSection && <CtaSection section={ctaSection} />}
     </>
   );
 }
