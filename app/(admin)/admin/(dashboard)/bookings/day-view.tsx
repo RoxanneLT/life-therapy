@@ -228,7 +228,7 @@ export function DayView({ bookings, date, businessHours, override }: Readonly<Da
                     {selected.status.replace("_", " ")}
                   </Badge>
                 </DetailRow>
-                {selected.teamsMeetingUrl && (
+                {selected.teamsMeetingUrl && !["cancelled", "completed", "no_show"].includes(selected.status) && (
                   <DetailRow label="Teams">
                     <a
                       href={selected.teamsMeetingUrl}

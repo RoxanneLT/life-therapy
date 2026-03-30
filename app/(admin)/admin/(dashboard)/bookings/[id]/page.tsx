@@ -212,7 +212,7 @@ export default async function BookingDetailPage({ params }: Props) {
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   In Person — Paarl
                 </span>
-              ) : booking.teamsMeetingUrl ? (
+              ) : booking.teamsMeetingUrl && !["cancelled", "completed", "no_show"].includes(booking.status) ? (
                 <a
                   href={booking.teamsMeetingUrl}
                   target="_blank"

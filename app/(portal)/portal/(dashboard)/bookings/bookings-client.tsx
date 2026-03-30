@@ -221,7 +221,7 @@ function UpcomingBookingCard({
                 <MapPin className="h-3.5 w-3.5" />
                 In Person
               </span>
-            ) : b.teamsMeetingUrl && (
+            ) : b.teamsMeetingUrl && !["cancelled", "completed", "no_show"].includes(b.status) && (
               <Button variant="outline" size="sm" asChild>
                 <a href={b.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
                   <Video className="mr-2 h-4 w-4" />

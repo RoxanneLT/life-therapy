@@ -268,7 +268,7 @@ function BookingCard({
                   clientId={clientId}
                 />
               )}
-              {b.teamsMeetingUrl && (
+              {b.teamsMeetingUrl && isUpcoming && !["cancelled", "no_show"].includes(b.status) && (
                 <a
                   href={b.teamsMeetingUrl}
                   target="_blank"
