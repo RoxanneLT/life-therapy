@@ -251,8 +251,15 @@ export default async function BookingDetailPage({ params }: Props) {
 
         {/* Client Info */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Client</CardTitle>
+            {booking.studentId && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/admin/clients/${booking.studentId}`}>
+                  View Client
+                </Link>
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between">
