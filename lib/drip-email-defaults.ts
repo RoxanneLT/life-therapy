@@ -263,8 +263,8 @@ ${sig}`,
   newsletter_1: {
     subject: "The Hidden Cost of People-Pleasing",
     previewText: "When \u2018being nice\u2019 comes at the expense of being you...",
-    ctaText: "Explore \u2018The Art of Saying No\u2019 Short Course",
-    ctaUrl: "/courses/short/the-art-of-saying-no",
+    ctaText: "Explore 'Assertiveness and Boundary-Setting'",
+    ctaUrl: "/courses/short/assertiveness-and-boundary-setting",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p('I had a conversation with a client recently that I keep thinking about. She told me: <strong>\u201CI\u2019m exhausted from being everyone\u2019s favourite person.\u201D</strong>')}
 ${p("That sentence stopped me. Because it perfectly captures what people-pleasing actually costs.")}
@@ -281,8 +281,8 @@ ${sig}`,
   newsletter_2: {
     subject: "3 Signs You\u2019re Self-Sabotaging (Without Realising It)",
     previewText: "The enemy isn\u2019t out there. It\u2019s the patterns you can\u2019t see...",
-    ctaText: "Explore \u2018The 5 Types of Self-Sabotage\u2019 Short Course",
-    ctaUrl: "/courses/short/5-types-of-self-sabotage",
+    ctaText: "Explore 'Challenging Negative Self-Talk'",
+    ctaUrl: "/courses/short/challenging-negative-self-talk",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Self-sabotage is sneaky. It rarely looks like dramatically burning things down. More often, it looks like this:")}
 ${h("1. Procrastination disguised as preparation")}
@@ -315,8 +315,8 @@ ${p("Take care of yourself today. Whatever that looks like.")}
   newsletter_4: {
     subject: "How to Stop Comparing Yourself to Everyone Online",
     previewText: "Your behind-the-scenes vs their highlight reel...",
-    ctaText: "Explore \u2018The Comparison Trap\u2019 Short Course",
-    ctaUrl: "/courses/short/the-comparison-trap",
+    ctaText: "Explore 'Embracing Imperfection'",
+    ctaUrl: "/courses/short/embracing-imperfection",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Let me guess: you <em>know</em> comparison is unhealthy. You <em>know</em> Instagram isn\u2019t real. You <em>know</em> you shouldn\u2019t measure your chapter 2 against someone else\u2019s chapter 20.")}
 ${p("And yet.")}
@@ -401,8 +401,8 @@ ${sig}`,
   newsletter_9: {
     subject: "What Nobody Tells You About Building Confidence at Work",
     previewText: "The boardroom isn\u2019t the problem. Your beliefs about yourself are...",
-    ctaText: "Explore \u2018Confidence Under Pressure\u2019",
-    ctaUrl: "/courses/short/confidence-under-pressure",
+    ctaText: "Explore 'Cultivating Resilience'",
+    ctaUrl: "/courses/short/cultivating-resilience",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Professional confidence is different from personal confidence. You might feel perfectly comfortable with friends but freeze in a team meeting.")}
 ${p("Here are three truths about professional confidence:")}
@@ -493,8 +493,8 @@ ${sig}`,
   newsletter_14: {
     subject: "A Client\u2019s Story: From People-Pleaser to Self-Advocate",
     previewText: "What happens when you finally choose yourself...",
-    ctaText: "Explore Our Boundary-Setting Resources",
-    ctaUrl: "/courses?category=all:mental_wellness",
+    ctaText: "Explore Assertiveness & Boundary-Setting",
+    ctaUrl: "/courses/short/assertiveness-and-boundary-setting",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("I want to share a journey I\u2019ve watched unfold (with permission, details changed for privacy).")}
 ${p('When Sarah first came to me, she described herself as \u201Cthe person everyone calls when they need something.\u201D She wasn\u2019t unhappy, she said. She was just... <strong>tired</strong>. All the time.')}
@@ -510,8 +510,8 @@ ${sig}`,
   newsletter_15: {
     subject: "Your Body Keeps the Score (And What to Do About It)",
     previewText: "When stress lives in your body, not just your mind...",
-    ctaText: "Explore \u2018Emergency Anxiety Toolkit\u2019 Short Course",
-    ctaUrl: "/courses/short/emergency-anxiety-toolkit",
+    ctaText: "Get the Health & Self-Care Planner",
+    ctaUrl: "/products/health-self-care-planner",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("You know that tension in your shoulders that never fully goes away? The tight jaw you notice at 3pm? That\u2019s your nervous system storing what your mind hasn\u2019t processed.")}
 ${p("Here are three nervous system regulation techniques you can use anywhere:")}
@@ -571,8 +571,8 @@ ${sig}`,
   newsletter_18: {
     subject: "How to Deal with Someone Who Doesn\u2019t Respect Your Boundaries",
     previewText: "When they push back, here\u2019s what to do...",
-    ctaText: "Explore \u2018Handling Boundary Pushback\u2019 Short Course",
-    ctaUrl: "/courses/short/handling-boundary-pushback",
+    ctaText: "Get the Boundary-Setting Scripts Pack",
+    ctaUrl: "/products/boundary-setting-scripts",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Setting a boundary is one thing. Maintaining it when someone pushes back is another entirely.")}
 ${p("When someone pushes back on your boundary:")}
@@ -590,8 +590,8 @@ ${sig}`,
   newsletter_19: {
     subject: "The Gift of Being a Highly Sensitive Person",
     previewText: "What if your sensitivity isn\u2019t a weakness?",
-    ctaText: "Get Notified When The Empowered Empath Launches",
-    ctaUrl: "/courses/the-empowered-empath",
+    ctaText: "Explore the Inner Strength Bundle",
+    ctaUrl: "/packages/inner-strength-bundle",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("About 15-20% of the population is considered a Highly Sensitive Person (HSP). If you feel things deeply, get overwhelmed by stimulation, or absorb the emotions of people around you \u2014 you might be one of them.")}
 ${p('For most of my HSP clients, sensitivity has always felt like a liability. They\u2019ve been told they\u2019re \u201Ctoo sensitive\u201D or \u201Ctoo emotional.\u201D')}
@@ -599,7 +599,7 @@ ${p("But here\u2019s what I\u2019ve seen over and over: <strong>sensitivity, pro
 ${p("HSPs make exceptional leaders. They\u2019re natural empaths. They notice things others miss. They care deeply about quality, ethics, and impact.")}
 ${p("The challenge isn\u2019t the sensitivity itself. It\u2019s the lack of tools to manage it.")}
 ${p("When you learn to protect your energy, set boundaries, and distinguish your emotions from others\u2019 \u2014 sensitivity becomes your greatest asset.")}
-${p("This is exactly what our <strong>Empowered Empath</strong> course is designed for. Reply to this email and I\u2019ll make sure you\u2019re the first to hear when it launches.")}
+${p("If this resonates, our <strong>Inner Strength Bundle</strong> is designed to help you harness your sensitivity as a superpower \u2014 with practical tools for energy management, boundaries, and self-care.")}
 ${sig}`,
   },
 
@@ -711,8 +711,8 @@ ${sig}`,
   newsletter_26: {
     subject: "When Your Growth Makes Others Uncomfortable",
     previewText: "Not everyone will celebrate your transformation...",
-    ctaText: "Explore Our Relationship & Boundaries Resources",
-    ctaUrl: "/courses?category=relationships",
+    ctaText: "Get the Relationship Journal Prompts",
+    ctaUrl: "/products/relationship-journal-prompts",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Here\u2019s an uncomfortable truth about personal growth: <strong>not everyone in your life will be happy about it.</strong>")}
 ${p("You\u2019ll start setting boundaries, and someone will call you selfish.<br>You\u2019ll start speaking up, and someone will say you\u2019ve changed.<br>You\u2019ll stop over-giving, and someone will feel cheated.<br>You\u2019ll pursue something new, and someone will question your judgement.")}
@@ -728,8 +728,8 @@ ${sig}`,
   newsletter_27: {
     subject: "The Connection Between Money and Self-Worth",
     previewText: "What you charge, accept, and settle for says more than you think...",
-    ctaText: "Explore \u2018Negotiating Your Worth\u2019 Short Course",
-    ctaUrl: "/courses/short/negotiating-your-worth",
+    ctaText: "Explore 'Setting Goals and Celebrating Success'",
+    ctaUrl: "/courses/short/setting-goals-and-celebrating-success",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("This one might be uncomfortable. But I think you\u2019re ready for it.")}
 ${p("<strong>Your relationship with money is a mirror of your relationship with yourself.</strong>")}
@@ -781,8 +781,8 @@ ${sig}`,
   newsletter_30: {
     subject: "Reparenting: Giving Yourself What You Didn\u2019t Get",
     previewText: "You can\u2019t change your childhood. But you can change what happens next...",
-    ctaText: "Explore Our Self-Esteem Courses",
-    ctaUrl: "/courses?category=self_esteem",
+    ctaText: "Explore The Foundations of Self-Esteem",
+    ctaUrl: "/courses/foundations-of-self-esteem",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("I want to introduce you to a concept that might sound strange at first but could be one of the most transformative practices you ever try: <strong>reparenting</strong>.")}
 ${p("Reparenting doesn\u2019t mean blaming your parents. It\u2019s not about resentment or pointing fingers. It\u2019s about recognising that every child has emotional needs \u2014 safety, validation, unconditional love, consistency, emotional attunement \u2014 and that most of us didn\u2019t get all of them met. Not because our parents were terrible, but because they were human.")}
@@ -822,8 +822,8 @@ ${sig}`,
   newsletter_32: {
     subject: "Your Attachment Style Is Running the Show",
     previewText: "Understanding this one thing can change every relationship you have...",
-    ctaText: "Explore Our Relationship Courses",
-    ctaUrl: "/courses?category=relationships",
+    ctaText: "Get the Relationship Journal Prompts",
+    ctaUrl: "/products/relationship-journal-prompts",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("If there\u2019s one concept from psychology that I wish everyone understood, it\u2019s <strong>attachment theory</strong>.")}
 ${p("Your attachment style \u2014 formed in the first few years of your life \u2014 shapes how you show up in every close relationship you have. It\u2019s the invisible operating system running your love life, your friendships, and even your relationship with yourself.")}
@@ -855,8 +855,8 @@ ${sig}`,
   newsletter_34: {
     subject: "How to Trust Again After Being Let Down",
     previewText: "Trust isn\u2019t about the other person. It\u2019s about you...",
-    ctaText: "Explore \u2018Building Self-Trust\u2019 Short Course",
-    ctaUrl: "/courses/short/building-self-trust",
+    ctaText: "Explore 'Cultivating Resilience'",
+    ctaUrl: "/courses/short/cultivating-resilience",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("After betrayal \u2014 whether it\u2019s a broken promise, infidelity, a friend who let you down, or a parent who wasn\u2019t there \u2014 the hardest thing isn\u2019t forgiving the other person. It\u2019s trusting again.")}
 ${p("Because trust, once broken, doesn\u2019t just affect that one relationship. It spreads. You start scanning everyone for signs of untrustworthiness. You keep people at arm\u2019s length. You test before you commit. And you tell yourself this is wisdom, when actually it\u2019s a wound.")}
@@ -962,8 +962,8 @@ ${sig}`,
   newsletter_40: {
     subject: "How to Stop Absorbing Other People\u2019s Stress",
     previewText: "Advanced emotional boundaries for sensitive people...",
-    ctaText: "Explore \u2018The Empowered Empath\u2019 Course",
-    ctaUrl: "/courses/the-empowered-empath",
+    ctaText: "Explore the Inner Strength Bundle",
+    ctaUrl: "/packages/inner-strength-bundle",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("By now, you probably know what your boundaries are. You might even be decent at communicating them. But there\u2019s a subtler boundary challenge that doesn\u2019t get talked about enough: <strong>emotional absorption</strong>.")}
 ${p("This is when someone else\u2019s stress becomes YOUR stress. When your partner has a bad day and suddenly you\u2019re anxious. When a colleague is overwhelmed and you leave the meeting feeling drained. When a friend vents for an hour and you carry the weight of their problems for days.")}
@@ -1049,8 +1049,8 @@ ${sig}`,
   newsletter_45: {
     subject: "What You Practise Grows Stronger",
     previewText: "Your brain is rewiring itself right now. Here\u2019s how to help it...",
-    ctaText: "Explore Our Self-Esteem Starter Kit",
-    ctaUrl: "/products/self-esteem-starter-kit",
+    ctaText: "Get the Confidence Starter Kit",
+    ctaUrl: "/packages/confidence-starter-kit",
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("I want to give you a piece of neuroscience that might change how you see your entire growth journey:")}
 ${p("<strong>Neurons that fire together wire together.</strong>")}
