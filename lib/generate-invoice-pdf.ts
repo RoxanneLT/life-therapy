@@ -407,12 +407,15 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     tY += bankRowH + 2;
   }
 
+  // Fixed R column: symbol at symbolX, number right-aligned to tValueX
+  const symbolX = tValueX - 38;
+
   // Total
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
   doc.text("Total:", tLabelX, tY);
-  doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
+  drawPrice(doc, invoice.totalCents, currency, symbolX, tValueX, tY);
   tY += bankRowH + 1;
 
   // Paid
@@ -421,13 +424,11 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   doc.setTextColor(...MUTED);
   doc.text("Paid:", tLabelX, tY);
   doc.setTextColor(22, 163, 74);
-  doc.text(
-    invoice.status === "paid" ? fmt(invoice.paidAmountCents ?? invoice.totalCents, currency) : fmt(0, currency),
-    tValueX, tY, { align: "right" },
-  );
+  const paidCents = invoice.status === "paid" ? (invoice.paidAmountCents ?? invoice.totalCents) : 0;
+  drawPrice(doc, paidCents, currency, symbolX, tValueX, tY);
   tY += bankRowH + 1;
 
-  // Line between Paid and Amount Due — same width as footer separator
+  // Line between Paid and Amount Due
   hLine(tY - 1, tLabelX, tValueX);
   tY += 3;
 
@@ -437,7 +438,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
   doc.text("Amount Due:", tLabelX, tY);
-  doc.text(fmt(amountDue, currency), tValueX, tY, { align: "right" });
+  drawPrice(doc, amountDue, currency, symbolX, tValueX, tY);
 
   // ── Buffer output ──
   const arrayBuf = doc.output("arraybuffer");
