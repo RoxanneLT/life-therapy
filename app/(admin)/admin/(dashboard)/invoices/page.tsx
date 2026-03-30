@@ -250,7 +250,7 @@ export default async function InvoicesPage({
                       <InvoiceRowActions
                         invoiceId={inv.id}
                         status={inv.status}
-                        pdfUrl={inv.pdfUrl}
+                        pdfUrl={inv.pdfUrl ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${inv.pdfUrl}` : null}
                       />
                     </TableCell>
                   </TableRow>

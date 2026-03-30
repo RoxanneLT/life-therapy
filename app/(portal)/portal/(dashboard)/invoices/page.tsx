@@ -227,7 +227,7 @@ export default async function PortalInvoicesPage({
 
                       {inv.pdfUrl && (
                         <a
-                          href={inv.pdfUrl}
+                          href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${inv.pdfUrl}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
