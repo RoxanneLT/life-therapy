@@ -42,7 +42,7 @@ export default async function ProductDetailPage({
     where: { slug },
   });
 
-  if (!product || !product.isPublished) notFound();
+  if (!product) notFound();
 
   const price = getDigitalProductPrice(product, currency);
 
