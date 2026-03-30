@@ -58,10 +58,10 @@ const LINK_STATUS: Record<string, { status: LinkAuditItem["status"]; note: strin
 
   // ── SPECIFIC PRODUCT SLUGS (route exists, need actual product records) ──
   "/products/confidence-self-assessment-toolkit": { status: "ready", note: "Free product: Confidence Self-Assessment Toolkit" },
-  "/products/boundary-setting-scripts": { status: "no_content", note: "Product: 'Boundary-Setting Scripts Pack' — not yet created" },
-  "/products/inner-critic-transformation-journal": { status: "no_content", note: "Product: 'Inner Critic Transformation Journal' — not yet created" },
-  "/products/values-discovery-workbook": { status: "no_content", note: "Product: 'Values Discovery Workbook' — not yet created" },
-  "/products/weekly-self-care-growth-tracker": { status: "no_content", note: "Product: 'Weekly Self-Care & Growth Tracker' — not yet created" },
+  "/products/boundary-setting-scripts": { status: "ready", note: "Paid product: Boundary-Setting Scripts Pack (R49)" },
+  "/products/inner-critic-transformation-journal": { status: "ready", note: "Paid product: Inner Critic Transformation Journal (R49)" },
+  "/products/values-discovery-workbook": { status: "ready", note: "Paid product: Values Discovery Workbook (R49)" },
+  "/products/weekly-self-care-growth-tracker": { status: "ready", note: "Paid product: Weekly Self-Care & Growth Tracker (R49)" },
   "/products/daily-affirmations-planner": { status: "ready", note: "Free product: Daily Affirmations & Reflection Planner" },
   "/products/self-esteem-starter-kit": { status: "no_content", note: "Product: 'Self-Esteem Starter Kit' — not yet created" },
   "/products/30-day-self-worth-challenge": { status: "ready", note: "Free product: 30-Day Self-Worth Challenge" },
