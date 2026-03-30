@@ -6,7 +6,8 @@ const NAV_CONFIG: Record<string, { label: string; order: number }> = {
   about: { label: "About", order: 1 },
   courses: { label: "Courses", order: 2 },
   sessions: { label: "Sessions", order: 3 },
-  packages: { label: "Packages", order: 4 },
+  products: { label: "Products", order: 4 },
+  packages: { label: "Packages", order: 5 },
 };
 
 export async function getPublicLayoutData() {
