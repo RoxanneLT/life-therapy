@@ -143,12 +143,12 @@ ${sig}`,
     bodyHtml: `${p("Hi {{firstName}},")}
 ${p("Over the past two weeks, I\u2019ve shared some of my favourite tools and insights with you. If they\u2019ve resonated, you might be wondering: what\u2019s the next step?")}
 ${p("I\u2019ve designed several ways to continue your growth journey, depending on what suits you:")}
-${h("START SMALL \u2014 Short Courses")}
-${p("Pick a single topic that resonates and dive in. Each short course is one focused module (~45 minutes) with a downloadable worksheet. Topics like \u201CChallenging Negative Self-Talk,\u201D \u201CBuilding Self-Trust,\u201D and \u201CThe 5 Types of Self-Sabotage\u201D are popular starting points.")}
-${h("GO DEEP \u2014 Full Courses")}
-${p("Comprehensive, structured programmes that take you from understanding to transformation. <strong>Foundations of Self-Esteem</strong> (9 modules, ~6 hours) builds your core. <strong>Confidence from Within</strong> (10 modules, ~7.5 hours) tackles the inner critic head-on.")}
-${h("GET TOOLS \u2014 Digital Worksheets & Journals")}
-${p("Practical tools you can use immediately \u2014 guided journals, reframing cards, self-assessment kits, and planners designed to support your daily practice.")}
+${h("SHORT COURSES \u2014 Bite-Sized Learning")}
+${p("Pick a single topic and dive in. Each short course is one focused module with video lessons and a downloadable worksheet. Popular topics include <strong>Challenging Negative Self-Talk</strong>, <strong>Assertiveness and Boundary-Setting</strong>, and <strong>Cultivating Resilience</strong>.")}
+${h("FULL COURSES \u2014 Deep Transformation")}
+${p("Comprehensive, structured programmes that take you from understanding to transformation. <strong>The Foundations of Self-Esteem</strong> (8 modules) builds your core self-worth from the ground up \u2014 with more courses launching throughout the year.")}
+${h("DIGITAL TOOLS \u2014 Journals, Planners & Workbooks")}
+${p("Practical downloadable tools you can start using today \u2014 self-assessment kits, guided journals, boundary-setting scripts, affirmation planners, trackers, and more.")}
 ${h("GO ALL IN \u2014 1:1 Sessions with Me")}
 ${p('If you want personalised guidance, <a href="/book?type=free_consultation" style="color: #8BA889; font-weight: 600;">book a free 30-minute consultation</a>. We\u2019ll talk about where you are, where you want to be, and how I can help.')}
 ${p("There\u2019s no pressure and no wrong choice. Even continuing with these emails is a valid path. The important thing is that you keep showing up for yourself.")}
@@ -196,19 +196,19 @@ ${sig}`,
 ${p("You\u2019ve been with me for almost a month now, and I\u2019ve loved sharing these insights with you. Today I want to put together a curated toolkit based on the topics we\u2019ve covered.")}
 ${h("FOR YOUR DAILY PRACTICE")}
 <ul style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
-<li><strong>Daily Affirmations & Reflection Planner</strong> \u2014 a year-long guided planner for your morning 5-minute practice</li>
-<li><strong>Negative Thought Reframing Cards</strong> \u2014 30 printable cards with CBT-based reframing prompts</li>
-<li><strong>Weekly Self-Care & Growth Tracker</strong> \u2014 52 weeks of tracking your habits, mood, and progress</li>
+<li><strong>Daily Affirmations & Reflection Planner</strong> \u2014 60 affirmations and a 30-day reflection practice</li>
+<li><strong>Weekly Self-Care & Growth Tracker</strong> \u2014 12-week habit, mood, and growth tracker</li>
+<li><strong>Values Discovery Workbook</strong> \u2014 identify your core values and align your life with what matters</li>
 </ul>
 ${h("FOR DEEPER WORK")}
 <ul style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
-<li><strong>Self-Esteem Starter Kit</strong> \u2014 comprehensive workbook with assessments, exercises, and action plans</li>
-<li><strong>Inner Critic Transformation Journal</strong> \u2014 40+ pages of guided journaling to rewrite your inner narrative</li>
+<li><strong>Inner Critic Transformation Journal</strong> \u2014 guided journaling to rewrite your inner narrative</li>
+<li><strong>Boundary-Setting Scripts Pack</strong> \u2014 word-for-word scripts for difficult conversations</li>
 </ul>
 ${h("FOR STRUCTURED LEARNING")}
 <ul style="margin: 0 0 16px; padding-left: 24px; line-height: 1.8;">
-<li><strong>Foundations of Self-Esteem</strong> \u2014 9-module course building your core self-worth</li>
-<li><strong>Confidence from Within</strong> \u2014 10-module course on silencing the inner critic</li>
+<li><strong>The Foundations of Self-Esteem</strong> \u2014 8-module course building your core self-worth</li>
+<li><strong>Bundles</strong> \u2014 combine courses, digital products, and session credits at a discount</li>
 </ul>
 ${p("No pressure. Just options. Pick what feels right for where you are right now.")}
 ${sig}`,
