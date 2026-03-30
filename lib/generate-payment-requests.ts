@@ -36,7 +36,10 @@ export async function getUnbilledBookings(
   return prisma.booking.findMany({
     where: {
       studentId,
-      status: { in: ["completed", "no_show"] },
+      OR: [
+        { status: { in: ["completed", "no_show"] } },
+        { status: "cancelled", isLateCancel: true },
+      ],
       date: { gte: periodStart, lte: periodEnd },
       paymentRequestId: null,
       invoiceId: null,
