@@ -150,28 +150,28 @@ export function SortableCourseList({ courses: initial }: { readonly courses: Cou
     <div>
       <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
 
-      <div className="rounded-md border">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-muted/50 text-left text-sm">
-              <th className="w-10 p-3" />
-              <th className="p-3 font-medium">Title</th>
-              <th className="p-3 font-medium">Category</th>
-              <th className="p-3 font-medium">Price</th>
-              <th className="p-3 font-medium">Modules</th>
-              <th className="p-3 font-medium">Status</th>
-              <th className="p-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={courses.map((c) => c.id)}
-              strategy={verticalListSortingStrategy}
-            >
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={courses.map((c) => c.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="rounded-md border">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-sm">
+                  <th className="w-10 p-3" />
+                  <th className="p-3 font-medium">Title</th>
+                  <th className="p-3 font-medium">Category</th>
+                  <th className="p-3 font-medium">Price</th>
+                  <th className="p-3 font-medium">Modules</th>
+                  <th className="p-3 font-medium">Status</th>
+                  <th className="p-3 font-medium">Actions</th>
+                </tr>
+              </thead>
               <tbody>
                 {courses.map((c) => (
                   <SortableRow key={c.id} course={c} onDelete={handleDelete} />
@@ -184,10 +184,10 @@ export function SortableCourseList({ courses: initial }: { readonly courses: Cou
                   </tr>
                 )}
               </tbody>
-            </SortableContext>
-          </DndContext>
-        </table>
-      </div>
+            </table>
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }
