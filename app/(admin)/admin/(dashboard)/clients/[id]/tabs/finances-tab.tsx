@@ -708,7 +708,7 @@ function InvoiceHistorySection({
                                 asChild
                               >
                                 <a
-                                  href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${inv.pdfUrl}`}
+                                  href={`/api/invoices/download?id=${inv.id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   title="Download PDF"

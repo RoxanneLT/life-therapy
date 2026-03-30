@@ -29,6 +29,7 @@ const TYPE_LABELS: Record<string, string> = {
   course_purchase: "Course",
   product_sale: "Product",
   ad_hoc_session: "Ad Hoc",
+  late_cancel: "Late Cancellation",
   credit_note: "Credit Note",
   other: "Other",
 };
@@ -250,7 +251,7 @@ export default async function InvoicesPage({
                       <InvoiceRowActions
                         invoiceId={inv.id}
                         status={inv.status}
-                        pdfUrl={inv.pdfUrl ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${inv.pdfUrl}` : null}
+                        pdfUrl={inv.pdfUrl ? `/api/invoices/download?id=${inv.id}` : null}
                       />
                     </TableCell>
                   </TableRow>
