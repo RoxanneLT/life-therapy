@@ -57,14 +57,14 @@ const LINK_STATUS: Record<string, { status: LinkAuditItem["status"]; note: strin
   "/courses/the-empowered-empath": { status: "no_content", note: "Full course: 'The Empowered Empath' — not yet created in DB" },
 
   // ── SPECIFIC PRODUCT SLUGS (route exists, need actual product records) ──
-  "/products/confidence-self-assessment-toolkit": { status: "no_content", note: "Product: 'Confidence Self-Assessment Toolkit' — not yet created" },
+  "/products/confidence-self-assessment-toolkit": { status: "ready", note: "Free product: Confidence Self-Assessment Toolkit" },
   "/products/boundary-setting-scripts": { status: "no_content", note: "Product: 'Boundary-Setting Scripts Pack' — not yet created" },
   "/products/inner-critic-transformation-journal": { status: "no_content", note: "Product: 'Inner Critic Transformation Journal' — not yet created" },
   "/products/values-discovery-workbook": { status: "no_content", note: "Product: 'Values Discovery Workbook' — not yet created" },
   "/products/weekly-self-care-growth-tracker": { status: "no_content", note: "Product: 'Weekly Self-Care & Growth Tracker' — not yet created" },
-  "/products/daily-affirmations-planner": { status: "no_content", note: "Product: 'Daily Affirmations & Reflection Planner' — not yet created" },
+  "/products/daily-affirmations-planner": { status: "ready", note: "Free product: Daily Affirmations & Reflection Planner" },
   "/products/self-esteem-starter-kit": { status: "no_content", note: "Product: 'Self-Esteem Starter Kit' — not yet created" },
-  "/products/30-day-self-worth-challenge": { status: "no_content", note: "Product: '30-Day Self-Worth Challenge' — not yet created" },
+  "/products/30-day-self-worth-challenge": { status: "ready", note: "Free product: 30-Day Self-Worth Challenge" },
 
   // ── MISSING ROUTES (don't exist at all) ──
   "/free/self-esteem-snapshot": { status: "ready", note: "Free assessment landing page" },
