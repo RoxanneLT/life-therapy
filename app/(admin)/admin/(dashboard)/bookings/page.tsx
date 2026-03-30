@@ -117,20 +117,24 @@ export default async function BookingsPage({ searchParams }: Props) {
     dateWhere = { date: { gte: mStart, lte: mEnd } };
   }
 
+  // List view defaults to upcoming bookings only (today forward, nearest first)
+  if (view === "list" && !dateWhere.date) {
+    const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+    dateWhere = { date: { gte: new Date(todaySast + "T00:00:00Z") } };
+  }
+
   const where = { ...statusWhere, ...dateWhere, ...seriesWhere };
 
   // Fetch bookings + counts in parallel
   const [bookings, counts] = await Promise.all([
     prisma.booking.findMany({
       where,
-      orderBy:
-        view === "list"
-          ? [{ date: "desc" }, { startTime: "desc" }]
-          : [{ date: "asc" }, { startTime: "asc" }],
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
     }),
     prisma.booking.groupBy({
       by: ["status"],
       _count: true,
+      where: view === "list" ? { date: { gte: new Date(formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd") + "T00:00:00Z") } } : undefined,
     }),
   ]);
 
