@@ -56,9 +56,10 @@ export function RevenueChart({ data }: RevenueChartProps) {
           }
         />
         <ChartLegend content={<ChartLegendContent />} />
-        <Bar dataKey="actual" fill="var(--color-actual)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="actual" stackId="revenue" fill="var(--color-actual)" radius={[0, 0, 0, 0]} />
         <Bar
           dataKey="requested"
+          stackId="revenue"
           fill="var(--color-requested)"
           fillOpacity={0.8}
           radius={[4, 4, 0, 0]}
@@ -66,7 +67,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
         <Bar
           dataKey="estimated"
           fill="var(--color-estimated)"
-          fillOpacity={0.6}
+          fillOpacity={0.4}
           radius={[4, 4, 0, 0]}
         />
       </BarChart>

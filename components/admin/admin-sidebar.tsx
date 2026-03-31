@@ -77,6 +77,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Admin",
     items: [
+      { href: "/admin/reports", label: "Reports", icon: FileText, roles: ["super_admin"] },
       { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
     ],
   },
