@@ -384,6 +384,9 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const tValueX = totalsBoxX + totalsBoxW - bankPadX;
   let tY = y - 1 + bankPadY + 2; // same start as first bank row
 
+  // Fixed R column for all totals
+  const symbolX = tValueX - 38;
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
 
@@ -393,7 +396,10 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     doc.setTextColor(...MUTED);
     doc.text(discountLabel, tLabelX, tY);
     doc.setTextColor(22, 163, 74);
-    doc.text(`-${fmt(invoice.discountCents, currency)}`, tValueX, tY, { align: "right" });
+    const [sym] = fmtParts(invoice.discountCents, currency);
+    const [, num] = fmtParts(invoice.discountCents, currency);
+    doc.text(`-${sym}`, symbolX, tY);
+    doc.text(num, tValueX, tY, { align: "right" });
     tY += bankRowH;
   }
 
@@ -402,24 +408,21 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     doc.setTextColor(...MUTED);
     doc.text("Total Exclusive:", tLabelX, tY);
     doc.setTextColor(...DARK);
-    doc.text(fmt(invoice.subtotalCents - invoice.discountCents, currency), tValueX, tY, { align: "right" });
+    drawPrice(doc, invoice.subtotalCents - invoice.discountCents, currency, symbolX, tValueX, tY);
     tY += bankRowH;
 
     doc.setTextColor(...MUTED);
     doc.text(`VAT (${invoice.vatPercent}%):`, tLabelX, tY);
     doc.setTextColor(...DARK);
-    doc.text(fmt(invoice.vatAmountCents, currency), tValueX, tY, { align: "right" });
+    drawPrice(doc, invoice.vatAmountCents, currency, symbolX, tValueX, tY);
     tY += bankRowH;
 
     doc.setTextColor(...MUTED);
     doc.text("Sub Total:", tLabelX, tY);
     doc.setTextColor(...DARK);
-    doc.text(fmt(invoice.totalCents, currency), tValueX, tY, { align: "right" });
+    drawPrice(doc, invoice.totalCents, currency, symbolX, tValueX, tY);
     tY += bankRowH + 2;
   }
-
-  // Fixed R column: symbol at symbolX, number right-aligned to tValueX
-  const symbolX = tValueX - 38;
 
   // Total
   doc.setFont("helvetica", "bold");
