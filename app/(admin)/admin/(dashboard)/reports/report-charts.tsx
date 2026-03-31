@@ -349,15 +349,25 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
     ? Math.round(monthsWithData.reduce((s, d) => s + d.rate, 0) / monthsWithData.length)
     : 0;
 
-  // Only include months up to the last one with data for actual lines
-  const lastDataIdx = data.reduce((last, d, i) => d.total > 0 ? i : last, -1);
+  // For months without data, show the expected rate instead of 0
+  const chartData = data.map((d) => {
+    const hasData = d.total > 0;
+    const noShowRate = hasData ? Math.round((d.noShow / d.total) * 100) : 0;
+    return {
+      month: d.month,
+      rate: hasData ? d.rate : avgRate,
+      noShowRate: hasData ? noShowRate : 0,
+      expected: avgRate,
+      hasData,
+    };
+  });
 
-  const chartData = data.map((d, i) => ({
-    month: d.month,
-    rate: i <= lastDataIdx ? d.rate : undefined,
-    noShowRate: i <= lastDataIdx ? (d.total > 0 ? Math.round((d.noShow / d.total) * 100) : 0) : undefined,
-    expected: avgRate,
-  }));
+  // Custom dot — only show dots on months with real data
+  const renderDot = (hasDataField: boolean) => (props: Record<string, unknown>) => {
+    const { cx, cy, index } = props as { cx: number; cy: number; index: number };
+    if (!chartData[index]?.hasData) return <circle key={index} cx={cx} cy={cy} r={0} />;
+    return <circle key={index} cx={cx} cy={cy} r={3} fill={hasDataField ? COLORS.red : COLORS.amber} />;
+  };
 
   return (
     <ChartContainer config={cancellationConfig} className="h-[300px] w-full">
@@ -373,7 +383,10 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => (value !== undefined ? value + "%" : "—")}
+              formatter={(value, name) => {
+                if (name === "expected") return value + "% (avg)";
+                return value + "%";
+              }}
             />
           }
         />
@@ -391,14 +404,14 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
           dataKey="rate"
           stroke="var(--color-rate)"
           strokeWidth={2}
-          dot={{ r: 3 }}
+          dot={renderDot(true)}
         />
         <Line
           type="monotone"
           dataKey="noShowRate"
           stroke="var(--color-noShowRate)"
           strokeWidth={2}
-          dot={{ r: 3 }}
+          dot={renderDot(false)}
           strokeDasharray="4 4"
         />
       </LineChart>
