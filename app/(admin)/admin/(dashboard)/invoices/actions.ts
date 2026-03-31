@@ -85,17 +85,39 @@ export async function resendInvoiceFromListAction(invoiceId: string) {
 export async function markPaymentRequestPaidFromListAction(
   paymentRequestId: string,
   method: string,
+  amountCents: number,
   reference?: string,
 ) {
   await requireRole("super_admin");
+
+  const pr = await prisma.paymentRequest.findUniqueOrThrow({
+    where: { id: paymentRequestId },
+  });
+
+  const isPartial = amountCents < pr.totalCents;
 
   const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
 
   const invoice = await createInvoiceFromPaymentRequest(paymentRequestId, {
     reference: reference || `manual-${Date.now()}`,
     method: method as "eft" | "cash" | "card",
-    amountCents: 0,
+    amountCents,
   });
+
+  // Partial payment: keep PR pending, invoice shows partial paid amount
+  if (isPartial) {
+    await prisma.paymentRequest.update({
+      where: { id: paymentRequestId },
+      data: { status: "pending" },
+    });
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: "payment_requested",
+        paidAmountCents: amountCents,
+      },
+    });
+  }
 
   await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
   await sendInvoiceEmail(invoice.id).catch(console.error);

@@ -48,12 +48,23 @@ export function PaymentRequestActions({
   const [showPayDialog, setShowPayDialog] = useState(false);
   const [method, setMethod] = useState("eft");
   const [reference, setReference] = useState("");
+  const [amountRands, setAmountRands] = useState((totalCents / 100).toFixed(2));
 
   function handleMarkPaid() {
+    const amountCents = Math.round(parseFloat(amountRands) * 100);
+    if (isNaN(amountCents) || amountCents <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
     startTransition(async () => {
       try {
-        await markPaymentRequestPaidFromListAction(requestId, method, reference || undefined);
-        toast.success(`Payment recorded for ${clientName}`);
+        await markPaymentRequestPaidFromListAction(requestId, method, amountCents, reference || undefined);
+        const isPartial = amountCents < totalCents;
+        toast.success(
+          isPartial
+            ? `Partial payment of R${(amountCents / 100).toFixed(2)} recorded for ${clientName}`
+            : `Payment recorded for ${clientName}`
+        );
         setShowPayDialog(false);
       } catch {
         toast.error("Failed to record payment");
@@ -108,10 +119,25 @@ export function PaymentRequestActions({
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Record payment of R{(totalCents / 100).toFixed(2)} from {clientName}.
+              Total due: R{(totalCents / 100).toFixed(2)} from {clientName}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Amount Received (R)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={amountRands}
+                onChange={(e) => setAmountRands(e.target.value)}
+              />
+              {Number.parseFloat(amountRands) < totalCents / 100 && Number.parseFloat(amountRands) > 0 && (
+                <p className="text-xs text-amber-600">
+                  Partial payment — R{((totalCents / 100) - Number.parseFloat(amountRands)).toFixed(2)} remaining. Request stays pending.
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label>Payment Method</Label>
               <Select value={method} onValueChange={setMethod}>
