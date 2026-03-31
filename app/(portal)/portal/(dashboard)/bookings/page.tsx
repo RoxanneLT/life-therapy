@@ -40,6 +40,8 @@ export default async function PortalBookingsPage() {
       cancelledAt: true,
       clientNotes: true,
       policyOverride: true,
+      recurringSeriesId: true,
+      recurringPattern: true,
     },
   });
 
@@ -65,6 +67,8 @@ export default async function PortalBookingsPage() {
     cancelledAt: b.cancelledAt?.toISOString() || null,
     clientNotes: b.clientNotes || null,
     policyOverride: b.policyOverride,
+    recurringSeriesId: b.recurringSeriesId,
+    recurringPattern: b.recurringPattern,
   }));
 
   return (

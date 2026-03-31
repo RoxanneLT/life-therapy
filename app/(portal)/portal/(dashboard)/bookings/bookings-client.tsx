@@ -69,6 +69,8 @@ interface SerializedBooking {
   cancelledAt: string | null;
   clientNotes: string | null;
   policyOverride: boolean;
+  recurringSeriesId: string | null;
+  recurringPattern: string | null;
 }
 
 const SESSION_LABELS: Record<string, string> = {
@@ -190,6 +192,11 @@ function UpcomingBookingCard({
               <Badge variant={STATUS_CONFIG[b.status]?.variant ?? "outline"}>
                 {SESSION_LABELS[b.sessionType] || b.sessionType}
               </Badge>
+              {b.recurringSeriesId && (
+                <Badge variant="outline" className="text-[10px] text-purple-600 border-purple-200 dark:text-purple-400 dark:border-purple-700">
+                  Recurring
+                </Badge>
+              )}
               {b.rescheduleCount > 0 && (
                 <span className="text-xs text-muted-foreground">
                   (rescheduled {b.rescheduleCount}x)

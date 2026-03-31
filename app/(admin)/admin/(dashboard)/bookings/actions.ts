@@ -286,6 +286,72 @@ export async function rescheduleSeriesAction(
 }
 
 // ────────────────────────────────────────────────────────────
+// Cancel entire recurring series (future bookings only)
+// ────────────────────────────────────────────────────────────
+
+export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled: number }> {
+  await requireRole("super_admin", "editor");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Find all future confirmed/pending bookings in this series
+  const bookings = await prisma.booking.findMany({
+    where: {
+      recurringSeriesId: seriesId,
+      status: { in: ["confirmed", "pending"] },
+      date: { gte: today },
+    },
+    orderBy: { date: "asc" },
+  });
+
+  if (bookings.length === 0) return { cancelled: 0 };
+
+  // Cancel each booking
+  for (const booking of bookings) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancelledBy: "admin",
+        billingNote: "(series cancelled — no charge)",
+      },
+    });
+
+    // Cancel calendar event
+    if (booking.graphEventId) {
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    }
+  }
+
+  // Send ONE cancellation email to the client
+  const first = bookings[0];
+  const config = getSessionTypeConfig(first.sessionType);
+
+  try {
+    const email = await renderEmail("booking_cancellation", {
+      clientName: first.clientName,
+      sessionType: config.label,
+      date: `Recurring series (${bookings.length} session${bookings.length !== 1 ? "s" : ""})`,
+      time: `${first.startTime} – ${first.endTime} (SAST)`,
+      bookUrl: "https://life-therapy.co.za/book",
+    });
+    await sendEmail({
+      to: first.clientEmail,
+      ...email,
+      templateKey: "booking_cancellation",
+      metadata: { seriesId },
+    });
+  } catch (err) {
+    console.error("Failed to send series cancellation email:", err);
+  }
+
+  revalidatePath("/admin/bookings");
+  return { cancelled: bookings.length };
+}
+
+// ────────────────────────────────────────────────────────────
 // Check conflicts for a proposed series reschedule
 // ────────────────────────────────────────────────────────────
 

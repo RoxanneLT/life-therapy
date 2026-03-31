@@ -25,6 +25,7 @@ import { DayView } from "./day-view";
 import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
 import { CreateBookingDialog } from "./create-booking-dialog";
+import { SeriesTimeline } from "./series-timeline";
 
 const VALID_VIEWS = ["list", "day", "week", "month"] as const;
 type ViewMode = (typeof VALID_VIEWS)[number];
@@ -118,7 +119,8 @@ export default async function BookingsPage({ searchParams }: Props) {
   }
 
   // List view defaults to upcoming bookings only (today forward, nearest first)
-  if (view === "list" && !dateWhere.date) {
+  // Exception: series filter shows ALL bookings (past + future) for the full timeline
+  if (view === "list" && !dateWhere.date && !seriesFilter) {
     const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
     dateWhere = { date: { gte: new Date(todaySast + "T00:00:00Z") } };
   }
@@ -215,13 +217,13 @@ export default async function BookingsPage({ searchParams }: Props) {
 
       {/* Series filter banner */}
       {seriesFilter && (
-        <div className="flex items-center gap-2 rounded-md border bg-purple-50 px-4 py-2">
-          <Repeat className="h-4 w-4 text-purple-600" />
-          <span className="text-sm font-medium text-purple-800">
+        <div className="flex items-center gap-2 rounded-md border bg-purple-50 px-4 py-2 dark:bg-purple-900/20 dark:text-purple-300">
+          <Repeat className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          <span className="text-sm font-medium text-purple-800 dark:text-purple-300">
             Showing {bookings.length} session{bookings.length !== 1 ? "s" : ""} in recurring series
           </span>
           <Link href="/admin/bookings" className="ml-auto">
-            <Button variant="ghost" size="sm" className="h-7 gap-1 text-purple-600 hover:text-purple-800">
+            <Button variant="ghost" size="sm" className="h-7 gap-1 text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200">
               <X className="h-3 w-3" />
               Clear filter
             </Button>
@@ -265,7 +267,21 @@ export default async function BookingsPage({ searchParams }: Props) {
       </div>
 
       {/* View content */}
-      {view === "list" && (
+      {seriesFilter && (
+        <SeriesTimeline
+          seriesId={seriesFilter}
+          bookings={serialisedBookings.map((b) => ({
+            id: b.id,
+            date: b.date,
+            startTime: b.startTime,
+            endTime: b.endTime,
+            status: b.status,
+            clientName: b.clientName,
+          }))}
+        />
+      )}
+
+      {!seriesFilter && view === "list" && (
         <>
           {bookings.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
@@ -339,7 +355,7 @@ export default async function BookingsPage({ searchParams }: Props) {
         </>
       )}
 
-      {view === "day" && (
+      {!seriesFilter && view === "day" && (
         <DayView
           bookings={serialisedBookings}
           date={selectedDate}
@@ -348,7 +364,7 @@ export default async function BookingsPage({ searchParams }: Props) {
         />
       )}
 
-      {view === "week" && (
+      {!seriesFilter && view === "week" && (
         <WeekView
           bookings={serialisedBookings}
           date={selectedDate}
@@ -357,7 +373,7 @@ export default async function BookingsPage({ searchParams }: Props) {
         />
       )}
 
-      {view === "month" && (
+      {!seriesFilter && view === "month" && (
         <MonthView bookings={serialisedBookings} date={selectedDate} />
       )}
     </div>

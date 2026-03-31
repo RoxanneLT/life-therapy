@@ -142,7 +142,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
               const blocked = overrideByDate[dateStr]?.isBlocked;
               const isToday = isSameDay(day, new Date());
               let headerBg = "bg-muted/50";
-              if (blocked) headerBg = "bg-gray-100 text-gray-400";
+              if (blocked) headerBg = "bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500";
               else if (isToday) headerBg = "bg-brand-50 text-brand-700";
 
               return (
@@ -185,7 +185,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
               return (
                 <div
                   key={dateStr}
-                  className={`relative flex-1 border-r last:border-r-0 ${blocked ? "bg-gray-50" : ""}`}
+                  className={`relative flex-1 border-r last:border-r-0 ${blocked ? "bg-gray-50 dark:bg-gray-800/50" : ""}`}
                   style={{ height: totalHeight }}
                 >
                   {/* Horizontal grid lines */}
@@ -201,7 +201,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
                   {dayBookings.map((booking) => {
                     const colorClass =
                       SESSION_COLORS[booking.sessionType] ||
-                      "border-l-gray-400 bg-gray-50 hover:bg-gray-100";
+                      "border-l-gray-400 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800/50 dark:hover:bg-gray-700/50 dark:text-gray-300";
                     const startMins = timeToMinutes(booking.startTime);
                     const endMins   = timeToMinutes(booking.endTime);
                     const duration  = endMins - startMins;
