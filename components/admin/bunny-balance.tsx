@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cloud } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function BunnyBalance() {
@@ -28,7 +27,7 @@ export function BunnyBalance() {
       )}
       title="Bunny.net credit balance"
     >
-      <Cloud className="h-3 w-3" />
+      <span className="text-[11px]">🐰</span>
       ${balance.toFixed(2)}
     </div>
   );
