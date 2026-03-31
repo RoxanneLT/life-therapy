@@ -34,6 +34,7 @@ export default async function PortalDashboardPage() {
     digitalProductCount,
     nextBooking,
     recentInvoices,
+    pendingPayments,
   ] = await Promise.all([
     prisma.booking.count({
       where: {
@@ -72,6 +73,11 @@ export default async function PortalDashboardPage() {
         createdAt: true,
       },
     }),
+    prisma.paymentRequest.aggregate({
+      where: { studentId: student.id, status: "pending" },
+      _count: true,
+      _sum: { totalCents: true },
+    }),
   ]);
 
   const currentBalance = creditBalance?.balance ?? 0;
@@ -81,6 +87,9 @@ export default async function PortalDashboardPage() {
     ? getSessionTypeConfig(nextBooking.sessionType)
     : null;
   const bookingIsToday = nextBooking ? isToday(new Date(nextBooking.date)) : false;
+
+  const outstandingCount = pendingPayments._count ?? 0;
+  const outstandingTotal = pendingPayments._sum.totalCents ?? 0;
 
   return (
     <div className="space-y-6">
@@ -92,6 +101,33 @@ export default async function PortalDashboardPage() {
           Continue learning and growing with Life-Therapy.
         </p>
       </div>
+
+      {/* Outstanding Payment Banner */}
+      {outstandingCount > 0 && (
+        <Link href="/portal/invoices">
+          <Card className="border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-700 transition-shadow hover:shadow-md cursor-pointer">
+            <CardContent className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/40">
+                  <FileText className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-900 dark:text-amber-200">
+                    Payment Outstanding
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400">
+                    {outstandingCount} payment{outstandingCount !== 1 ? "s" : ""} due — R{(outstandingTotal / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-700 shrink-0">
+                Pay Now
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* Stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
