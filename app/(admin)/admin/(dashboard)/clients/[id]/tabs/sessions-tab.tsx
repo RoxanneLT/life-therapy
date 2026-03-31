@@ -170,7 +170,7 @@ const EDITABLE_STATUSES = [
 function QuickStatusEdit({
   bookingId,
   currentStatus,
-  clientId,
+  clientId: _clientId,
 }: {
   bookingId: string;
   currentStatus: string;

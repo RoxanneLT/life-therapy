@@ -81,7 +81,6 @@ export default async function PortalDashboardPage() {
   ]);
 
   const currentBalance = creditBalance?.balance ?? 0;
-  const isSessionsClient = upcomingBookingsCount > 0 || currentBalance > 0 || !!nextBooking;
 
   const sessionConfig = nextBooking
     ? getSessionTypeConfig(nextBooking.sessionType)

@@ -59,7 +59,6 @@ export default async function AdminDashboard({
   const validYear = year >= currentYear - 2 && year <= currentYear + 2 ? year : currentYear;
 
   const now = new Date();
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);

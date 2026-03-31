@@ -166,7 +166,7 @@ export async function getOutstandingAging() {
 // 2. Session queries
 // ---------------------------------------------------------------------------
 
-export async function getSessionStats(fyYear: number) {
+export async function getSessionStats(_fyYear: number) {
   const { start: monthStart, end: monthEnd } = currentMonthRange();
 
   const [completed, allBookings, cancelled, noShows] = await Promise.all([

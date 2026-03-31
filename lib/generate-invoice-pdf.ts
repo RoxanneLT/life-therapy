@@ -30,7 +30,6 @@ const MT = 20;
 const MB = 20;
 const CW = PAGE_W - ML - MR;
 
-const BRAND: [number, number, number] = [139, 168, 137];
 const DARK: [number, number, number] = [40, 40, 40];
 const MUTED: [number, number, number] = [130, 130, 130];
 const LINE_CLR: [number, number, number] = [200, 200, 200];

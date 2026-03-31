@@ -119,10 +119,9 @@ export function SeriesTimeline({ seriesId, bookings }: SeriesTimelineProps) {
         <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
 
         <div className="space-y-0">
-          {bookings.map((booking, index) => {
+          {bookings.map((booking) => {
             const config = statusConfig[booking.status] || statusConfig.pending;
             const Icon = config.icon;
-            const isLast = index === bookings.length - 1;
 
             return (
               <Link

@@ -369,10 +369,14 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
   });
 
   // Custom dot — only show dots on months with real data
-  const renderDot = (hasDataField: boolean) => (props: Record<string, unknown>) => {
-    const { cx, cy, index } = props as { cx: number; cy: number; index: number };
-    if (!chartData[index]?.hasData) return <circle key={index} cx={cx} cy={cy} r={0} />;
-    return <circle key={index} cx={cx} cy={cy} r={3} fill={hasDataField ? COLORS.red : COLORS.amber} />;
+  const renderDot = (hasDataField: boolean) => {
+    const DotRenderer = (props: Record<string, unknown>) => {
+      const { cx, cy, index } = props as { cx: number; cy: number; index: number };
+      if (!chartData[index]?.hasData) return <circle key={index} cx={cx} cy={cy} r={0} />;
+      return <circle key={index} cx={cx} cy={cy} r={3} fill={hasDataField ? COLORS.red : COLORS.amber} />;
+    };
+    DotRenderer.displayName = "CancellationDot";
+    return DotRenderer;
   };
 
   return (
@@ -482,7 +486,6 @@ const STATUS_COLORS: Record<string, string> = {
 export function ClientStatusChart({ data }: ClientStatusProps) {
   if (!data.length) return <EmptyChart message="No client data" />;
 
-  const total = data.reduce((s, d) => s + d.count, 0);
   const chartData = data.map((d) => ({
     name: humanLabel(d.status, { active: "Active", inactive: "Inactive", potential: "Potential", archived: "Archived" }),
     value: d.count,
