@@ -66,22 +66,16 @@ export default async function AdminDashboard({
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const [
-    upcomingBookings,
     studentCount,
     thisMonthRevenue,
     pendingPayments,
     sessionsThisMonth,
+    nextMonthSessions,
     nextSession,
     allStudentsWithDob,
     bookingsByMonth,
     revenueByMonth,
   ] = await Promise.all([
-    prisma.booking.count({
-      where: {
-        status: { in: ["pending", "confirmed"] },
-        date: { gte: now },
-      },
-    }),
     prisma.student.count({ where: { clientStatus: "active" } }),
     prisma.invoice.aggregate({
       where: {
@@ -101,6 +95,12 @@ export default async function AdminDashboard({
         date: { gte: monthStart, lt: monthEnd },
       },
     }),
+    prisma.booking.count({
+      where: {
+        status: { in: ["confirmed", "pending"] },
+        date: { gte: monthEnd, lt: new Date(now.getFullYear(), now.getMonth() + 2, 1) },
+      },
+    }),
     prisma.booking.findFirst({
       where: { status: "confirmed", date: { gte: now } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
@@ -114,7 +114,9 @@ export default async function AdminDashboard({
     getRevenueByMonth(validYear),
   ]);
 
-  const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, now, sevenDaysFromNow);
+  // Show next 3 birthdays regardless of timeframe
+  const farFuture = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, now, farFuture).slice(0, 3);
   const isSessionSoon = nextSession ? isWithinTwoHours(nextSession, twoHoursFromNow) : false;
 
   const pendingCount = pendingPayments._count ?? 0;
@@ -140,8 +142,8 @@ export default async function AdminDashboard({
       href: "/admin/bookings",
     },
     {
-      label: "Upcoming Bookings",
-      value: upcomingBookings,
+      label: `Sessions (${new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString("en-ZA", { month: "short" })})`,
+      value: nextMonthSessions,
       icon: CalendarDays,
       href: "/admin/bookings",
     },
