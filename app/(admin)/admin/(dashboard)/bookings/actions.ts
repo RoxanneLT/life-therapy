@@ -247,6 +247,86 @@ export async function rescheduleSeriesAction(
 }
 
 // ────────────────────────────────────────────────────────────
+// Check conflicts for a proposed series reschedule
+// ────────────────────────────────────────────────────────────
+
+export async function checkSeriesConflictsAction(
+  seriesId: string,
+  newDayOfWeek: number,
+  newStartTime: string,
+): Promise<{ date: string; conflict: string | null }[]> {
+  await requireRole("super_admin", "editor");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      recurringSeriesId: seriesId,
+      status: { in: ["confirmed", "pending"] },
+      date: { gte: today },
+    },
+    orderBy: { date: "asc" },
+  });
+
+  if (bookings.length === 0) return [];
+
+  const duration = bookings[0].durationMinutes || 60;
+  const [startH, startM] = newStartTime.split(":").map(Number);
+  const endH = startH + Math.floor((startM + duration) / 60);
+  const endM = (startM + duration) % 60;
+  const newEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+  const results: { date: string; conflict: string | null }[] = [];
+
+  for (const booking of bookings) {
+    const oldDate = new Date(booking.date);
+    const oldDow = oldDate.getUTCDay();
+    const diff = newDayOfWeek - oldDow;
+    const newDate = new Date(oldDate);
+    newDate.setUTCDate(newDate.getUTCDate() + diff);
+    const newDateStr = newDate.toISOString().slice(0, 10);
+
+    // Check for existing bookings on that date/time (excluding this series)
+    const existing = await prisma.booking.findFirst({
+      where: {
+        date: new Date(newDateStr + "T00:00:00Z"),
+        startTime: { lte: newEndTime },
+        endTime: { gte: newStartTime },
+        status: { in: ["confirmed", "pending"] },
+        id: { not: booking.id },
+        recurringSeriesId: { not: seriesId },
+      },
+      select: { clientName: true, startTime: true },
+    });
+
+    // Check availability overrides (blocked days)
+    const override = await prisma.availabilityOverride.findUnique({
+      where: { date: new Date(newDateStr + "T00:00:00Z") },
+    });
+
+    // Check SA public holidays
+    const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
+
+    let conflict: string | null = null;
+    if (isSAPublicHoliday(newDate)) {
+      conflict = "Public holiday";
+    } else if (override?.isBlocked) {
+      conflict = `Day blocked${override.reason ? `: ${override.reason}` : ""}`;
+    } else if (existing) {
+      conflict = `Overlaps with ${existing.clientName} at ${existing.startTime}`;
+    }
+
+    results.push({
+      date: format(newDate, "EEE d MMM"),
+      conflict,
+    });
+  }
+
+  return results;
+}
+
+// ────────────────────────────────────────────────────────────
 // Admin: Create booking on behalf of a client
 // ────────────────────────────────────────────────────────────
 
