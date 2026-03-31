@@ -62,11 +62,15 @@ export default async function AdminDashboard({
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
   const [
     upcomingBookings,
     studentCount,
     thisMonthRevenue,
     pendingPayments,
+    sessionsThisMonth,
     nextSession,
     allStudentsWithDob,
     bookingsByMonth,
@@ -90,6 +94,12 @@ export default async function AdminDashboard({
       where: { status: "pending" },
       _count: true,
       _sum: { totalCents: true },
+    }),
+    prisma.booking.count({
+      where: {
+        status: { in: ["completed", "confirmed", "pending"] },
+        date: { gte: monthStart, lt: monthEnd },
+      },
     }),
     prisma.booking.findFirst({
       where: { status: "confirmed", date: { gte: now } },
@@ -124,10 +134,10 @@ export default async function AdminDashboard({
       href: "/admin/invoices?status=paid",
     },
     {
-      label: "Outstanding",
-      value: pendingTotal > 0 ? formatPrice(pendingTotal) : "R 0",
+      label: `Sessions (${now.toLocaleDateString("en-ZA", { month: "short" })})`,
+      value: sessionsThisMonth,
       icon: CreditCard,
-      href: "/admin/invoices?status=payment_requested",
+      href: "/admin/bookings",
     },
     {
       label: "Upcoming Bookings",

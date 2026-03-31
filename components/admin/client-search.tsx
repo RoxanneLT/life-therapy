@@ -77,13 +77,12 @@ export function ClientSearch() {
     <>
       <Button
         variant="outline"
-        size="sm"
-        className="hidden sm:flex items-center gap-2 text-muted-foreground"
+        className="flex w-64 items-center justify-start gap-2 text-muted-foreground lg:w-80"
         onClick={() => setOpen(true)}
       >
-        <Search className="h-3.5 w-3.5" />
-        <span className="text-xs">Search clients...</span>
-        <kbd className="ml-2 hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground md:inline">
+        <Search className="h-4 w-4" />
+        <span className="text-sm">Search clients...</span>
+        <kbd className="ml-auto rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
           ⌘K
         </kbd>
       </Button>
