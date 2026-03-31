@@ -16,8 +16,10 @@ import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { InvoiceListFilters } from "./invoice-list-filters";
 import { InvoiceRowActions } from "./invoice-row-actions";
+import { PaymentRequestActions } from "./payment-request-actions";
 import { ExportDialog } from "./export-dialog";
 import { SortableHeader } from "@/components/admin/sortable-header";
+import Link from "next/link";
 
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
 
@@ -105,15 +107,20 @@ export default async function InvoicesPage({
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  const [invoices, statusCounts, monthStats] = await Promise.all([
-    prisma.invoice.findMany({
-      where,
-      orderBy: { [sortField]: sortDir },
-      include: {
-        student: { select: { id: true, firstName: true, lastName: true } },
-        billingEntity: { select: { name: true } },
-      },
-    }),
+  // When "payment_requested" tab: show payment requests, not invoices
+  const showPaymentRequests = activeStatus === "payment_requested";
+
+  const [invoices, statusCounts, monthStats, pendingRequests, pendingRequestCount] = await Promise.all([
+    showPaymentRequests
+      ? Promise.resolve([])
+      : prisma.invoice.findMany({
+          where,
+          orderBy: { [sortField]: sortDir },
+          include: {
+            student: { select: { id: true, firstName: true, lastName: true } },
+            billingEntity: { select: { name: true } },
+          },
+        }),
     prisma.invoice.groupBy({
       by: ["status"],
       _count: true,
@@ -124,6 +131,17 @@ export default async function InvoicesPage({
       _count: true,
       _sum: { totalCents: true },
     }),
+    showPaymentRequests
+      ? prisma.paymentRequest.findMany({
+          where: { status: "pending" },
+          orderBy: { createdAt: "desc" },
+          include: {
+            student: { select: { id: true, firstName: true, lastName: true } },
+            billingEntity: { select: { name: true } },
+          },
+        })
+      : Promise.resolve([]),
+    prisma.paymentRequest.count({ where: { status: "pending" } }),
   ]);
 
   // Status count map (for filter tabs)
@@ -133,6 +151,9 @@ export default async function InvoicesPage({
     countMap[c.status] = c._count;
     totalCount += c._count;
   }
+  // Override payment_requested count with actual pending payment requests
+  countMap.payment_requested = pendingRequestCount;
+  totalCount += pendingRequestCount;
   countMap.all = totalCount;
 
   // Summary card calculations
@@ -147,6 +168,16 @@ export default async function InvoicesPage({
     if (s.status === "payment_requested" || s.status === "draft")
       outstanding += s._sum.totalCents ?? 0;
     if (s.status === "overdue") overdue += s._sum.totalCents ?? 0;
+  }
+
+  // Add pending payment requests to outstanding
+  if (pendingRequestCount > 0) {
+    const prTotal = await prisma.paymentRequest.aggregate({
+      where: { status: "pending" },
+      _sum: { totalCents: true },
+    });
+    outstanding += prTotal._sum.totalCents ?? 0;
+    thisMonthCount += pendingRequestCount;
   }
 
   return (
@@ -175,8 +206,89 @@ export default async function InvoicesPage({
         counts={countMap}
       />
 
-      {/* Table */}
-      {invoices.length === 0 ? (
+      {/* Table — Payment Requests or Invoices depending on tab */}
+      {showPaymentRequests ? (
+        pendingRequests.length === 0 ? (
+          <EmptyState
+            icon={Receipt}
+            message="No pending payment requests."
+          />
+        ) : (
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Date Sent</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Sessions</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingRequests.map((pr) => {
+                  const clientName = pr.student
+                    ? `${pr.student.firstName} ${pr.student.lastName}`
+                    : pr.billingEntity?.name ?? "—";
+                  const lineItems = pr.lineItems as unknown as { description: string }[];
+                  const sessionCount = lineItems?.length ?? 0;
+                  const isDue = pr.dueDate && new Date(pr.dueDate) <= now;
+                  return (
+                    <TableRow key={pr.id}>
+                      <TableCell className="text-sm font-medium">
+                        {pr.billingMonth}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(pr.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">
+                          {pr.studentId ? (
+                            <Link href={`/admin/clients/${pr.studentId}`} className="hover:text-brand-600 hover:underline">
+                              {clientName}
+                            </Link>
+                          ) : clientName}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {sessionCount} session{sessionCount !== 1 ? "s" : ""}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm font-medium">
+                        {formatCurrency(pr.totalCents)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={isDue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>
+                          {pr.dueDate ? formatDate(pr.dueDate) : "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <PaymentRequestActions
+                          requestId={pr.id}
+                          studentId={pr.studentId}
+                          clientName={clientName}
+                          totalCents={pr.totalCents}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+
+            {/* Total banner */}
+            <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-3">
+              <span className="text-sm text-muted-foreground">
+                {pendingRequests.length} pending request{pendingRequests.length !== 1 ? "s" : ""}
+              </span>
+              <span className="font-mono text-sm font-bold">
+                Total: {formatCurrency(pendingRequests.reduce((s, pr) => s + pr.totalCents, 0))}
+              </span>
+            </div>
+          </div>
+        )
+      ) : invoices.length === 0 ? (
         <EmptyState
           icon={Receipt}
           message={params.q ? "No invoices match your search." : "No invoices found."}

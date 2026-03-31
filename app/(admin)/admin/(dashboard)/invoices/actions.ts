@@ -79,6 +79,44 @@ export async function resendInvoiceFromListAction(invoiceId: string) {
 }
 
 // ────────────────────────────────────────────────────────────
+// Payment Requests — Mark as paid (creates invoice + PDF + email)
+// ────────────────────────────────────────────────────────────
+
+export async function markPaymentRequestPaidFromListAction(
+  paymentRequestId: string,
+  method: string,
+  reference?: string,
+) {
+  await requireRole("super_admin");
+
+  const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
+
+  const invoice = await createInvoiceFromPaymentRequest(paymentRequestId, {
+    reference: reference || `manual-${Date.now()}`,
+    method: method as "eft" | "cash" | "card",
+    amountCents: 0,
+  });
+
+  await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
+  await sendInvoiceEmail(invoice.id).catch(console.error);
+
+  revalidatePath("/admin/invoices");
+}
+
+// ────────────────────────────────────────────────────────────
+// Payment Requests — Resend email
+// ────────────────────────────────────────────────────────────
+
+export async function resendPaymentRequestEmailAction(paymentRequestId: string) {
+  await requireRole("super_admin");
+
+  const { sendPaymentRequestEmail } = await import("@/lib/send-invoice");
+  await sendPaymentRequestEmail(paymentRequestId);
+
+  revalidatePath("/admin/invoices");
+}
+
+// ────────────────────────────────────────────────────────────
 // CSV Export
 // ────────────────────────────────────────────────────────────
 
