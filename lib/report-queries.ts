@@ -169,7 +169,7 @@ export async function getOutstandingAging() {
 export async function getSessionStats(_fyYear: number) {
   const { start: monthStart, end: monthEnd } = currentMonthRange();
 
-  const [completed, allBookings, cancelled, noShows] = await Promise.all([
+  const [completed, _allBookings, cancelled, noShows] = await Promise.all([
     prisma.booking.count({
       where: {
         status: { in: ["completed", "confirmed"] },
@@ -210,7 +210,9 @@ export async function getSessionStats(_fyYear: number) {
   const avgSessionsPerClient =
     distinctClients.length > 0 ? Math.round((sessionsThisMonth / distinctClients.length) * 10) / 10 : 0;
   const cancellationRate =
-    allBookings > 0 ? Math.round(((cancelled + noShows) / allBookings) * 100 * 10) / 10 : 0;
+    (cancelled + noShows + completed) > 0
+      ? Math.round(((cancelled + noShows) / (cancelled + noShows + completed)) * 100 * 10) / 10
+      : 0;
 
   return {
     sessionsThisMonth,

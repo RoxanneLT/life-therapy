@@ -205,8 +205,13 @@ export default async function ReportsPage({
               value={sessionStats.avgSessionsPerClient.toFixed(1)}
             />
             <KPICard
-              label="Cancellation Rate"
-              value={`${sessionStats.cancellationRate}%`}
+              label="Cancel Rate (Avg)"
+              value={`${(() => {
+                const withData = cancellationTrend.filter(m => m.total > 0);
+                return withData.length > 0
+                  ? (withData.reduce((s, m) => s + m.rate, 0) / withData.length).toFixed(1)
+                  : "0";
+              })()}%`}
               variant={sessionStats.cancellationRate <= 10 ? "green" : "red"}
             />
           </div>
