@@ -130,7 +130,7 @@ export function SeriesTimeline({ seriesId, bookings }: SeriesTimelineProps) {
                 className="group relative flex items-start gap-4 py-3 pl-2 pr-3 rounded-md hover:bg-muted/50 transition-colors"
               >
                 {/* Timeline dot */}
-                <div className="relative z-10 flex-shrink-0">
+                <div className="relative z-10 shrink-0">
                   <Icon className={`h-6 w-6 ${config.color}`} />
                 </div>
 

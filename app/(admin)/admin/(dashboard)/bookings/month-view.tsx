@@ -155,7 +155,7 @@ export function MonthView({ bookings, date }: MonthViewProps) {
                 <div
                   key={dateStr}
                   className={cn(
-                    "min-h-[6rem] border-r p-1.5 last:border-r-0",
+                    "min-h-24 border-r p-1.5 last:border-r-0",
                     !isCurrentMonth && "bg-gray-50/60 dark:bg-gray-900/40",
                     isWeekend && isCurrentMonth && "bg-gray-50/30 dark:bg-gray-800/20",
                     isToday && "bg-brand-50/40 dark:bg-brand-900/30",

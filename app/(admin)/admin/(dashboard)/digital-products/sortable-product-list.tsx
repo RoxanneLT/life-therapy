@@ -79,7 +79,7 @@ function SortableRow({ product, onDelete }: { readonly product: Product; readonl
         {product.fileName || product.fileUrl.split("/").pop()}
       </td>
       <td className="p-3">
-        <Badge variant={product.isPublished ? "default" : "outline"}>
+        <Badge variant={product.isPublished ? "default" : "outline-solid"}>
           {product.isPublished ? "Published" : "Draft"}
         </Badge>
       </td>

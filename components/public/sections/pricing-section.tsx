@@ -88,7 +88,7 @@ export function PricingSection({ section }: PricingSectionProps) {
                   )}
                   <Button
                     className="mt-6 w-full"
-                    variant={item.highlight ? "outline" : "default"}
+                    variant={item.highlight ? "outline-solid" : "default"}
                     asChild
                   >
                     <Link href={item.ctaLink}>{item.ctaText}</Link>
@@ -100,7 +100,7 @@ export function PricingSection({ section }: PricingSectionProps) {
         </div>
         {config.footnote && (
           <p
-            className="mt-6 text-center text-sm text-muted-foreground [&_a]:text-brand-600 [&_a]:underline [&_a]:hover:text-brand-700"
+            className="mt-6 text-center text-sm text-muted-foreground [&_a]:text-brand-600 [&_a]:underline hover:[&_a]:text-brand-700"
             dangerouslySetInnerHTML={{ __html: config.footnote }}
           />
         )}

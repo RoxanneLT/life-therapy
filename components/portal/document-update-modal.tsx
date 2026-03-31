@@ -39,7 +39,7 @@ export function DocumentUpdateModal({ documents }: DocumentUpdateModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
       <div className="mx-4 flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-background shadow-2xl">
         {/* Header */}
         <div className="border-b px-6 py-5">

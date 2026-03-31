@@ -77,7 +77,7 @@ export function InvoiceListFilters({
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               activeStatus === tab.key
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -96,7 +96,7 @@ export function InvoiceListFilters({
         <select
           value={activeType}
           onChange={(e) => navigate({ type: e.target.value || undefined })}
-          className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
         >
           {TYPE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -109,7 +109,7 @@ export function InvoiceListFilters({
           type="month"
           value={activeMonth}
           onChange={(e) => navigate({ month: e.target.value || undefined })}
-          className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="h-9 rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
         />
 
         <form onSubmit={handleSearch} className="relative sm:ml-auto">
@@ -119,7 +119,7 @@ export function InvoiceListFilters({
             placeholder="Search invoices..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-64"
+            className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-brand-500 sm:w-64"
           />
         </form>
       </div>

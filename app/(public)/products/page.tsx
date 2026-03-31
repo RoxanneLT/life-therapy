@@ -77,7 +77,7 @@ export default async function ProductsPage({
       {heroSection ? (
         <HeroSection section={heroSection} />
       ) : (
-        <section className="bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-16 sm:py-24">
+        <section className="bg-linear-to-br from-brand-50 via-cream-50 to-brand-100 px-4 py-16 sm:py-24">
           <div className="mx-auto max-w-4xl text-center">
             <h1 className="font-heading text-3xl font-bold uppercase tracking-wide text-foreground sm:text-4xl lg:text-5xl">
               Digital Products
@@ -153,7 +153,7 @@ export default async function ProductsPage({
                 <Card key={product.id} className="group overflow-hidden transition-shadow hover:shadow-lg">
                   <Link href={`/products/${product.slug}`}>
                     {product.imageUrl ? (
-                      <div className="relative aspect-[4/3] overflow-hidden">
+                      <div className="relative aspect-4/3 overflow-hidden">
                         <Image
                           src={product.imageUrl}
                           alt={product.title}
@@ -168,7 +168,7 @@ export default async function ProductsPage({
                         )}
                       </div>
                     ) : (
-                      <div className="relative flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-brand-50 to-brand-100">
+                      <div className="relative flex aspect-4/3 items-center justify-center bg-linear-to-br from-brand-50 to-brand-100">
                         <FileDown className="h-12 w-12 text-brand-300" />
                         {product.category && (
                           <Badge className="absolute left-3 top-3 bg-brand-500/90 text-white capitalize">

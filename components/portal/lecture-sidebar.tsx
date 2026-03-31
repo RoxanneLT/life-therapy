@@ -87,9 +87,9 @@ function ModuleSection({
         className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-muted"
       >
         {expanded ? (
-          <ChevronDown className="h-4 w-4 flex-shrink-0" />
+          <ChevronDown className="h-4 w-4 shrink-0" />
         ) : (
-          <ChevronRight className="h-4 w-4 flex-shrink-0" />
+          <ChevronRight className="h-4 w-4 shrink-0" />
         )}
         <span className="flex-1 truncate">{mod.title}</span>
         <span className="text-xs text-muted-foreground">
@@ -115,7 +115,7 @@ function ModuleSection({
               )}
             >
               {lecture.completed ? (
-                <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
               ) : (
                 <LectureIcon type={lecture.lectureType} />
               )}
@@ -138,9 +138,9 @@ function ModuleSection({
               )}
             >
               {mod.quiz.passed ? (
-                <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
               ) : (
-                <HelpCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                <HelpCircle className="h-3.5 w-3.5 shrink-0" />
               )}
               <span className="flex-1 truncate">{mod.quiz.title}</span>
             </Link>
@@ -154,13 +154,13 @@ function ModuleSection({
 function LectureIcon({ type }: { type: string }) {
   switch (type) {
     case "video":
-      return <PlayCircle className="h-3.5 w-3.5 flex-shrink-0" />;
+      return <PlayCircle className="h-3.5 w-3.5 shrink-0" />;
     case "text":
-      return <FileText className="h-3.5 w-3.5 flex-shrink-0" />;
+      return <FileText className="h-3.5 w-3.5 shrink-0" />;
     case "quiz":
-      return <HelpCircle className="h-3.5 w-3.5 flex-shrink-0" />;
+      return <HelpCircle className="h-3.5 w-3.5 shrink-0" />;
     default:
-      return <PlayCircle className="h-3.5 w-3.5 flex-shrink-0" />;
+      return <PlayCircle className="h-3.5 w-3.5 shrink-0" />;
   }
 }
 

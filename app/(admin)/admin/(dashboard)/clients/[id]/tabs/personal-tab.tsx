@@ -48,7 +48,7 @@ function FormField({
         type={type}
         defaultValue={defaultValue || ""}
         placeholder={placeholder}
-        className="mt-0.5 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className="mt-0.5 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
       />
     </div>
   );
@@ -208,7 +208,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
                 name="address"
                 defaultValue={(client.address as string) || ""}
                 rows={2}
-                className="mt-0.5 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="mt-0.5 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               />
             </div>
 

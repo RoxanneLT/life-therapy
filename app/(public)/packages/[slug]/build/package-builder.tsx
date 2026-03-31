@@ -144,7 +144,7 @@ export function PackageBuilder({
                       }`}
                     >
                       {course.imageUrl ? (
-                        <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded">
                           <Image
                             src={course.imageUrl}
                             alt={course.title}
@@ -154,7 +154,7 @@ export function PackageBuilder({
                           />
                         </div>
                       ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-muted">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-muted">
                           <GraduationCap className="h-5 w-5 text-muted-foreground" />
                         </div>
                       )}
@@ -167,7 +167,7 @@ export function PackageBuilder({
                         </p>
                       </div>
                       {selected && (
-                        <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-brand-500" />
+                        <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-500" />
                       )}
                     </button>
                   );
@@ -210,7 +210,7 @@ export function PackageBuilder({
                       }`}
                     >
                       {product.imageUrl ? (
-                        <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded">
                           <Image
                             src={product.imageUrl}
                             alt={product.title}
@@ -220,7 +220,7 @@ export function PackageBuilder({
                           />
                         </div>
                       ) : (
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-muted">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-muted">
                           <FileDown className="h-5 w-5 text-muted-foreground" />
                         </div>
                       )}
@@ -233,7 +233,7 @@ export function PackageBuilder({
                         </p>
                       </div>
                       {selected && (
-                        <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-brand-500" />
+                        <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-500" />
                       )}
                     </button>
                   );

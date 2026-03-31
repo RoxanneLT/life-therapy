@@ -75,7 +75,7 @@ export function ExportDialog() {
   }
 
   const inputClass =
-    "h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+    "h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -96,7 +96,7 @@ export function ExportDialog() {
               onClick={() => setMode("fy")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 mode === "fy"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-xs"
                   : "text-muted-foreground"
               }`}
             >
@@ -106,7 +106,7 @@ export function ExportDialog() {
               onClick={() => setMode("custom")}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 mode === "custom"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-xs"
                   : "text-muted-foreground"
               }`}
             >

@@ -116,7 +116,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                           (id) =>
                             courseMap[id] && (
                               <div key={id} className="flex items-center gap-2 text-sm">
-                                <GraduationCap className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                                <GraduationCap className="h-4 w-4 shrink-0 text-brand-500" />
                                 <span>{courseMap[id]}</span>
                               </div>
                             ),
@@ -125,7 +125,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                           (id) =>
                             moduleMap[id] && (
                               <div key={id} className="flex items-center gap-2 text-sm">
-                                <BookOpen className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                                <BookOpen className="h-4 w-4 shrink-0 text-brand-500" />
                                 <span>{moduleMap[id]}</span>
                               </div>
                             ),
@@ -134,7 +134,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                           (id) =>
                             productMap[id] && (
                               <div key={id} className="flex items-center gap-2 text-sm">
-                                <FileDown className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                                <FileDown className="h-4 w-4 shrink-0 text-brand-500" />
                                 <span>{productMap[id]}</span>
                               </div>
                             ),
@@ -143,7 +143,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                         {/* Pick-your-own: show slot counts */}
                         {pkg.courseSlots > 0 && (
                           <div className="flex items-center gap-2 text-sm">
-                            <GraduationCap className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                            <GraduationCap className="h-4 w-4 shrink-0 text-brand-500" />
                             <span>
                               Choose {pkg.courseSlots} course
                               {pkg.courseSlots !== 1 && "s"}
@@ -152,7 +152,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                         )}
                         {pkg.digitalProductSlots > 0 && (
                           <div className="flex items-center gap-2 text-sm">
-                            <FileDown className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                            <FileDown className="h-4 w-4 shrink-0 text-brand-500" />
                             <span>
                               Choose {pkg.digitalProductSlots} digital product
                               {pkg.digitalProductSlots !== 1 && "s"}
@@ -161,7 +161,7 @@ export async function PackageGridSection({ section }: PackageGridSectionProps) {
                         )}
                         {pkg.credits > 0 && (
                           <div className="flex items-center gap-2 text-sm">
-                            <Sparkles className="h-4 w-4 flex-shrink-0 text-brand-500" />
+                            <Sparkles className="h-4 w-4 shrink-0 text-brand-500" />
                             <span>
                               {pkg.credits} session credit
                               {pkg.credits !== 1 && "s"}

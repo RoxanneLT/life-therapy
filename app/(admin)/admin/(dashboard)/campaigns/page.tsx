@@ -16,15 +16,15 @@ import {
 import { Plus, Send, ListOrdered, Mail, Cake, Edit } from "lucide-react";
 import { format } from "date-fns";
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  draft: "outline",
+const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline-solid" | "destructive"> = {
+  draft: "outline-solid",
   sending: "default",
   sent: "secondary",
   failed: "destructive",
   scheduled: "default",
   active: "default",
   completed: "secondary",
-  paused: "outline",
+  paused: "outline-solid",
 };
 
 import { CAMPAIGN_STATUS_BADGE } from "@/lib/status-styles";
@@ -113,7 +113,7 @@ export default async function CampaignsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          variant={STATUS_VARIANTS[campaign.status] || "outline"}
+                          variant={STATUS_VARIANTS[campaign.status] || "outline-solid"}
                           className={statusColor || ""}
                         >
                           {campaign.status}
@@ -167,7 +167,7 @@ export default async function CampaignsPage() {
               return (
                 <div
                   key={campaign.id}
-                  className="rounded-lg border bg-card p-5 shadow-sm hover:shadow-md transition-shadow"
+                  className="rounded-lg border bg-card p-5 shadow-xs hover:shadow-md transition-shadow"
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -187,7 +187,7 @@ export default async function CampaignsPage() {
                       </div>
                     </div>
                     <Badge
-                      variant={STATUS_VARIANTS[campaign.status] || "outline"}
+                      variant={STATUS_VARIANTS[campaign.status] || "outline-solid"}
                       className={statusColor || ""}
                     >
                       {campaign.status}

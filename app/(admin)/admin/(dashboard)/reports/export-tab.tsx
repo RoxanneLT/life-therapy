@@ -182,7 +182,7 @@ function ExportButton({
       type="button"
       onClick={onClick}
       disabled={loading || disabled}
-      className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className="inline-flex items-center gap-2 rounded-md border bg-background px-4 py-2 text-sm font-medium shadow-xs hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {label}

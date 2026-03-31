@@ -222,7 +222,7 @@ export default async function CourseDetailPage({
               "Certificate of completion",
             ].map((item) => (
               <div key={item} className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-brand-500" />
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
                 <span className="text-sm text-muted-foreground">{item}</span>
               </div>
             ))}

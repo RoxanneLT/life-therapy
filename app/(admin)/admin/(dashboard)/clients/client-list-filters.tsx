@@ -58,7 +58,7 @@ export function ClientListFilters({ activeTab, search, counts }: ClientListFilte
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               activeTab === tab.key
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -80,7 +80,7 @@ export function ClientListFilters({ activeTab, search, counts }: ClientListFilte
           placeholder="Search clients..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500 sm:w-64"
+          className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-brand-500 sm:w-64"
         />
       </form>
     </div>

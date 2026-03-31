@@ -274,7 +274,7 @@ function DetailRow({ label, children }: Readonly<{ label: string; children: Reac
   return (
     <div className="flex gap-3">
       <span className="w-16 shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-words">{children}</span>
+      <span className="min-w-0 wrap-break-word">{children}</span>
     </div>
   );
 }

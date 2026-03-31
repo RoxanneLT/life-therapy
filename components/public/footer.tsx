@@ -151,7 +151,7 @@ export function PublicFooter({
                 <Button
                   type="submit"
                   variant="secondary"
-                  className="flex-shrink-0"
+                  className="shrink-0"
                   disabled={subscribing}
                 >
                   {subscribing ? "Subscribing..." : "Subscribe"}

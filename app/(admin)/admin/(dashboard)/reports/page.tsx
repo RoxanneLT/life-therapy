@@ -116,7 +116,7 @@ export default async function ReportsPage({
               href={`/admin/reports?tab=${tab.key}&fy=${currentFY}`}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >

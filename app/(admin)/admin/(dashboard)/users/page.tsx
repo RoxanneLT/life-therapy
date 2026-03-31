@@ -22,10 +22,10 @@ const ROLE_LABELS: Record<string, string> = {
   marketing: "Marketing",
 };
 
-const ROLE_VARIANTS: Record<string, "default" | "secondary" | "outline"> = {
+const ROLE_VARIANTS: Record<string, "default" | "secondary" | "outline-solid"> = {
   super_admin: "default",
   editor: "secondary",
-  marketing: "outline",
+  marketing: "outline-solid",
 };
 
 export default async function UsersPage() {

@@ -449,7 +449,7 @@ function AddRelationshipDialog({
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant={mode === "client" ? "default" : "outline"}
+              variant={mode === "client" ? "default" : "outline-solid"}
               size="sm"
               onClick={() => setMode("client")}
             >
@@ -458,7 +458,7 @@ function AddRelationshipDialog({
             </Button>
             <Button
               type="button"
-              variant={mode === "new_client" ? "default" : "outline"}
+              variant={mode === "new_client" ? "default" : "outline-solid"}
               size="sm"
               onClick={() => setMode("new_client")}
             >
@@ -467,7 +467,7 @@ function AddRelationshipDialog({
             </Button>
             <Button
               type="button"
-              variant={mode === "corporate" ? "default" : "outline"}
+              variant={mode === "corporate" ? "default" : "outline-solid"}
               size="sm"
               onClick={() => {
                 setMode("corporate");

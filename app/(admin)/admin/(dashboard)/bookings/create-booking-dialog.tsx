@@ -548,7 +548,7 @@ export function CreateBookingDialog() {
               <div className="flex gap-2">
                 <Button
                   type="button"
-                  variant={bookingMode === "single" ? "default" : "outline"}
+                  variant={bookingMode === "single" ? "default" : "outline-solid"}
                   size="sm"
                   onClick={() => setBookingMode("single")}
                   className="flex-1"
@@ -558,7 +558,7 @@ export function CreateBookingDialog() {
                 </Button>
                 <Button
                   type="button"
-                  variant={bookingMode === "recurring" ? "default" : "outline"}
+                  variant={bookingMode === "recurring" ? "default" : "outline-solid"}
                   size="sm"
                   onClick={() => setBookingMode("recurring")}
                   className="flex-1"
@@ -575,7 +575,7 @@ export function CreateBookingDialog() {
               <div className="flex gap-2">
                 <Button
                   type="button"
-                  variant={sessionLocation === "online" ? "default" : "outline"}
+                  variant={sessionLocation === "online" ? "default" : "outline-solid"}
                   size="sm"
                   onClick={() => setSessionLocation("online")}
                   className="flex-1"
@@ -585,7 +585,7 @@ export function CreateBookingDialog() {
                 </Button>
                 <Button
                   type="button"
-                  variant={sessionLocation === "in_person" ? "default" : "outline"}
+                  variant={sessionLocation === "in_person" ? "default" : "outline-solid"}
                   size="sm"
                   onClick={() => setSessionLocation("in_person")}
                   className="flex-1"
@@ -630,7 +630,7 @@ export function CreateBookingDialog() {
                       value={recurringEndDate}
                       min={new Date().toISOString().slice(0, 10)}
                       onChange={(e) => setRecurringEndDate(e.target.value)}
-                      className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
                 </div>
@@ -682,7 +682,7 @@ export function CreateBookingDialog() {
                 value={adminNotes}
                 onChange={(e) => setAdminNotes(e.target.value)}
                 rows={2}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                 placeholder="Internal notes..."
               />
             </div>

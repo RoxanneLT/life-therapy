@@ -179,7 +179,7 @@ export function PageEditor({ initialPage, seo, activeTab }: PageEditorProps) {
         </div>
         <div className="flex gap-2">
           <Button
-            variant={page.isPublished ? "default" : "outline"}
+            variant={page.isPublished ? "default" : "outline-solid"}
             onClick={handleTogglePublished}
           >
             {page.isPublished ? "Published" : "Draft"}

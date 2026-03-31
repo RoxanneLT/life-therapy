@@ -81,7 +81,7 @@ const SESSION_LABELS: Record<string, string> = {
 
 const STATUS_CONFIG: Record<
   string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  { label: string; variant: "default" | "secondary" | "destructive" | "outline-solid" | "outline" }
 > = {
   pending: { label: "Pending", variant: "outline" },
   confirmed: { label: "Confirmed", variant: "default" },
@@ -189,7 +189,7 @@ function UpcomingBookingCard({
         <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Badge variant={STATUS_CONFIG[b.status]?.variant ?? "outline"}>
+              <Badge variant={STATUS_CONFIG[b.status]?.variant ?? "outline-solid"}>
                 {SESSION_LABELS[b.sessionType] || b.sessionType}
               </Badge>
               {b.recurringSeriesId && (

@@ -54,7 +54,7 @@ export default async function DripEmailsPage() {
       />
 
       {/* ── Smart Behaviour Panel ── */}
-      <Card className="border-brand-200 bg-gradient-to-br from-brand-50/50 to-white">
+      <Card className="border-brand-200 bg-linear-to-br from-brand-50/50 to-white">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100">

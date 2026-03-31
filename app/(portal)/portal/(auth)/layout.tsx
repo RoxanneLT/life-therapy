@@ -17,7 +17,7 @@ export default async function PortalAuthLayout({
         showBookButton={showBookButton}
         logoUrl={settings.logoUrl}
       />
-      <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gradient-to-br from-brand-50 via-cream-50 to-brand-100 py-12 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950">
+      <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-linear-to-br from-brand-50 via-cream-50 to-brand-100 py-12 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950">
         {children}
       </main>
       <PublicFooter

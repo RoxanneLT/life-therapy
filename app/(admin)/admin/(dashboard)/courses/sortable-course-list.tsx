@@ -86,7 +86,7 @@ function SortableRow({
       <td className="p-3">{course.modulesCount}</td>
       <td className="p-3">
         <div className="flex gap-1">
-          <Badge variant={course.isPublished ? "default" : "outline"}>
+          <Badge variant={course.isPublished ? "default" : "outline-solid"}>
             {course.isPublished ? "Published" : "Draft"}
           </Badge>
           {course.isFeatured && <Badge variant="secondary">Featured</Badge>}

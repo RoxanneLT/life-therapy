@@ -11,7 +11,7 @@ interface AddToCartButtonProps {
   digitalProductId?: string;
   packageSelections?: { courseIds: string[]; digitalProductIds: string[] };
   size?: "default" | "sm" | "lg";
-  variant?: "default" | "secondary" | "outline";
+  variant?: "default" | "secondary" | "outline-solid";
   label?: string;
   className?: string;
 }

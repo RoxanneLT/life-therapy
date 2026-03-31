@@ -62,14 +62,14 @@ export default async function OrdersPage({
       {/* Status filters */}
       <div className="flex flex-wrap gap-2">
         <Link href="/admin/orders">
-          <Badge variant={!params.status ? "default" : "outline"}>
+          <Badge variant={!params.status ? "default" : "outline-solid"}>
             All ({orders.length})
           </Badge>
         </Link>
         {counts.map((c) => (
           <Link key={c.status} href={`/admin/orders?status=${c.status}`}>
             <Badge
-              variant={params.status === c.status ? "default" : "outline"}
+              variant={params.status === c.status ? "default" : "outline-solid"}
             >
               {c.status} ({c._count})
             </Badge>

@@ -292,11 +292,11 @@ export default async function CourseOverviewPage({
                     className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
                   >
                     {completedIds.has(lecture.id) ? (
-                      <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
                     ) : lecture.lectureType === "video" ? (
-                      <PlayCircle className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <PlayCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
                     ) : (
-                      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
                     <span className="flex-1">{lecture.title}</span>
                     {lecture.durationSeconds && (
@@ -311,7 +311,7 @@ export default async function CourseOverviewPage({
                     href={`/portal/courses/${slug}/learn/quiz-${mod.quiz.id}`}
                     className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
                   >
-                    <HelpCircle className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    <HelpCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="flex-1">{mod.quiz.title}</span>
                   </Link>
                 )}

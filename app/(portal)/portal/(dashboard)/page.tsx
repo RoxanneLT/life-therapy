@@ -104,7 +104,7 @@ export default async function PortalDashboardPage() {
       {/* Outstanding Payment Banner */}
       {outstandingCount > 0 && (
         <Link href="/portal/invoices">
-          <Card className="border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-700 transition-shadow hover:shadow-md cursor-pointer">
+          <Card className="border-amber-300 bg-linear-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-700 transition-shadow hover:shadow-md cursor-pointer">
             <CardContent className="flex items-center justify-between py-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/40">

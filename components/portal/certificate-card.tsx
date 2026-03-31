@@ -41,7 +41,7 @@ export function CertificateCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="border-b bg-gradient-to-r from-brand-50 to-amber-50 px-6 py-8 text-center dark:from-brand-950/20 dark:to-amber-950/20">
+      <div className="border-b bg-linear-to-r from-brand-50 to-amber-50 px-6 py-8 text-center dark:from-brand-950/20 dark:to-amber-950/20">
         <Award className="mx-auto mb-3 h-10 w-10 text-amber-500" />
         <h3 className="font-heading text-lg font-bold">
           Certificate of Completion

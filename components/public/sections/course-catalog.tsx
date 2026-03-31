@@ -301,11 +301,11 @@ export async function CourseCatalog({
                           </div>
                         </div>
                       )}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent px-4 pb-3 pt-10">
+                      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/40 to-transparent px-4 pb-3 pt-10">
                         <div className="mb-1.5 flex items-center gap-2">
                           <Badge
                             variant={
-                              item.type === "short" ? "secondary" : "outline"
+                              item.type === "short" ? "secondary" : "outline-solid"
                             }
                             className="border-white/40 bg-white/10 text-xs text-white"
                           >
@@ -393,7 +393,7 @@ export async function CourseCatalog({
                             </div>
                           </div>
                         )}
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/40 to-transparent px-3 pb-2 pt-8 sm:px-2 sm:pb-2 sm:pt-6">
+                        <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/40 to-transparent px-3 pb-2 pt-8 sm:px-2 sm:pb-2 sm:pt-6">
                           <h3 className="font-heading text-base font-semibold text-white sm:text-sm">
                             {item.title}
                           </h3>
@@ -404,7 +404,7 @@ export async function CourseCatalog({
                           <div className="mb-1.5 flex items-center gap-2">
                             <Badge
                               variant={
-                                item.type === "short" ? "secondary" : "outline"
+                                item.type === "short" ? "secondary" : "outline-solid"
                               }
                               className="text-xs"
                             >

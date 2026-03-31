@@ -77,7 +77,7 @@ export default async function PortalBookingsPage() {
         <h1 className="font-heading text-2xl font-bold">My Sessions</h1>
         <Link
           href="/portal/book"
-          className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-brand-700 transition-colors"
         >
           + Book a Session
         </Link>

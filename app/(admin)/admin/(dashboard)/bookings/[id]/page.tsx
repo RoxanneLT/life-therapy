@@ -392,7 +392,7 @@ export default async function BookingDetailPage({ params }: Props) {
               <form action={handleTogglePolicyOverride}>
                 <Button
                   type="submit"
-                  variant={booking.policyOverride ? "default" : "outline"}
+                  variant={booking.policyOverride ? "default" : "outline-solid"}
                   size="sm"
                 >
                   {booking.policyOverride ? "Override Active" : "Enable Override"}

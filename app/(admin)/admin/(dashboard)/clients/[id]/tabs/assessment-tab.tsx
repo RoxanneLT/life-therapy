@@ -198,7 +198,7 @@ function AssessmentForm({
             value={adminNotes}
             onChange={(e) => setAdminNotes(e.target.value)}
             rows={4}
-            className="w-full rounded-md border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full rounded-md border bg-white px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
             placeholder="Private assessment notes..."
           />
         </CardContent>

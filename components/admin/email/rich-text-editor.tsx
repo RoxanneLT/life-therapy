@@ -363,7 +363,7 @@ export function RichTextEditor({
         onPaste={handlePaste}
         onKeyDown={handleKeyDown}
         data-placeholder={placeholder}
-        className="rounded-md border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-muted-foreground/50 [&_p]:mb-[1em] [&_p:last-child]:mb-0 [&_ul]:mb-[1em] [&_ol]:mb-[1em] [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-[0.75em] [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mb-[0.5em] [&_a]:text-brand-600 [&_a]:underline"
+        className="rounded-md border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/50 [&_p]:mb-[1em] [&_p:last-child]:mb-0 [&_ul]:mb-[1em] [&_ol]:mb-[1em] [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-[0.75em] [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mb-[0.5em] [&_a]:text-brand-600 [&_a]:underline"
         style={{ minHeight, lineHeight: 1.6 }}
         suppressContentEditableWarning
       />

@@ -240,7 +240,7 @@ export default async function BookingsPage({ searchParams }: Props) {
       <div className="flex flex-wrap gap-2">
         <Link href={view === "list" ? "/admin/bookings" : `/admin/bookings?view=${view}&date=${selectedDate}`}>
           <Badge
-            variant={statusFilter ? "outline" : "default"}
+            variant={statusFilter ? "outline-solid" : "default"}
             className="cursor-pointer"
           >
             All ({total})
@@ -258,7 +258,7 @@ export default async function BookingsPage({ searchParams }: Props) {
           return (
             <Link key={status} href={href}>
               <Badge
-                variant={statusFilter === status ? "default" : "outline"}
+                variant={statusFilter === status ? "default" : "outline-solid"}
                 className="cursor-pointer"
               >
                 {status.replace("_", " ")} ({countMap[status] || 0})

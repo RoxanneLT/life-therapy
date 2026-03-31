@@ -223,7 +223,7 @@ export default async function ShortCourseDetailPage({
                   key={lecture.id}
                   className="flex items-center gap-3 rounded-lg border px-4 py-3"
                 >
-                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-medium text-brand-700">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-medium text-brand-700">
                     {i + 1}
                   </span>
                   <span className="flex-1 text-sm">{lecture.title}</span>

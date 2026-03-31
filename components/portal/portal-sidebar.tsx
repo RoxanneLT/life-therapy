@@ -57,7 +57,7 @@ export function PortalSidebar({ className, upcomingSessionCount, isSessionsClien
   }
 
   return (
-    <aside className={cn("flex-shrink-0 border-r bg-card transition-all duration-200", collapsed ? "w-16" : "w-64", className)}>
+    <aside className={cn("shrink-0 border-r bg-card transition-all duration-200", collapsed ? "w-16" : "w-64", className)}>
       <div className="flex h-full flex-col">
         <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "justify-between px-4")}>
           {collapsed ? (

@@ -304,7 +304,7 @@ export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
                     <div className="flex gap-2">
                       <Button
                         type="button"
-                        variant={!isMultiStep ? "default" : "outline"}
+                        variant={!isMultiStep ? "default" : "outline-solid"}
                         size="sm"
                         onClick={() => setIsMultiStep(false)}
                       >
@@ -313,7 +313,7 @@ export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
                       </Button>
                       <Button
                         type="button"
-                        variant={isMultiStep ? "default" : "outline"}
+                        variant={isMultiStep ? "default" : "outline-solid"}
                         size="sm"
                         onClick={() => setIsMultiStep(true)}
                       >

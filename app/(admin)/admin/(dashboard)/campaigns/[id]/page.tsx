@@ -34,15 +34,15 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  draft: "outline",
+const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline-solid" | "destructive"> = {
+  draft: "outline-solid",
   sending: "default",
   sent: "secondary",
   failed: "destructive",
   scheduled: "default",
   active: "default",
   completed: "secondary",
-  paused: "outline",
+  paused: "outline-solid",
 };
 
 import { CAMPAIGN_STATUS_BADGE } from "@/lib/status-styles";
@@ -141,7 +141,7 @@ export default async function CampaignDetailPage({
           <div className="flex items-center gap-3">
             <h1 className="font-heading text-2xl font-bold">{campaign.name}</h1>
             <Badge
-              variant={STATUS_VARIANTS[campaign.status] || "outline"}
+              variant={STATUS_VARIANTS[campaign.status] || "outline-solid"}
               className={statusColor || ""}
             >
               {campaign.status}

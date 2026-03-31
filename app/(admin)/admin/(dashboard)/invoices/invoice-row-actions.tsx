@@ -126,7 +126,7 @@ export function InvoiceRowActions({ invoiceId, status, pdfUrl }: InvoiceRowActio
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               >
                 <option value="eft">EFT / Bank Transfer</option>
                 <option value="cash">Cash</option>
@@ -145,7 +145,7 @@ export function InvoiceRowActions({ invoiceId, status, pdfUrl }: InvoiceRowActio
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
                   placeholder="Bank reference"
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                 />
               </div>
             )}

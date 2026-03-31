@@ -51,7 +51,7 @@ export default async function DownloadsPage() {
           {accesses.map((access) => (
             <Card key={access.id} className="overflow-hidden">
               {access.digitalProduct.imageUrl ? (
-                <div className="relative aspect-[4/3]">
+                <div className="relative aspect-4/3">
                   <Image
                     src={access.digitalProduct.imageUrl}
                     alt={access.digitalProduct.title}
@@ -60,7 +60,7 @@ export default async function DownloadsPage() {
                   />
                 </div>
               ) : (
-                <div className="flex aspect-[4/3] items-center justify-center bg-muted">
+                <div className="flex aspect-4/3 items-center justify-center bg-muted">
                   <FileDown className="h-12 w-12 text-muted-foreground" />
                 </div>
               )}

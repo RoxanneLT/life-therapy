@@ -25,7 +25,7 @@ export function CoursePlayerLayout({
       {/* Sidebar */}
       <div
         className={cn(
-          "flex-shrink-0 overflow-y-auto border-r bg-card transition-all",
+          "shrink-0 overflow-y-auto border-r bg-card transition-all",
           sidebarOpen ? "w-72" : "w-0"
         )}
       >

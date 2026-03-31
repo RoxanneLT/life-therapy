@@ -30,7 +30,7 @@ export function CartItemRow({
       <div className="flex gap-4">
         {/* Image */}
         {product.imageUrl ? (
-          <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md">
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md">
             <Image
               src={product.imageUrl}
               alt={product.title}
@@ -40,7 +40,7 @@ export function CartItemRow({
             />
           </div>
         ) : (
-          <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-md bg-muted">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md bg-muted">
             <span className="text-xs text-muted-foreground">
               {product.type === "package" ? "Package" : "Course"}
             </span>
