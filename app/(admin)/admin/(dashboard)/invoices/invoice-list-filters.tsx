@@ -7,7 +7,6 @@ import { Search } from "lucide-react";
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
-  { key: "draft", label: "Draft" },
   { key: "payment_requested", label: "Requested" },
   { key: "paid", label: "Paid" },
   { key: "overdue", label: "Overdue" },

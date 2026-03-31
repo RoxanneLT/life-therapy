@@ -23,7 +23,7 @@ import Link from "next/link";
 
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
 
-const STATUS_TABS = ["all", "draft", "payment_requested", "paid", "overdue", "cancelled"] as const;
+const STATUS_TABS = ["all", "payment_requested", "paid", "overdue", "cancelled"] as const;
 
 const TYPE_LABELS: Record<string, string> = {
   monthly_postpaid: "Monthly",
