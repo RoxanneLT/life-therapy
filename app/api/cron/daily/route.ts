@@ -97,5 +97,14 @@ export async function GET(request: NextRequest) {
     results.bunnyBalance = { error: String(err) };
   }
 
+  // 10. Dormant client follow-up (30/60/90 day inactivity)
+  try {
+    const { processDormantFollowUp } = await import("@/lib/cron/dormant-follow-up");
+    results.dormantFollowUp = await processDormantFollowUp();
+  } catch (err) {
+    console.error("[daily-cron] Dormant follow-up failed:", err);
+    results.dormantFollowUp = { error: String(err) };
+  }
+
   return NextResponse.json({ ok: true, results });
 }

@@ -254,6 +254,7 @@ model Booking {
   clientNotes        String?       @db.Text
   status             BookingStatus @default(pending)
   adminNotes         String?       @db.Text
+  sessionNotes       String?       @db.Text  // Therapist's post-session notes (not visible to client)
   sessionMode        SessionMode   @default(online)
   graphEventId       String?
   teamsMeetingUrl    String?

@@ -26,6 +26,7 @@ import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
 import { CreateBookingDialog } from "./create-booking-dialog";
 import { SeriesTimeline } from "./series-timeline";
+import { ClientQuickView } from "@/components/admin/client-quick-view";
 
 const VALID_VIEWS = ["list", "day", "week", "month"] as const;
 type ViewMode = (typeof VALID_VIEWS)[number];
@@ -181,6 +182,7 @@ export default async function BookingsPage({ searchParams }: Props) {
     status: b.status,
     teamsMeetingUrl: b.teamsMeetingUrl,
     adminNotes: b.adminNotes,
+    studentId: b.studentId,
   }));
 
   const serialisedOverrides = overrides.map((ov) => ({
@@ -319,9 +321,22 @@ export default async function BookingsPage({ searchParams }: Props) {
                           {booking.startTime} – {booking.endTime}
                         </TableCell>
                         <TableCell>
-                          <div>{booking.clientName}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {booking.clientEmail}
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/40 text-xs font-semibold text-brand-700 dark:text-brand-300">
+                              {booking.clientName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                            </div>
+                            <div>
+                              <div>
+                                {booking.studentId ? (
+                                  <ClientQuickView studentId={booking.studentId}>
+                                    {booking.clientName}
+                                  </ClientQuickView>
+                                ) : (
+                                  booking.clientName
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{booking.clientEmail}</div>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>

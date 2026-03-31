@@ -8,6 +8,7 @@ import { Search } from "lucide-react";
 const TABS = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
+  { key: "at_risk", label: "At Risk" },
   { key: "potential", label: "Potential" },
   { key: "inactive", label: "Inactive" },
   { key: "archived", label: "Archived" },

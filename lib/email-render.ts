@@ -187,6 +187,16 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     relationshipLabel: "partner",
     signupUrl: "https://life-therapy.co.za/portal/login",
   },
+  dormant_60d: {
+    firstName: "Jane",
+    daysSince: "62",
+    bookUrl: "https://life-therapy.co.za/book",
+  },
+  dormant_90d: {
+    firstName: "Jane",
+    daysSince: "94",
+    bookUrl: "https://life-therapy.co.za/book",
+  },
 };
 
 // Title mapping for baseTemplate wrapper
@@ -215,6 +225,8 @@ const TEMPLATE_TITLES: Record<string, string> = {
   payment_request_overdue: "Payment Overdue",
   relationship_invite: "Relationship Link Request",
   relationship_invite_signup: "You've Been Invited to Life-Therapy",
+  dormant_60d: "Checking In",
+  dormant_90d: "We Miss You",
 };
 
 /**
@@ -604,6 +616,38 @@ function renderFallback(
           </div>
           <p>Once you&rsquo;ve created your account, you&rsquo;ll be able to accept the link request from your settings.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
+    case "dormant_60d":
+      return {
+        subject: `Checking in — how are you doing, ${variables.firstName || ""}?`,
+        html: bt(
+          "Checking In",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>I hope you're doing well. It's been a little while since our last session, and I just wanted to reach out and see how things are going for you.</p>
+          <p>There's no pressure at all — I simply wanted you to know that I'm here whenever you feel ready to chat again. Sometimes life gets busy, and that's completely okay.</p>
+          <p>If you'd like to book a session, you can do so anytime:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.bookUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Book a Session</a>
+          </div>
+          <p>Otherwise, I hope everything is going well in your world. Feel free to reply to this email if you'd like to talk about anything.</p>
+          <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
+    case "dormant_90d":
+      return {
+        subject: `We miss you, ${variables.firstName || ""} — your space is always here`,
+        html: bt(
+          "We Miss You",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>It's been about ${variables.daysSince || "90"} days since we last connected, and I've been thinking about you. I wanted you to know that your space here at Life-Therapy is always open — whenever the time feels right.</p>
+          <p>I know that stepping back into therapy can feel like a big step, so I'd love to offer you a <strong>free 15-minute check-in call</strong> — no commitment, just a chance to reconnect and see where you're at.</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.bookUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Book a Free Check-In</a>
+          </div>
+          <p>You've already done such meaningful work — and I'd love to continue supporting you whenever you're ready.</p>
+          <p>Take care of yourself.</p>
+          <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
       };
     default:

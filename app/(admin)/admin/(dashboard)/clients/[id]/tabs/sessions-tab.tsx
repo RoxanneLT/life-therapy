@@ -53,6 +53,7 @@ interface BookingData {
   isLateCancel: boolean;
   creditRefunded: boolean;
   clientNotes: string | null;
+  sessionNotes: string | null;
   priceZarCents: number;
 }
 
@@ -321,6 +322,14 @@ function BookingCard({
               <p className="text-xs text-red-600">
                 {isPostpaid ? "No-show — session will be invoiced" : "Credit forfeited"}
               </p>
+            )}
+
+            {/* Session notes */}
+            {b.sessionNotes && (
+              <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground mb-0.5">Session Notes</p>
+                <p className="whitespace-pre-wrap">{b.sessionNotes}</p>
+              </div>
             )}
           </div>
 

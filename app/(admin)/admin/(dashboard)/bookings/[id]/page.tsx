@@ -7,7 +7,7 @@ import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
 import type { Currency } from "@/lib/region";
 import { format } from "date-fns";
-import { updateBookingStatus, updateBookingNotes, deleteBooking, togglePolicyOverrideAction } from "../actions";
+import { updateBookingStatus, updateBookingNotes, updateSessionNotes, deleteBooking, togglePolicyOverrideAction } from "../actions";
 import {
   Card,
   CardContent,
@@ -97,6 +97,7 @@ export default async function BookingDetailPage({ params }: Props) {
           date: true,
           sessionType: true,
           adminNotes: true,
+          sessionNotes: true,
           clientNotes: true,
         },
       })
@@ -403,6 +404,34 @@ export default async function BookingDetailPage({ params }: Props) {
         </Card>
       )}
 
+      {/* Session Notes — only for completed sessions */}
+      {(booking.status === "completed" || booking.status === "no_show") && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Session Notes</CardTitle>
+            <CardDescription>
+              Private therapist notes about this session. Not visible to the client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form action={async (formData: FormData) => {
+              "use server";
+              await updateSessionNotes(booking.id, formData);
+            }}>
+              <Textarea
+                name="sessionNotes"
+                defaultValue={booking.sessionNotes || ""}
+                rows={4}
+                placeholder="How did the session go? Key topics, breakthroughs, follow-up needed..."
+              />
+              <div className="mt-2 flex justify-end">
+                <Button type="submit" size="sm">Save Notes</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Admin Notes */}
       <Card>
         <CardHeader>
@@ -461,6 +490,12 @@ export default async function BookingDetailPage({ params }: Props) {
                           View
                         </Link>
                       </div>
+                      {prev.sessionNotes && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Session notes</p>
+                          <p className="text-sm whitespace-pre-wrap">{prev.sessionNotes}</p>
+                        </div>
+                      )}
                       {prev.adminNotes && (
                         <div>
                           <p className="text-xs font-medium text-muted-foreground">Your notes</p>
@@ -473,7 +508,7 @@ export default async function BookingDetailPage({ params }: Props) {
                           <p className="text-sm whitespace-pre-wrap">{prev.clientNotes}</p>
                         </div>
                       )}
-                      {!prev.adminNotes && !prev.clientNotes && (
+                      {!prev.sessionNotes && !prev.adminNotes && !prev.clientNotes && (
                         <p className="text-xs text-muted-foreground italic">No notes</p>
                       )}
                     </div>

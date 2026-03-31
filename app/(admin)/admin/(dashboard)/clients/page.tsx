@@ -20,7 +20,7 @@ import { CreateClientDialog } from "./create-client-dialog";
 
 import { CLIENT_STATUS_BADGE } from "@/lib/status-styles";
 
-const STATUS_TABS = ["all", "active", "potential", "inactive", "archived"] as const;
+const STATUS_TABS = ["all", "active", "at_risk", "potential", "inactive", "archived"] as const;
 
 const ONBOARDING_LABELS: Record<number, string> = {
   0: "Not started",
@@ -73,8 +73,16 @@ export default async function ClientsPage({
     : "created";
   const sortDir: SortDir = dir === "asc" ? "asc" : "desc";
 
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
   const where: Record<string, unknown> = {};
-  if (activeTab !== "all") {
+  if (activeTab === "at_risk") {
+    // Active clients whose most recent completed session is 30+ days ago,
+    // with no upcoming confirmed/pending bookings
+    where.clientStatus = "active";
+    where.bookings = { some: { status: "completed" } };
+  } else if (activeTab !== "all") {
     where.clientStatus = activeTab;
   }
   if (q) {
@@ -86,7 +94,7 @@ export default async function ClientsPage({
     ];
   }
 
-  const [clients, counts] = await Promise.all([
+  const [allClients, counts] = await Promise.all([
     prisma.student.findMany({
       where,
       take: 500,
@@ -94,6 +102,16 @@ export default async function ClientsPage({
       include: {
         _count: { select: { bookings: true, enrollments: true } },
         creditBalance: { select: { balance: true } },
+        ...(activeTab === "at_risk"
+          ? {
+              bookings: {
+                where: { status: { in: ["completed", "confirmed", "pending"] } },
+                orderBy: { date: "desc" as const },
+                take: 1,
+                select: { date: true, status: true },
+              },
+            }
+          : {}),
       },
     }),
     prisma.student.groupBy({
@@ -102,12 +120,57 @@ export default async function ClientsPage({
     }),
   ]);
 
+  // For at_risk, filter in JS: last session must be completed & 30+ days ago
+  let clients = allClients;
+  if (activeTab === "at_risk") {
+    clients = allClients.filter((c) => {
+      const bookings = (c as Record<string, unknown>).bookings as
+        | { date: Date; status: string }[]
+        | undefined;
+      if (!bookings?.length) return false;
+      const last = bookings[0];
+      // If they have a future confirmed/pending booking, not at risk
+      if (last.status === "confirmed" || last.status === "pending") return false;
+      return new Date(last.date) < thirtyDaysAgo;
+    });
+  }
+
+  // Count at-risk clients (separate query for the badge count)
+  const atRiskClients = activeTab === "at_risk"
+    ? allClients.map((c) => ({
+        id: c.id,
+        bookings: ((c as Record<string, unknown>).bookings as { date: Date; status: string }[] | undefined) ?? [],
+      }))
+    : await prisma.student.findMany({
+        where: {
+          clientStatus: "active",
+          bookings: { some: { status: "completed" } },
+        },
+        select: {
+          id: true,
+          bookings: {
+            where: { status: { in: ["completed", "confirmed", "pending"] } },
+            orderBy: { date: "desc" },
+            take: 1,
+            select: { date: true, status: true },
+          },
+        },
+      });
+
+  const atRiskCount = atRiskClients.filter((c) => {
+    if (!c.bookings?.length) return false;
+    const last = c.bookings[0];
+    if (last.status === "confirmed" || last.status === "pending") return false;
+    return new Date(last.date) < thirtyDaysAgo;
+  }).length;
+
   const countMap: Record<string, number> = {};
   let totalCount = 0;
   for (const c of counts) {
     countMap[c.clientStatus] = c._count;
     totalCount += c._count;
   }
+  countMap.at_risk = atRiskCount;
 
   return (
     <div className="space-y-6">

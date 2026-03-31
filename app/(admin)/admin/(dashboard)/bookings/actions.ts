@@ -61,6 +61,16 @@ export async function updateBookingNotes(id: string, formData: FormData) {
   revalidatePath(`/admin/bookings/${id}`);
 }
 
+export async function updateSessionNotes(id: string, formData: FormData) {
+  await requireRole("super_admin", "editor");
+  const sessionNotes = formData.get("sessionNotes") as string;
+  await prisma.booking.update({
+    where: { id },
+    data: { sessionNotes },
+  });
+  revalidatePath(`/admin/bookings/${id}`);
+}
+
 export async function deleteBooking(id: string) {
   await requireRole("super_admin");
 
