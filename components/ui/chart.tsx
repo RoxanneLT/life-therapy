@@ -38,23 +38,20 @@ const ChartContainer = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
     config: ChartConfig
-    children: React.ComponentProps<
-      typeof RechartsPrimitive.ResponsiveContainer
-    >["children"]
+    children: React.ReactElement
   }
 >(({ id, className, children, config, ...props }, ref) => {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
-  const [hasSize, setHasSize] = React.useState(false)
+  const [size, setSize] = React.useState<{ width: number; height: number } | null>(null)
   const innerRef = React.useRef<HTMLDivElement>(null)
 
   React.useLayoutEffect(() => {
     const el = innerRef.current
     if (!el) return
     const observer = new ResizeObserver(([entry]) => {
-      if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-        setHasSize(true)
-      }
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) setSize({ width, height })
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -76,11 +73,12 @@ const ChartContainer = React.forwardRef<
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        {hasSize && (
-          <RechartsPrimitive.ResponsiveContainer>
-            {children}
-          </RechartsPrimitive.ResponsiveContainer>
-        )}
+        {size && React.isValidElement(children)
+          ? React.cloneElement(
+              children as React.ReactElement<{ width?: number; height?: number }>,
+              { width: size.width, height: size.height }
+            )
+          : null}
       </div>
     </ChartContext.Provider>
   )
