@@ -343,22 +343,28 @@ const cancellationConfig: ChartConfig = {
 export function CancellationTrendChart({ data }: CancellationTrendProps) {
   if (!data.length) return <EmptyChart message="No cancellation data" />;
 
-  // Calculate average rate from months that have data
+  // Calculate average cancellation rate from months that have real data
   const monthsWithData = data.filter((d) => d.total > 0);
   const avgRate = monthsWithData.length > 0
-    ? Math.round(monthsWithData.reduce((s, d) => s + d.rate, 0) / monthsWithData.length)
+    ? Number((monthsWithData.reduce((s, d) => s + d.rate, 0) / monthsWithData.length).toFixed(1))
     : 0;
 
-  // For months without data, show the expected rate instead of 0
-  const chartData = data.map((d) => {
+  // Find the last month index with actual data
+  const lastDataIdx = data.reduce((last, d, i) => d.total > 0 ? i : last, -1);
+
+  // Months with data: show actual. After last data month: don't draw the line at all.
+  const chartData = data.map((d, i) => {
     const hasData = d.total > 0;
-    const noShowRate = hasData ? Math.round((d.noShow / d.total) * 100) : 0;
+    const noShowRate = hasData ? Number(((d.noShow / d.total) * 100).toFixed(1)) : 0;
     return {
       month: d.month,
-      rate: hasData ? d.rate : avgRate,
-      noShowRate: hasData ? noShowRate : 0,
+      // After last real month: set rate to avgRate so line merges into expected
+      // But we'll hide the stroke for these segments using a custom approach
+      rate: i <= lastDataIdx ? d.rate : avgRate,
+      noShowRate: i <= lastDataIdx ? noShowRate : 0,
       expected: avgRate,
       hasData,
+      isPast: i <= lastDataIdx,
     };
   });
 
