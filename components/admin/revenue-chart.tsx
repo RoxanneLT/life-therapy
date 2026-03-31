@@ -13,11 +13,15 @@ import type { MonthlyRevenueData } from "@/lib/dashboard-queries";
 
 const chartConfig = {
   actual: {
-    label: "Actual Revenue",
-    color: "hsl(271, 81%, 40%)",
+    label: "Paid",
+    color: "hsl(142, 71%, 35%)",
+  },
+  requested: {
+    label: "Pending Payment",
+    color: "hsl(38, 92%, 50%)",
   },
   estimated: {
-    label: "Estimated Revenue",
+    label: "Estimated",
     color: "hsl(var(--chart-4))",
   },
 } satisfies ChartConfig;
@@ -53,6 +57,12 @@ export function RevenueChart({ data }: RevenueChartProps) {
         />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar dataKey="actual" fill="var(--color-actual)" radius={[4, 4, 0, 0]} />
+        <Bar
+          dataKey="requested"
+          fill="var(--color-requested)"
+          fillOpacity={0.8}
+          radius={[4, 4, 0, 0]}
+        />
         <Bar
           dataKey="estimated"
           fill="var(--color-estimated)"

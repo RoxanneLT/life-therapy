@@ -24,6 +24,7 @@ export type MonthlyBookingData = {
 export type MonthlyRevenueData = {
   month: string;
   actual: number;
+  requested: number;
   estimated: number;
 };
 
@@ -66,7 +67,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
   const yearStart = new Date(`${year}-01-01`);
   const yearEnd   = new Date(`${year + 1}-01-01`);
 
-  const [paidInvoices, unbilledCompleted, upcomingBookings] = await Promise.all([
+  const [paidInvoices, pendingRequests, unbilledCompleted, upcomingBookings] = await Promise.all([
     // Actual revenue from paid invoices
     prisma.invoice.groupBy({
       by: ["billingMonth"],
@@ -75,6 +76,14 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
         billingMonth: { startsWith: `${year}`, not: null },
       },
       _sum: { paidAmountCents: true },
+    }),
+    // Pending payment requests (billed but unpaid)
+    prisma.paymentRequest.findMany({
+      where: {
+        status: "pending",
+        billingMonth: { startsWith: `${year}` },
+      },
+      select: { billingMonth: true, totalCents: true },
     }),
     // Completed sessions not yet invoiced (postpaid pool) — use actual price
     prisma.booking.findMany({
@@ -102,6 +111,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
   const months: MonthlyRevenueData[] = MONTH_LABELS.map((m) => ({
     month: m,
     actual: 0,
+    requested: 0,
     estimated: 0,
   }));
 
@@ -110,6 +120,13 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     if (!row.billingMonth) continue;
     const idx = Number.parseInt(row.billingMonth.split("-")[1], 10) - 1;
     if (idx >= 0 && idx < 12) months[idx].actual = row._sum.paidAmountCents ?? 0;
+  }
+
+  // Pending payment requests → requested
+  for (const pr of pendingRequests) {
+    if (!pr.billingMonth) continue;
+    const idx = Number.parseInt(pr.billingMonth.split("-")[1], 10) - 1;
+    if (idx >= 0 && idx < 12) months[idx].requested += pr.totalCents;
   }
 
   // Completed unbilled → estimated (known amount, just not yet invoiced)
