@@ -36,11 +36,12 @@ export function CancelBookingButton({
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
 
-  const bookingDateTime = new Date(bookingDate);
-  const [hours, minutes] = bookingStartTime.split(":").map(Number);
-  bookingDateTime.setHours(hours, minutes, 0, 0);
-  const hoursUntilBooking =
-    (bookingDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+  const [hoursUntilBooking] = useState(() => {
+    const dt = new Date(bookingDate);
+    const [h, m] = bookingStartTime.split(":").map(Number);
+    dt.setHours(h, m, 0, 0);
+    return (dt.getTime() - Date.now()) / (1000 * 60 * 60);
+  });
   const isLateCancel = hoursUntilBooking < 24 && hoursUntilBooking > -2;
   const showBillingPrompt = isLateCancel && !isFreeSession;
 

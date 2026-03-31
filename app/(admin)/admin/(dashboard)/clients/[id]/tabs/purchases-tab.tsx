@@ -304,12 +304,17 @@ function EnrolCourseDialog({ clientId }: { clientId: string }) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional loading state before async fetch
       setLoading(true);
+      let cancelled = false;
       getAvailableCoursesAction(clientId).then((c) => {
-        setCourses(c);
-        setSelectedCourseId(c[0]?.id || "");
-        setLoading(false);
+        if (!cancelled) {
+          setCourses(c);
+          setSelectedCourseId(c[0]?.id || "");
+          setLoading(false);
+        }
       });
+      return () => { cancelled = true; };
     }
   }, [open, clientId]);
 

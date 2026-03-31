@@ -370,13 +370,12 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
 
   // Custom dot — only show dots on months with real data
   const renderDot = (hasDataField: boolean) => {
-    const DotRenderer = (props: Record<string, unknown>) => {
+    function CancellationDot(props: Record<string, unknown>) {
       const { cx, cy, index } = props as { cx: number; cy: number; index: number };
       if (!chartData[index]?.hasData) return <circle key={index} cx={cx} cy={cy} r={0} />;
       return <circle key={index} cx={cx} cy={cy} r={3} fill={hasDataField ? COLORS.red : COLORS.amber} />;
-    };
-    DotRenderer.displayName = "CancellationDot";
-    return DotRenderer;
+    }
+    return CancellationDot;
   };
 
   return (

@@ -59,6 +59,7 @@ export function BookingWidget({ creditBalance = 0, sessionPrices, currency }: Bo
       const match = SESSION_TYPES.find((t) => t.type === typeParam);
       if (match) {
         hasAppliedUrlParam.current = true;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time URL param initialization
         setData((d) => ({ ...d, sessionType: match }));
         setStep(1);
         setPreselected(true);

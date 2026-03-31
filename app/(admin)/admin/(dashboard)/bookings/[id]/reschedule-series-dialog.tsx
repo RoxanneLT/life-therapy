@@ -79,6 +79,7 @@ export function RescheduleSeriesDialog({
 
   useEffect(() => {
     if (open && hasChanges) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- async conflict check sets state via callback
       checkConflicts();
     } else {
       setConflicts([]);

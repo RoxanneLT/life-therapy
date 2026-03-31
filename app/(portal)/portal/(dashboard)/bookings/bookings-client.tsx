@@ -221,7 +221,6 @@ function UpcomingBookingCard({
             )}
           </div>
 
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             {b.sessionMode === "in_person" ? (
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

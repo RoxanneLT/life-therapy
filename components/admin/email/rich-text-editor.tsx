@@ -171,7 +171,7 @@ export function RichTextEditor({
       isInternalChange.current = true;
       onChange(sanitizeHtml(editorRef.current.innerHTML));
     }
-  }, [onChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [onChange]);
 
   function exec(command: string, val?: string) {
     // Use semantic tags (e.g. <b>) instead of <span style="font-weight:bold">

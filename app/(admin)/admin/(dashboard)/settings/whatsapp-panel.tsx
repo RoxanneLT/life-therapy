@@ -109,11 +109,6 @@ export function WhatsAppPanel({
   const [editBody, setEditBody] = useState("");
   const [editDesc, setEditDesc] = useState("");
 
-  useEffect(() => {
-    loadLogs(1);
-    loadTemplates();
-  }, []);
-
   function loadLogs(page: number) {
     getWhatsAppLogsAction(page, 10).then((data) => {
       setLogs(data.logs);
@@ -133,6 +128,11 @@ export function WhatsAppPanel({
       })));
     }).catch(console.error);
   }
+
+  useEffect(() => {
+    loadLogs(1);
+    loadTemplates();
+  }, []);
 
   function startEditing(t: TemplateEntry) {
     setEditingId(t.id);
