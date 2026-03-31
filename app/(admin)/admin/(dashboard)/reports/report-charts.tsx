@@ -349,10 +349,13 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
     ? Math.round(monthsWithData.reduce((s, d) => s + d.rate, 0) / monthsWithData.length)
     : 0;
 
-  const chartData = data.map((d) => ({
+  // Only include months up to the last one with data for actual lines
+  const lastDataIdx = data.reduce((last, d, i) => d.total > 0 ? i : last, -1);
+
+  const chartData = data.map((d, i) => ({
     month: d.month,
-    rate: d.total > 0 ? d.rate : null,
-    noShowRate: d.total > 0 ? Math.round((d.noShow / d.total) * 100) : null,
+    rate: i <= lastDataIdx ? d.rate : undefined,
+    noShowRate: i <= lastDataIdx ? (d.total > 0 ? Math.round((d.noShow / d.total) * 100) : 0) : undefined,
     expected: avgRate,
   }));
 
@@ -360,17 +363,17 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
     <ChartContainer config={cancellationConfig} className="h-[300px] w-full">
       <LineChart data={chartData} accessibilityLayer>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={0} fontSize={11} />
         <YAxis
           tickLine={false}
           axisLine={false}
           width={40}
-          tickFormatter={(v) => `${v}%`}
+          tickFormatter={(v) => v + "%"}
         />
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => `${value}%`}
+              formatter={(value) => (value !== undefined ? value + "%" : "—")}
             />
           }
         />
@@ -382,7 +385,6 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
           strokeWidth={1}
           strokeDasharray="6 3"
           dot={false}
-          connectNulls
         />
         <Line
           type="monotone"
@@ -390,7 +392,6 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
           stroke="var(--color-rate)"
           strokeWidth={2}
           dot={{ r: 3 }}
-          connectNulls={false}
         />
         <Line
           type="monotone"
@@ -399,7 +400,6 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
           strokeWidth={2}
           dot={{ r: 3 }}
           strokeDasharray="4 4"
-          connectNulls={false}
         />
       </LineChart>
     </ChartContainer>
