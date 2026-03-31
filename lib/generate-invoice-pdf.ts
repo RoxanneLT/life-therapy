@@ -270,6 +270,9 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     const addr = doc.splitTextToSize(billingAddress, CW);
     doc.text(addr, ML, y);
     y += addr.length * 3.5;
+  } else if (invoice.billingEmail) {
+    doc.text(invoice.billingEmail, ML, y);
+    y += 3.5;
   }
 
   y += 6;
