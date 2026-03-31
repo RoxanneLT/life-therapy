@@ -94,8 +94,45 @@ export async function markPaymentRequestPaidFromListAction(
     where: { id: paymentRequestId },
   });
 
-  const isPartial = amountCents < pr.totalCents;
+  // Check if an invoice already exists for this PR (from a prior partial payment)
+  const existingInvoice = await prisma.invoice.findFirst({
+    where: { paymentRequestId },
+  });
 
+  if (existingInvoice) {
+    // Update existing invoice with additional payment
+    const newPaidAmount = (existingInvoice.paidAmountCents ?? 0) + amountCents;
+    const isFullyPaid = newPaidAmount >= pr.totalCents;
+
+    await prisma.invoice.update({
+      where: { id: existingInvoice.id },
+      data: {
+        paidAmountCents: newPaidAmount,
+        status: isFullyPaid ? "paid" : "payment_requested",
+        paidAt: isFullyPaid ? new Date() : existingInvoice.paidAt,
+        paymentMethod: method,
+        eftReference: method === "eft" ? [existingInvoice.eftReference, reference].filter(Boolean).join(", ") : existingInvoice.eftReference,
+      },
+    });
+
+    if (isFullyPaid) {
+      await prisma.paymentRequest.update({
+        where: { id: paymentRequestId },
+        data: { status: "paid" },
+      });
+    }
+
+    await generateAndStoreInvoicePDF(existingInvoice.id).catch(console.error);
+    // Only send email on full payment
+    if (isFullyPaid) {
+      await sendInvoiceEmail(existingInvoice.id).catch(console.error);
+    }
+
+    revalidatePath("/admin/invoices");
+    return;
+  }
+
+  // No existing invoice — create one
   const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
 
   const invoice = await createInvoiceFromPaymentRequest(paymentRequestId, {
@@ -103,6 +140,8 @@ export async function markPaymentRequestPaidFromListAction(
     method: method as "eft" | "cash" | "card",
     amountCents,
   });
+
+  const isPartial = amountCents < pr.totalCents;
 
   // Partial payment: keep PR pending, invoice shows partial paid amount
   if (isPartial) {

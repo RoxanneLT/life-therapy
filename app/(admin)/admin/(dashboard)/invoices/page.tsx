@@ -156,6 +156,23 @@ export default async function InvoicesPage({
   totalCount += pendingRequestCount;
   countMap.all = totalCount;
 
+  // Look up partial payments on pending PRs
+  const prPaidAmounts = new Map<string, number>();
+  if (pendingRequests.length > 0) {
+    const prIds = pendingRequests.filter(pr => pr.invoiceId).map(pr => pr.invoiceId!);
+    if (prIds.length > 0) {
+      const partialInvoices = await prisma.invoice.findMany({
+        where: { id: { in: prIds } },
+        select: { id: true, paidAmountCents: true, paymentRequestId: true },
+      });
+      for (const inv of partialInvoices) {
+        if (inv.paymentRequestId && inv.paidAmountCents) {
+          prPaidAmounts.set(inv.paymentRequestId, inv.paidAmountCents);
+        }
+      }
+    }
+  }
+
   // Summary card calculations
   let thisMonthCount = 0;
   let paidThisMonth = 0;
@@ -255,8 +272,13 @@ export default async function InvoicesPage({
                       <TableCell className="text-sm text-muted-foreground">
                         {sessionCount} session{sessionCount !== 1 ? "s" : ""}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm font-medium">
-                        {formatCurrency(pr.totalCents)}
+                      <TableCell className="text-right">
+                        <span className="font-mono text-sm font-medium">{formatCurrency(pr.totalCents)}</span>
+                        {(prPaidAmounts.get(pr.id) ?? 0) > 0 && (
+                          <div className="text-xs text-amber-600">
+                            Paid {formatCurrency(prPaidAmounts.get(pr.id)!)} · Due {formatCurrency(pr.totalCents - prPaidAmounts.get(pr.id)!)}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={isDue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>
@@ -269,6 +291,7 @@ export default async function InvoicesPage({
                           studentId={pr.studentId}
                           clientName={clientName}
                           totalCents={pr.totalCents}
+                          paidCents={prPaidAmounts.get(pr.id) ?? 0}
                         />
                       </TableCell>
                     </TableRow>

@@ -36,6 +36,7 @@ interface PaymentRequestActionsProps {
   readonly studentId: string | null;
   readonly clientName: string;
   readonly totalCents: number;
+  readonly paidCents: number;
 }
 
 export function PaymentRequestActions({
@@ -43,12 +44,14 @@ export function PaymentRequestActions({
   studentId,
   clientName,
   totalCents,
+  paidCents,
 }: PaymentRequestActionsProps) {
+  const remainingCents = totalCents - paidCents;
   const [isPending, startTransition] = useTransition();
   const [showPayDialog, setShowPayDialog] = useState(false);
   const [method, setMethod] = useState("eft");
   const [reference, setReference] = useState("");
-  const [amountRands, setAmountRands] = useState((totalCents / 100).toFixed(2));
+  const [amountRands, setAmountRands] = useState((remainingCents / 100).toFixed(2));
 
   function handleMarkPaid() {
     const amountCents = Math.round(parseFloat(amountRands) * 100);
@@ -119,7 +122,9 @@ export function PaymentRequestActions({
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
-              Total due: R{(totalCents / 100).toFixed(2)} from {clientName}.
+              {paidCents > 0
+                ? `Total: R${(totalCents / 100).toFixed(2)} · Paid: R${(paidCents / 100).toFixed(2)} · Remaining: R${(remainingCents / 100).toFixed(2)}`
+                : `Total due: R${(totalCents / 100).toFixed(2)}`} — {clientName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
