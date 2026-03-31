@@ -144,6 +144,109 @@ export async function rescheduleBooking(
 }
 
 // ────────────────────────────────────────────────────────────
+// Reschedule entire recurring series (future bookings only)
+// ────────────────────────────────────────────────────────────
+
+export async function rescheduleSeriesAction(
+  seriesId: string,
+  newDayOfWeek: number, // 1=Mon..5=Fri
+  newStartTime: string, // HH:mm
+): Promise<{ updated: number }> {
+  await requireRole("super_admin", "editor");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Get all future confirmed/pending bookings in this series
+  const bookings = await prisma.booking.findMany({
+    where: {
+      recurringSeriesId: seriesId,
+      status: { in: ["confirmed", "pending"] },
+      date: { gte: today },
+    },
+    orderBy: { date: "asc" },
+  });
+
+  if (bookings.length === 0) return { updated: 0 };
+
+  // Compute end time from the first booking's duration
+  const duration = bookings[0].durationMinutes || 60;
+  const [startH, startM] = newStartTime.split(":").map(Number);
+  const endH = startH + Math.floor((startM + duration) / 60);
+  const endM = (startM + duration) % 60;
+  const newEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+
+  let updated = 0;
+
+  for (const booking of bookings) {
+    // Calculate new date: same week, different day
+    const oldDate = new Date(booking.date);
+    const oldDow = oldDate.getUTCDay(); // 0=Sun
+    const diff = newDayOfWeek - oldDow;
+    const newDate = new Date(oldDate);
+    newDate.setUTCDate(newDate.getUTCDate() + diff);
+    const newDateStr = newDate.toISOString().slice(0, 10);
+
+    // Cancel old calendar event
+    if (booking.graphEventId) {
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    }
+
+    // Create new calendar event
+    const config = getSessionTypeConfig(booking.sessionType);
+    const calResult = await createCalendarEvent({
+      subject: `${config.label} — ${booking.clientName}`,
+      startDateTime: `${newDateStr}T${newStartTime}:00`,
+      endDateTime: `${newDateStr}T${newEndTime}:00`,
+      clientName: booking.clientName,
+      clientEmail: booking.clientEmail,
+    }).catch(() => null);
+
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        date: new Date(newDateStr + "T00:00:00Z"),
+        startTime: newStartTime,
+        endTime: newEndTime,
+        graphEventId: calResult?.eventId || null,
+        teamsMeetingUrl: calResult?.teamsMeetingUrl || booking.teamsMeetingUrl,
+      },
+    });
+
+    updated++;
+  }
+
+  // Notify client once (using first booking's details)
+  const first = bookings[0];
+  const config = getSessionTypeConfig(first.sessionType);
+  const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][newDayOfWeek];
+
+  try {
+    const email = await renderEmail("booking_reschedule", {
+      clientName: first.clientName,
+      sessionType: config.label,
+      oldDate: "Recurring series",
+      oldTime: `${first.startTime} – ${first.endTime} (SAST)`,
+      newDate: `Every ${dayName}`,
+      newTime: `${newStartTime} – ${newEndTime} (SAST)`,
+      teamsMeetingUrl: bookings[0].teamsMeetingUrl ?? "",
+      bookUrl: "https://life-therapy.co.za/book",
+    });
+    await sendEmail({
+      to: first.clientEmail,
+      ...email,
+      templateKey: "booking_reschedule",
+      metadata: { seriesId },
+    });
+  } catch (err) {
+    console.error("Failed to send series reschedule email:", err);
+  }
+
+  revalidatePath("/admin/bookings");
+  return { updated };
+}
+
+// ────────────────────────────────────────────────────────────
 // Admin: Create booking on behalf of a client
 // ────────────────────────────────────────────────────────────
 

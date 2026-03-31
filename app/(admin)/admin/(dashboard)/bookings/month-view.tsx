@@ -40,11 +40,11 @@ const SESSION_DOT: Record<string, string> = {
 };
 
 const STATUS_LINE: Record<string, string> = {
-  pending: "bg-yellow-200",
-  confirmed: "bg-green-200",
-  cancelled: "bg-red-200 line-through",
-  completed: "bg-blue-200",
-  no_show: "bg-gray-200",
+  pending: "bg-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-200",
+  confirmed: "bg-green-200 dark:bg-green-900/40 dark:text-green-200",
+  cancelled: "bg-red-200 dark:bg-red-900/40 dark:text-red-300 line-through",
+  completed: "bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200",
+  no_show: "bg-gray-200 dark:bg-gray-700/50 dark:text-gray-300",
 };
 
 export function MonthView({ bookings, date }: MonthViewProps) {
@@ -131,7 +131,7 @@ export function MonthView({ bookings, date }: MonthViewProps) {
               key={d}
               className={cn(
                 "px-2 py-2 text-center text-xs font-medium text-muted-foreground",
-                d === "Sat" || d === "Sun" ? "bg-gray-50" : "",
+                d === "Sat" || d === "Sun" ? "bg-gray-50 dark:bg-gray-800/30" : "",
               )}
             >
               {d}
@@ -156,9 +156,9 @@ export function MonthView({ bookings, date }: MonthViewProps) {
                   key={dateStr}
                   className={cn(
                     "min-h-[6rem] border-r p-1.5 last:border-r-0",
-                    !isCurrentMonth && "bg-gray-50/60",
-                    isWeekend && isCurrentMonth && "bg-gray-50/30",
-                    isToday && "bg-brand-50/40",
+                    !isCurrentMonth && "bg-gray-50/60 dark:bg-gray-900/40",
+                    isWeekend && isCurrentMonth && "bg-gray-50/30 dark:bg-gray-800/20",
+                    isToday && "bg-brand-50/40 dark:bg-brand-900/30",
                   )}
                 >
                   {/* Day number */}
@@ -168,7 +168,7 @@ export function MonthView({ bookings, date }: MonthViewProps) {
                     className={cn(
                       "mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium transition-colors hover:bg-brand-100",
                       isToday && "bg-brand-600 text-white hover:bg-brand-700",
-                      !isCurrentMonth && "text-gray-300",
+                      !isCurrentMonth && "text-gray-300 dark:text-gray-600",
                     )}
                   >
                     {format(day, "d")}
