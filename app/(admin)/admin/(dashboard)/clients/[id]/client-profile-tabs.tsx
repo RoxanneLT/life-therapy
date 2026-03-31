@@ -32,7 +32,9 @@ const PERSONAL_SECTIONS = [
 
 // Sub-sections within Finances tab
 const FINANCE_SECTIONS = [
-  { key: "billing", label: "Billing & Invoices" },
+  { key: "billing", label: "Billing" },
+  { key: "credits", label: "Credits" },
+  { key: "invoices", label: "Invoices" },
   { key: "purchases", label: "Purchases" },
 ] as const;
 
@@ -145,7 +147,9 @@ export function ClientProfileTabs({ client, activeTab, insights }: ClientProfile
                 </button>
               ))}
             </div>
-            {financeSection === "billing" && <FinancesTab client={client} />}
+            {financeSection === "billing" && <FinancesTab client={client} section="billing" />}
+            {financeSection === "credits" && <FinancesTab client={client} section="credits" />}
+            {financeSection === "invoices" && <FinancesTab client={client} section="invoices" />}
             {financeSection === "purchases" && <PurchasesTab client={client} />}
           </div>
         )}

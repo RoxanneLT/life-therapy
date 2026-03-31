@@ -113,6 +113,7 @@ interface BilledToMeEntry {
 
 interface FinancesTabProps {
   readonly client: Record<string, unknown>;
+  readonly section?: "billing" | "credits" | "invoices";
 }
 
 const TXN_TYPE_STYLES: Record<string, { label: string; className: string }> = {
@@ -150,7 +151,7 @@ function formatCurrency(cents: number, currency: string): string {
 
 // ─── Main Component ──────────────────────────────────────────
 
-export function FinancesTab({ client }: FinancesTabProps) {
+export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
   const clientId = client.id as string;
   const billingType = (client.billingType as string) || "prepaid";
   const billingEmail = (client.billingEmail as string) || "";
@@ -228,15 +229,8 @@ export function FinancesTab({ client }: FinancesTabProps) {
     <div className="space-y-4">
       <h2 className="font-heading text-lg font-semibold">Finances</h2>
 
-      <Tabs defaultValue="billing">
-        <TabsList>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
-          <TabsTrigger value="credits">Credits</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-        </TabsList>
-
-        {/* ── Billing Sub-tab ──────────────────────────────── */}
-        <TabsContent value="billing" className="space-y-4">
+      {section === "billing" && (
+        <div className="space-y-4">
           {/* Billing Indicator */}
           {billedToMe.length > 0 && (
             <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
@@ -264,10 +258,11 @@ export function FinancesTab({ client }: FinancesTabProps) {
             individualBilledToId={individualBilledToId}
             couplesBilledToId={couplesBilledToId}
           />
-        </TabsContent>
+        </div>
+      )}
 
-        {/* ── Credits Sub-tab ──────────────────────────────── */}
-        <TabsContent value="credits" className="space-y-6">
+      {section === "credits" && (
+        <div className="space-y-6">
           <div className="flex items-start justify-between">
             <Card className="w-fit">
               <CardContent className="px-8 py-6 text-center">
@@ -337,10 +332,11 @@ export function FinancesTab({ client }: FinancesTabProps) {
               <p className="text-sm text-muted-foreground">No transactions.</p>
             )}
           </section>
-        </TabsContent>
+        </div>
+      )}
 
-        {/* ── Invoices Sub-tab ─────────────────────────────── */}
-        <TabsContent value="invoices" className="space-y-6">
+      {section === "invoices" && (
+        <div className="space-y-6">
           <div className="flex justify-end gap-2">
             <CreateInvoiceDialog clientId={clientId} />
             {isPostpaid && <BillToDateButton clientId={clientId} />}
@@ -404,8 +400,8 @@ export function FinancesTab({ client }: FinancesTabProps) {
               <p className="text-sm text-muted-foreground">No payments.</p>
             )}
           </section>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   );
 }
