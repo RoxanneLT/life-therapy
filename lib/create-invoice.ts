@@ -262,7 +262,7 @@ export async function createInvoiceFromPaymentRequest(
     paymentMethod: payment.method,
     paystackReference: payment.method === "paystack" ? payment.reference : undefined,
     eftReference: payment.method === "eft" ? payment.reference : undefined,
-    paidAmountCents: payment.amountCents,
+    paidAmountCents: payment.amountCents || pr.totalCents,
     paymentRequestId: pr.id,
     periodStart: pr.periodStart,
     periodEnd: pr.periodEnd,
