@@ -82,6 +82,7 @@ async function generateOrderInvoice(orderId: string, paystackRef: string) {
     paymentReference: paystackRef || fullOrder.paystackReference || "",
     paymentMethod: "paystack",
     lineItems: buildLineItemsFromOrder(fullOrder.items),
+    invoiceDiscountCents: fullOrder.discountCents || undefined,
   });
 }
 

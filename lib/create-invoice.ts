@@ -176,6 +176,7 @@ export async function createInvoiceFromPayment(params: {
   paymentReference: string;
   paymentMethod: "paystack" | "eft" | "cash" | "card";
   lineItems: InvoiceLineItem[];
+  invoiceDiscountCents?: number;
   metadata?: Record<string, unknown>;
 }): Promise<Invoice> {
   // Idempotency: don't create duplicate invoices for the same payment
@@ -198,6 +199,7 @@ export async function createInvoiceFromPayment(params: {
     billingVatNumber: contact.vatNumber,
     currency: params.currency,
     lineItems: params.lineItems,
+    invoiceDiscountCents: params.invoiceDiscountCents,
     paymentMethod: params.paymentMethod,
     paystackReference: params.paymentReference,
     paidAmountCents: params.amountCents,
