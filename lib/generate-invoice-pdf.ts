@@ -101,6 +101,16 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const currency = invoice.currency || "ZAR";
   const isVat = settings.vatRegistered && invoice.vatPercent > 0;
 
+  // Look up coupon code if discount was applied
+  let couponCode: string | null = null;
+  if (invoice.discountCents > 0 && invoice.orderId) {
+    const order = await prisma.order.findUnique({
+      where: { id: invoice.orderId },
+      select: { coupon: { select: { code: true } } },
+    });
+    couponCode = order?.coupon?.code ?? null;
+  }
+
   // Resolve billing address — fallback to student's encrypted address if not on invoice
   let billingAddress = invoice.billingAddress;
   if (!billingAddress && invoice.studentId) {
@@ -379,8 +389,9 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
 
   // Discount (only if applicable)
   if (invoice.discountCents > 0) {
+    const discountLabel = couponCode ? `Discount (${couponCode.toUpperCase()}):` : "Discount:";
     doc.setTextColor(...MUTED);
-    doc.text("Discount:", tLabelX, tY);
+    doc.text(discountLabel, tLabelX, tY);
     doc.setTextColor(22, 163, 74);
     doc.text(`-${fmt(invoice.discountCents, currency)}`, tValueX, tY, { align: "right" });
     tY += bankRowH;

@@ -73,20 +73,6 @@ async function generateOrderInvoice(orderId: string, paystackRef: string) {
   });
   if (!fullOrder) return;
 
-  const lineItems = buildLineItemsFromOrder(fullOrder.items);
-
-  // If coupon was used, add a discount note to the line items
-  if (fullOrder.discountCents > 0 && fullOrder.coupon?.code) {
-    lineItems.push({
-      description: `Coupon: ${fullOrder.coupon.code.toUpperCase()}`,
-      quantity: 1,
-      unitPriceCents: -fullOrder.discountCents,
-      discountCents: 0,
-      discountPercent: 0,
-      totalCents: -fullOrder.discountCents,
-    });
-  }
-
   await createInvoiceFromPayment({
     type: determineInvoiceType(fullOrder.items),
     studentId: fullOrder.studentId,
@@ -95,7 +81,9 @@ async function generateOrderInvoice(orderId: string, paystackRef: string) {
     currency: fullOrder.currency,
     paymentReference: paystackRef || fullOrder.paystackReference || "",
     paymentMethod: "paystack",
-    lineItems,
+    lineItems: buildLineItemsFromOrder(fullOrder.items),
+    invoiceDiscountCents: fullOrder.discountCents || undefined,
+    couponCode: fullOrder.coupon?.code || undefined,
   });
 }
 

@@ -177,6 +177,7 @@ export async function createInvoiceFromPayment(params: {
   paymentMethod: "paystack" | "eft" | "cash" | "card";
   lineItems: InvoiceLineItem[];
   invoiceDiscountCents?: number;
+  couponCode?: string;
   metadata?: Record<string, unknown>;
 }): Promise<Invoice> {
   // Idempotency: don't create duplicate invoices for the same payment
