@@ -133,7 +133,7 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
     sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
     total: fmt(pr.totalCents, pr.currency),
     dueDate: fmtDate(pr.dueDate),
-    paymentUrl: pr.paymentUrl || "#",
+    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
   });
 
   await sendEmail({
@@ -187,7 +187,7 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
     billingName,
     total: fmt(pr.totalCents, pr.currency),
     dueDate: fmtDate(pr.dueDate),
-    paymentUrl: pr.paymentUrl || "#",
+    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
   });
 
   await sendEmail({
@@ -239,7 +239,7 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
   const { subject, html } = await renderEmail("payment_request_due_today", {
     billingName,
     total: fmt(pr.totalCents, pr.currency),
-    paymentUrl: pr.paymentUrl || "#",
+    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
   });
 
   await sendEmail({
@@ -295,7 +295,7 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
     billingName,
     month: monthLabel,
     total: fmt(pr.totalCents, pr.currency),
-    paymentUrl: pr.paymentUrl || "#",
+    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
   });
 
   await sendEmail({
