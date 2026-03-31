@@ -385,6 +385,7 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
           axisLine={false}
           width={40}
           tickFormatter={(v) => v + "%"}
+          domain={[0, (max: number) => Math.max(Math.ceil(max * 1.2), 10)]}
         />
         <ChartTooltip
           content={

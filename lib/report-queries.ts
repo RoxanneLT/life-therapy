@@ -269,22 +269,21 @@ export async function getSessionTypeBreakdown(fyYear: number) {
 export async function getCancellationTrend(fyYear: number) {
   const months = getFYMonths(fyYear);
 
-  // Only include past bookings (completed, cancelled, no_show) — not future confirmed
-  const bookings = await prisma.booking.findMany({
-    where: {
-      date: { gte: months[0].start, lt: months[11].end },
-      status: { in: ["completed", "cancelled", "no_show"] },
-    },
+  // All bookings for total count (denominator), including future confirmed
+  const allBookings = await prisma.booking.findMany({
+    where: { date: { gte: months[0].start, lt: months[11].end } },
     select: { date: true, status: true },
   });
 
   return months.map(({ label, start, end }) => {
-    const inMonth = bookings.filter((b) => b.date >= start && b.date < end);
+    const inMonth = allBookings.filter((b) => b.date >= start && b.date < end);
     const total = inMonth.length;
     const cancelled = inMonth.filter((b) => b.status === "cancelled").length;
     const noShow = inMonth.filter((b) => b.status === "no_show").length;
     const rate = total > 0 ? Math.round(((cancelled + noShow) / total) * 100 * 10) / 10 : 0;
-    return { month: label, total, cancelled, noShow, rate };
+    // Month is "past" if it has at least one completed/cancelled/no_show booking
+    const hasPastData = inMonth.some((b) => ["completed", "cancelled", "no_show"].includes(b.status));
+    return { month: label, total: hasPastData ? total : 0, cancelled, noShow, rate: hasPastData ? rate : 0 };
   });
 }
 
