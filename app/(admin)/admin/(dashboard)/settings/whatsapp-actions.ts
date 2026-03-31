@@ -53,7 +53,6 @@ export async function sendTestWhatsAppAction(phone: string) {
       parameters: [
         { type: "text", text: "Test" },
         { type: "text", text: "10:00" },
-        { type: "text", text: "https://life-therapy.co.za" },
       ],
     }],
   });

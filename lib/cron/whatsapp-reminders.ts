@@ -127,7 +127,6 @@ async function processSessionReminders(
         parameters: [
           { type: "text", text: booking.student.firstName },
           { type: "text", text: booking.startTime },
-          { type: "text", text: booking.teamsMeetingUrl || "" },
         ],
       }],
       metadata: { bookingId: booking.id },
