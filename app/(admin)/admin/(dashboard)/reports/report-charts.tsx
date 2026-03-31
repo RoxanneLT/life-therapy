@@ -337,15 +337,23 @@ interface CancellationTrendProps {
 const cancellationConfig: ChartConfig = {
   rate: { label: "Cancellation %", color: COLORS.red },
   noShowRate: { label: "No-show %", color: COLORS.amber },
+  expected: { label: "Expected %", color: "hsl(0, 0%, 60%)" },
 };
 
 export function CancellationTrendChart({ data }: CancellationTrendProps) {
   if (!data.length) return <EmptyChart message="No cancellation data" />;
 
+  // Calculate average rate from months that have data
+  const monthsWithData = data.filter((d) => d.total > 0);
+  const avgRate = monthsWithData.length > 0
+    ? Math.round(monthsWithData.reduce((s, d) => s + d.rate, 0) / monthsWithData.length)
+    : 0;
+
   const chartData = data.map((d) => ({
     month: d.month,
-    rate: d.rate,
-    noShowRate: d.total > 0 ? Math.round((d.noShow / d.total) * 100) : 0,
+    rate: d.total > 0 ? d.rate : null,
+    noShowRate: d.total > 0 ? Math.round((d.noShow / d.total) * 100) : null,
+    expected: avgRate,
   }));
 
   return (
@@ -369,10 +377,20 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
         <ChartLegend content={<ChartLegendContent />} />
         <Line
           type="monotone"
+          dataKey="expected"
+          stroke="var(--color-expected)"
+          strokeWidth={1}
+          strokeDasharray="6 3"
+          dot={false}
+          connectNulls
+        />
+        <Line
+          type="monotone"
           dataKey="rate"
           stroke="var(--color-rate)"
           strokeWidth={2}
           dot={{ r: 3 }}
+          connectNulls={false}
         />
         <Line
           type="monotone"
@@ -381,6 +399,7 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
           strokeWidth={2}
           dot={{ r: 3 }}
           strokeDasharray="4 4"
+          connectNulls={false}
         />
       </LineChart>
     </ChartContainer>
