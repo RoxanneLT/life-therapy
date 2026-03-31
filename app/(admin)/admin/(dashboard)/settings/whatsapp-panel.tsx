@@ -363,7 +363,7 @@ export function WhatsAppPanel({
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Sends the &quot;hello_world&quot; template (available on all new WABA accounts).
+                  Sends a test session reminder to verify the connection.
                 </p>
               </CardContent>
             </Card>

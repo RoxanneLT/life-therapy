@@ -46,12 +46,20 @@ export async function sendTestWhatsAppAction(phone: string) {
 
   const result = await sendWhatsAppTemplate({
     to: phone,
-    templateName: "hello_world",
-    languageCode: "en_US",
+    templateName: "session_reminder_today",
+    languageCode: "en",
+    components: [{
+      type: "body",
+      parameters: [
+        { type: "text", text: "Test" },
+        { type: "text", text: "10:00" },
+        { type: "text", text: "https://life-therapy.co.za" },
+      ],
+    }],
   });
 
   await logWhatsAppMessage({
-    templateName: "hello_world",
+    templateName: "session_reminder_today",
     to: normalizePhoneNumber(phone),
     status: result.success ? "sent" : "failed",
     waMessageId: result.messageId,
