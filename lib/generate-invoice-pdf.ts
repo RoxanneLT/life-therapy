@@ -396,10 +396,9 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     doc.setTextColor(...MUTED);
     doc.text(discountLabel, tLabelX, tY);
     doc.setTextColor(22, 163, 74);
-    const [sym] = fmtParts(invoice.discountCents, currency);
-    const [, num] = fmtParts(invoice.discountCents, currency);
-    doc.text(`-${sym}`, symbolX, tY);
-    doc.text(num, tValueX, tY, { align: "right" });
+    const [sym, num] = fmtParts(invoice.discountCents, currency);
+    doc.text(sym, symbolX, tY);
+    doc.text(`${num} -/-`, tValueX, tY, { align: "right" });
     tY += bankRowH;
   }
 
