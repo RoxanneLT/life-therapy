@@ -269,8 +269,12 @@ export async function getSessionTypeBreakdown(fyYear: number) {
 export async function getCancellationTrend(fyYear: number) {
   const months = getFYMonths(fyYear);
 
+  // Only include past bookings (completed, cancelled, no_show) — not future confirmed
   const bookings = await prisma.booking.findMany({
-    where: { date: { gte: months[0].start, lt: months[11].end } },
+    where: {
+      date: { gte: months[0].start, lt: months[11].end },
+      status: { in: ["completed", "cancelled", "no_show"] },
+    },
     select: { date: true, status: true },
   });
 
