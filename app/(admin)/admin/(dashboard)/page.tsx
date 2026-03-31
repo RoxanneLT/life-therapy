@@ -124,8 +124,8 @@ export default async function AdminDashboard({
       href: "/admin/invoices?status=paid",
     },
     {
-      label: "Pending Payments",
-      value: pendingCount > 0 ? `${pendingCount} (${formatPrice(pendingTotal)})` : "0",
+      label: "Outstanding",
+      value: pendingTotal > 0 ? formatPrice(pendingTotal) : "R 0",
       icon: CreditCard,
       href: "/admin/invoices?status=payment_requested",
     },

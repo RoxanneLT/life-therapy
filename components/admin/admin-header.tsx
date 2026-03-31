@@ -17,6 +17,7 @@ import { Menu, LogOut, ExternalLink, UserCog } from "lucide-react";
 import Link from "next/link";
 import { AdminSidebarContent } from "./admin-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ClientSearch } from "./client-search";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 
 interface AdminHeaderProps {
@@ -73,6 +74,7 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
 
       {/* Right side */}
       <div className="ml-auto flex items-center gap-2">
+        <ClientSearch />
         <ThemeToggle />
         <Button size="sm" className="bg-terracotta-500 text-white hover:bg-terracotta-600" asChild>
           <a href="/" target="_blank" rel="noopener noreferrer">
