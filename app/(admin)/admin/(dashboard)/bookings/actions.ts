@@ -151,7 +151,7 @@ export async function rescheduleSeriesAction(
   seriesId: string,
   newDayOfWeek: number, // 1=Mon..5=Fri
   newStartTime: string, // HH:mm
-): Promise<{ updated: number }> {
+): Promise<{ updated: number; skipped: { id: string; date: string; reason: string }[] }> {
   await requireRole("super_admin", "editor");
 
   const today = new Date();
@@ -167,7 +167,7 @@ export async function rescheduleSeriesAction(
     orderBy: { date: "asc" },
   });
 
-  if (bookings.length === 0) return { updated: 0 };
+  if (bookings.length === 0) return { updated: 0, skipped: [] };
 
   // Compute end time from the first booking's duration
   const duration = bookings[0].durationMinutes || 60;
@@ -176,23 +176,62 @@ export async function rescheduleSeriesAction(
   const endM = (startM + duration) % 60;
   const newEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
+  const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
+
   let updated = 0;
+  const skipped: { id: string; date: string; reason: string }[] = [];
 
   for (const booking of bookings) {
-    // Calculate new date: same week, different day
     const oldDate = new Date(booking.date);
-    const oldDow = oldDate.getUTCDay(); // 0=Sun
+    const oldDow = oldDate.getUTCDay();
     const diff = newDayOfWeek - oldDow;
     const newDate = new Date(oldDate);
     newDate.setUTCDate(newDate.getUTCDate() + diff);
     const newDateStr = newDate.toISOString().slice(0, 10);
 
-    // Cancel old calendar event
+    // Check for conflicts — skip if any found
+    let skipReason: string | null = null;
+
+    if (isSAPublicHoliday(newDate)) {
+      skipReason = "Public holiday";
+    } else {
+      const override = await prisma.availabilityOverride.findUnique({
+        where: { date: new Date(newDateStr + "T00:00:00Z") },
+      });
+      if (override?.isBlocked) {
+        skipReason = `Day blocked${override.reason ? `: ${override.reason}` : ""}`;
+      } else {
+        const existing = await prisma.booking.findFirst({
+          where: {
+            date: new Date(newDateStr + "T00:00:00Z"),
+            startTime: { lte: newEndTime },
+            endTime: { gte: newStartTime },
+            status: { in: ["confirmed", "pending"] },
+            id: { not: booking.id },
+            recurringSeriesId: { not: seriesId },
+          },
+          select: { clientName: true, startTime: true },
+        });
+        if (existing) {
+          skipReason = `Conflicts with ${existing.clientName} at ${existing.startTime}`;
+        }
+      }
+    }
+
+    if (skipReason) {
+      skipped.push({
+        id: booking.id,
+        date: format(newDate, "EEE d MMM yyyy"),
+        reason: skipReason,
+      });
+      continue;
+    }
+
+    // No conflict — proceed with reschedule
     if (booking.graphEventId) {
       await cancelCalendarEvent(booking.graphEventId).catch(console.error);
     }
 
-    // Create new calendar event
     const config = getSessionTypeConfig(booking.sessionType);
     const calResult = await createCalendarEvent({
       subject: `${config.label} — ${booking.clientName}`,
@@ -216,15 +255,15 @@ export async function rescheduleSeriesAction(
     updated++;
   }
 
-  // Notify client once (using first booking's details)
+  // Notify client
   const first = bookings[0];
-  const config = getSessionTypeConfig(first.sessionType);
+  const cfgLabel = getSessionTypeConfig(first.sessionType).label;
   const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][newDayOfWeek];
 
   try {
     const email = await renderEmail("booking_reschedule", {
       clientName: first.clientName,
-      sessionType: config.label,
+      sessionType: cfgLabel,
       oldDate: "Recurring series",
       oldTime: `${first.startTime} – ${first.endTime} (SAST)`,
       newDate: `Every ${dayName}`,
@@ -243,7 +282,7 @@ export async function rescheduleSeriesAction(
   }
 
   revalidatePath("/admin/bookings");
-  return { updated };
+  return { updated, skipped };
 }
 
 // ────────────────────────────────────────────────────────────

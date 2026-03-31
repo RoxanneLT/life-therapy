@@ -55,6 +55,7 @@ export function RescheduleSeriesDialog({
   const [startTime, setStartTime] = useState(currentTime);
   const [conflicts, setConflicts] = useState<{ date: string; conflict: string | null }[]>([]);
   const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState<{ updated: number; skipped: { id: string; date: string; reason: string }[] } | null>(null);
 
   const dayChanged = dayOfWeek !== initialDay;
   const timeChanged = startTime !== currentTime;
@@ -87,9 +88,13 @@ export function RescheduleSeriesDialog({
   function handleSubmit() {
     startTransition(async () => {
       try {
-        const result = await rescheduleSeriesAction(seriesId, parseInt(dayOfWeek), startTime);
-        toast.success(`${result.updated} future session${result.updated !== 1 ? "s" : ""} rescheduled`);
-        setOpen(false);
+        const res = await rescheduleSeriesAction(seriesId, Number.parseInt(dayOfWeek), startTime);
+        setResult(res);
+        if (res.skipped.length === 0) {
+          toast.success(`${res.updated} session${res.updated !== 1 ? "s" : ""} rescheduled`);
+        } else {
+          toast.warning(`${res.updated} rescheduled, ${res.skipped.length} skipped due to conflicts`);
+        }
       } catch {
         toast.error("Failed to reschedule series");
       }
@@ -184,23 +189,62 @@ export function RescheduleSeriesDialog({
           {checking && (
             <p className="text-xs text-muted-foreground">Checking availability...</p>
           )}
+
+          {/* Results after submission */}
+          {result && (
+            <div className="space-y-3 rounded-md border p-3">
+              <p className="text-sm font-semibold">
+                <CheckCircle className="mr-1 inline h-4 w-4 text-green-600" />
+                {result.updated} session{result.updated !== 1 ? "s" : ""} rescheduled
+              </p>
+              {result.skipped.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-amber-600 mb-2">
+                    <AlertTriangle className="mr-1 inline h-4 w-4" />
+                    {result.skipped.length} session{result.skipped.length !== 1 ? "s" : ""} skipped — manual action required:
+                  </p>
+                  <div className="space-y-1.5">
+                    {result.skipped.map((s) => (
+                      <div key={s.id} className="flex items-center justify-between rounded bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1.5 text-xs">
+                        <a
+                          href={`/admin/bookings/${s.id}`}
+                          className="font-medium text-amber-800 dark:text-amber-300 hover:underline"
+                        >
+                          {s.date}
+                        </a>
+                        <span className="text-amber-600 dark:text-amber-400">{s.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Click a date to open the booking and reschedule it individually.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isPending || !hasChanges}
-            variant={conflictCount > 0 ? "destructive" : "default"}
-          >
-            {isPending
-              ? "Rescheduling..."
-              : conflictCount > 0
-                ? `Reschedule Anyway (${conflictCount} conflict${conflictCount !== 1 ? "s" : ""})`
-                : `Reschedule ${futureCount} Session${futureCount !== 1 ? "s" : ""}`}
-          </Button>
+          {result ? (
+            <Button onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isPending || !hasChanges}
+              >
+                {isPending
+                  ? "Rescheduling..."
+                  : `Reschedule ${futureCount} Session${futureCount !== 1 ? "s" : ""}`}
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
