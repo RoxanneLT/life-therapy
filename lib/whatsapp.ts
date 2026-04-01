@@ -39,10 +39,13 @@ export interface SendResult {
 // ─── Phone number helpers ────────────────────────────────────
 
 /**
- * Normalize SA phone numbers to E.164 format.
+ * Normalize phone numbers to E.164 format.
+ * Numbers with a leading 0 are assumed to be SA and get the +27 prefix.
+ * Numbers already carrying a + country code are passed through as-is.
  * "082 123 4567" → "+27821234567"
  * "0821234567"   → "+27821234567"
  * "+27821234567" → "+27821234567"
+ * "+447911123456"→ "+447911123456"
  */
 export function normalizePhoneNumber(phone: string): string {
   const digits = phone.replace(/[\s\-()]/g, "");
@@ -53,11 +56,12 @@ export function normalizePhoneNumber(phone: string): string {
 }
 
 /**
- * Validate that a phone number is a valid SA mobile number.
+ * Validate that a phone number resolves to a plausible E.164 number:
+ * a + followed by 7–15 digits. Accepts any country code.
  */
-export function isValidSAPhone(phone: string): boolean {
+export function isValidPhone(phone: string): boolean {
   const normalized = normalizePhoneNumber(phone);
-  return /^\+27\d{9}$/.test(normalized);
+  return /^\+\d{7,15}$/.test(normalized);
 }
 
 // ─── Core send function ──────────────────────────────────────
@@ -175,8 +179,8 @@ export async function sendAndLogTemplate(params: {
     return { success: false, error: "No phone number" };
   }
 
-  if (!isValidSAPhone(phone)) {
-    const error = `Invalid SA phone number: ${phone}`;
+  if (!isValidPhone(phone)) {
+    const error = `Invalid phone number: ${phone}`;
     await logWhatsAppMessage({
       templateName: params.templateName,
       to: phone,
