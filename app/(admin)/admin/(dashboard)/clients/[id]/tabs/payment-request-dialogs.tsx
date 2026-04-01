@@ -12,7 +12,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Send, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
@@ -94,8 +93,8 @@ function LineEditor({ lines, onLinesChange, sessionRates, loadingRates }: LineEd
       <div className="flex flex-wrap gap-2">
         {loadingRates ? (
           <>
-            <Skeleton className="h-7 w-32" />
-            <Skeleton className="h-7 w-32" />
+            <div className="h-7 w-32 animate-pulse rounded bg-muted" />
+            <div className="h-7 w-32 animate-pulse rounded bg-muted" />
           </>
         ) : sessionRates ? (
           <>
@@ -598,9 +597,9 @@ export function EditPaymentRequestDialog({
 
           {loading ? (
             <div className="space-y-3 py-4">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-3/4" />
+              <div className="h-8 w-full animate-pulse rounded bg-muted" />
+              <div className="h-8 w-full animate-pulse rounded bg-muted" />
+              <div className="h-8 w-3/4 animate-pulse rounded bg-muted" />
             </div>
           ) : (
             <div className="space-y-5 py-1">
