@@ -185,6 +185,7 @@ async function processBillingReminders(
       if (!contact) continue;
 
       const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
+      const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
       const result = await sendAndLogTemplate({
         studentId: contact.studentId,
         phone: contact.phone,
@@ -196,7 +197,7 @@ async function processBillingReminders(
             { type: "text", text: monthLabel },
             { type: "text", text: formatCents(pr.totalCents, pr.currency) },
             { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
-            { type: "text", text: pr.paymentUrl || "" },
+            { type: "text", text: pr.paymentUrl || portalUrl },
           ],
         }],
         metadata: { paymentRequestId: pr.id },
@@ -229,6 +230,7 @@ async function processBillingReminders(
     const contact = await resolveStudentPhone(pr.studentId);
     if (!contact) continue;
 
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
     const result = await sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
@@ -239,7 +241,7 @@ async function processBillingReminders(
           { type: "text", text: contact.firstName },
           { type: "text", text: formatCents(pr.totalCents, pr.currency) },
           { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
-          { type: "text", text: pr.paymentUrl || "" },
+          { type: "text", text: pr.paymentUrl || portalUrl },
         ],
       }],
       metadata: { paymentRequestId: pr.id },
@@ -270,6 +272,7 @@ async function processBillingReminders(
     const contact = await resolveStudentPhone(pr.studentId);
     if (!contact) continue;
 
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
     const result = await sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
@@ -279,7 +282,7 @@ async function processBillingReminders(
         parameters: [
           { type: "text", text: contact.firstName },
           { type: "text", text: formatCents(pr.totalCents, pr.currency) },
-          { type: "text", text: pr.paymentUrl || "" },
+          { type: "text", text: pr.paymentUrl || portalUrl },
         ],
       }],
       metadata: { paymentRequestId: pr.id },
@@ -312,6 +315,7 @@ async function processBillingReminders(
     if (!contact) continue;
 
     const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
+    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
     const result = await sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
@@ -322,7 +326,7 @@ async function processBillingReminders(
           { type: "text", text: contact.firstName },
           { type: "text", text: formatCents(pr.totalCents, pr.currency) },
           { type: "text", text: monthLabel },
-          { type: "text", text: pr.paymentUrl || "" },
+          { type: "text", text: pr.paymentUrl || portalUrl },
         ],
       }],
       metadata: { paymentRequestId: pr.id },
