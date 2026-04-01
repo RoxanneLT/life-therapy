@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { formatPhoneDisplay } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -146,7 +147,7 @@ export function ConvertDialog({
             </p>
             <p className="text-sm text-muted-foreground">{client.email}</p>
             {client.phone && (
-              <p className="text-sm text-muted-foreground">{client.phone}</p>
+              <p className="text-sm text-muted-foreground">{formatPhoneDisplay(client.phone)}</p>
             )}
           </div>
 

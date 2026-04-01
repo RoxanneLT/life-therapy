@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -36,4 +37,21 @@ export function slugify(text: string): string {
     .replaceAll(/[^\w\s-]/g, "")
     .replaceAll(/[\s_]+/g, "-")
     .replaceAll(/(?:^-+)|(?:-+$)/g, "");
+}
+
+/**
+ * Format a phone number for display in international format.
+ * "+27764106679"  → "+27 76 410 6679"
+ * "+447911123456" → "+44 7911 123456"
+ * Falls back to the raw value if the number can't be parsed.
+ */
+export function formatPhoneDisplay(phone: string | null | undefined): string {
+  if (!phone) return "";
+  try {
+    const parsed = parsePhoneNumberFromString(phone);
+    if (parsed?.isValid()) return parsed.formatInternational();
+  } catch {
+    // fall through
+  }
+  return phone;
 }

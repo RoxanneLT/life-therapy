@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatPhoneDisplay } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -247,7 +248,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
               <UpdateEmailDialog clientId={client.id as string} currentEmail={client.email as string} />
             </dd>
           </div>
-          <DisplayField label="Phone" value={client.phone as string} />
+          <DisplayField label="Phone" value={formatPhoneDisplay(client.phone as string)} />
           <DisplayField label="Date of Birth" value={dateOfBirthDisplay} />
           <DisplayField label="Gender" value={client.gender as string} />
           <DisplayField label="Relationship Status" value={client.relationshipStatus as string} />
