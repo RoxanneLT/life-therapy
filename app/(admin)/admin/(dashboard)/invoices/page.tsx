@@ -109,7 +109,6 @@ export default async function InvoicesPage({
 
   // Queries
   const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   // Billing period for upcoming run tab
   const { start: billingPeriodStart, end: billingPeriodEnd } = getBillingPeriod(
@@ -131,7 +130,15 @@ export default async function InvoicesPage({
   const showPaymentRequests = activeStatus === "payment_requested";
   const showUpcoming = activeStatus === "upcoming";
 
-  const [invoices, statusCounts, monthStats, pendingRequests, pendingRequestCount, upcomingCount] = await Promise.all([
+  // Find the most recent billing month across invoices
+  const lastCycleInvoice = await prisma.invoice.findFirst({
+    where: { billingMonth: { not: null } },
+    orderBy: { billingMonth: "desc" },
+    select: { billingMonth: true },
+  });
+  const lastCycleBillingMonth = lastCycleInvoice?.billingMonth ?? null;
+
+  const [invoices, statusCounts, lastCycleStats, overdueResult, pendingRequests, pendingRequestCount, upcomingCount] = await Promise.all([
     (showPaymentRequests || showUpcoming)
       ? Promise.resolve([])
       : prisma.invoice.findMany({
@@ -146,10 +153,18 @@ export default async function InvoicesPage({
       by: ["status"],
       _count: true,
     }),
-    prisma.invoice.groupBy({
-      by: ["status"],
-      where: { billingMonth: currentMonth },
-      _count: true,
+    // Last cycle stats grouped by status
+    lastCycleBillingMonth
+      ? prisma.invoice.groupBy({
+          by: ["status"],
+          where: { billingMonth: lastCycleBillingMonth },
+          _count: true,
+          _sum: { totalCents: true },
+        })
+      : Promise.resolve([]),
+    // Overdue: all overdue invoices across all months
+    prisma.invoice.aggregate({
+      where: { status: "overdue" },
       _sum: { totalCents: true },
     }),
     showPaymentRequests
@@ -217,29 +232,28 @@ export default async function InvoicesPage({
     }
   }
 
-  // Summary card calculations
-  let thisMonthCount = 0;
-  let paidThisMonth = 0;
-  let outstanding = 0;
-  let overdue = 0;
-
-  for (const s of monthStats) {
-    thisMonthCount += s._count;
-    if (s.status === "paid") paidThisMonth += s._sum.totalCents ?? 0;
-    if (s.status === "payment_requested" || s.status === "draft")
-      outstanding += s._sum.totalCents ?? 0;
-    if (s.status === "overdue") overdue += s._sum.totalCents ?? 0;
+  // Summary card calculations — based on last billing cycle
+  // Paid invoices come from Invoice table; outstanding ones are still PaymentRequests
+  let lastCyclePaid = 0;
+  for (const s of lastCycleStats) {
+    if (s.status === "paid") lastCyclePaid += s._sum.totalCents ?? 0;
   }
-
-  // Add pending payment requests to outstanding
-  if (pendingRequestCount > 0) {
+  // Outstanding = pending payment requests for this billing month
+  let lastCycleOutstanding = 0;
+  if (lastCycleBillingMonth) {
     const prTotal = await prisma.paymentRequest.aggregate({
-      where: { status: "pending" },
+      where: { status: "pending", billingMonth: lastCycleBillingMonth },
       _sum: { totalCents: true },
     });
-    outstanding += prTotal._sum.totalCents ?? 0;
-    thisMonthCount += pendingRequestCount;
+    lastCycleOutstanding = prTotal._sum.totalCents ?? 0;
   }
+  // Total billed that cycle = paid invoices + still-outstanding PRs
+  const lastCycleTotal = lastCyclePaid + lastCycleOutstanding;
+  const overdue = overdueResult._sum.totalCents ?? 0;
+  // Friendly label for the last billing month, e.g. "2026-03" → "Mar 2026"
+  const lastCycleLabel = lastCycleBillingMonth
+    ? new Date(`${lastCycleBillingMonth}-01`).toLocaleDateString("en-ZA", { month: "short", year: "numeric" })
+    : "—";
 
   return (
     <div className="space-y-6">
@@ -257,10 +271,10 @@ export default async function InvoicesPage({
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <SummaryCard label="This Month" value={String(thisMonthCount)} sub="invoices" />
-        <SummaryCard label="Paid This Month" value={formatCurrency(paidThisMonth)} variant="green" />
-        <SummaryCard label="Outstanding" value={formatCurrency(outstanding)} variant="yellow" />
-        <SummaryCard label="Overdue" value={formatCurrency(overdue)} variant="red" />
+        <SummaryCard label="Last Cycle" value={formatCurrency(lastCycleTotal)} sub={lastCycleLabel} />
+        <SummaryCard label="Collected" value={formatCurrency(lastCyclePaid)} sub={lastCycleLabel} variant="green" />
+        <SummaryCard label="Outstanding" value={formatCurrency(lastCycleOutstanding)} sub={lastCycleLabel} variant="yellow" />
+        <SummaryCard label="Overdue" value={formatCurrency(overdue)} sub="all time" variant="red" />
       </div>
 
       {/* Filters */}
