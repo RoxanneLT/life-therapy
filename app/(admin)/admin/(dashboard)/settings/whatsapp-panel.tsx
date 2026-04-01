@@ -585,7 +585,17 @@ export function WhatsAppPanel({
                       <span className="text-xs text-muted-foreground">
                         Page {logPage} of {logPages}
                       </span>
-                      <div className="flex gap-1">
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => loadLogs(1)}
+                          disabled={logPage <= 1}
+                        >
+                          <ChevronLeft className="h-3 w-3" />
+                          <ChevronLeft className="-ml-2 h-3 w-3" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -595,6 +605,28 @@ export function WhatsAppPanel({
                         >
                           <ChevronLeft className="h-3.5 w-3.5" />
                         </Button>
+                        {Array.from({ length: logPages }, (_, i) => i + 1)
+                          .filter((p) => p === 1 || p === logPages || Math.abs(p - logPage) <= 2)
+                          .reduce<(number | "…")[]>((acc, p, idx, arr) => {
+                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("…");
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((p, i) =>
+                            p === "…" ? (
+                              <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground">…</span>
+                            ) : (
+                              <Button
+                                key={p}
+                                variant={p === logPage ? "default" : "ghost"}
+                                size="icon"
+                                className="h-7 w-7 text-xs"
+                                onClick={() => loadLogs(p as number)}
+                              >
+                                {p}
+                              </Button>
+                            )
+                          )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -603,6 +635,16 @@ export function WhatsAppPanel({
                           disabled={logPage >= logPages}
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => loadLogs(logPages)}
+                          disabled={logPage >= logPages}
+                        >
+                          <ChevronRight className="h-3 w-3" />
+                          <ChevronRight className="-ml-2 h-3 w-3" />
                         </Button>
                       </div>
                     </div>
