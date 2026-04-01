@@ -178,6 +178,39 @@ export async function resendPaymentRequestEmailAction(paymentRequestId: string) 
 }
 
 // ────────────────────────────────────────────────────────────
+// Client search for billing (used by global New PR dialog)
+// ────────────────────────────────────────────────────────────
+
+export async function searchClientsForBillingAction(query: string) {
+  await requireRole("super_admin");
+
+  if (!query.trim()) return [];
+
+  return prisma.student.findMany({
+    where: {
+      OR: [
+        { firstName: { contains: query, mode: "insensitive" } },
+        { lastName: { contains: query, mode: "insensitive" } },
+        { email: { contains: query, mode: "insensitive" } },
+        { billingEmail: { contains: query, mode: "insensitive" } },
+      ],
+      clientStatus: { not: "archived" },
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      billingEmail: true,
+      standingDiscountPercent: true,
+      standingDiscountFixed: true,
+    },
+    take: 10,
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // CSV Export
 // ────────────────────────────────────────────────────────────
 

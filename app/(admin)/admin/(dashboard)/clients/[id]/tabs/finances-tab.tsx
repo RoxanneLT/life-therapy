@@ -54,6 +54,11 @@ import {
   generateAdHocInvoiceAction,
   getSessionRatesAction,
 } from "../actions";
+import {
+  CreatePaymentRequestDialog,
+  EditPaymentRequestDialog,
+  ResendPRButton,
+} from "./payment-request-dialogs";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL, PR_STATUS_BADGE, PR_STATUS_LABEL } from "@/lib/status-styles";
 
@@ -153,6 +158,7 @@ function formatCurrency(cents: number, currency: string): string {
 
 export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
   const clientId = client.id as string;
+  const clientName = `${client.firstName as string} ${client.lastName as string}`.trim();
   const billingType = (client.billingType as string) || "prepaid";
   const billingEmail = (client.billingEmail as string) || "";
   const standingDiscountPercent = (client.standingDiscountPercent as number) || 0;
@@ -348,6 +354,10 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
             <PaymentRequestsSection
               paymentRequests={paymentRequests}
               clientId={clientId}
+              clientName={clientName}
+              billingEmail={billingEmail}
+              standingDiscountPercent={standingDiscountPercent}
+              standingDiscountFixed={standingDiscountFixed}
             />
           )}
 
@@ -769,9 +779,17 @@ function InvoiceHistorySection({
 function PaymentRequestsSection({
   paymentRequests,
   clientId,
+  clientName,
+  billingEmail,
+  standingDiscountPercent,
+  standingDiscountFixed,
 }: Readonly<{
   paymentRequests: PaymentRequestData[];
   clientId: string;
+  clientName: string;
+  billingEmail: string;
+  standingDiscountPercent: number;
+  standingDiscountFixed: number;
 }>) {
   const [isPending, startTransition] = useTransition();
 
@@ -809,9 +827,18 @@ function PaymentRequestsSection({
 
   return (
     <section>
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Payment Requests
-      </h3>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Payment Requests
+        </h3>
+        <CreatePaymentRequestDialog
+          clientId={clientId}
+          clientName={clientName}
+          billingEmail={billingEmail}
+          standingDiscountPercent={standingDiscountPercent}
+          standingDiscountFixed={standingDiscountFixed}
+        />
+      </div>
       {paymentRequests.length > 0 ? (
         <Card>
           <CardContent className="p-0">
@@ -867,6 +894,20 @@ function PaymentRequestsSection({
                             )}
                             {pr.status !== "paid" && pr.status !== "cancelled" && (
                               <>
+                                <EditPaymentRequestDialog
+                                  paymentRequestId={pr.id}
+                                  clientId={clientId}
+                                  clientName={clientName}
+                                  billingEmail={billingEmail}
+                                />
+                                <ResendPRButton
+                                  paymentRequestId={pr.id}
+                                  clientId={clientId}
+                                  clientName={clientName}
+                                  billingEmail={billingEmail}
+                                  totalCents={pr.totalCents}
+                                  isDraft={pr.status === "draft"}
+                                />
                                 <Button
                                   variant="ghost"
                                   size="icon"

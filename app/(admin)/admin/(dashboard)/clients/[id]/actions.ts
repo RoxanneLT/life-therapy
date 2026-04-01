@@ -1180,3 +1180,378 @@ export async function getSessionRatesAction() {
 
   return { individualRate, couplesRate };
 }
+
+// ────────────────────────────────────────────────────────────
+// Create manual payment request
+// ────────────────────────────────────────────────────────────
+
+export async function createManualPaymentRequestAction(data: {
+  studentId: string;
+  lineItems: {
+    description: string;
+    subLine?: string;
+    quantity: number;
+    unitPriceCents: number;
+  }[];
+  discountPercent?: number;
+  discountFixedCents?: number;
+  dueDate: string;
+  billingMonth?: string;
+  note?: string;
+  sendImmediately: boolean;
+}): Promise<{ success: boolean; paymentRequestId?: string; error?: string }> {
+  await requireRole("super_admin", "editor");
+
+  try {
+    const settings = await getSiteSettings();
+
+    const lineItemsCalc = data.lineItems.map((li) => ({
+      unitPriceCents: li.unitPriceCents,
+      quantity: li.quantity,
+      discountCents: 0,
+      discountPercent: 0,
+    }));
+
+    const totals = calculateInvoiceTotals(
+      lineItemsCalc,
+      data.discountPercent,
+      data.discountFixedCents,
+      settings.vatRegistered ?? false,
+      settings.vatPercent ?? 15,
+    );
+
+    const now = new Date();
+    const billingMonth = data.billingMonth?.trim()
+      || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    const [ymYear, ymMonth] = billingMonth.split("-").map(Number);
+    const periodStart = new Date(ymYear, ymMonth - 1, 1);
+    const periodEnd = new Date(ymYear, ymMonth, 0); // last day of month
+
+    const lineItemsJson: InvoiceLineItem[] = data.lineItems.map((li) => ({
+      description: li.description,
+      subLine: li.subLine,
+      quantity: li.quantity,
+      unitPriceCents: li.unitPriceCents,
+      discountCents: 0,
+      discountPercent: 0,
+      totalCents: Math.round(li.unitPriceCents * li.quantity),
+    }));
+
+    const pr = await prisma.paymentRequest.create({
+      data: {
+        studentId: data.studentId,
+        billingMonth,
+        periodStart,
+        periodEnd,
+        currency: "ZAR",
+        subtotalCents: totals.subtotalCents,
+        discountCents: totals.discountCents,
+        vatAmountCents: totals.vatAmountCents,
+        totalCents: totals.totalCents,
+        lineItems: lineItemsJson as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
+        status: data.sendImmediately ? "pending" : "draft",
+        dueDate: new Date(data.dueDate),
+      },
+    });
+
+    if (data.sendImmediately) {
+      // Generate Paystack link
+      const student = await prisma.student.findUnique({
+        where: { id: data.studentId },
+        select: { email: true, billingEmail: true },
+      });
+      const email = student?.billingEmail || student?.email || "";
+
+      if (email) {
+        try {
+          const reference = `pr-${pr.id.slice(-8)}-${Date.now()}`;
+          const result = await initializeTransaction({
+            email,
+            amount: pr.totalCents,
+            currency: pr.currency || "ZAR",
+            reference,
+            callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+            metadata: { paymentRequestId: pr.id },
+          });
+          await prisma.paymentRequest.update({
+            where: { id: pr.id },
+            data: { paymentUrl: result.authorization_url, paystackReference: reference },
+          });
+        } catch (err) {
+          console.error("Paystack link generation failed:", err);
+        }
+      }
+
+      // Send email with pro-forma PDF
+      const { sendPaymentRequestEmail } = await import("@/lib/send-invoice");
+      await sendPaymentRequestEmail(pr.id);
+    }
+
+    revalidatePath(`/admin/clients/${data.studentId}`);
+    return { success: true, paymentRequestId: pr.id };
+  } catch (err) {
+    console.error("createManualPaymentRequestAction error:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Failed to create payment request" };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Get payment request details (for edit dialog)
+// ────────────────────────────────────────────────────────────
+
+export interface PaymentRequestDetails {
+  id: string;
+  studentId: string | null;
+  lineItems: {
+    description: string;
+    subLine?: string;
+    quantity: number;
+    unitPriceCents: number;
+    totalCents: number;
+  }[];
+  subtotalCents: number;
+  discountCents: number;
+  vatAmountCents: number;
+  totalCents: number;
+  dueDate: string | null;
+  billingMonth: string;
+  status: string;
+  paymentUrl: string | null;
+  proformaPdfUrl: string | null;
+}
+
+export async function getPaymentRequestDetailsAction(
+  paymentRequestId: string,
+): Promise<PaymentRequestDetails | null> {
+  await requireRole("super_admin", "editor");
+
+  const pr = await prisma.paymentRequest.findUnique({
+    where: { id: paymentRequestId },
+    select: {
+      id: true,
+      studentId: true,
+      lineItems: true,
+      subtotalCents: true,
+      discountCents: true,
+      vatAmountCents: true,
+      totalCents: true,
+      dueDate: true,
+      billingMonth: true,
+      status: true,
+      paymentUrl: true,
+      proformaPdfUrl: true,
+    },
+  });
+
+  if (!pr) return null;
+
+  const lineItems = (pr.lineItems as unknown as InvoiceLineItem[]).map((li) => ({
+    description: li.description,
+    subLine: li.subLine,
+    quantity: li.quantity,
+    unitPriceCents: li.unitPriceCents,
+    totalCents: li.totalCents,
+  }));
+
+  return {
+    id: pr.id,
+    studentId: pr.studentId,
+    lineItems,
+    subtotalCents: pr.subtotalCents,
+    discountCents: pr.discountCents,
+    vatAmountCents: pr.vatAmountCents,
+    totalCents: pr.totalCents,
+    dueDate: pr.dueDate ? pr.dueDate.toISOString() : null,
+    billingMonth: pr.billingMonth,
+    status: pr.status,
+    paymentUrl: pr.paymentUrl,
+    proformaPdfUrl: pr.proformaPdfUrl,
+  };
+}
+
+// ────────────────────────────────────────────────────────────
+// Update payment request (edit dialog save)
+// ────────────────────────────────────────────────────────────
+
+export async function updatePaymentRequestAction(data: {
+  paymentRequestId: string;
+  studentId: string;
+  lineItems: { description: string; subLine?: string; quantity: number; unitPriceCents: number }[];
+  discountPercent?: number;
+  discountFixedCents?: number;
+  dueDate: string;
+  resend: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  await requireRole("super_admin", "editor");
+
+  try {
+    const pr = await prisma.paymentRequest.findUniqueOrThrow({
+      where: { id: data.paymentRequestId },
+      select: { status: true, totalCents: true, paymentUrl: true, studentId: true, currency: true },
+    });
+
+    if (!["draft", "pending", "overdue"].includes(pr.status)) {
+      return { error: "This payment request can no longer be edited" };
+    }
+
+    const settings = await getSiteSettings();
+    const lineItemsCalc = data.lineItems.map((li) => ({
+      unitPriceCents: li.unitPriceCents,
+      quantity: li.quantity,
+      discountCents: 0,
+      discountPercent: 0,
+    }));
+
+    const totals = calculateInvoiceTotals(
+      lineItemsCalc,
+      data.discountPercent,
+      data.discountFixedCents,
+      settings.vatRegistered ?? false,
+      settings.vatPercent ?? 15,
+    );
+
+    const lineItemsJson: InvoiceLineItem[] = data.lineItems.map((li) => ({
+      description: li.description,
+      subLine: li.subLine,
+      quantity: li.quantity,
+      unitPriceCents: li.unitPriceCents,
+      discountCents: 0,
+      discountPercent: 0,
+      totalCents: Math.round(li.unitPriceCents * li.quantity),
+    }));
+
+    const amountChanged = totals.totalCents !== pr.totalCents;
+
+    await prisma.paymentRequest.update({
+      where: { id: data.paymentRequestId },
+      data: {
+        lineItems: lineItemsJson as unknown as Parameters<typeof prisma.paymentRequest.update>[0]["data"]["lineItems"],
+        subtotalCents: totals.subtotalCents,
+        discountCents: totals.discountCents,
+        vatAmountCents: totals.vatAmountCents,
+        totalCents: totals.totalCents,
+        dueDate: new Date(data.dueDate),
+      },
+    });
+
+    // Regenerate Paystack link if amount changed and URL exists
+    if (amountChanged && pr.paymentUrl) {
+      const studentId = pr.studentId || data.studentId;
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        select: { email: true, billingEmail: true },
+      });
+      const email = student?.billingEmail || student?.email || "";
+      if (email) {
+        try {
+          const reference = `pr-${data.paymentRequestId.slice(-8)}-${Date.now()}`;
+          const result = await initializeTransaction({
+            email,
+            amount: totals.totalCents,
+            currency: pr.currency || "ZAR",
+            reference,
+            callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+            metadata: { paymentRequestId: data.paymentRequestId },
+          });
+          await prisma.paymentRequest.update({
+            where: { id: data.paymentRequestId },
+            data: { paymentUrl: result.authorization_url, paystackReference: reference },
+          });
+        } catch (err) {
+          console.error("Paystack regeneration failed:", err);
+        }
+      }
+    }
+
+    // Regenerate pro-forma PDF
+    try {
+      const { generateAndStoreProformaPDF } = await import("@/lib/generate-invoice-pdf");
+      await generateAndStoreProformaPDF(data.paymentRequestId);
+    } catch (err) {
+      console.error("Pro-forma PDF regeneration failed:", err);
+    }
+
+    if (data.resend) {
+      const { sendPaymentRequestEmail } = await import("@/lib/send-invoice");
+      if (pr.status === "draft") {
+        await prisma.paymentRequest.update({
+          where: { id: data.paymentRequestId },
+          data: { status: "pending" },
+        });
+      }
+      await sendPaymentRequestEmail(data.paymentRequestId);
+    }
+
+    revalidatePath(`/admin/clients/${data.studentId}`);
+    revalidatePath("/admin/invoices");
+    return { success: true };
+  } catch (err) {
+    console.error("updatePaymentRequestAction error:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Failed to update payment request" };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Resend payment request (draft → pending, then send)
+// ────────────────────────────────────────────────────────────
+
+export async function resendPaymentRequestAction(
+  paymentRequestId: string,
+  studentId: string,
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("super_admin", "editor");
+
+  const pr = await prisma.paymentRequest.findUnique({
+    where: { id: paymentRequestId },
+    select: { status: true, totalCents: true, paymentUrl: true, studentId: true, currency: true },
+  });
+
+  if (!pr) return { success: false, error: "Payment request not found" };
+  if (pr.status === "paid" || pr.status === "cancelled") {
+    return { success: false, error: "Cannot resend a paid or voided request" };
+  }
+
+  // Generate Paystack link if missing (e.g. draft with no URL)
+  if (!pr.paymentUrl) {
+    const sid = pr.studentId || studentId;
+    const student = await prisma.student.findUnique({
+      where: { id: sid },
+      select: { email: true, billingEmail: true },
+    });
+    const email = student?.billingEmail || student?.email || "";
+    if (email) {
+      try {
+        const reference = `pr-${paymentRequestId.slice(-8)}-${Date.now()}`;
+        const result = await initializeTransaction({
+          email,
+          amount: pr.totalCents,
+          currency: pr.currency || "ZAR",
+          reference,
+          callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+          metadata: { paymentRequestId },
+        });
+        await prisma.paymentRequest.update({
+          where: { id: paymentRequestId },
+          data: { paymentUrl: result.authorization_url, paystackReference: reference },
+        });
+      } catch (err) {
+        console.error("Paystack link generation failed:", err);
+      }
+    }
+  }
+
+  if (pr.status === "draft") {
+    await prisma.paymentRequest.update({
+      where: { id: paymentRequestId },
+      data: { status: "pending" },
+    });
+  }
+
+  const { sendPaymentRequestEmail } = await import("@/lib/send-invoice");
+  await sendPaymentRequestEmail(paymentRequestId);
+
+  revalidatePath(`/admin/clients/${studentId}`);
+  revalidatePath("/admin/invoices");
+  return { success: true };
+}

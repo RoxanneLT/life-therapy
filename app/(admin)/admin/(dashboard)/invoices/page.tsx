@@ -18,6 +18,7 @@ import { InvoiceListFilters } from "./invoice-list-filters";
 import { InvoiceRowActions } from "./invoice-row-actions";
 import { PaymentRequestActions } from "./payment-request-actions";
 import { ExportDialog } from "./export-dialog";
+import { NewPaymentRequestDialog } from "./new-pr-dialog";
 import { SortableHeader } from "@/components/admin/sortable-header";
 import Link from "next/link";
 
@@ -201,9 +202,14 @@ export default async function InvoicesPage({
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
-        title="Invoices"
+        title="Finance"
         description={`${totalCount} total invoices`}
-        action={<ExportDialog />}
+        action={
+          <div className="flex items-center gap-2">
+            <NewPaymentRequestDialog />
+            <ExportDialog />
+          </div>
+        }
       />
 
       {/* Summary cards */}

@@ -56,10 +56,15 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Finance",
+    items: [
+      { href: "/admin/invoices", label: "Finance", icon: Receipt, roles: ["super_admin"] },
+    ],
+  },
+  {
     label: "E-Commerce",
     items: [
       { href: "/admin/orders", label: "Orders", icon: ShoppingCart, roles: ["super_admin"] },
-      { href: "/admin/invoices", label: "Invoices", icon: Receipt, roles: ["super_admin"] },
       { href: "/admin/gifts", label: "Gifts", icon: Gift, roles: ["super_admin"] },
       { href: "/admin/coupons", label: "Coupons", icon: Tag, roles: ["super_admin"] },
       { href: "/admin/packages", label: "Packages", icon: Package, roles: ["super_admin"] },
