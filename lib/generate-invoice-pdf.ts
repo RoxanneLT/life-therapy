@@ -35,6 +35,7 @@ const MUTED: [number, number, number] = [130, 130, 130];
 const LINE_CLR: [number, number, number] = [200, 200, 200];
 const TBL_HDR_BG: [number, number, number] = [245, 248, 245];
 const BANK_BG: [number, number, number] = [248, 250, 248];
+const BRAND_GREEN: [number, number, number] = [92, 142, 110];
 
 // Table columns
 const COL_DESC = ML;
@@ -67,7 +68,6 @@ function fmt(cents: number, currency: string): string {
 /** Split formatted price into symbol and number, e.g. "R 895,00" → ["R", "895,00"] */
 function fmtParts(cents: number, currency: string): [string, string] {
   const full = formatPrice(cents, currency);
-  // Match currency symbol(s) then space then number
   const match = full.match(/^([^\d]+?)\s*(.+)$/);
   if (match) return [match[1].trim(), match[2]];
   return ["", full];
@@ -88,48 +88,48 @@ function fmtDate(d: Date | string | null | undefined): string {
   return format(new Date(d), "dd/MM/yyyy");
 }
 
-// ─── PDF Generator ───────────────────────────────────────────
+// ─── Shared layout data ──────────────────────────────────────
 
-export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
-  const invoice = await prisma.invoice.findUniqueOrThrow({
-    where: { id: invoiceId },
-  });
+interface InvoiceLayoutData {
+  title: string;
+  metaRows: [string, string][];
+  isVat: boolean;
+  billingName: string;
+  billingEmail: string | null;
+  billingAddress?: string | null;
+  billingVatNumber?: string | null;
+  lineItems: InvoiceLineItem[];
+  currency: string;
+  subtotalCents: number;
+  discountCents: number;
+  discountPercent: number;
+  vatPercent: number;
+  vatAmountCents: number;
+  totalCents: number;
+  paidCents: number;
+  amountDueCents: number;
+  couponCode?: string | null;
+  showUnpaidWatermark: boolean;
+  payNowUrl?: string | null;
+  settings: Awaited<ReturnType<typeof getSiteSettings>>;
+}
 
-  const settings = await getSiteSettings();
-  const lineItems = invoice.lineItems as unknown as InvoiceLineItem[];
-  const currency = invoice.currency || "ZAR";
-  const isVat = settings.vatRegistered && invoice.vatPercent > 0;
+// ─── Core layout builder ─────────────────────────────────────
 
-  // Look up coupon code if discount was applied
-  let couponCode: string | null = null;
-  if (invoice.discountCents > 0 && invoice.orderId) {
-    const order = await prisma.order.findUnique({
-      where: { id: invoice.orderId },
-      select: { coupon: { select: { code: true } } },
-    });
-    couponCode = order?.coupon?.code ?? null;
-  }
-
-  // Resolve billing address — fallback to student's encrypted address if not on invoice
-  let billingAddress = invoice.billingAddress;
-  if (!billingAddress && invoice.studentId) {
-    const student = await prisma.student.findUnique({
-      where: { id: invoice.studentId },
-      select: { billingAddress: true, address: true },
-    });
-    billingAddress = student?.billingAddress ?? null;
-    if (!billingAddress && student?.address) {
-      try {
-        const { decryptOrNull } = await import("@/lib/encryption");
-        billingAddress = decryptOrNull(student.address);
-      } catch { /* skip */ }
-    }
-  }
+function buildInvoiceDoc(data: InvoiceLayoutData): jsPDF {
+  const {
+    title, metaRows, isVat,
+    billingName, billingEmail, billingAddress, billingVatNumber,
+    lineItems, currency,
+    subtotalCents, discountCents, discountPercent, vatPercent, vatAmountCents,
+    totalCents, paidCents, amountDueCents,
+    couponCode, showUnpaidWatermark, payNowUrl,
+    settings,
+  } = data;
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   let y = MT;
   let pageNum = 1;
-
   let inTable = false;
 
   function hLine(yPos: number, x1 = ML, x2 = PAGE_W - MR) {
@@ -156,7 +156,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   }
 
   function checkPageBreak(needed: number) {
-    if (y + needed > PAGE_H - MB - 50) { // reserve 50mm for footer
+    if (y + needed > PAGE_H - MB - 50) {
       doc.addPage();
       pageNum++;
       y = MT;
@@ -171,7 +171,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(...DARK);
-  doc.text(isVat ? "Tax Invoice" : "Invoice", ML, y + 8);
+  doc.text(title, ML, y + 8);
 
   const logo = getLogoBase64();
   if (logo) {
@@ -185,14 +185,13 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   y += 8;
 
   // ══════════════════════════════════════════════════════════
-  // BUSINESS DETAILS (left) + INVOICE META (right)
+  // BUSINESS DETAILS (left) + META (right)
   // ══════════════════════════════════════════════════════════
 
   const metaX = 115;
   let lY = y;
   let rY = y;
 
-  // Business
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
@@ -214,21 +213,6 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
       doc.text(line, ML, lY);
       lY += 3.5;
     }
-  }
-
-  // Invoice meta (right)
-  const initials = extractInitials(invoice.billingName);
-  const prefix = settings.invoicePrefix || "LT";
-
-  const metaRows: [string, string][] = [
-    ["Number:", invoice.invoiceNumber],
-    ["Date:", fmtDate(invoice.issuedAt || invoice.createdAt)],
-    ["Page:", `${pageNum}`],
-    ["Reference:", `${initials} - ${prefix}`],
-    ["Due Date:", invoice.dueDate ? fmtDate(invoice.dueDate) : "On receipt"],
-  ];
-  if (invoice.discountPercent > 0) {
-    metaRows.push(["Overall Discount %:", `${invoice.discountPercent.toFixed(2)}%`]);
   }
 
   doc.setFontSize(8);
@@ -253,15 +237,15 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...DARK);
-  doc.text(invoice.billingName, ML, y);
+  doc.text(billingName, ML, y);
   y += 5;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
 
-  if (isVat && invoice.billingVatNumber) {
-    doc.text(`Customer VAT No: ${invoice.billingVatNumber}`, ML, y);
+  if (isVat && billingVatNumber) {
+    doc.text(`Customer VAT No: ${billingVatNumber}`, ML, y);
     y += 4;
   }
 
@@ -269,8 +253,8 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     const addr = doc.splitTextToSize(billingAddress, CW);
     doc.text(addr, ML, y);
     y += addr.length * 3.5;
-  } else if (invoice.billingEmail) {
-    doc.text(invoice.billingEmail, ML, y);
+  } else if (billingEmail) {
+    doc.text(billingEmail, ML, y);
     y += 3.5;
   }
 
@@ -323,12 +307,12 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   // FOOTER — Banking (bottom-left) + Totals (bottom-right)
   // ══════════════════════════════════════════════════════════
 
-  // Calculate footer Y — push to bottom of page if space allows
+  const payNowRowH = payNowUrl ? 10 : 0;
+
   const footerMinY = y + 10;
-  const footerH = 42;
+  const footerH = 42 + payNowRowH;
   const footerY = Math.max(footerMinY, PAGE_H - MB - footerH);
 
-  // If we'd overflow, add page
   if (footerMinY > PAGE_H - MB - footerH) {
     if (footerMinY + footerH > PAGE_H - MB) {
       doc.addPage();
@@ -340,7 +324,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   hLine(y);
   y += 5;
 
-  // ── Banking (left) — subtle background box, evenly spaced ──
+  // ── Banking (left) ──
   const bankRows: [string, string | null | undefined][] = [
     ["Payment to bank", settings.bankName],
     ["Accountholder", settings.bankAccountHolder],
@@ -375,30 +359,40 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
     bY += bankRowH;
   }
 
-  // ── Totals (right) — same box dimensions as banking, invisible border ──
+  // ── Pay Now (pro-forma only) — below banking box ──
+  if (payNowUrl) {
+    const payNowY = y - 1 + bankBoxH + 4;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND_GREEN);
+    doc.text("To pay online, visit:", ML + bankPadX, payNowY);
+    doc.setFontSize(7);
+    const urlLines = doc.splitTextToSize(payNowUrl, bankBoxW - bankPadX * 2);
+    doc.text(urlLines, ML + bankPadX, payNowY + 4);
+    doc.setTextColor(...DARK);
+  }
+
+  // ── Totals (right) ──
   const totalsBoxX = ML + bankBoxW + 6;
   const totalsBoxW = PAGE_W - MR - totalsBoxX;
-  // Draw invisible box (same height as banking) for alignment
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(totalsBoxX, y - 1, totalsBoxW, bankBoxH, 1.5, 1.5, "F");
 
   const tLabelX = totalsBoxX + bankPadX;
   const tValueX = totalsBoxX + totalsBoxW - bankPadX;
-  let tY = y - 1 + bankPadY + 2; // same start as first bank row
+  let tY = y - 1 + bankPadY + 2;
 
-  // Fixed R column for all totals
   const symbolX = tValueX - 38;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
 
-  // Discount (only if applicable)
-  if (invoice.discountCents > 0) {
+  if (discountCents > 0) {
     const discountLabel = couponCode ? `Discount (${couponCode.toUpperCase()}):` : "Discount:";
     doc.setTextColor(...MUTED);
     doc.text(discountLabel, tLabelX, tY);
     doc.setTextColor(22, 163, 74);
-    const [sym, num] = fmtParts(invoice.discountCents, currency);
+    const [sym, num] = fmtParts(discountCents, currency);
     doc.text(sym, symbolX, tY);
     doc.text(num, tValueX, tY, { align: "right" });
     doc.setFontSize(6.5);
@@ -408,62 +402,226 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   }
 
   if (isVat) {
-    // VAT registered — show full breakdown
     doc.setTextColor(...MUTED);
     doc.text("Total Exclusive:", tLabelX, tY);
     doc.setTextColor(...DARK);
-    drawPrice(doc, invoice.subtotalCents - invoice.discountCents, currency, symbolX, tValueX, tY);
+    drawPrice(doc, subtotalCents - discountCents, currency, symbolX, tValueX, tY);
     tY += bankRowH;
 
     doc.setTextColor(...MUTED);
-    doc.text(`VAT (${invoice.vatPercent}%):`, tLabelX, tY);
+    doc.text(`VAT (${vatPercent}%):`, tLabelX, tY);
     doc.setTextColor(...DARK);
-    drawPrice(doc, invoice.vatAmountCents, currency, symbolX, tValueX, tY);
+    drawPrice(doc, vatAmountCents, currency, symbolX, tValueX, tY);
     tY += bankRowH;
 
     doc.setTextColor(...MUTED);
     doc.text("Sub Total:", tLabelX, tY);
     doc.setTextColor(...DARK);
-    drawPrice(doc, invoice.totalCents, currency, symbolX, tValueX, tY);
+    drawPrice(doc, totalCents, currency, symbolX, tValueX, tY);
     tY += bankRowH + 2;
   }
 
-  // Total
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
   doc.text("Total:", tLabelX, tY);
-  drawPrice(doc, invoice.totalCents, currency, symbolX, tValueX, tY);
+  drawPrice(doc, totalCents, currency, symbolX, tValueX, tY);
   tY += bankRowH + 1;
 
-  // Paid
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
   doc.text("Paid:", tLabelX, tY);
   doc.setTextColor(22, 163, 74);
-  const paidCents = invoice.status === "paid" ? (invoice.paidAmountCents ?? invoice.totalCents) : 0;
   drawPrice(doc, paidCents, currency, symbolX, tValueX, tY);
   tY += bankRowH + 1;
 
-  // Line between Paid and Amount Due
   hLine(tY - 1, tLabelX, tValueX);
   tY += 3;
 
-  // Amount Due — same font/size as Total
-  const amountDue = invoice.status === "paid" ? 0 : invoice.totalCents;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
   doc.text("Amount Due:", tLabelX, tY);
-  drawPrice(doc, amountDue, currency, symbolX, tValueX, tY);
+  drawPrice(doc, amountDueCents, currency, symbolX, tValueX, tY);
 
-  // ── Buffer output ──
+  // ── "UNPAID" diagonal watermark (pro-forma only) ──
+  if (showUnpaidWatermark) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(52);
+    doc.setTextColor(220, 38, 38);
+    doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 0.08 }));
+    doc.text("UNPAID", 105, 148, { align: "center", angle: 45 });
+    doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 1 }));
+    doc.setTextColor(...DARK);
+  }
+
+  void pageNum; // used in checkPageBreak closure — suppress unused warning
+  return doc;
+}
+
+// ─── PDF Generator (Invoice) ─────────────────────────────────
+
+export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
+  const invoice = await prisma.invoice.findUniqueOrThrow({
+    where: { id: invoiceId },
+  });
+
+  const settings = await getSiteSettings();
+  const lineItems = invoice.lineItems as unknown as InvoiceLineItem[];
+  const currency = invoice.currency || "ZAR";
+  const isVat = settings.vatRegistered && invoice.vatPercent > 0;
+
+  let couponCode: string | null = null;
+  if (invoice.discountCents > 0 && invoice.orderId) {
+    const order = await prisma.order.findUnique({
+      where: { id: invoice.orderId },
+      select: { coupon: { select: { code: true } } },
+    });
+    couponCode = order?.coupon?.code ?? null;
+  }
+
+  let billingAddress = invoice.billingAddress;
+  if (!billingAddress && invoice.studentId) {
+    const student = await prisma.student.findUnique({
+      where: { id: invoice.studentId },
+      select: { billingAddress: true, address: true },
+    });
+    billingAddress = student?.billingAddress ?? null;
+    if (!billingAddress && student?.address) {
+      try {
+        const { decryptOrNull } = await import("@/lib/encryption");
+        billingAddress = decryptOrNull(student.address);
+      } catch { /* skip */ }
+    }
+  }
+
+  const initials = extractInitials(invoice.billingName);
+  const prefix = settings.invoicePrefix || "LT";
+
+  const metaRows: [string, string][] = [
+    ["Number:", invoice.invoiceNumber],
+    ["Date:", fmtDate(invoice.issuedAt || invoice.createdAt)],
+    ["Page:", "1"],
+    ["Reference:", `${initials} - ${prefix}`],
+    ["Due Date:", invoice.dueDate ? fmtDate(invoice.dueDate) : "On receipt"],
+  ];
+  if (invoice.discountPercent > 0) {
+    metaRows.push(["Overall Discount %:", `${invoice.discountPercent.toFixed(2)}%`]);
+  }
+
+  const paidCents = invoice.status === "paid" ? (invoice.paidAmountCents ?? invoice.totalCents) : 0;
+  const amountDueCents = invoice.status === "paid" ? 0 : invoice.totalCents;
+
+  const doc = buildInvoiceDoc({
+    title: isVat ? "Tax Invoice" : "Invoice",
+    metaRows,
+    isVat,
+    billingName: invoice.billingName,
+    billingEmail: invoice.billingEmail,
+    billingAddress,
+    billingVatNumber: invoice.billingVatNumber,
+    lineItems,
+    currency,
+    subtotalCents: invoice.subtotalCents,
+    discountCents: invoice.discountCents,
+    discountPercent: invoice.discountPercent,
+    vatPercent: invoice.vatPercent,
+    vatAmountCents: invoice.vatAmountCents,
+    totalCents: invoice.totalCents,
+    paidCents,
+    amountDueCents,
+    couponCode,
+    showUnpaidWatermark: false,
+    payNowUrl: null,
+    settings,
+  });
+
   const arrayBuf = doc.output("arraybuffer");
   return Buffer.from(arrayBuf);
 }
 
-// ─── Generate + Store in Supabase ────────────────────────────
+// ─── PDF Generator (Pro-Forma) ───────────────────────────────
+
+/**
+ * Generate a Pro-Forma Invoice PDF for a PaymentRequest.
+ * Sent with the payment request email so clients have a document
+ * to reference before paying. The real tax invoice is generated
+ * after payment and sent separately.
+ */
+export async function generateProformaInvoicePDF(
+  paymentRequestId: string,
+): Promise<Buffer> {
+  const pr = await prisma.paymentRequest.findUniqueOrThrow({
+    where: { id: paymentRequestId },
+    include: {
+      student: true,
+      billingEntity: true,
+    },
+  });
+
+  const settings = await getSiteSettings();
+  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const currency = pr.currency || "ZAR";
+  const isVat = settings.vatRegistered && (settings.vatPercent ?? 0) > 0 && pr.vatAmountCents > 0;
+
+  let billingName = "Client";
+  let billingEmail: string | null = null;
+  let billingAddress: string | null = null;
+
+  if (pr.student) {
+    billingName = `${pr.student.firstName} ${pr.student.lastName}`;
+    billingEmail = pr.student.billingEmail ?? pr.student.email;
+    billingAddress = pr.student.billingAddress ?? null;
+  } else if (pr.billingEntity) {
+    billingName = pr.billingEntity.contactPerson || pr.billingEntity.name;
+    billingEmail = pr.billingEntity.email;
+    billingAddress = (pr.billingEntity as unknown as { address?: string | null }).address ?? null;
+  }
+
+  const prReference = `PR-${pr.billingMonth}-${pr.id.slice(-4).toUpperCase()}`;
+
+  const metaRows: [string, string][] = [
+    ["Reference:", prReference],
+    ["Date:", format(new Date(), "dd/MM/yyyy")],
+    ["Due Date:", fmtDate(pr.dueDate)],
+    ["Period:", `${fmtDate(pr.periodStart)} – ${fmtDate(pr.periodEnd)}`],
+  ];
+
+  const vatPercent = isVat ? (settings.vatPercent ?? 15) : 0;
+  const discountPercent = pr.subtotalCents > 0 && pr.discountCents > 0
+    ? Math.round((pr.discountCents / pr.subtotalCents) * 100)
+    : 0;
+
+  const doc = buildInvoiceDoc({
+    title: "Pro-Forma Invoice",
+    metaRows,
+    isVat,
+    billingName,
+    billingEmail,
+    billingAddress,
+    billingVatNumber: null,
+    lineItems,
+    currency,
+    subtotalCents: pr.subtotalCents,
+    discountCents: pr.discountCents,
+    discountPercent,
+    vatPercent,
+    vatAmountCents: pr.vatAmountCents,
+    totalCents: pr.totalCents,
+    paidCents: 0,
+    amountDueCents: pr.totalCents,
+    couponCode: null,
+    showUnpaidWatermark: true,
+    payNowUrl: pr.paymentUrl ?? null,
+    settings,
+  });
+
+  const arrayBuf = doc.output("arraybuffer");
+  return Buffer.from(arrayBuf);
+}
+
+// ─── Generate + Store (Invoice) ──────────────────────────────
 
 export async function generateAndStoreInvoicePDF(
   invoiceId: string,
@@ -485,6 +643,33 @@ export async function generateAndStoreInvoicePDF(
   await prisma.invoice.update({
     where: { id: invoiceId },
     data: { pdfUrl: storagePath },
+  });
+
+  return storagePath;
+}
+
+// ─── Generate + Store (Pro-Forma) ────────────────────────────
+
+export async function generateAndStoreProformaPDF(
+  paymentRequestId: string,
+): Promise<string> {
+  const pdfBuffer = await generateProformaInvoicePDF(paymentRequestId);
+  const storagePath = `proforma/${paymentRequestId}.pdf`;
+
+  const { error } = await supabaseAdmin.storage
+    .from("invoices")
+    .upload(storagePath, pdfBuffer, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (error) {
+    throw new Error(`Failed to upload pro-forma PDF: ${error.message}`);
+  }
+
+  await prisma.paymentRequest.update({
+    where: { id: paymentRequestId },
+    data: { proformaPdfUrl: storagePath },
   });
 
   return storagePath;

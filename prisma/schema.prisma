@@ -999,6 +999,7 @@ model PaymentRequest {
   // Payment link
   paystackReference  String?         // Set when Paystack payment link is generated
   paymentUrl         String?         // Paystack authorization_url for client to pay
+  proformaPdfUrl     String?         // Supabase Storage path for the pro-forma PDF
 
   // Status
   status             String          @default("pending") // "pending" | "paid" | "overdue" | "cancelled"

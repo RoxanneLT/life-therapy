@@ -97,6 +97,7 @@ interface PaymentRequestData {
   status: string;
   dueDate: string | null;
   createdAt: string;
+  proformaPdfUrl: string | null;
 }
 
 interface RelationshipOption {
@@ -847,6 +848,23 @@ function PaymentRequestsSection({
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex justify-end gap-1">
+                            {pr.proformaPdfUrl && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Download Pro-Forma Invoice"
+                                asChild
+                              >
+                                <a
+                                  href={`/api/admin/proforma/${pr.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </a>
+                              </Button>
+                            )}
                             {pr.status !== "paid" && pr.status !== "cancelled" && (
                               <>
                                 <Button

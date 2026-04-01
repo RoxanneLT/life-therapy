@@ -2,9 +2,10 @@
  * Invoice and payment request email delivery.
  *
  * - sendInvoiceEmail: sends invoice with PDF attachment
- * - sendPaymentRequestEmail: sends payment request with Pay Now link
- * - sendPaymentReminder: friendly reminder before due date
- * - sendOverdueNotice: overdue notice after due date
+ * - sendPaymentRequestEmail: sends payment request with pro-forma PDF attached
+ * - sendPaymentReminder: friendly reminder before due date (pro-forma re-attached)
+ * - sendDueTodayNotice: due today notice (pro-forma re-attached)
+ * - sendOverdueNotice: overdue notice after due date (pro-forma re-attached)
  */
 
 import { prisma } from "@/lib/prisma";
@@ -40,6 +41,39 @@ function buildSessionSummaryHtml(lineItems: InvoiceLineItem[], currency = "ZAR")
   return `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">${rows}</table>`;
 }
 
+/**
+ * Generate pro-forma PDF for a payment request and return as a buffer.
+ * Non-fatal: returns undefined if generation fails.
+ */
+async function tryGenerateProformaPDF(
+  paymentRequestId: string,
+): Promise<Buffer | undefined> {
+  try {
+    const { generateAndStoreProformaPDF } = await import("@/lib/generate-invoice-pdf");
+    await generateAndStoreProformaPDF(paymentRequestId);
+    // Re-download from storage to get the buffer for email attachment
+    const { data, error } = await supabaseAdmin.storage
+      .from("invoices")
+      .download(`proforma/${paymentRequestId}.pdf`);
+    if (error || !data) return undefined;
+    return Buffer.from(await data.arrayBuffer());
+  } catch (err) {
+    console.error(`Pro-forma PDF generation failed for PR ${paymentRequestId}:`, err);
+    return undefined;
+  }
+}
+
+function buildProformaFilename(billingName: string, periodEnd: Date): string {
+  const monthLabel = format(periodEnd, "MMMM_yyyy");
+  const initials = billingName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 3);
+  return `ProForma_${monthLabel}_${initials}.pdf`;
+}
+
 // ─── Send Invoice Email ──────────────────────────────────────
 
 /**
@@ -51,7 +85,6 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<void> {
     where: { id: invoiceId },
   });
 
-  // Download PDF from Supabase Storage
   let pdfBuffer: Buffer | undefined;
   if (invoice.pdfUrl) {
     const { data, error } = await supabaseAdmin.storage
@@ -67,6 +100,7 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<void> {
     invoiceNumber: invoice.invoiceNumber,
     invoiceDate: fmtDate(invoice.issuedAt || invoice.createdAt),
     total: fmt(invoice.totalCents, invoice.currency),
+    isReplacingProforma: !!invoice.paymentRequestId,
   });
 
   await sendEmail({
@@ -93,7 +127,8 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<void> {
 // ─── Send Payment Request Email ──────────────────────────────
 
 /**
- * Send the initial payment request email with session summary and Pay Now link.
+ * Send the initial payment request email with session summary, Pay Now link,
+ * and pro-forma invoice PDF attached.
  * Updates sentAt on the PaymentRequest.
  */
 export async function sendPaymentRequestEmail(paymentRequestId: string): Promise<void> {
@@ -104,7 +139,6 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
   const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
   const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 
-  // Resolve billing name and email in one pass
   let billingName = "Client";
   let to = "";
 
@@ -127,6 +161,10 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
     return;
   }
 
+  // Generate and store pro-forma PDF, attach to email
+  const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
+  const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
+
   const { subject, html } = await renderEmail("payment_request", {
     billingName,
     month: monthLabel,
@@ -143,6 +181,17 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
     templateKey: "payment_request",
     studentId: pr.studentId ?? undefined,
     metadata: { paymentRequestId: pr.id, billingMonth: pr.billingMonth },
+    ...(pdfBuffer
+      ? {
+          attachments: [
+            {
+              filename: pdfFilename,
+              content: pdfBuffer,
+              contentType: "application/pdf",
+            },
+          ],
+        }
+      : {}),
   });
 
   await prisma.paymentRequest.update({
@@ -155,6 +204,7 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
 
 /**
  * Send a friendly reminder 2 business days before due date.
+ * Re-attaches pro-forma PDF so client has the document.
  * Updates reminderSentAt on the PaymentRequest.
  */
 export async function sendPaymentReminder(paymentRequestId: string): Promise<void> {
@@ -162,7 +212,7 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
     where: { id: paymentRequestId },
   });
 
-  if (pr.reminderSentAt) return; // Already sent
+  if (pr.reminderSentAt) return;
 
   let billingName = "Client";
   let to = "";
@@ -182,6 +232,9 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
   }
 
   if (!to) return;
+
+  const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
+  const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
   const { subject, html } = await renderEmail("payment_request_reminder", {
     billingName,
@@ -197,6 +250,9 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
     templateKey: "payment_request_reminder",
     studentId: pr.studentId ?? undefined,
     metadata: { paymentRequestId: pr.id },
+    ...(pdfBuffer
+      ? { attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: "application/pdf" }] }
+      : {}),
   });
 
   await prisma.paymentRequest.update({
@@ -209,13 +265,14 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
 
 /**
  * Send a "due today" notice on the actual due date.
+ * Re-attaches pro-forma PDF.
  */
 export async function sendDueTodayNotice(paymentRequestId: string): Promise<void> {
   const pr = await prisma.paymentRequest.findUniqueOrThrow({
     where: { id: paymentRequestId },
   });
 
-  if (pr.dueTodaySentAt) return; // Already sent
+  if (pr.dueTodaySentAt) return;
 
   let billingName = "Client";
   let to = "";
@@ -236,6 +293,9 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
 
   if (!to) return;
 
+  const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
+  const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
+
   const { subject, html } = await renderEmail("payment_request_due_today", {
     billingName,
     total: fmt(pr.totalCents, pr.currency),
@@ -249,6 +309,9 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
     templateKey: "payment_request_due_today",
     studentId: pr.studentId ?? undefined,
     metadata: { paymentRequestId: pr.id },
+    ...(pdfBuffer
+      ? { attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: "application/pdf" }] }
+      : {}),
   });
 
   await prisma.paymentRequest.update({
@@ -261,6 +324,7 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
 
 /**
  * Send an overdue notice 1 business day after due date.
+ * Re-attaches pro-forma so the client always has the document when chasing payment.
  * Updates overdueSentAt and sets status to "overdue".
  */
 export async function sendOverdueNotice(paymentRequestId: string): Promise<void> {
@@ -268,7 +332,7 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
     where: { id: paymentRequestId },
   });
 
-  if (pr.overdueSentAt) return; // Already sent
+  if (pr.overdueSentAt) return;
 
   const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 
@@ -291,6 +355,9 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
 
   if (!to) return;
 
+  const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
+  const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
+
   const { subject, html } = await renderEmail("payment_request_overdue", {
     billingName,
     month: monthLabel,
@@ -305,6 +372,9 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
     templateKey: "payment_request_overdue",
     studentId: pr.studentId ?? undefined,
     metadata: { paymentRequestId: pr.id },
+    ...(pdfBuffer
+      ? { attachments: [{ filename: pdfFilename, content: pdfBuffer, contentType: "application/pdf" }] }
+      : {}),
   });
 
   await prisma.paymentRequest.update({
