@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 
 const STATUS_TABS = [
   { key: "all", label: "All" },
+  { key: "upcoming", label: "Upcoming Run" },
   { key: "payment_requested", label: "Requested" },
   { key: "paid", label: "Paid" },
   { key: "overdue", label: "Overdue" },
@@ -91,8 +92,8 @@ export function InvoiceListFilters({
         ))}
       </div>
 
-      {/* Second row: type dropdown + month picker + search */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* Second row: type dropdown + month picker + search — hidden on upcoming tab */}
+      {activeStatus !== "upcoming" && <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <select
           value={activeType}
           onChange={(e) => navigate({ type: e.target.value || undefined })}
@@ -122,7 +123,7 @@ export function InvoiceListFilters({
             className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-brand-500 sm:w-64"
           />
         </form>
-      </div>
+      </div>}
     </div>
   );
 }

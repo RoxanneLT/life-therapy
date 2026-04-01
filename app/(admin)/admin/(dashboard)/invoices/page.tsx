@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { BookingStatus } from "@/lib/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import {
   Table,
@@ -23,8 +24,10 @@ import { SortableHeader } from "@/components/admin/sortable-header";
 import Link from "next/link";
 
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
+import { getBillingPeriod } from "@/lib/billing";
+import { UpcomingBillingSection, type UpcomingBooking } from "./upcoming-billing-section";
 
-const STATUS_TABS = ["all", "payment_requested", "paid", "overdue", "cancelled"] as const;
+const STATUS_TABS = ["all", "upcoming", "payment_requested", "paid", "overdue", "cancelled"] as const;
 
 const TYPE_LABELS: Record<string, string> = {
   monthly_postpaid: "Monthly",
@@ -93,7 +96,7 @@ export default async function InvoicesPage({
 
   // Build filter
   const where: Record<string, unknown> = {};
-  if (activeStatus !== "all") where.status = activeStatus;
+  if (activeStatus !== "all" && activeStatus !== "upcoming") where.status = activeStatus;
   if (activeType) where.type = activeType;
   if (activeMonth) where.billingMonth = activeMonth;
   if (params.q) {
@@ -108,11 +111,28 @@ export default async function InvoicesPage({
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  // Billing period for upcoming run tab
+  const { start: billingPeriodStart, end: billingPeriodEnd } = getBillingPeriod(
+    now.getFullYear(),
+    now.getMonth() + 1,
+  );
+  const unbilledWhere = {
+    student: { billingType: "postpaid" },
+    OR: [
+      { status: { in: [BookingStatus.completed, BookingStatus.no_show] } },
+      { status: BookingStatus.cancelled, isLateCancel: true },
+    ],
+    date: { gte: billingPeriodStart, lte: billingPeriodEnd },
+    paymentRequestId: null,
+    invoiceId: null,
+  };
+
   // When "payment_requested" tab: show payment requests, not invoices
   const showPaymentRequests = activeStatus === "payment_requested";
+  const showUpcoming = activeStatus === "upcoming";
 
-  const [invoices, statusCounts, monthStats, pendingRequests, pendingRequestCount] = await Promise.all([
-    showPaymentRequests
+  const [invoices, statusCounts, monthStats, pendingRequests, pendingRequestCount, upcomingCount] = await Promise.all([
+    (showPaymentRequests || showUpcoming)
       ? Promise.resolve([])
       : prisma.invoice.findMany({
           where,
@@ -143,7 +163,29 @@ export default async function InvoicesPage({
         })
       : Promise.resolve([]),
     prisma.paymentRequest.count({ where: { status: "pending" } }),
+    prisma.booking.count({ where: unbilledWhere }),
   ]);
+
+  const upcomingBookingsRaw = showUpcoming
+    ? await prisma.booking.findMany({
+        where: unbilledWhere,
+        include: {
+          student: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              standingDiscountPercent: true,
+              standingDiscountFixed: true,
+            },
+          },
+        },
+        orderBy: [{ student: { firstName: "asc" } }, { date: "asc" }],
+      })
+    : [];
+  const upcomingBookings = upcomingBookingsRaw.filter(
+    (b): b is typeof b & { student: NonNullable<(typeof b)["student"]> } => b.student !== null,
+  ) satisfies UpcomingBooking[];
 
   // Status count map (for filter tabs)
   const countMap: Record<string, number> = {};
@@ -156,6 +198,7 @@ export default async function InvoicesPage({
   countMap.payment_requested = pendingRequestCount;
   totalCount += pendingRequestCount;
   countMap.all = totalCount;
+  countMap.upcoming = upcomingCount;
 
   // Look up partial payments on pending PRs
   const prPaidAmounts = new Map<string, number>();
@@ -229,8 +272,14 @@ export default async function InvoicesPage({
         counts={countMap}
       />
 
-      {/* Table — Payment Requests or Invoices depending on tab */}
-      {showPaymentRequests ? (
+      {/* Table — Upcoming / Payment Requests / Invoices depending on tab */}
+      {showUpcoming ? (
+        <UpcomingBillingSection
+          bookings={upcomingBookings}
+          periodStart={billingPeriodStart}
+          periodEnd={billingPeriodEnd}
+        />
+      ) : showPaymentRequests ? (
         pendingRequests.length === 0 ? (
           <EmptyState
             icon={Receipt}
