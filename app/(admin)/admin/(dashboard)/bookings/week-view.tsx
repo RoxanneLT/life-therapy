@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { BusinessHours } from "@/lib/settings";
 import { BOOKING_STATUS_DOT } from "@/lib/status-styles";
+import { ALLOWED_SLOT_START_TIMES } from "@/lib/booking-config";
 
 interface BookingData {
   id: string;
@@ -40,12 +41,12 @@ interface WeekViewProps {
   onSlotClick?: (date: string, time: string) => void;
 }
 
-function slotIsCovered(slot: string, dayBookings: BookingData[]): boolean {
-  const slotMins = timeToMinutes(slot);
+function ghostSlotOverlapsBooking(slotStart: number, dayBookings: BookingData[]): boolean {
+  const slotEnd = slotStart + 60;
   return dayBookings.some((b) => {
-    const start = timeToMinutes(b.startTime);
-    const end = timeToMinutes(b.endTime);
-    return start <= slotMins && slotMins < end;
+    const bStart = timeToMinutes(b.startTime);
+    const bEnd = timeToMinutes(b.endTime);
+    return bStart < slotEnd && bEnd > slotStart;
   });
 }
 
@@ -207,20 +208,23 @@ export function WeekView({ bookings, date, businessHours, overrides, onSlotClick
                     );
                   })}
 
-                  {/* Clickable slot areas */}
-                  {onSlotClick && !blocked && slots.map((slot, i) => {
-                    if (slotIsCovered(slot, dayBookings)) return null;
+                  {/* Ghost slot blocks at allowed booking start times */}
+                  {onSlotClick && !blocked && ALLOWED_SLOT_START_TIMES.map((time) => {
+                    const slotMins = timeToMinutes(time);
+                    if (slotMins < gridStart || slotMins + 60 > gridEnd) return null;
+                    if (ghostSlotOverlapsBooking(slotMins, dayBookings)) return null;
+                    const top = ((slotMins - gridStart) / 15) * ROW_H + 1;
+                    const height = (60 / 15) * ROW_H - 2;
                     return (
                       <button
-                        key={slot}
+                        key={time}
                         type="button"
-                        className="group absolute w-full hover:bg-brand-50/40 dark:hover:bg-brand-900/20 transition-colors"
-                        style={{ top: i * ROW_H, height: ROW_H, zIndex: 5 }}
-                        onClick={() => onSlotClick(dateStr, slot)}
+                        className="group absolute inset-x-0.5 flex items-center justify-center gap-1 rounded border border-dashed border-muted-foreground/20 bg-transparent transition-colors hover:border-brand-400 hover:bg-brand-50/60 dark:hover:bg-brand-900/20"
+                        style={{ top, height, zIndex: 5 }}
+                        onClick={() => onSlotClick(dateStr, time)}
                       >
-                        <span className="flex h-full items-center justify-center opacity-0 group-hover:opacity-70 transition-opacity">
-                          <Plus className="h-3 w-3 text-muted-foreground" />
-                        </span>
+                        <Plus className="h-3 w-3 text-muted-foreground/30 transition-colors group-hover:text-brand-500" />
+                        <span className="text-xs text-muted-foreground/30 transition-colors group-hover:text-brand-500">{time}</span>
                       </button>
                     );
                   })}

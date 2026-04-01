@@ -45,3 +45,18 @@ export function getSessionTypeConfig(
 }
 
 export const TIMEZONE = "Africa/Johannesburg";
+
+/**
+ * The fixed booking slot start times (HH:mm).
+ * Each slot is 60 minutes long (regardless of actual session duration —
+ * e.g. a 30-min consultation still occupies a full 60-min slot).
+ * Pattern: 09:00, 10:15, 11:30, [lunch], 13:00, 14:15, 15:30
+ */
+export const ALLOWED_SLOT_START_TIMES = [
+  "09:00",
+  "10:15",
+  "11:30",
+  "13:00",
+  "14:15",
+  "15:30",
+] as const;

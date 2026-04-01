@@ -757,31 +757,33 @@ export function CreateBookingDialog({
             )}
 
             {/* Booking mode toggle */}
-            <div className="space-y-2">
-              <Label>Booking Type</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={bookingMode === "single" ? "default" : "outline-solid"}
-                  size="sm"
-                  onClick={() => setBookingMode("single")}
-                  className="flex-1"
-                >
-                  <CalendarPlus className="mr-1.5 h-4 w-4" />
-                  Single Session
-                </Button>
-                <Button
-                  type="button"
-                  variant={bookingMode === "recurring" ? "default" : "outline-solid"}
-                  size="sm"
-                  onClick={() => setBookingMode("recurring")}
-                  className="flex-1"
-                >
-                  <Repeat className="mr-1.5 h-4 w-4" />
-                  Recurring Series
-                </Button>
+            {!isPrefilledPast && (
+              <div className="space-y-2">
+                <Label>Booking Type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={bookingMode === "single" ? "default" : "outline-solid"}
+                    size="sm"
+                    onClick={() => setBookingMode("single")}
+                    className="flex-1"
+                  >
+                    <CalendarPlus className="mr-1.5 h-4 w-4" />
+                    Single Session
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={bookingMode === "recurring" ? "default" : "outline-solid"}
+                    size="sm"
+                    onClick={() => setBookingMode("recurring")}
+                    className="flex-1"
+                  >
+                    <Repeat className="mr-1.5 h-4 w-4" />
+                    Recurring Series
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Session location */}
             <div className="space-y-2">

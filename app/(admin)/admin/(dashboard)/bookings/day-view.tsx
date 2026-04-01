@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, X, ExternalLink, AlertTriangle, CalendarClock, Plus } from "lucide-react";
-import { getSessionTypeConfig } from "@/lib/booking-config";
+import { getSessionTypeConfig, ALLOWED_SLOT_START_TIMES } from "@/lib/booking-config";
 import type { BusinessHours } from "@/lib/settings";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 
@@ -40,14 +40,8 @@ interface DayViewProps {
   onSlotClick?: (date: string, time: string) => void;
 }
 
-function slotIsCovered(slot: string, bookings: BookingData[]): boolean {
-  const slotMins = timeToMinutes(slot);
-  return bookings.some((b) => {
-    const start = timeToMinutes(b.startTime);
-    const end = timeToMinutes(b.endTime);
-    return start <= slotMins && slotMins < end;
-  });
-}
+/** Height in px for one 60-min ghost slot block */
+const GHOST_BLOCK_H = (60 / 15) * 24; // 4 rows × ROW_H
 
 const SESSION_COLORS: Record<string, string> = {
   individual:        "border-l-green-500  bg-green-50  hover:bg-green-100  dark:bg-green-900/50  dark:hover:bg-green-900/70  dark:text-green-100  dark:border-l-green-400",
@@ -61,6 +55,15 @@ const ROW_H = 24;
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
+}
+
+function slotOverlapsBooking(slotStart: number, bookings: BookingData[]): boolean {
+  const slotEnd = slotStart + 60;
+  return bookings.some((b) => {
+    const bStart = timeToMinutes(b.startTime);
+    const bEnd = timeToMinutes(b.endTime);
+    return bStart < slotEnd && bEnd > slotStart;
+  });
 }
 
 function getDayKey(date: Date): string {
@@ -128,7 +131,7 @@ export function DayView({ bookings, date, businessHours, override, onSlotClick }
         )}
 
         <div className="relative rounded-lg border bg-white dark:bg-zinc-900">
-          {/* Time grid rows — fixed height, no booking content */}
+          {/* Time grid rows — display only */}
           {slots.map((slot, i) => {
             const slotMinutes = timeToMinutes(slot);
             const isBusinessHour =
@@ -138,36 +141,48 @@ export function DayView({ bookings, date, businessHours, override, onSlotClick }
             const isHour = slot.endsWith(":00");
             let lineClass = "";
             if (i > 0) lineClass = isHour ? "border-t border-t-gray-300 dark:border-t-zinc-600" : "border-t border-t-gray-100 dark:border-t-zinc-700/50";
-            const isBlocked = override?.isBlocked ?? false;
-            const covered = slotIsCovered(slot, bookings);
-            const canClick = !!onSlotClick && !isBlocked && !covered;
 
             return (
               <div
                 key={slot}
                 style={{ height: ROW_H }}
-                className={`group flex ${lineClass} ${isBusinessHour ? "bg-white dark:bg-zinc-900" : "bg-gray-50 dark:bg-zinc-800"}`}
+                className={`flex ${lineClass} ${isBusinessHour ? "bg-white dark:bg-zinc-900" : "bg-gray-50 dark:bg-zinc-800"}`}
               >
                 <div className="flex w-16 shrink-0 items-start justify-end border-r px-2 py-1">
                   {isHour && (
                     <span className="text-xs text-muted-foreground">{slot}</span>
                   )}
                 </div>
-                {canClick ? (
-                  <button
-                    type="button"
-                    className="flex flex-1 items-center gap-1 px-2 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
-                    onClick={() => onSlotClick(date, slot)}
-                  >
-                    <Plus className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Add booking</span>
-                  </button>
-                ) : (
-                  <div className="flex-1" />
-                )}
+                <div className="flex-1" />
               </div>
             );
           })}
+
+          {/* Ghost slot blocks — clickable add-booking targets at allowed start times */}
+          {onSlotClick && !override?.isBlocked && (
+            <div className="pointer-events-none absolute inset-0 left-16" style={{ height: totalHeight }}>
+              {ALLOWED_SLOT_START_TIMES.map((time) => {
+                const slotMins = timeToMinutes(time);
+                if (slotMins < gridStart || slotMins + 60 > gridEnd) return null;
+                if (slotOverlapsBooking(slotMins, bookings)) return null;
+                const top = ((slotMins - gridStart) / 15) * ROW_H + 1;
+                return (
+                  <button
+                    key={time}
+                    type="button"
+                    onClick={() => onSlotClick(date, time)}
+                    className="pointer-events-auto group absolute flex items-center justify-center gap-1.5 rounded-md border border-dashed border-muted-foreground/20 bg-transparent transition-colors hover:border-brand-400 hover:bg-brand-50/60 dark:hover:bg-brand-900/20"
+                    style={{ top, height: GHOST_BLOCK_H - 2, left: 8, right: 8 }}
+                  >
+                    <Plus className="h-3.5 w-3.5 text-muted-foreground/40 transition-colors group-hover:text-brand-500" />
+                    <span className="text-xs text-muted-foreground/40 transition-colors group-hover:text-brand-500">
+                      {time}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Absolutely positioned booking blocks */}
           <div className="pointer-events-none absolute inset-0 left-16" style={{ height: totalHeight }}>
