@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, X, ExternalLink, AlertTriangle, CalendarClock } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, ExternalLink, AlertTriangle, CalendarClock, Plus } from "lucide-react";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import type { BusinessHours } from "@/lib/settings";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
@@ -37,6 +37,16 @@ interface DayViewProps {
   date: string;
   businessHours: BusinessHours | null;
   override: OverrideData | null;
+  onSlotClick?: (date: string, time: string) => void;
+}
+
+function slotIsCovered(slot: string, bookings: BookingData[]): boolean {
+  const slotMins = timeToMinutes(slot);
+  return bookings.some((b) => {
+    const start = timeToMinutes(b.startTime);
+    const end = timeToMinutes(b.endTime);
+    return start <= slotMins && slotMins < end;
+  });
 }
 
 const SESSION_COLORS: Record<string, string> = {
@@ -58,7 +68,7 @@ function getDayKey(date: Date): string {
   return days[date.getDay()];
 }
 
-export function DayView({ bookings, date, businessHours, override }: Readonly<DayViewProps>) {
+export function DayView({ bookings, date, businessHours, override, onSlotClick }: Readonly<DayViewProps>) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -128,18 +138,33 @@ export function DayView({ bookings, date, businessHours, override }: Readonly<Da
             const isHour = slot.endsWith(":00");
             let lineClass = "";
             if (i > 0) lineClass = isHour ? "border-t border-t-gray-300 dark:border-t-zinc-600" : "border-t border-t-gray-100 dark:border-t-zinc-700/50";
+            const isBlocked = override?.isBlocked ?? false;
+            const covered = slotIsCovered(slot, bookings);
+            const canClick = !!onSlotClick && !isBlocked && !covered;
 
             return (
               <div
                 key={slot}
                 style={{ height: ROW_H }}
-                className={`flex ${lineClass} ${isBusinessHour ? "bg-white dark:bg-zinc-900" : "bg-gray-50 dark:bg-zinc-800"}`}
+                className={`group flex ${lineClass} ${isBusinessHour ? "bg-white dark:bg-zinc-900" : "bg-gray-50 dark:bg-zinc-800"}`}
               >
                 <div className="flex w-16 shrink-0 items-start justify-end border-r px-2 py-1">
                   {isHour && (
                     <span className="text-xs text-muted-foreground">{slot}</span>
                   )}
                 </div>
+                {canClick ? (
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center gap-1 px-2 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                    onClick={() => onSlotClick(date, slot)}
+                  >
+                    <Plus className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Add booking</span>
+                  </button>
+                ) : (
+                  <div className="flex-1" />
+                )}
               </div>
             );
           })}

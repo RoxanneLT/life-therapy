@@ -10,7 +10,7 @@ import {
 } from "date-fns";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import type { BusinessHours } from "@/lib/settings";
 import { BOOKING_STATUS_DOT } from "@/lib/status-styles";
 
@@ -37,6 +37,16 @@ interface WeekViewProps {
   date: string;
   businessHours: BusinessHours | null;
   overrides: OverrideData[];
+  onSlotClick?: (date: string, time: string) => void;
+}
+
+function slotIsCovered(slot: string, dayBookings: BookingData[]): boolean {
+  const slotMins = timeToMinutes(slot);
+  return dayBookings.some((b) => {
+    const start = timeToMinutes(b.startTime);
+    const end = timeToMinutes(b.endTime);
+    return start <= slotMins && slotMins < end;
+  });
 }
 
 const SESSION_COLORS: Record<string, string> = {
@@ -55,7 +65,7 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-export function WeekView({ bookings, date, businessHours, overrides }: Readonly<WeekViewProps>) {
+export function WeekView({ bookings, date, businessHours, overrides, onSlotClick }: Readonly<WeekViewProps>) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -197,6 +207,24 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
                     );
                   })}
 
+                  {/* Clickable slot areas */}
+                  {onSlotClick && !blocked && slots.map((slot, i) => {
+                    if (slotIsCovered(slot, dayBookings)) return null;
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        className="group absolute w-full hover:bg-brand-50/40 dark:hover:bg-brand-900/20 transition-colors"
+                        style={{ top: i * ROW_H, height: ROW_H, zIndex: 5 }}
+                        onClick={() => onSlotClick(dateStr, slot)}
+                      >
+                        <span className="flex h-full items-center justify-center opacity-0 group-hover:opacity-70 transition-opacity">
+                          <Plus className="h-3 w-3 text-muted-foreground" />
+                        </span>
+                      </button>
+                    );
+                  })}
+
                   {/* Booking blocks */}
                   {dayBookings.map((booking) => {
                     const colorClass =
@@ -213,7 +241,7 @@ export function WeekView({ bookings, date, businessHours, overrides }: Readonly<
                         key={booking.id}
                         href={`/admin/bookings/${booking.id}`}
                         className={`absolute overflow-hidden rounded border-l-2 px-1.5 py-0.5 text-xs transition-colors ${colorClass}`}
-                        style={{ top, height, left: 2, right: 2 }}
+                        style={{ top, height, left: 2, right: 2, zIndex: 10 }}
                       >
                         <div className="flex items-center gap-1">
                           <span

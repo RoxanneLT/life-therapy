@@ -963,3 +963,268 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   revalidatePath(`/admin/bookings/${id}`);
   redirect("/admin/bookings");
 }
+
+// ────────────────────────────────────────────────────────────
+// Check billing cycle status for a historical booking
+// ────────────────────────────────────────────────────────────
+
+export async function checkBillingCycleStatusAction(
+  studentId: string,
+  bookingDate: string, // yyyy-MM-dd
+): Promise<
+  | { status: "open" }
+  | { status: "no_billing" }
+  | { status: "pending"; billingMonth: string; existingRequestId: string }
+  | { status: "closed"; billingMonth: string }
+> {
+  await requireRole("super_admin", "editor");
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { billingType: true },
+  });
+
+  if (!student || student.billingType !== "postpaid") {
+    return { status: "no_billing" };
+  }
+
+  const date = new Date(bookingDate + "T12:00:00Z");
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const billingMonthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const billingMonthLabel = date.toLocaleString("en-ZA", {
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Johannesburg",
+  });
+
+  // PENDING: payment request sent but not yet paid — can be amended
+  const pendingRequest = await prisma.paymentRequest.findFirst({
+    where: {
+      studentId,
+      billingMonth: { startsWith: billingMonthKey },
+      status: { in: ["pending", "overdue"] },
+    },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (pendingRequest) {
+    return { status: "pending", billingMonth: billingMonthLabel, existingRequestId: pendingRequest.id };
+  }
+
+  // CLOSED: payment request already paid
+  const paidRequest = await prisma.paymentRequest.findFirst({
+    where: {
+      studentId,
+      billingMonth: { startsWith: billingMonthKey },
+      status: "paid",
+    },
+    select: { id: true },
+  });
+
+  if (paidRequest) {
+    return { status: "closed", billingMonth: billingMonthLabel };
+  }
+
+  // CLOSED: direct invoice exists for this period
+  const periodStart = new Date(Date.UTC(year, month - 1, 1));
+  const periodEnd = new Date(Date.UTC(year, month, 0));
+  const existingInvoice = await prisma.invoice.findFirst({
+    where: {
+      studentId,
+      createdAt: { gte: periodStart, lte: periodEnd },
+      type: { in: ["session", "late_cancel", "ad_hoc_session"] },
+      status: { not: "cancelled" },
+    },
+    select: { id: true },
+  });
+
+  if (existingInvoice) {
+    return { status: "closed", billingMonth: billingMonthLabel };
+  }
+
+  return { status: "open" };
+}
+
+// ────────────────────────────────────────────────────────────
+// Create a historical (past) booking entered in hindsight
+// ────────────────────────────────────────────────────────────
+
+type BillingResolution = "auto" | "defer" | "invoice_now" | "amend_request";
+
+interface AdminCreateHistoricalData {
+  studentId: string;
+  sessionType: SessionType;
+  sessionMode: SessionMode;
+  date: string; // yyyy-MM-dd — must be in the past
+  startTime: string;
+  endTime: string;
+  adminNotes?: string;
+  couplesPartnerName?: string;
+  billingResolution: BillingResolution;
+  existingRequestId?: string; // required when billingResolution === "amend_request"
+}
+
+export async function adminCreateHistoricalBookingAction(data: AdminCreateHistoricalData) {
+  await requireRole("super_admin", "editor");
+
+  const student = await prisma.student.findUnique({
+    where: { id: data.studentId },
+    select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
+  });
+  if (!student) throw new Error("Client not found");
+
+  const config = getSessionTypeConfig(data.sessionType);
+  const settings = await getSiteSettings();
+  const clientName = `${student.firstName} ${student.lastName}`.trim();
+  const bookingDate = new Date(data.date + "T00:00:00Z");
+  const confirmationToken = randomUUID();
+
+  let priceZarCents = 0;
+  if (!config.isFree) {
+    priceZarCents = data.sessionType === "couples"
+      ? (settings.sessionPriceCouplesZar ?? 0)
+      : (settings.sessionPriceIndividualZar ?? 0);
+  }
+
+  // Create booking as COMPLETED — no calendar event, no confirmation email
+  const booking = await prisma.booking.create({
+    data: {
+      sessionType: data.sessionType,
+      sessionMode: data.sessionMode,
+      date: bookingDate,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      durationMinutes: config.durationMinutes,
+      priceZarCents,
+      priceCurrency: "ZAR",
+      clientName,
+      clientEmail: student.email,
+      clientPhone: student.phone || null,
+      status: "completed",
+      adminNotes: data.adminNotes
+        ? `[Historical entry] ${data.adminNotes}`
+        : "[Historical entry — added in hindsight]",
+      couplesPartnerName: data.couplesPartnerName || null,
+      graphEventId: null,
+      teamsMeetingUrl: null,
+      confirmationToken,
+      originalDate: bookingDate,
+      originalStartTime: data.startTime,
+      studentId: student.id,
+    },
+  });
+
+  // Handle billing resolution
+  if (data.billingResolution === "invoice_now" && !config.isFree) {
+    try {
+      const { createManualInvoice } = await import("@/lib/create-invoice");
+      const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
+      const { sendInvoiceEmail } = await import("@/lib/send-invoice");
+
+      const dateStr = format(bookingDate, "d MMM yyyy");
+      const invoice = await createManualInvoice({
+        type: "ad_hoc_session",
+        studentId: student.id,
+        paymentMethod: "eft" as const,
+        lineItems: [
+          {
+            description: config.label,
+            subLine: `${dateStr}, ${data.startTime}–${data.endTime} (historical entry)`,
+            quantity: 1,
+            unitPriceCents: priceZarCents,
+            totalCents: priceZarCents,
+            discountCents: 0,
+            discountPercent: 0,
+          },
+        ],
+      });
+
+      await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
+      await sendInvoiceEmail(invoice.id).catch(console.error);
+
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { invoiceId: invoice.id },
+      });
+    } catch (err) {
+      console.error("Failed to create invoice for historical booking:", err);
+    }
+  }
+
+  if (data.billingResolution === "amend_request" && data.existingRequestId && !config.isFree) {
+    try {
+      const existingPR = await prisma.paymentRequest.findUnique({
+        where: { id: data.existingRequestId },
+      });
+
+      if (existingPR && existingPR.status !== "paid") {
+        const { calculateInvoiceTotals } = await import("@/lib/billing");
+        const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
+        const { sendInvoiceEmail } = await import("@/lib/send-invoice");
+
+        const dateStr = format(bookingDate, "d MMM yyyy");
+        const existingLines = (existingPR.lineItems as unknown as object[]) || [];
+        const newLine = {
+          description: config.label,
+          subLine: `${dateStr}, ${data.startTime}–${data.endTime} (historical entry)`,
+          quantity: 1,
+          unitPriceCents: priceZarCents,
+          discountCents: 0,
+          discountPercent: 0,
+          totalCents: priceZarCents,
+          bookingId: booking.id,
+          attendeeName: clientName,
+        };
+        const updatedLines = [...existingLines, newLine];
+
+        const isVat = settings.vatRegistered ?? false;
+        const vatPercent = settings.vatPercent ?? 0;
+        type LineObj = { unitPriceCents: number; quantity: number; discountPercent?: number; discountCents?: number };
+        const lineCalcs = (updatedLines as LineObj[]).map((li) => ({
+          unitPriceCents: li.unitPriceCents,
+          quantity: li.quantity,
+          lineDiscountPercent: li.discountPercent || undefined,
+          lineDiscountCents: li.discountCents || undefined,
+        }));
+        const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
+
+        await prisma.paymentRequest.update({
+          where: { id: existingPR.id },
+          data: {
+            lineItems: updatedLines as Parameters<typeof prisma.paymentRequest.update>[0]["data"]["lineItems"],
+            subtotalCents: totals.subtotalCents,
+            discountCents: totals.discountCents,
+            vatAmountCents: totals.vatAmountCents,
+            totalCents: totals.totalCents,
+          },
+        });
+
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { paymentRequestId: existingPR.id },
+        });
+
+        // Regenerate PDF and resend for any invoice linked to this payment request
+        const linkedInvoice = await prisma.invoice.findFirst({
+          where: { paymentRequestId: existingPR.id },
+          select: { id: true },
+        });
+
+        if (linkedInvoice) {
+          await generateAndStoreInvoicePDF(linkedInvoice.id).catch(console.error);
+          await sendInvoiceEmail(linkedInvoice.id).catch(console.error);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to amend payment request for historical booking:", err);
+    }
+  }
+
+  // "auto" and "defer": booking sits in unbilled queue for next monthly run
+
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${booking.id}`);
+  return { success: true, bookingId: booking.id };
+}

@@ -21,10 +21,9 @@ import { CalendarDays, Settings, ShieldOff, Repeat, X } from "lucide-react";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { ViewSwitcher } from "./view-switcher";
-import { DayView } from "./day-view";
-import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
 import { CreateBookingDialog } from "./create-booking-dialog";
+import { CalendarShell } from "./calendar-shell";
 import { SeriesTimeline } from "./series-timeline";
 import { ClientQuickView } from "@/components/admin/client-quick-view";
 
@@ -370,17 +369,9 @@ export default async function BookingsPage({ searchParams }: Props) {
         </>
       )}
 
-      {!seriesFilter && view === "day" && (
-        <DayView
-          bookings={serialisedBookings}
-          date={selectedDate}
-          businessHours={businessHours}
-          override={serialisedOverrides[0] || null}
-        />
-      )}
-
-      {!seriesFilter && view === "week" && (
-        <WeekView
+      {!seriesFilter && (view === "day" || view === "week") && (
+        <CalendarShell
+          view={view}
           bookings={serialisedBookings}
           date={selectedDate}
           businessHours={businessHours}

@@ -38,6 +38,10 @@ interface ReschedulePickerProps {
   mode?: "reschedule" | "new";
   /** When true, bypasses minimum notice requirement for admin bookings */
   isAdmin?: boolean;
+  /** Pre-select this date when picker opens (yyyy-MM-dd) */
+  defaultDate?: string;
+  /** Pre-select this time slot when picker opens (HH:mm) */
+  defaultTime?: string;
 }
 
 export function ReschedulePicker({
@@ -48,13 +52,17 @@ export function ReschedulePicker({
   isPending,
   mode = "reschedule",
   isAdmin = false,
+  defaultDate,
+  defaultTime,
 }: ReschedulePickerProps) {
-  const [month, setMonth] = useState(new Date());
+  const [month, setMonth] = useState(() =>
+    defaultDate ? new Date(defaultDate + "T12:00:00") : new Date()
+  );
   const [availableDates, setAvailableDates] = useState<Set<string>>(new Set());
   const [loadingDates, setLoadingDates] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(defaultDate ?? "");
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loadingSlots, setLoadingSlots] = useState(!!defaultDate);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
 
   const fetchDates = useCallback(async () => {
@@ -74,12 +82,34 @@ export function ReschedulePicker({
     fetchDates();
   }, [fetchDates]);
 
+  // Auto-load slots when a defaultDate is provided
+  useEffect(() => {
+    if (!defaultDate) return;
+    setLoadingSlots(true);
+    setSlots([]);
+    fetch(`/api/booking/available-slots?type=${sessionType}&date=${defaultDate}${isAdmin ? "&admin=1" : ""}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const fetched: Slot[] = data.slots || [];
+        setSlots(fetched);
+        if (defaultTime) {
+          const match = fetched.find((s) => s.start === defaultTime);
+          if (match) setSelectedSlot(match);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSlots(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultDate, defaultTime]);
+
   /** Reset selections when parent re-mounts (e.g. dialog re-open). */
   useEffect(() => {
-    setSelectedDate("");
-    setSelectedSlot(null);
-    setSlots([]);
-  }, []);
+    if (!defaultDate) {
+      setSelectedDate("");
+      setSelectedSlot(null);
+      setSlots([]);
+    }
+  }, [defaultDate]);
 
   async function handleDayClick(dateStr: string) {
     setSelectedDate(dateStr);

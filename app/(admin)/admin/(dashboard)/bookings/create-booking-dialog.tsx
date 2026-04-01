@@ -28,22 +28,37 @@ import {
 import {
   adminCreateBookingAction,
   adminCreateRecurringBookingsAction,
+  adminCreateHistoricalBookingAction,
+  checkBillingCycleStatusAction,
   getClientsForBookingAction,
   getClientCreditBalance,
   getClientPartnersAction,
 } from "./actions";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  AlertTriangle,
   CalendarPlus,
+  Clock,
   Loader2,
+  MapPin,
+  Receipt,
+  RefreshCw,
+  Repeat,
   Search,
   Check,
-  Repeat,
-  MapPin,
   Video,
 } from "lucide-react";
 import type { SessionMode, SessionType } from "@/lib/generated/prisma/client";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 interface ClientOption {
   id: string;
@@ -62,6 +77,12 @@ interface PartnerOption {
 
 type BookingMode = "single" | "recurring";
 type SessionLocation = "online" | "in_person";
+type BillingResolution = "auto" | "defer" | "invoice_now" | "amend_request";
+type BillingCycleStatus =
+  | { status: "open" }
+  | { status: "no_billing" }
+  | { status: "pending"; billingMonth: string; existingRequestId: string }
+  | { status: "closed"; billingMonth: string };
 
 /** Default "repeat until" date: 3 months from today */
 function defaultEndDate(): string {
@@ -70,9 +91,31 @@ function defaultEndDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function CreateBookingDialog() {
+function addMinutes(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+interface CreateBookingDialogProps {
+  /** Controlled open state (used by CalendarShell) */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Pre-fill date/time from slot click (yyyy-MM-dd / HH:mm) */
+  prefilledDate?: string;
+  prefilledTime?: string;
+}
+
+export function CreateBookingDialog({
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  prefilledDate,
+  prefilledTime,
+}: Readonly<CreateBookingDialogProps> = {}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen! : internalOpen;
   const [isPending, startTransition] = useTransition();
 
   // Step tracking: 1 = select client + type, 2 = pick date/time
@@ -125,6 +168,13 @@ export function CreateBookingDialog() {
 
   // Error
   const [error, setError] = useState("");
+
+  // Historical booking billing state
+  const [pendingDate, setPendingDate] = useState("");
+  const [pendingStartTime, setPendingStartTime] = useState("");
+  const [pendingEndTime, setPendingEndTime] = useState("");
+  const [billingCycleInfo, setBillingCycleInfo] = useState<BillingCycleStatus | null>(null);
+  const [showBillingPrompt, setShowBillingPrompt] = useState(false);
 
   // Config for selected session type
   const config = SESSION_TYPES.find((s) => s.type === sessionType)!;
@@ -203,6 +253,11 @@ export function CreateBookingDialog() {
       .catch(() => setPartners([]));
   }, [selectedClient, sessionType]);
 
+  function handleSetOpen(value: boolean) {
+    if (!isControlled) setInternalOpen(value);
+    controlledOnOpenChange?.(value);
+  }
+
   function resetForm() {
     setStep(1);
     setSearch("");
@@ -223,10 +278,15 @@ export function CreateBookingDialog() {
     setRecurringEndTime("");
     setRecurringResult(null);
     setError("");
+    setPendingDate("");
+    setPendingStartTime("");
+    setPendingEndTime("");
+    setBillingCycleInfo(null);
+    setShowBillingPrompt(false);
   }
 
   function handleOpenChange(isOpen: boolean) {
-    setOpen(isOpen);
+    handleSetOpen(isOpen);
     if (!isOpen) resetForm();
   }
 
@@ -242,39 +302,112 @@ export function CreateBookingDialog() {
     setStep(2);
   }
 
-  // Single booking confirm
+  // Single booking confirm — handles both future (normal) and past (historical)
   function handleSingleConfirm(date: string, startTime: string, endTime: string) {
     if (!selectedClient) return;
     setError("");
 
-    startTransition(async () => {
-      try {
-        const result = await adminCreateBookingAction({
-          studentId: selectedClient.id,
-          sessionType,
-          sessionMode: sessionLocation as SessionMode,
-          date,
-          startTime,
-          endTime,
-          useCredit: useCredit && !config.isFree,
-          adminNotes: adminNotes.trim() || undefined,
-          couplesPartnerName: effectivePartnerName,
-        });
-        setOpen(false);
-        resetForm();
-        if (result?.bookingId) {
-          router.push(`/admin/bookings/${result.bookingId}`);
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    const isPast = date < todayStr;
+
+    if (!isPast) {
+      // Normal future booking
+      startTransition(async () => {
+        try {
+          const result = await adminCreateBookingAction({
+            studentId: selectedClient.id,
+            sessionType,
+            sessionMode: sessionLocation as SessionMode,
+            date,
+            startTime,
+            endTime,
+            useCredit: useCredit && !config.isFree,
+            adminNotes: adminNotes.trim() || undefined,
+            couplesPartnerName: effectivePartnerName,
+          });
+          handleSetOpen(false);
+          resetForm();
+          if (result?.bookingId) router.push(`/admin/bookings/${result.bookingId}`);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to create booking");
         }
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to create booking"
-        );
-      }
+      });
+      return;
+    }
+
+    // Past booking — capture and check billing cycle for postpaid clients
+    setPendingDate(date);
+    setPendingStartTime(startTime);
+    setPendingEndTime(endTime);
+
+    if (selectedClient.billingType === "postpaid" && !config.isFree) {
+      startTransition(async () => {
+        try {
+          const cycleStatus = await checkBillingCycleStatusAction(selectedClient.id, date);
+          if (cycleStatus.status === "pending" || cycleStatus.status === "closed") {
+            setBillingCycleInfo(cycleStatus);
+            setShowBillingPrompt(true);
+          } else {
+            await submitHistoricalBooking(date, startTime, endTime, "auto");
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to check billing cycle");
+        }
+      });
+    } else {
+      startTransition(async () => {
+        await submitHistoricalBooking(date, startTime, endTime, "auto");
+      });
+    }
+  }
+
+  async function submitHistoricalBooking(
+    date: string,
+    startTime: string,
+    endTime: string,
+    resolution: BillingResolution,
+  ) {
+    if (!selectedClient) return;
+    try {
+      const existingRequestId =
+        resolution === "amend_request" && billingCycleInfo?.status === "pending"
+          ? (billingCycleInfo as { status: "pending"; existingRequestId: string }).existingRequestId
+          : undefined;
+      const result = await adminCreateHistoricalBookingAction({
+        studentId: selectedClient.id,
+        sessionType,
+        sessionMode: sessionLocation as SessionMode,
+        date,
+        startTime,
+        endTime,
+        adminNotes: adminNotes.trim() || undefined,
+        couplesPartnerName: effectivePartnerName,
+        billingResolution: resolution,
+        existingRequestId,
+      });
+      setShowBillingPrompt(false);
+      handleSetOpen(false);
+      resetForm();
+      if (result?.bookingId) router.push(`/admin/bookings/${result.bookingId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create booking");
+    }
+  }
+
+  function handleHistoricalBookingCreate(resolution: BillingResolution) {
+    setError("");
+    startTransition(async () => {
+      await submitHistoricalBooking(pendingDate, pendingStartTime, pendingEndTime, resolution);
     });
   }
 
-  // Recurring: capture first date/time from picker, then show preview
+  // Recurring: capture first date/time from picker (reject past dates)
   function handleRecurringSlotSelect(date: string, startTime: string, endTime: string) {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    if (date < todayStr) {
+      setError("Recurring series cannot start in the past. Use single session for historical entries.");
+      return;
+    }
     setRecurringDate(date);
     setRecurringStartTime(startTime);
     setRecurringEndTime(endTime);
@@ -322,14 +455,95 @@ export function CreateBookingDialog() {
     ? Math.max(0, creditsForSeries - creditsAvailable)
     : creditsForSeries;
 
+  // Computed values for prefilled past session
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const isPrefilledPast = !!prefilledDate && prefilledDate < todayStr;
+  const prefilledEndTime = prefilledTime && config
+    ? addMinutes(prefilledTime, config.durationMinutes)
+    : undefined;
+
   return (
+    <>
+    {/* Billing resolution AlertDialog — shown over the booking dialog */}
+    {billingCycleInfo && (billingCycleInfo.status === "pending" || billingCycleInfo.status === "closed") && (
+      <AlertDialog open={showBillingPrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-amber-500" />
+              {billingCycleInfo.status === "pending"
+                ? `Unpaid Payment Request — ${billingCycleInfo.billingMonth}`
+                : `Billing Cycle Closed — ${billingCycleInfo.billingMonth}`}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                {billingCycleInfo.status === "pending" ? (
+                  <>
+                    <p>
+                      A payment request for <strong>{billingCycleInfo.billingMonth}</strong> has
+                      been sent to {selectedClient?.firstName} and is still unpaid.
+                    </p>
+                    <p>Choose how to handle billing for this session:</p>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      The billing cycle for <strong>{billingCycleInfo.billingMonth}</strong> has
+                      already been paid or invoiced. This session cannot be added to that cycle.
+                    </p>
+                    <p>Choose how to handle billing:</p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            <AlertDialogCancel onClick={() => setShowBillingPrompt(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => handleHistoricalBookingCreate("defer")}
+              disabled={isPending}
+            >
+              <Clock className="mr-2 h-4 w-4" />
+              Add to Next Cycle
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleHistoricalBookingCreate("invoice_now")}
+              disabled={isPending}
+            >
+              <Receipt className="mr-2 h-4 w-4" />
+              Invoice Separately
+            </Button>
+            {billingCycleInfo.status === "pending" && (
+              <Button
+                onClick={() => handleHistoricalBookingCreate("amend_request")}
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Add to Existing Request & Resend
+              </Button>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    )}
+
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5">
-          <CalendarPlus className="h-4 w-4" />
-          New Booking
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button size="sm" className="gap-1.5">
+            <CalendarPlus className="h-4 w-4" />
+            New Booking
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
@@ -376,7 +590,7 @@ export function CreateBookingDialog() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setOpen(false);
+                  handleSetOpen(false);
                   resetForm();
                 }}
               >
@@ -384,7 +598,7 @@ export function CreateBookingDialog() {
               </Button>
               <Button
                 onClick={() => {
-                  setOpen(false);
+                  handleSetOpen(false);
                   resetForm();
                   router.push(`/admin/bookings?series=${recurringResult.seriesId}`);
                 }}
@@ -702,7 +916,7 @@ export function CreateBookingDialog() {
           </div>
         )}
 
-        {/* Step 2: Single booking — date/time picker */}
+        {/* Step 2: Single booking */}
         {!recurringResult && step === 2 && bookingMode === "single" && (
           <div className="space-y-4">
             <SummaryBar
@@ -712,16 +926,73 @@ export function CreateBookingDialog() {
               isFree={config.isFree}
               onBack={() => setStep(1)}
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <ReschedulePicker
-              sessionType={sessionType}
-              currentDate=""
-              currentTime=""
-              onConfirm={handleSingleConfirm}
-              isPending={isPending}
-              mode="new"
-              isAdmin
-            />
+
+            {isPrefilledPast ? (
+              /* Past session — fixed date/time view */
+              <>
+                <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <div className="space-y-1">
+                    <p className="font-medium">Recording a past session</p>
+                    <p>
+                      This session date is in the past. The booking will be recorded as{" "}
+                      <strong>Completed</strong> immediately. No confirmation email will be
+                      sent and no calendar event will be created.
+                    </p>
+                    {selectedClient?.billingType === "postpaid" && (
+                      <p>
+                        Billing will be handled based on whether the{" "}
+                        <strong>{format(parseISO(prefilledDate!), "MMMM")}</strong> billing
+                        cycle has already been processed for this client.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-4 space-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Date: </span>
+                    <span className="font-medium">
+                      {format(parseISO(prefilledDate!), "EEEE, d MMMM yyyy")}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Time: </span>
+                    <span className="font-medium">
+                      {prefilledTime} – {prefilledEndTime}
+                    </span>
+                  </div>
+                </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => handleSingleConfirm(prefilledDate!, prefilledTime!, prefilledEndTime!)}
+                    disabled={isPending}
+                  >
+                    {isPending ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Recording...</>
+                    ) : (
+                      "Record Past Session"
+                    )}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              /* Future session — normal picker */
+              <>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <ReschedulePicker
+                  sessionType={sessionType}
+                  currentDate=""
+                  currentTime=""
+                  onConfirm={handleSingleConfirm}
+                  isPending={isPending}
+                  mode="new"
+                  isAdmin
+                  defaultDate={prefilledDate}
+                  defaultTime={prefilledTime}
+                />
+              </>
+            )}
           </div>
         )}
 
@@ -856,6 +1127,7 @@ export function CreateBookingDialog() {
         )}
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 
