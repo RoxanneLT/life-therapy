@@ -910,9 +910,11 @@ export function CreateBookingDialog({
                 onClick={handleNext}
                 disabled={!selectedClient}
               >
-                {bookingMode === "single"
-                  ? "Next — Pick Date & Time"
-                  : "Next — Pick First Session"}
+                {prefilledDate
+                  ? "Next"
+                  : bookingMode === "single"
+                    ? "Next — Pick Date & Time"
+                    : "Next — Pick First Session"}
               </Button>
             </div>
           </div>
