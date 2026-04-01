@@ -121,7 +121,7 @@ function buildInvoiceDoc(data: InvoiceLayoutData): jsPDF {
     title, metaRows, isVat,
     billingName, billingEmail, billingAddress, billingVatNumber,
     lineItems, currency,
-    subtotalCents, discountCents, discountPercent, vatPercent, vatAmountCents,
+    subtotalCents, discountCents, discountPercent: _discountPercent, vatPercent, vatAmountCents,
     totalCents, paidCents, amountDueCents,
     couponCode, showUnpaidWatermark, payNowUrl,
     settings,

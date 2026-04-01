@@ -1182,6 +1182,27 @@ export async function getSessionRatesAction() {
 }
 
 // ────────────────────────────────────────────────────────────
+// Get active billing presets for payment request quick-add
+// ────────────────────────────────────────────────────────────
+
+export async function getActiveBillingPresetsAction() {
+  await requireRole("super_admin", "editor");
+
+  return prisma.billingPreset.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      label: true,
+      description: true,
+      subLine: true,
+      priceCents: true,
+      category: true,
+    },
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // Create manual payment request
 // ────────────────────────────────────────────────────────────
 
@@ -1192,6 +1213,7 @@ export async function createManualPaymentRequestAction(data: {
     subLine?: string;
     quantity: number;
     unitPriceCents: number;
+    discountCents?: number;
   }[];
   discountPercent?: number;
   discountFixedCents?: number;
@@ -1208,7 +1230,7 @@ export async function createManualPaymentRequestAction(data: {
     const lineItemsCalc = data.lineItems.map((li) => ({
       unitPriceCents: li.unitPriceCents,
       quantity: li.quantity,
-      discountCents: 0,
+      lineDiscountCents: li.discountCents ?? 0,
       discountPercent: 0,
     }));
 
@@ -1233,9 +1255,9 @@ export async function createManualPaymentRequestAction(data: {
       subLine: li.subLine,
       quantity: li.quantity,
       unitPriceCents: li.unitPriceCents,
-      discountCents: 0,
+      discountCents: li.discountCents ?? 0,
       discountPercent: 0,
-      totalCents: Math.round(li.unitPriceCents * li.quantity),
+      totalCents: Math.round(li.unitPriceCents * li.quantity) - (li.discountCents ?? 0) * li.quantity,
     }));
 
     const pr = await prisma.paymentRequest.create({
@@ -1308,6 +1330,7 @@ export interface PaymentRequestDetails {
     subLine?: string;
     quantity: number;
     unitPriceCents: number;
+    discountCents?: number;
     totalCents: number;
   }[];
   subtotalCents: number;
@@ -1377,7 +1400,7 @@ export async function getPaymentRequestDetailsAction(
 export async function updatePaymentRequestAction(data: {
   paymentRequestId: string;
   studentId: string;
-  lineItems: { description: string; subLine?: string; quantity: number; unitPriceCents: number }[];
+  lineItems: { description: string; subLine?: string; quantity: number; unitPriceCents: number; discountCents?: number }[];
   discountPercent?: number;
   discountFixedCents?: number;
   dueDate: string;
@@ -1399,7 +1422,7 @@ export async function updatePaymentRequestAction(data: {
     const lineItemsCalc = data.lineItems.map((li) => ({
       unitPriceCents: li.unitPriceCents,
       quantity: li.quantity,
-      discountCents: 0,
+      lineDiscountCents: li.discountCents ?? 0,
       discountPercent: 0,
     }));
 
@@ -1416,9 +1439,9 @@ export async function updatePaymentRequestAction(data: {
       subLine: li.subLine,
       quantity: li.quantity,
       unitPriceCents: li.unitPriceCents,
-      discountCents: 0,
+      discountCents: li.discountCents ?? 0,
       discountPercent: 0,
-      totalCents: Math.round(li.unitPriceCents * li.quantity),
+      totalCents: Math.round(li.unitPriceCents * li.quantity) - (li.discountCents ?? 0) * li.quantity,
     }));
 
     const amountChanged = totals.totalCents !== pr.totalCents;

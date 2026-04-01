@@ -1036,6 +1036,24 @@ model PaymentRequest {
 }
 
 // ============================================================
+// Billing Line Item Presets (configurable quick-add buttons)
+// ============================================================
+model BillingPreset {
+  id           String   @id @default(cuid())
+  label        String   // Display name, e.g. "Individual Session"
+  description  String   // Line item description text
+  subLine      String?  // Optional sub-line hint (e.g. "60 min")
+  priceCents   Int      // Default unit price in ZAR cents
+  category     String   @default("session") // "session" | "other"
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("billing_presets")
+}
+
+// ============================================================
 // Coupons
 // ============================================================
 model Coupon {

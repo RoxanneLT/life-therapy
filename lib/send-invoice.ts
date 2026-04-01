@@ -100,7 +100,7 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<void> {
     invoiceNumber: invoice.invoiceNumber,
     invoiceDate: fmtDate(invoice.issuedAt || invoice.createdAt),
     total: fmt(invoice.totalCents, invoice.currency),
-    isReplacingProforma: !!invoice.paymentRequestId,
+    isReplacingProforma: invoice.paymentRequestId ? "true" : "false",
   });
 
   await sendEmail({

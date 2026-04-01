@@ -28,10 +28,18 @@ import {
   CalendarClock,
   Landmark,
   FileText,
+  ListChecks,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { updateFinanceSettings } from "@/app/(admin)/admin/(dashboard)/settings/finance/actions";
+import {
+  updateFinanceSettings,
+  getBillingPresetsAction,
+  updateBillingPresetsAction,
+  type BillingPresetInput,
+} from "@/app/(admin)/admin/(dashboard)/settings/finance/actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 
 // ─── Sections ─────────────────────────────────────────────────
@@ -48,6 +56,7 @@ const SECTIONS: Section[] = [
   { id: "pricing", label: "Session Rates", icon: DollarSign },
   { id: "billing", label: "Billing Schedule", icon: CalendarClock },
   { id: "banking", label: "Banking Details", icon: Landmark },
+  { id: "billing-items", label: "Billing Items", icon: ListChecks },
   { id: "invoice", label: "Invoice Template", icon: FileText },
 ];
 
@@ -756,6 +765,11 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
           </Card>
         )}
 
+        {/* ── Billing Items ── */}
+        {activeSection === "billing-items" && (
+          <BillingItemsSection />
+        )}
+
         {/* ── Invoice Template ── */}
         {activeSection === "invoice" && (
           <InvoicePreview
@@ -1033,6 +1047,176 @@ function InvoicePreview({
         <p className="mt-4 text-center text-xs text-muted-foreground">
           Sample invoice using current settings. Edit Business Details, VAT, and Banking sections to update.
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Billing Items Section ─────────────────────────────────────
+
+function BillingItemsSection() {
+  const [presets, setPresets] = useState<BillingPresetInput[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getBillingPresetsAction()
+      .then((data) => {
+        setPresets(
+          data.map((p) => ({
+            id: p.id,
+            label: p.label,
+            description: p.description,
+            subLine: p.subLine ?? "",
+            priceCents: p.priceCents,
+            category: p.category,
+            isActive: p.isActive,
+            sortOrder: p.sortOrder,
+          })),
+        );
+      })
+      .catch(() => toast.error("Failed to load billing items"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function updatePreset(i: number, patch: Partial<BillingPresetInput>) {
+    setPresets((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+
+  function addPreset() {
+    setPresets((prev) => [
+      ...prev,
+      {
+        label: "",
+        description: "",
+        subLine: "",
+        priceCents: 0,
+        category: "session",
+        isActive: true,
+        sortOrder: prev.length,
+      },
+    ]);
+  }
+
+  function removePreset(i: number) {
+    setPresets((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const result = await updateBillingPresetsAction(presets);
+      if (result.success) {
+        toast.success("Billing items saved");
+      } else {
+        toast.error(result.error ?? "Failed to save billing items");
+      }
+    } catch {
+      toast.error("Failed to save billing items");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Billing Items</CardTitle>
+        <CardDescription>
+          Quick-add presets shown in payment request dialogs. Enable or disable items, adjust prices, or add custom line items.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <div className="space-y-2">
+            <div className="h-10 w-full animate-pulse rounded bg-muted" />
+            <div className="h-10 w-full animate-pulse rounded bg-muted" />
+          </div>
+        ) : (
+          <>
+            {/* Column headers */}
+            <div className="grid grid-cols-[1fr_1fr_90px_80px_60px_28px] gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span>Label (button)</span>
+              <span>Line description</span>
+              <span>Sub-line</span>
+              <span>Price (R)</span>
+              <span>Active</span>
+              <span />
+            </div>
+
+            {presets.map((preset, i) => (
+              <div key={preset.id ?? i} className="grid grid-cols-[1fr_1fr_90px_80px_60px_28px] items-center gap-2">
+                <Input
+                  value={preset.label}
+                  onChange={(e) => updatePreset(i, { label: e.target.value })}
+                  placeholder="e.g. Individual Session"
+                  className="h-8 text-sm"
+                />
+                <Input
+                  value={preset.description}
+                  onChange={(e) => updatePreset(i, { description: e.target.value })}
+                  placeholder="Line item text on invoice"
+                  className="h-8 text-sm"
+                />
+                <Input
+                  value={preset.subLine ?? ""}
+                  onChange={(e) => updatePreset(i, { subLine: e.target.value })}
+                  placeholder="60 min"
+                  className="h-8 text-sm"
+                />
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    R
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={preset.priceCents > 0 ? preset.priceCents / 100 : ""}
+                    onChange={(e) =>
+                      updatePreset(i, {
+                        priceCents: Math.round((Number.parseFloat(e.target.value) || 0) * 100),
+                      })
+                    }
+                    className="h-8 pl-5 text-sm"
+                  />
+                </div>
+                <div className="flex justify-center">
+                  <Switch
+                    checked={preset.isActive}
+                    onCheckedChange={(v) => updatePreset(i, { isActive: v })}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                  onClick={() => removePreset(i)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-full border border-dashed text-xs text-muted-foreground"
+              onClick={addPreset}
+            >
+              <Plus className="mr-1 h-3 w-3" /> Add item
+            </Button>
+
+            <div className="flex justify-end pt-2">
+              <Button type="button" onClick={handleSave} disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Billing Items
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

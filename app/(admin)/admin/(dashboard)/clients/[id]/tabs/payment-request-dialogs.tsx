@@ -16,12 +16,14 @@ import { Send, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays } from "date-fns";
 import {
-  getSessionRatesAction,
+  getActiveBillingPresetsAction,
   createManualPaymentRequestAction,
   getPaymentRequestDetailsAction,
   updatePaymentRequestAction,
   resendPaymentRequestAction,
 } from "../actions";
+
+type BillingPreset = Awaited<ReturnType<typeof getActiveBillingPresetsAction>>[number];
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -38,10 +40,11 @@ interface LineItem {
   subLine: string;
   quantity: number;
   unitPriceRands: number;
+  discountRands: number; // per-line discount; aggregates to invoice discount when > 0
 }
 
 function emptyLine(): LineItem {
-  return { description: "", subLine: "", quantity: 1, unitPriceRands: 0 };
+  return { description: "", subLine: "", quantity: 1, unitPriceRands: 0, discountRands: 0 };
 }
 
 function calcTotals(
@@ -51,13 +54,19 @@ function calcTotals(
   vatPct: number,
 ) {
   const subtotal = lines.reduce((s, l) => s + Math.round(l.unitPriceRands * 100) * l.quantity, 0);
-  const percentDisc = discountPct > 0 ? Math.round((subtotal * discountPct) / 100) : 0;
-  const fixedDisc = Math.round(discountFixedR * 100);
-  const discountCents = Math.max(percentDisc, fixedDisc);
+  const lineDiscountTotal = lines.reduce((s, l) => s + Math.round((l.discountRands ?? 0) * 100) * l.quantity, 0);
+  let discountCents: number;
+  if (lineDiscountTotal > 0) {
+    discountCents = lineDiscountTotal;
+  } else {
+    const percentDisc = discountPct > 0 ? Math.round((subtotal * discountPct) / 100) : 0;
+    const fixedDisc = Math.round(discountFixedR * 100);
+    discountCents = Math.max(percentDisc, fixedDisc);
+  }
   const afterDiscount = Math.max(0, subtotal - discountCents);
   const vatCents = vatPct > 0 ? Math.round((afterDiscount * vatPct) / 100) : 0;
   const total = afterDiscount + vatCents;
-  return { subtotal, discountCents, vatCents, total };
+  return { subtotal, discountCents, vatCents, total, hasLineDiscounts: lineDiscountTotal > 0 };
 }
 
 // ─── Line items editor (shared) ──────────────────────────────
@@ -65,11 +74,11 @@ function calcTotals(
 interface LineEditorProps {
   lines: LineItem[];
   onLinesChange: (lines: LineItem[]) => void;
-  sessionRates: { individual: number; couples: number } | null;
-  loadingRates: boolean;
+  presets: BillingPreset[];
+  loadingPresets: boolean;
 }
 
-function LineEditor({ lines, onLinesChange, sessionRates, loadingRates }: LineEditorProps) {
+function LineEditor({ lines, onLinesChange, presets, loadingPresets }: LineEditorProps) {
   function updateLine(i: number, patch: Partial<LineItem>) {
     const next = lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l));
     onLinesChange(next);
@@ -80,60 +89,58 @@ function LineEditor({ lines, onLinesChange, sessionRates, loadingRates }: LineEd
   function addLine() {
     onLinesChange([...lines, emptyLine()]);
   }
-  function addSession(type: "individual" | "couples") {
-    if (!sessionRates) return;
-    const cents = type === "individual" ? sessionRates.individual : sessionRates.couples;
-    const desc = type === "individual" ? "1:1 Individual Session (60 min)" : "Couples Session (60 min)";
-    onLinesChange([...lines, { description: desc, subLine: "", quantity: 1, unitPriceRands: cents / 100 }]);
+  function addPreset(preset: BillingPreset) {
+    onLinesChange([
+      ...lines,
+      {
+        description: preset.description,
+        subLine: preset.subLine ?? "",
+        quantity: 1,
+        unitPriceRands: preset.priceCents / 100,
+        discountRands: 0,
+      },
+    ]);
   }
 
   return (
     <div className="space-y-3">
-      {/* Quick-add session type buttons */}
+      {/* Quick-add preset buttons */}
       <div className="flex flex-wrap gap-2">
-        {loadingRates ? (
+        {loadingPresets ? (
           <>
             <div className="h-7 w-32 animate-pulse rounded bg-muted" />
             <div className="h-7 w-32 animate-pulse rounded bg-muted" />
           </>
-        ) : sessionRates ? (
-          <>
+        ) : presets.length > 0 ? (
+          presets.map((preset) => (
             <Button
+              key={preset.id}
               type="button"
               variant="outline"
               size="sm"
               className="h-7 border-dashed text-xs"
-              onClick={() => addSession("individual")}
+              onClick={() => addPreset(preset)}
             >
               <Plus className="mr-1 h-3 w-3" />
-              Individual ({formatR(sessionRates.individual)})
+              {preset.label} ({formatR(preset.priceCents)})
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 border-dashed text-xs"
-              onClick={() => addSession("couples")}
-            >
-              <Plus className="mr-1 h-3 w-3" />
-              Couples ({formatR(sessionRates.couples)})
-            </Button>
-          </>
+          ))
         ) : null}
       </div>
 
       {/* Column headers */}
-      <div className="grid grid-cols-[1fr_52px_88px_28px] gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="grid grid-cols-[1fr_52px_84px_84px_28px] gap-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         <span>Description</span>
         <span>Qty</span>
         <span>Unit price</span>
+        <span>Discount</span>
         <span />
       </div>
 
       {/* Lines */}
       {lines.map((line, i) => (
         <div key={i} className="space-y-1">
-          <div className="grid grid-cols-[1fr_52px_88px_28px] items-center gap-2">
+          <div className="grid grid-cols-[1fr_52px_84px_84px_28px] items-center gap-2">
             <Input
               value={line.description}
               onChange={(e) => updateLine(i, { description: e.target.value })}
@@ -145,7 +152,7 @@ function LineEditor({ lines, onLinesChange, sessionRates, loadingRates }: LineEd
               min={1}
               step={1}
               value={line.quantity}
-              onChange={(e) => updateLine(i, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+              onChange={(e) => updateLine(i, { quantity: Math.max(1, Number.parseInt(e.target.value) || 1) })}
               className="h-8 text-center text-sm"
             />
             <div className="relative">
@@ -155,7 +162,19 @@ function LineEditor({ lines, onLinesChange, sessionRates, loadingRates }: LineEd
                 min={0}
                 step={0.01}
                 value={line.unitPriceRands || ""}
-                onChange={(e) => updateLine(i, { unitPriceRands: parseFloat(e.target.value) || 0 })}
+                onChange={(e) => updateLine(i, { unitPriceRands: Number.parseFloat(e.target.value) || 0 })}
+                className="h-8 pl-5 text-sm"
+              />
+            </div>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R</span>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={line.discountRands || ""}
+                onChange={(e) => updateLine(i, { discountRands: Number.parseFloat(e.target.value) || 0 })}
+                placeholder="0"
                 className="h-8 pl-5 text-sm"
               />
             </div>
@@ -245,26 +264,26 @@ export function CreatePaymentRequestDialog({
   const [dueDate, setDueDate] = useState(todayPlus7());
   const [billingMonth, setBillingMonth] = useState("");
   const [note, setNote] = useState("");
-  const [sessionRates, setSessionRates] = useState<{ individual: number; couples: number } | null>(null);
-  const [loadingRates, setLoadingRates] = useState(false);
+  const [presets, setPresets] = useState<BillingPreset[]>([]);
+  const [loadingPresets, setLoadingPresets] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"send" | "draft" | null>(null);
 
   const vatPct = 0; // client-side preview — server does authoritative calc with site settings
 
   const totals = calcTotals(lines, discountPct, discountFixedR, vatPct);
 
-  const loadRates = useCallback(async () => {
-    setLoadingRates(true);
+  const loadPresets = useCallback(async () => {
+    setLoadingPresets(true);
     try {
-      const { individualRate, couplesRate } = await getSessionRatesAction();
-      setSessionRates({ individual: individualRate, couples: couplesRate });
+      const data = await getActiveBillingPresetsAction();
+      setPresets(data);
     } catch { /* non-fatal */ }
-    finally { setLoadingRates(false); }
+    finally { setLoadingPresets(false); }
   }, []);
 
   useEffect(() => {
-    if (open) loadRates();
-  }, [open, loadRates]);
+    if (open) void loadPresets();
+  }, [open, loadPresets]);
 
   function resetForm() {
     setLines([emptyLine()]);
@@ -292,6 +311,7 @@ export function CreatePaymentRequestDialog({
   function handleConfirmed() {
     const sendImmediately = confirmAction === "send";
     startTransition(async () => {
+      const hasLineDiscounts = totals.hasLineDiscounts;
       const result = await createManualPaymentRequestAction({
         studentId: clientId,
         lineItems: lines.map((l) => ({
@@ -299,9 +319,10 @@ export function CreatePaymentRequestDialog({
           subLine: l.subLine || undefined,
           quantity: l.quantity,
           unitPriceCents: Math.round(l.unitPriceRands * 100),
+          discountCents: hasLineDiscounts ? Math.round((l.discountRands ?? 0) * 100) : 0,
         })),
-        discountPercent: discountPct || undefined,
-        discountFixedCents: Math.round(discountFixedR * 100) || undefined,
+        discountPercent: hasLineDiscounts ? undefined : discountPct || undefined,
+        discountFixedCents: hasLineDiscounts ? undefined : Math.round(discountFixedR * 100) || undefined,
         dueDate,
         billingMonth: billingMonth || undefined,
         note: note || undefined,
@@ -331,7 +352,7 @@ export function CreatePaymentRequestDialog({
 
       {/* Confirmation dialog */}
       <Dialog open={confirmAction !== null} onOpenChange={(v) => { if (!v) setConfirmAction(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>
               {confirmAction === "send" ? "Send payment request?" : "Save as draft?"}
@@ -353,7 +374,7 @@ export function CreatePaymentRequestDialog({
 
       {/* Main dialog */}
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>New payment request — {clientName}</DialogTitle>
           </DialogHeader>
@@ -365,37 +386,43 @@ export function CreatePaymentRequestDialog({
               <LineEditor
                 lines={lines}
                 onLinesChange={setLines}
-                sessionRates={sessionRates}
-                loadingRates={loadingRates}
+                presets={presets}
+                loadingPresets={loadingPresets}
               />
             </div>
 
-            {/* Discount */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-1.5 block text-xs text-muted-foreground">Discount %</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={discountPct || ""}
-                  onChange={(e) => setDiscountPct(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-sm"
-                />
+            {/* Discount — invoice-level only shown when no per-line discounts */}
+            {totals.hasLineDiscounts ? (
+              <p className="text-xs text-muted-foreground">
+                Discount applied per line item · total discount: {formatR(totals.discountCents)}
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Discount %</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={discountPct || ""}
+                    onChange={(e) => setDiscountPct(Number.parseFloat(e.target.value) || 0)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 block text-xs text-muted-foreground">Fixed discount (R)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={discountFixedR || ""}
+                    onChange={(e) => setDiscountFixedR(Number.parseFloat(e.target.value) || 0)}
+                    className="h-8 text-sm"
+                  />
+                </div>
               </div>
-              <div>
-                <Label className="mb-1.5 block text-xs text-muted-foreground">Fixed discount (R)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={discountFixedR || ""}
-                  onChange={(e) => setDiscountFixedR(parseFloat(e.target.value) || 0)}
-                  className="h-8 text-sm"
-                />
-              </div>
-            </div>
+            )}
 
             {/* Totals */}
             <TotalsDisplay {...totals} />
@@ -468,15 +495,16 @@ export function EditPaymentRequestDialog({
 }: EditPaymentRequestDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [loading, setLoading] = useState(false);
 
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
   const [discountPct, setDiscountPct] = useState(0);
   const [discountFixedR, setDiscountFixedR] = useState(0);
   const [dueDate, setDueDate] = useState(todayPlus7());
-  const [sessionRates, setSessionRates] = useState<{ individual: number; couples: number } | null>(null);
-  const [loadingRates, setLoadingRates] = useState(false);
+  const [presets, setPresets] = useState<BillingPreset[]>([]);
   const [confirmResend, setConfirmResend] = useState(false);
+
+  // loading: true while dialog is open and presets haven't arrived yet
+  const loading = open && presets.length === 0;
 
   const vatPct = 0;
   const totals = calcTotals(lines, discountPct, discountFixedR, vatPct);
@@ -484,38 +512,42 @@ export function EditPaymentRequestDialog({
   useEffect(() => {
     if (!open) return;
 
-    setLoading(true);
-    setLoadingRates(true);
+    let cancelled = false;
 
-    Promise.all([
-      getPaymentRequestDetailsAction(paymentRequestId),
-      getSessionRatesAction(),
-    ]).then(([pr, rates]) => {
-      if (pr) {
-        setLines(
-          pr.lineItems.length > 0
-            ? pr.lineItems.map((li) => ({
-                description: li.description,
-                subLine: li.subLine ?? "",
-                quantity: li.quantity,
-                unitPriceRands: li.unitPriceCents / 100,
-              }))
-            : [emptyLine()],
-        );
-        setDueDate(pr.dueDate ? format(new Date(pr.dueDate), "yyyy-MM-dd") : todayPlus7());
-        // Approximate discount percent back from stored cents
-        if (pr.discountCents > 0 && pr.subtotalCents > 0) {
-          setDiscountPct(Math.round((pr.discountCents / pr.subtotalCents) * 100));
+    async function load() {
+      try {
+        const [pr, data] = await Promise.all([
+          getPaymentRequestDetailsAction(paymentRequestId),
+          getActiveBillingPresetsAction(),
+        ]);
+        if (cancelled) return;
+        if (pr) {
+          setLines(
+            pr.lineItems.length > 0
+              ? pr.lineItems.map((li) => ({
+                  description: li.description,
+                  subLine: li.subLine ?? "",
+                  quantity: li.quantity,
+                  unitPriceRands: li.unitPriceCents / 100,
+                  discountRands: (li.discountCents ?? 0) / 100,
+                }))
+              : [emptyLine()],
+          );
+          setDueDate(pr.dueDate ? format(new Date(pr.dueDate), "yyyy-MM-dd") : todayPlus7());
+          if (pr.discountCents > 0 && pr.subtotalCents > 0) {
+            setDiscountPct(Math.round((pr.discountCents / pr.subtotalCents) * 100));
+          }
         }
+        setPresets(data);
+      } catch {
+        if (cancelled) return;
+        toast.error("Failed to load payment request");
+        setOpen(false);
       }
-      setSessionRates({ individual: rates.individualRate, couples: rates.couplesRate });
-    }).catch(() => {
-      toast.error("Failed to load payment request");
-      setOpen(false);
-    }).finally(() => {
-      setLoading(false);
-      setLoadingRates(false);
-    });
+    }
+
+    void load();
+    return () => { cancelled = true; };
   }, [open, paymentRequestId]);
 
   function handleSave(resend: boolean) {
@@ -532,6 +564,7 @@ export function EditPaymentRequestDialog({
 
   function submitSave(resend: boolean) {
     startTransition(async () => {
+      const hasLineDiscounts = totals.hasLineDiscounts;
       const result = await updatePaymentRequestAction({
         paymentRequestId,
         studentId: clientId,
@@ -540,9 +573,10 @@ export function EditPaymentRequestDialog({
           subLine: l.subLine || undefined,
           quantity: l.quantity,
           unitPriceCents: Math.round(l.unitPriceRands * 100),
+          discountCents: hasLineDiscounts ? Math.round((l.discountRands ?? 0) * 100) : 0,
         })),
-        discountPercent: discountPct || undefined,
-        discountFixedCents: Math.round(discountFixedR * 100) || undefined,
+        discountPercent: hasLineDiscounts ? undefined : discountPct || undefined,
+        discountFixedCents: hasLineDiscounts ? undefined : Math.round(discountFixedR * 100) || undefined,
         dueDate,
         resend,
       });
@@ -572,7 +606,7 @@ export function EditPaymentRequestDialog({
 
       {/* Resend confirmation */}
       <Dialog open={confirmResend} onOpenChange={(v) => { if (!v) setConfirmResend(false); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Save &amp; resend?</DialogTitle>
           </DialogHeader>
@@ -589,8 +623,8 @@ export function EditPaymentRequestDialog({
       </Dialog>
 
       {/* Main edit dialog */}
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); }}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setPresets([]); }}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Edit payment request — {clientName}</DialogTitle>
           </DialogHeader>
@@ -608,36 +642,42 @@ export function EditPaymentRequestDialog({
                 <LineEditor
                   lines={lines}
                   onLinesChange={setLines}
-                  sessionRates={sessionRates}
-                  loadingRates={loadingRates}
+                  presets={presets}
+                  loadingPresets={loading}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="mb-1.5 block text-xs text-muted-foreground">Discount %</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    value={discountPct || ""}
-                    onChange={(e) => setDiscountPct(parseFloat(e.target.value) || 0)}
-                    className="h-8 text-sm"
-                  />
+              {totals.hasLineDiscounts ? (
+                <p className="text-xs text-muted-foreground">
+                  Discount applied per line item · total discount: {formatR(totals.discountCents)}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Discount %</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={discountPct || ""}
+                      onChange={(e) => setDiscountPct(Number.parseFloat(e.target.value) || 0)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-xs text-muted-foreground">Fixed discount (R)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={discountFixedR || ""}
+                      onChange={(e) => setDiscountFixedR(Number.parseFloat(e.target.value) || 0)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="mb-1.5 block text-xs text-muted-foreground">Fixed discount (R)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={discountFixedR || ""}
-                    onChange={(e) => setDiscountFixedR(parseFloat(e.target.value) || 0)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
+              )}
 
               <TotalsDisplay {...totals} />
 
@@ -705,7 +745,7 @@ export function ResendPRButton({
   return (
     <>
       <Dialog open={confirm} onOpenChange={(v) => { if (!v) setConfirm(false); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{isDraft ? "Send payment request?" : "Resend payment request?"}</DialogTitle>
           </DialogHeader>

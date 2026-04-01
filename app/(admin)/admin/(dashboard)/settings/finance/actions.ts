@@ -73,3 +73,78 @@ export async function updateFinanceSettings(formData: FormData): Promise<{ succe
   revalidatePath("/book");
   return { success: true };
 }
+
+// ─── Billing Presets ──────────────────────────────────────────
+
+export async function getBillingPresetsAction() {
+  await requireRole("super_admin");
+  return prisma.billingPreset.findMany({
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+}
+
+export interface BillingPresetInput {
+  id?: string;          // existing presets have an id; new ones don't
+  label: string;
+  description: string;
+  subLine?: string;
+  priceCents: number;
+  category: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export async function updateBillingPresetsAction(
+  presets: BillingPresetInput[],
+): Promise<{ success: boolean; error?: string }> {
+  await requireRole("super_admin");
+
+  try {
+    // Upsert each preset, delete any that were removed
+    const incoming = presets.filter((p) => p.label.trim());
+    const incomingIds = incoming.filter((p) => p.id).map((p) => p.id!);
+
+    // Delete rows not in the incoming set
+    if (incomingIds.length > 0) {
+      await prisma.billingPreset.deleteMany({
+        where: { id: { notIn: incomingIds } },
+      });
+    } else {
+      await prisma.billingPreset.deleteMany({});
+    }
+
+    for (const p of incoming) {
+      if (p.id) {
+        await prisma.billingPreset.update({
+          where: { id: p.id },
+          data: {
+            label: p.label.trim(),
+            description: p.description.trim(),
+            subLine: p.subLine?.trim() || null,
+            priceCents: p.priceCents,
+            category: p.category,
+            isActive: p.isActive,
+            sortOrder: p.sortOrder,
+          },
+        });
+      } else {
+        await prisma.billingPreset.create({
+          data: {
+            label: p.label.trim(),
+            description: p.description.trim(),
+            subLine: p.subLine?.trim() || null,
+            priceCents: p.priceCents,
+            category: p.category,
+            isActive: p.isActive,
+            sortOrder: p.sortOrder,
+          },
+        });
+      }
+    }
+
+    revalidatePath("/admin/settings/finance");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
