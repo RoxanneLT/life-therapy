@@ -1392,7 +1392,7 @@ export async function updatePaymentRequestAction(data: {
     });
 
     if (!["draft", "pending", "overdue"].includes(pr.status)) {
-      return { error: "This payment request can no longer be edited" };
+      return { success: false, error: "This payment request can no longer be edited" };
     }
 
     const settings = await getSiteSettings();
