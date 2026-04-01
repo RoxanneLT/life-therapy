@@ -121,6 +121,17 @@ interface FinancesTabProps {
   readonly section?: "billing" | "credits" | "invoices";
 }
 
+const INVOICE_TYPE_LABELS: Record<string, string> = {
+  monthly_postpaid: "Monthly",
+  package_purchase: "Package",
+  course_purchase: "Course",
+  product_sale: "Product",
+  ad_hoc_session: "Ad Hoc",
+  late_cancel: "Late Cancellation",
+  credit_note: "Credit Note",
+  other: "Other",
+};
+
 const TXN_TYPE_STYLES: Record<string, { label: string; className: string }> = {
   purchase: { label: "Purchase", className: "bg-green-100 text-green-700" },
   used: { label: "Used", className: "bg-blue-100 text-blue-700" },
@@ -692,8 +703,8 @@ function InvoiceHistorySection({
                           {format(new Date(inv.createdAt), "d MMM yyyy")}
                         </td>
                         <td className="px-4 py-2.5">
-                          <Badge variant="outline" className="text-xs capitalize">
-                            {inv.type}
+                          <Badge variant="outline" className="text-xs">
+                            {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
                           </Badge>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
