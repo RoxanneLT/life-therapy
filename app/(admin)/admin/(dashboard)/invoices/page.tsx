@@ -137,8 +137,8 @@ export default async function InvoicesPage({
           where: { status: "pending" },
           orderBy: { createdAt: "desc" },
           include: {
-            student: { select: { id: true, firstName: true, lastName: true } },
-            billingEntity: { select: { name: true } },
+            student: { select: { id: true, firstName: true, lastName: true, email: true, billingEmail: true } },
+            billingEntity: { select: { name: true, email: true } },
           },
         })
       : Promise.resolve([]),
@@ -296,6 +296,7 @@ export default async function InvoicesPage({
                           requestId={pr.id}
                           studentId={pr.studentId}
                           clientName={clientName}
+                          billingEmail={pr.student?.billingEmail ?? pr.student?.email ?? pr.billingEntity?.email ?? ""}
                           totalCents={pr.totalCents}
                           paidCents={prPaidAmounts.get(pr.id) ?? 0}
                         />

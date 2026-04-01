@@ -30,11 +30,13 @@ import { MoreHorizontal, CheckCircle, Send, Eye } from "lucide-react";
 import { markPaymentRequestPaidFromListAction, resendPaymentRequestEmailAction } from "./actions";
 import { toast } from "sonner";
 import Link from "next/link";
+import { EditPaymentRequestDialog } from "../clients/[id]/tabs/payment-request-dialogs";
 
 interface PaymentRequestActionsProps {
   readonly requestId: string;
   readonly studentId: string | null;
   readonly clientName: string;
+  readonly billingEmail: string;
   readonly totalCents: number;
   readonly paidCents: number;
 }
@@ -43,6 +45,7 @@ export function PaymentRequestActions({
   requestId,
   studentId,
   clientName,
+  billingEmail,
   totalCents,
   paidCents,
 }: PaymentRequestActionsProps) {
@@ -54,8 +57,8 @@ export function PaymentRequestActions({
   const [amountRands, setAmountRands] = useState((remainingCents / 100).toFixed(2));
 
   function handleMarkPaid() {
-    const amountCents = Math.round(parseFloat(amountRands) * 100);
-    if (isNaN(amountCents) || amountCents <= 0) {
+    const amountCents = Math.round(Number.parseFloat(amountRands) * 100);
+    if (Number.isNaN(amountCents) || amountCents <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
@@ -87,7 +90,13 @@ export function PaymentRequestActions({
   }
 
   return (
-    <>
+    <div className="flex items-center gap-1">
+      <EditPaymentRequestDialog
+        paymentRequestId={requestId}
+        clientId={studentId ?? ""}
+        clientName={clientName}
+        billingEmail={billingEmail}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isPending}>
@@ -175,6 +184,6 @@ export function PaymentRequestActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
