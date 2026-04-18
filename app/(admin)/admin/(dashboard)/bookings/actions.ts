@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { cancelCalendarEvent, createCalendarEvent } from "@/lib/graph";
+import { cancelCalendarEvent, createCalendarEvent, createRecurringCalendarEvent, deleteRecurringEventOccurrences } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getSessionTypeConfig } from "@/lib/booking-config";
@@ -32,7 +32,13 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
 
   if (status === "cancelled") {
     if (booking.graphEventId) {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+      if (booking.recurringSeriesId) {
+        // Part of a recurring series — delete only this occurrence, not the whole series
+        const dateStr = new Date(booking.date).toISOString().split("T")[0];
+        await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
+      } else {
+        await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+      }
     }
     const config = getSessionTypeConfig(booking.sessionType);
     const email = await renderEmail("booking_cancellation", {
@@ -76,7 +82,12 @@ export async function deleteBooking(id: string) {
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (booking?.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    if (booking.recurringSeriesId) {
+      const dateStr = new Date(booking.date).toISOString().split("T")[0];
+      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
+    } else {
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    }
   }
 
   await prisma.booking.delete({ where: { id } });
@@ -95,9 +106,14 @@ export async function rescheduleBooking(
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) throw new Error("Booking not found");
 
-  // Cancel old calendar event
+  // Cancel old calendar event (or just the occurrence if part of a series)
   if (booking.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    if (booking.recurringSeriesId) {
+      const oldDateStr = new Date(booking.date).toISOString().split("T")[0];
+      await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]).catch(console.error);
+    } else {
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    }
   }
 
   // Create new calendar event
@@ -190,6 +206,7 @@ export async function rescheduleSeriesAction(
 
   let updated = 0;
   const skipped: { id: string; date: string; reason: string }[] = [];
+  const updatedBookings: { booking: typeof bookings[0]; newDateStr: string; newDate: Date }[] = [];
 
   for (const booking of bookings) {
     const oldDate = new Date(booking.date);
@@ -237,32 +254,75 @@ export async function rescheduleSeriesAction(
       continue;
     }
 
-    // No conflict — proceed with reschedule
-    if (booking.graphEventId) {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
-    }
+    // No conflict — mark for update
+    updatedBookings.push({ booking, newDateStr, newDate });
+    updated++;
+  }
 
-    const config = getSessionTypeConfig(booking.sessionType);
-    const calResult = await createCalendarEvent({
-      subject: `${config.label} — ${booking.clientName}`,
-      startDateTime: `${newDateStr}T${newStartTime}:00`,
-      endDateTime: `${newDateStr}T${newEndTime}:00`,
-      clientName: booking.clientName,
-      clientEmail: booking.clientEmail,
+  // ── Delete old recurring calendar event once ─────────────────────────
+  const oldSeriesEventId = bookings[0].graphEventId;
+  if (oldSeriesEventId) {
+    await cancelCalendarEvent(oldSeriesEventId).catch(console.error);
+  }
+
+  // ── Create ONE new recurring event on the new day ──────────────────
+  let newSeriesEventId: string | null = null;
+  let newTeamsMeetingUrl: string | null = null;
+
+  if (updatedBookings.length > 0) {
+    const firstUpdated = updatedBookings[0];
+    const lastUpdated = updatedBookings[updatedBookings.length - 1];
+    const config = getSessionTypeConfig(bookings[0].sessionType);
+
+    // Determine the recurring pattern from the first booking
+    const pattern = (bookings[0].recurringPattern as "weekly" | "bimonthly" | "monthly") || "weekly";
+
+    const calResult = await createRecurringCalendarEvent({
+      subject: `${config.label} — ${bookings[0].clientName}`,
+      startDateTime: `${firstUpdated.newDateStr}T${newStartTime}:00`,
+      endDateTime: `${firstUpdated.newDateStr}T${newEndTime}:00`,
+      clientName: bookings[0].clientName,
+      clientEmail: bookings[0].clientEmail,
+      recurrencePattern: pattern,
+      seriesEndDate: lastUpdated.newDateStr,
+      isOnlineMeeting: bookings[0].sessionMode !== "in_person",
     }).catch(() => null);
 
+    newSeriesEventId = calResult?.seriesEventId || null;
+    newTeamsMeetingUrl = calResult?.teamsMeetingUrl || null;
+
+    // Delete occurrences for skipped dates from the new series
+    if (newSeriesEventId && skipped.length > 0) {
+      // Skipped dates are in display format — we need to recompute the ISO date strings
+      const skippedISODates: string[] = [];
+      for (const booking of bookings) {
+        const oldDate = new Date(booking.date);
+        const diff = newDayOfWeek - oldDate.getUTCDay();
+        const nd = new Date(oldDate);
+        nd.setUTCDate(nd.getUTCDate() + diff);
+        const ndStr = nd.toISOString().slice(0, 10);
+        if (skipped.some(s => s.id === booking.id)) {
+          skippedISODates.push(ndStr);
+        }
+      }
+      if (skippedISODates.length > 0) {
+        await deleteRecurringEventOccurrences(newSeriesEventId, skippedISODates).catch(console.error);
+      }
+    }
+  }
+
+  // ── Update booking records with new dates and series event ID ─────
+  for (const { booking, newDateStr } of updatedBookings) {
     await prisma.booking.update({
       where: { id: booking.id },
       data: {
         date: new Date(newDateStr + "T00:00:00Z"),
         startTime: newStartTime,
         endTime: newEndTime,
-        graphEventId: calResult?.eventId || null,
-        teamsMeetingUrl: calResult?.teamsMeetingUrl || booking.teamsMeetingUrl,
+        graphEventId: newSeriesEventId,
+        teamsMeetingUrl: newTeamsMeetingUrl || booking.teamsMeetingUrl,
       },
     });
-
-    updated++;
   }
 
   // Notify client
@@ -317,7 +377,13 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
 
   if (bookings.length === 0) return { cancelled: 0 };
 
-  // Cancel each booking
+  // Delete the recurring calendar event once (all bookings share the same series event ID)
+  const seriesGraphEventId = bookings[0].graphEventId;
+  if (seriesGraphEventId) {
+    await cancelCalendarEvent(seriesGraphEventId).catch(console.error);
+  }
+
+  // Cancel each booking record
   for (const booking of bookings) {
     await prisma.booking.update({
       where: { id: booking.id },
@@ -328,11 +394,6 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
         billingNote: "(series cancelled — no charge)",
       },
     });
-
-    // Cancel calendar event
-    if (booking.graphEventId) {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
-    }
   }
 
   // Send ONE cancellation email to the client
@@ -666,29 +727,53 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
   const skippedDates: { date: string; reason: string }[] = [];
   let creditsUsed = 0;
 
+  // ── Step 1: Check which dates are available ──────────────────────
+  const availableDates: string[] = [];
   for (const dateStr of dates) {
-    // Validate slot availability
     const slots = await getAvailableSlots(dateStr, config);
     const slotAvailable = slots.some((s) => s.start === data.startTime);
     if (!slotAvailable) {
       skippedDates.push({ date: dateStr, reason: "Slot unavailable" });
-      continue;
+    } else {
+      availableDates.push(dateStr);
     }
+  }
 
-    const bookingDate = new Date(`${dateStr}T00:00:00Z`);
-    const confirmationToken = randomUUID();
+  // ── Step 2: Create ONE recurring calendar event ─────────────────
+  // Client receives a single meeting invite covering the full series.
+  let seriesEventId: string | null = null;
+  let seriesTeamsMeetingUrl: string | null = null;
 
-    // Create calendar event (in-person: block calendar but no Teams link)
-    const calResult = await createCalendarEvent({
+  if (availableDates.length > 0) {
+    const firstDate = availableDates[0];
+    const lastDate = availableDates[availableDates.length - 1];
+
+    const calResult = await createRecurringCalendarEvent({
       subject: `${config.label} — ${clientName}${data.sessionMode === "in_person" ? " (In Person)" : ""}`,
-      startDateTime: `${dateStr}T${data.startTime}:00`,
-      endDateTime: `${dateStr}T${data.endTime}:00`,
+      startDateTime: `${firstDate}T${data.startTime}:00`,
+      endDateTime: `${firstDate}T${data.endTime}:00`,
       clientName,
       clientEmail: student.email,
+      recurrencePattern: data.pattern,
+      seriesEndDate: lastDate,
       isOnlineMeeting: data.sessionMode !== "in_person",
     }).catch(() => null);
 
-    // Create booking record
+    seriesEventId = calResult?.seriesEventId || null;
+    seriesTeamsMeetingUrl = calResult?.teamsMeetingUrl || null;
+
+    // Delete Graph occurrences for skipped dates (holidays, conflicts)
+    if (seriesEventId && skippedDates.length > 0) {
+      const skippedDateStrings = skippedDates.map(s => s.date);
+      await deleteRecurringEventOccurrences(seriesEventId, skippedDateStrings).catch(console.error);
+    }
+  }
+
+  // ── Step 3: Create booking records (no individual calendar calls) ──
+  for (const dateStr of availableDates) {
+    const bookingDate = new Date(`${dateStr}T00:00:00Z`);
+    const confirmationToken = randomUUID();
+
     const booking = await prisma.booking.create({
       data: {
         sessionType: data.sessionType,
@@ -705,8 +790,8 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         status: "confirmed",
         adminNotes: data.adminNotes || null,
         couplesPartnerName: data.couplesPartnerName || null,
-        graphEventId: calResult?.eventId || null,
-        teamsMeetingUrl: calResult?.teamsMeetingUrl || null,
+        graphEventId: seriesEventId,
+        teamsMeetingUrl: seriesTeamsMeetingUrl,
         confirmationToken,
         originalDate: bookingDate,
         originalStartTime: data.startTime,
@@ -911,7 +996,12 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   });
 
   if (booking.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    if (booking.recurringSeriesId) {
+      const dateStr = new Date(booking.date).toISOString().split("T")[0];
+      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
+    } else {
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    }
   }
 
   const config = getSessionTypeConfig(booking.sessionType);

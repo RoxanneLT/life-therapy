@@ -153,6 +153,151 @@ export async function createCalendarEvent(params: {
   }
 }
 
+// ────────────────────────────────────────────────────────────
+// Create a single recurring calendar event (one invite for the entire series)
+// ────────────────────────────────────────────────────────────
+
+const GRAPH_DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+const GRAPH_WEEK_INDEX = ["first", "second", "third", "fourth", "last"] as const;
+
+export async function createRecurringCalendarEvent(params: {
+  subject: string;
+  startDateTime: string;       // first occurrence: "2026-04-21T09:00:00"
+  endDateTime: string;         // first occurrence end: "2026-04-21T10:00:00"
+  clientName: string;
+  clientEmail: string;
+  recurrencePattern: "weekly" | "bimonthly" | "monthly";
+  seriesEndDate: string;       // last occurrence date: "2026-09-08"
+  isOnlineMeeting?: boolean;
+}): Promise<{ seriesEventId: string; teamsMeetingUrl: string } | null> {
+  const config = getGraphConfig();
+  if (!config) return null;
+
+  try {
+    const client = createGraphClient(config);
+
+    // Extract day of week from the start date
+    const startDate = new Date(params.startDateTime);
+    const dayOfWeek = GRAPH_DAY_NAMES[startDate.getDay()];
+    const startDateStr = params.startDateTime.split("T")[0];
+
+    // Build the recurrence object based on pattern
+    let recurrence: Record<string, unknown>;
+
+    if (params.recurrencePattern === "weekly" || params.recurrencePattern === "bimonthly") {
+      recurrence = {
+        pattern: {
+          type: "weekly",
+          interval: params.recurrencePattern === "bimonthly" ? 2 : 1,
+          daysOfWeek: [dayOfWeek],
+        },
+        range: {
+          type: "endDate",
+          startDate: startDateStr,
+          endDate: params.seriesEndDate,
+        },
+      };
+    } else {
+      // monthly — use "relativeMonthly" (nth weekday of month)
+      const dayOfMonth = startDate.getDate();
+      const weekIndex = Math.min(Math.ceil(dayOfMonth / 7) - 1, 4); // 0-4
+      recurrence = {
+        pattern: {
+          type: "relativeMonthly",
+          interval: 1,
+          daysOfWeek: [dayOfWeek],
+          index: GRAPH_WEEK_INDEX[weekIndex],
+        },
+        range: {
+          type: "endDate",
+          startDate: startDateStr,
+          endDate: params.seriesEndDate,
+        },
+      };
+    }
+
+    const event = await client
+      .api(`/users/${config.userEmail}/events`)
+      .post({
+        subject: params.subject,
+        start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
+        end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
+        recurrence,
+        attendees: [
+          {
+            emailAddress: {
+              address: params.clientEmail,
+              name: params.clientName,
+            },
+            type: "required",
+          },
+        ],
+        ...(params.isOnlineMeeting !== false && {
+          isOnlineMeeting: true,
+          onlineMeetingProvider: "teamsForBusiness",
+        }),
+      });
+
+    return {
+      seriesEventId: event.id ?? "",
+      teamsMeetingUrl: event.onlineMeeting?.joinUrl ?? "",
+    };
+  } catch (error) {
+    console.error("Graph API createRecurringCalendarEvent error:", error);
+    return null;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Delete specific occurrences from a recurring event
+// (used when dates are skipped due to holidays/conflicts)
+// ────────────────────────────────────────────────────────────
+
+export async function deleteRecurringEventOccurrences(
+  seriesEventId: string,
+  datesToDelete: string[], // ["2026-05-01", "2026-06-16", ...]
+): Promise<void> {
+  if (datesToDelete.length === 0) return;
+
+  const config = getGraphConfig();
+  if (!config) return;
+
+  try {
+    const client = createGraphClient(config);
+
+    // Fetch all instances in the series date range
+    const earliest = datesToDelete[0];
+    const latest = datesToDelete[datesToDelete.length - 1];
+    const instances = await client
+      .api(`/users/${config.userEmail}/events/${seriesEventId}/instances`)
+      .query({
+        startDateTime: `${earliest}T00:00:00`,
+        endDateTime: `${latest}T23:59:59`,
+        $select: "id,start",
+        $top: 200,
+      })
+      .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+      .get();
+
+    const deleteSet = new Set(datesToDelete);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const instance of (instances.value || []) as any[]) {
+      const instanceDate = (instance.start?.dateTime as string)?.split("T")[0];
+      if (instanceDate && deleteSet.has(instanceDate)) {
+        await client
+          .api(`/users/${config.userEmail}/events/${instance.id}`)
+          .delete()
+          .catch((err: unknown) =>
+            console.error(`Failed to delete occurrence ${instanceDate}:`, err)
+          );
+      }
+    }
+  } catch (error) {
+    console.error("Graph API deleteRecurringEventOccurrences error:", error);
+  }
+}
+
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
   const config = getGraphConfig();
   if (!config) return;
