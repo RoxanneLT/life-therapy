@@ -131,32 +131,50 @@ function parseMigrations(migrations) {
     return tables.get(tname)
   }
 
+  // Table names that are never real schema objects — skip if the parser captures them.
+  const SKIP_TABLES = new Set(["public", "if", "not", "only", "exists"])
+
   for (const mig of migrations) {
     const clean = mig.searchable.replace(/\s+/g, " ")
 
     // ── CREATE TABLE [IF NOT EXISTS] tname ( body ) ──
-    const createRe = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?(\w+)\s*\(([^;]+)\)/g
+    // Handles both quoted ("table_name") and unquoted (table_name) identifiers.
+    const createRe = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?(\w+)"?\s*\(([^;]+)\)/g
     let m
     while ((m = createRe.exec(clean)) !== null) {
+      if (SKIP_TABLES.has(m[1])) continue
       const entry = ensure(m[1], mig.name)
       for (const line of splitTopLevel(m[2])) {
         const t = line.trim()
         if (!t) continue
         if (/^constraint\s+/.test(t)) continue
         if (/^(unique|primary|check|foreign)\b/.test(t)) continue
-        const col = /^(\w+)/.exec(t)
+        // Handle quoted column names ("col_name") as well as bare ones
+        const col = /^"?(\w+)/.exec(t)
         if (col && !/^\d+$/.test(col[1])) entry.columns.add(col[1])
       }
     }
 
+    // ── DROP TABLE — remove from expected so we don't report "column missing" ──
+    const dropRe = /drop\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?(\w+)"?/g
+    while ((m = dropRe.exec(clean)) !== null) {
+      if (!SKIP_TABLES.has(m[1])) tables.delete(m[1])
+    }
+
     // ── ALTER TABLE sections ──
-    const alterRe = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\.)?(\w+)([^;]*);/g
+    // Handles quoted table names to match Prisma-generated migrations.
+    const alterRe = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\.)?"?(\w+)"?([^;]*);/g
     while ((m = alterRe.exec(clean)) !== null) {
       const tname = m[1]
+      if (SKIP_TABLES.has(tname)) continue
       const section = m[2]
       const entry = ensure(tname, mig.name)
 
-      const addColRe = /add\s+column\s+(?:if\s+not\s+exists\s+)?(\w+)/g
+      // The "? before (\w+) prevents backtracking: without it, when the column
+      // name is quoted ("col") and (\w+) fails on the leading quote, the regex
+      // engine backtracks and drops the optional (?:if\s+not\s+exists\s+)? group,
+      // then matches "if" as the column name instead.
+      const addColRe = /add\s+column\s+(?:if\s+not\s+exists\s+)?"?(\w+)"?/g
       let cm
       while ((cm = addColRe.exec(section)) !== null) {
         if (!/^\d+$/.test(cm[1])) entry.columns.add(cm[1])
@@ -315,7 +333,9 @@ function inlineCheckColumn(cname, tname) {
   for (const c of live.columns) {
     if (!liveBaseTables.has(c.table_name)) continue
     if (!liveColsByTable.has(c.table_name)) liveColsByTable.set(c.table_name, new Map())
-    liveColsByTable.get(c.table_name).set(c.column_name, c)
+    // Key is lowercased so it matches the lowercased names from the migration parser.
+    // The original-case column name is preserved in the value object (c.column_name).
+    liveColsByTable.get(c.table_name).set(c.column_name.toLowerCase(), c)
   }
   const liveChecksByTable = new Map()
   for (const c of live.checks) {
@@ -336,6 +356,9 @@ function inlineCheckColumn(cname, tname) {
     livePolByTable.get(p.tablename).set(p.policyname, p)
   }
 
+  // System tables that are never real schema objects and should never be reported.
+  const SYSTEM_TABLES = new Set(["_prisma_migrations"])
+
   const allTableNames = new Set([...expected.keys(), ...liveBaseTables])
 
   // ── Drift detection ─────────────────────────────────────────────────────────
@@ -353,6 +376,7 @@ function inlineCheckColumn(cname, tname) {
   }
 
   for (const t of allTableNames) {
+    if (SYSTEM_TABLES.has(t)) continue
     if (tableFilter && t !== tableFilter) continue
 
     const inMigrations = expected.has(t)
@@ -385,11 +409,12 @@ function inlineCheckColumn(cname, tname) {
     for (const [colname, coldata] of liveCols) {
       if (!expectedCols.has(colname)) {
         extraColsHere.add(colname)
+        const origName = coldata.column_name  // preserve original casing for output
         add(t, {
           kind: "col-extra",
-          msg: `Column **${colname}** in DB but no ADD COLUMN in migrations`,
+          msg: `Column **${origName}** in DB but no ADD COLUMN in migrations`,
           detail: columnTypeString(coldata),
-          fix: `ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS ${colname} ${columnTypeString(coldata)};`,
+          fix: `ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS "${origName}" ${columnTypeString(coldata)};`,
         })
         counts.colExtra++
       }
