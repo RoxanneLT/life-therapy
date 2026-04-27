@@ -1,5 +1,6 @@
 "use client";
 
+import { useClientRelationships } from "../use-client-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,9 +115,23 @@ function buildAuditTrail(
 }
 
 export function CommitmentTab({ client }: CommitmentTabProps) {
+  const { data: personalData, isLoading } = useClientRelationships(client.id as string);
+  const mergedClient = personalData ? { ...client, ...personalData } : client;
   const docAcceptances =
-    (client.documentAcceptances as DocumentAcceptanceRow[]) || [];
-  const legacyAcks = (client.commitmentAcks as LegacyAck[]) || [];
+    (mergedClient.documentAcceptances as DocumentAcceptanceRow[]) || [];
+  const legacyAcks = (mergedClient.commitmentAcks as LegacyAck[]) || [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/4" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="h-20 bg-muted rounded" />
+          <div className="h-20 bg-muted rounded" />
+        </div>
+      </div>
+    );
+  }
   const auditTrail = buildAuditTrail(docAcceptances, legacyAcks);
 
   // Group current acceptances by document slug

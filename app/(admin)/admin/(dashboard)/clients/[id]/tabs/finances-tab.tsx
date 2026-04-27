@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useClientFinances } from "../use-client-data";
+import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +41,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   grantCreditsAction,
   updateBillingTypeAction,
@@ -105,6 +109,21 @@ interface PaymentRequestData {
   proformaPdfUrl: string | null;
 }
 
+interface BookingData {
+  id: string;
+  date: string;
+  sessionType: string;
+  startTime: string;
+  endTime: string;
+  priceZarCents: number;
+  priceCurrency: string;
+  status: string;
+  isLateCancel: boolean;
+  billingNote: string | null;
+  paymentRequestId: string | null;
+  invoiceId: string | null;
+}
+
 interface RelationshipOption {
   id: string;
   label: string;
@@ -169,20 +188,38 @@ function formatCurrency(cents: number, currency: string): string {
 
 export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
   const clientId = client.id as string;
-  const clientName = `${client.firstName as string} ${client.lastName as string}`.trim();
-  const billingType = (client.billingType as string) || "prepaid";
-  const billingEmail = (client.billingEmail as string) || "";
-  const standingDiscountPercent = (client.standingDiscountPercent as number) || 0;
-  const standingDiscountFixed = (client.standingDiscountFixed as number) || 0;
-  const individualBilledToId = (client.individualBilledToId as string | null) ?? null;
-  const couplesBilledToId = (client.couplesBilledToId as string | null) ?? null;
+  const queryClient = useQueryClient();
+  const { data: financeData, isLoading } = useClientFinances(clientId);
+  const mergedClient = financeData ? { ...client, ...financeData } : client;
+
+  const clientName = `${mergedClient.firstName as string} ${mergedClient.lastName as string}`.trim();
+  const billingType = (mergedClient.billingType as string) || "prepaid";
+  const billingEmail = (mergedClient.billingEmail as string) || "";
+  const standingDiscountPercent = (mergedClient.standingDiscountPercent as number) || 0;
+  const standingDiscountFixed = (mergedClient.standingDiscountFixed as number) || 0;
+  const individualBilledToId = (mergedClient.individualBilledToId as string | null) ?? null;
+  const couplesBilledToId = (mergedClient.couplesBilledToId as string | null) ?? null;
   const creditBalance =
-    (client.creditBalance as { balance: number } | null)?.balance ?? 0;
-  const creditTxns = (client.creditTransactions as CreditTxnData[]) || [];
-  const orders = (client.orders as OrderData[]) || [];
-  const invoices = (client.invoices as InvoiceData[]) || [];
-  const paymentRequests = (client.paymentRequests as PaymentRequestData[]) || [];
-  const billedToMe = (client._billedToMe as BilledToMeEntry[]) || [];
+    (mergedClient.creditBalance as { balance: number } | null)?.balance ?? 0;
+  const creditTxns = (mergedClient.creditTransactions as CreditTxnData[]) || [];
+  const orders = (mergedClient.orders as OrderData[]) || [];
+  const invoices = (mergedClient.invoices as InvoiceData[]) || [];
+  const paymentRequests = (mergedClient.paymentRequests as PaymentRequestData[]) || [];
+  const billedToMe = (mergedClient._billedToMe as BilledToMeEntry[]) || [];
+
+  function invalidateFinances() {
+    void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.finances(clientId) });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/4" />
+        <div className="h-40 bg-muted rounded" />
+        <div className="h-32 bg-muted rounded" />
+      </div>
+    );
+  }
 
   // Build relationship options from BOTH directions + corporate entities
   // Invert relationship type when showing the other person's role
@@ -274,6 +311,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
             relationships={billingRelationships}
             individualBilledToId={individualBilledToId}
             couplesBilledToId={couplesBilledToId}
+            onSuccess={invalidateFinances}
           />
         </div>
       )}
@@ -288,7 +326,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
                 <p className="text-xs text-muted-foreground">credits</p>
               </CardContent>
             </Card>
-            <GrantCreditsDialog clientId={clientId} />
+            <GrantCreditsDialog clientId={clientId} onSuccess={invalidateFinances} />
           </div>
 
           <section>
@@ -355,11 +393,53 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
       {section === "invoices" && (
         <div className="space-y-6">
           <div className="flex justify-end gap-2">
-            <CreateInvoiceDialog clientId={clientId} />
-            {isPostpaid && <BillToDateButton clientId={clientId} />}
+            <CreateInvoiceDialog clientId={clientId} onSuccess={invalidateFinances} />
+            {isPostpaid && <BillToDateButton clientId={clientId} onSuccess={invalidateFinances} />}
           </div>
 
-          <InvoiceHistorySection invoices={invoices} clientId={clientId} />
+          {isPostpaid && (() => {
+            // Resolve billing assignment label + link
+            const indivBilledTo = mergedClient.individualBilledTo as {
+              studentId?: string | null;
+              relatedStudentId?: string | null;
+              relatedStudent?: { id?: string; firstName: string; lastName: string } | null;
+              student?: { id?: string; firstName: string; lastName: string } | null;
+              billingEntity?: { id?: string; name: string } | null;
+            } | null;
+
+            let billedToLabel: string | null = null;
+            let billedToId: string | null = null;
+
+            if (indivBilledTo?.billingEntity) {
+              billedToLabel = indivBilledTo.billingEntity.name;
+            } else if (indivBilledTo) {
+              // The payer is the OTHER person in the relationship
+              // If studentId === this client, payer = relatedStudent. Otherwise payer = student.
+              const payer = indivBilledTo.studentId === clientId
+                ? indivBilledTo.relatedStudent
+                : indivBilledTo.student;
+              if (payer) {
+                const name = `${payer.firstName} ${payer.lastName}`.trim();
+                if (name !== clientName) {
+                  billedToLabel = name;
+                  billedToId = payer.id || null;
+                }
+              }
+            }
+
+            return (
+              <UnbilledSessionsSection
+                bookings={(mergedClient.bookings as BookingData[]) || []}
+                discountPercent={standingDiscountPercent}
+                discountFixed={standingDiscountFixed}
+                currency={(mergedClient.bookings as BookingData[])?.[0]?.priceCurrency || "ZAR"}
+                billedToLabel={billedToLabel}
+                billedToId={billedToId}
+              />
+            );
+          })()}
+
+          <InvoiceHistorySection invoices={invoices} clientId={clientId} onSuccess={invalidateFinances} />
 
           {isPostpaid && (
             <PaymentRequestsSection
@@ -369,58 +449,11 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
               billingEmail={billingEmail}
               standingDiscountPercent={standingDiscountPercent}
               standingDiscountFixed={standingDiscountFixed}
+              onSuccess={invalidateFinances}
             />
           )}
 
-          {/* Payment History (Orders) */}
-          <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Payment History
-            </h3>
-            {orders.length > 0 ? (
-              <Card>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-xs text-muted-foreground">
-                          <th className="px-4 py-2.5">Date</th>
-                          <th className="px-4 py-2.5">Amount</th>
-                          <th className="px-4 py-2.5">Status</th>
-                          <th className="px-4 py-2.5">Reference</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orders.map((order) => (
-                          <tr key={order.id} className="border-b last:border-0">
-                            <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">
-                              {format(
-                                new Date(order.paidAt || order.createdAt),
-                                "d MMM yyyy",
-                              )}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-2.5 font-medium">
-                              {formatCurrency(order.totalCents, order.currency)}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <Badge className="bg-green-100 text-green-700">
-                                Paid
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-2.5 text-muted-foreground">
-                              {order.orderNumber}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <p className="text-sm text-muted-foreground">No payments.</p>
-            )}
-          </section>
+
         </div>
       )}
     </div>
@@ -438,6 +471,7 @@ function BillingConfigCard({
   relationships,
   individualBilledToId,
   couplesBilledToId,
+  onSuccess,
 }: Readonly<{
   clientId: string;
   billingType: string;
@@ -447,6 +481,7 @@ function BillingConfigCard({
   relationships: RelationshipOption[];
   individualBilledToId: string | null;
   couplesBilledToId: string | null;
+  onSuccess?: () => void;
 }>) {
   const [isPending, startTransition] = useTransition();
   const [localEmail, setLocalEmail] = useState(billingEmail);
@@ -460,6 +495,7 @@ function BillingConfigCard({
     startTransition(async () => {
       await updateBillingTypeAction(clientId, newType);
       toast.success(`Billing type set to ${newType}`);
+      onSuccess?.();
     });
   }
 
@@ -467,6 +503,7 @@ function BillingConfigCard({
     startTransition(async () => {
       await updateBillingEmailAction(clientId, localEmail);
       toast.success("Billing email updated");
+      onSuccess?.();
     });
   }
 
@@ -478,6 +515,7 @@ function BillingConfigCard({
         localFixed || null,
       );
       toast.success("Standing discount updated");
+      onSuccess?.();
     });
   }
 
@@ -591,6 +629,7 @@ function BillingConfigCard({
                   startTransition(async () => {
                     await updateBillingAssignmentAction(clientId, "individual", val);
                     toast.success("Individual billing assignment updated");
+                    onSuccess?.();
                   });
                 }}
                 disabled={isPending}
@@ -617,6 +656,7 @@ function BillingConfigCard({
                   startTransition(async () => {
                     await updateBillingAssignmentAction(clientId, "couples", val);
                     toast.success("Couples billing assignment updated");
+                    onSuccess?.();
                   });
                 }}
                 disabled={isPending}
@@ -644,9 +684,11 @@ function BillingConfigCard({
 function InvoiceHistorySection({
   invoices,
   clientId,
+  onSuccess,
 }: Readonly<{
   invoices: InvoiceData[];
   clientId: string;
+  onSuccess?: () => void;
 }>) {
   const [isPending, startTransition] = useTransition();
 
@@ -654,6 +696,7 @@ function InvoiceHistorySection({
     startTransition(async () => {
       await markInvoicePaidAction(invoiceId, "manual", undefined, clientId);
       toast.success("Invoice marked as paid");
+      onSuccess?.();
     });
   }
 
@@ -662,6 +705,7 @@ function InvoiceHistorySection({
     startTransition(async () => {
       await voidInvoiceAction(invoiceId, clientId);
       toast.success("Invoice voided");
+      onSuccess?.();
     });
   }
 
@@ -669,6 +713,7 @@ function InvoiceHistorySection({
     startTransition(async () => {
       await resendInvoiceAction(invoiceId);
       toast.success("Invoice resent");
+      onSuccess?.();
     });
   }
 
@@ -794,6 +839,7 @@ function PaymentRequestsSection({
   billingEmail,
   standingDiscountPercent,
   standingDiscountFixed,
+  onSuccess,
 }: Readonly<{
   paymentRequests: PaymentRequestData[];
   clientId: string;
@@ -801,6 +847,7 @@ function PaymentRequestsSection({
   billingEmail: string;
   standingDiscountPercent: number;
   standingDiscountFixed: number;
+  onSuccess?: () => void;
 }>) {
   const [isPending, startTransition] = useTransition();
 
@@ -809,6 +856,7 @@ function PaymentRequestsSection({
     startTransition(async () => {
       await voidPaymentRequestAction(prId, clientId);
       toast.success("Payment request voided — sessions are now unbilled");
+      onSuccess?.();
     });
   }
 
@@ -816,6 +864,7 @@ function PaymentRequestsSection({
     startTransition(async () => {
       await markPaymentRequestPaidAction(prId, "manual", undefined, clientId);
       toast.success("Payment request marked as paid");
+      onSuccess?.();
     });
   }
 
@@ -830,6 +879,7 @@ function PaymentRequestsSection({
             onClick: () => { void navigator.clipboard.writeText(paymentUrl); },
           },
         });
+        onSuccess?.();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to regenerate link");
       }
@@ -968,9 +1018,155 @@ function PaymentRequestsSection({
   );
 }
 
+// ─── Unbilled Sessions (Upcoming Billing) ────────────────────
+
+const SESSION_TYPE_LABELS: Record<string, string> = {
+  individual: "Individual",
+  couples: "Couples",
+  free_consultation: "Free Consult",
+};
+
+function applyDiscount(
+  priceCents: number,
+  discPct: number,
+  discFixed: number,
+): number {
+  let disc = 0;
+  if (discPct > 0) disc = Math.round((priceCents * discPct) / 100);
+  if (discFixed > disc) disc = discFixed;
+  return Math.max(0, priceCents - disc);
+}
+
+function UnbilledSessionsSection({
+  bookings,
+  discountPercent,
+  discountFixed,
+  currency,
+  billedToLabel,
+  billedToId,
+}: Readonly<{
+  bookings: BookingData[];
+  discountPercent: number;
+  discountFixed: number;
+  currency: string;
+  billedToLabel?: string | null;
+  billedToId?: string | null;
+}>) {
+  const unbilled = bookings.filter(
+    (b) =>
+      !b.paymentRequestId &&
+      !b.invoiceId &&
+      (b.status === "completed" ||
+        b.status === "no_show" ||
+        (b.status === "cancelled" && b.isLateCancel)),
+  );
+
+  if (unbilled.length === 0) return null;
+
+  const total = unbilled.reduce(
+    (sum, b) =>
+      sum +
+      (b.priceZarCents > 0
+        ? applyDiscount(b.priceZarCents, discountPercent, discountFixed)
+        : 0),
+    0,
+  );
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Upcoming billing
+        </h3>
+        <span className="font-mono text-sm font-semibold">
+          {formatCurrency(total, currency)}
+        </span>
+      </div>
+      {billedToLabel && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+          <p className="text-sm text-blue-800">
+            These sessions are billed to{" "}
+            {billedToId ? (
+              <Link
+                href={`/admin/clients/${billedToId}?tab=finances`}
+                className="font-semibold underline hover:text-blue-900"
+              >
+                {billedToLabel}
+              </Link>
+            ) : (
+              <strong>{billedToLabel}</strong>
+            )}
+            , not this client directly.
+          </p>
+        </div>
+      )}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">Session</th>
+                  <th className="px-4 py-2">Time</th>
+                  <th className="px-4 py-2 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unbilled.map((b) => {
+                  const net =
+                    b.priceZarCents > 0
+                      ? applyDiscount(b.priceZarCents, discountPercent, discountFixed)
+                      : 0;
+                  const typeLabel = SESSION_TYPE_LABELS[b.sessionType] ?? b.sessionType;
+                  let note = "";
+                  if (b.status === "no_show") note = " \u00b7 no-show";
+                  else if (b.isLateCancel) note = " \u00b7 late cancel";
+
+                  return (
+                    <tr key={b.id} className="border-b last:border-0">
+                      <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">
+                        {format(new Date(b.date), "d MMM yyyy")}
+                      </td>
+                      <td className="px-4 py-2">
+                        {typeLabel}
+                        {note && <span className="text-muted-foreground">{note}</span>}
+                        {b.billingNote && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {b.billingNote}
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">
+                        {b.startTime}&ndash;{b.endTime}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-right font-mono">
+                        {b.priceZarCents === 0 ? (
+                          <span className="text-xs text-muted-foreground">credit</span>
+                        ) : (
+                          formatCurrency(net, b.priceCurrency || currency)
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t px-4 py-2.5 text-xs text-muted-foreground">
+            <span>{unbilled.length} unbilled session{unbilled.length !== 1 ? "s" : ""}</span>
+            {discountPercent > 0 && <span>{discountPercent}% discount applied</span>}
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
 // ─── Bill to Date Button ─────────────────────────────────────
 
-function BillToDateButton({ clientId }: Readonly<{ clientId: string }>) {
+function BillToDateButton({ clientId, onSuccess }: Readonly<{ clientId: string; onSuccess?: () => void }>) {
   const [isPending, startTransition] = useTransition();
 
   function handleBillToDate() {
@@ -980,6 +1176,7 @@ function BillToDateButton({ clientId }: Readonly<{ clientId: string }>) {
       try {
         await billToDateAction(clientId);
         toast.success("Payment request generated");
+        onSuccess?.();
       } catch (err) {
         toast.error(
           err instanceof Error ? err.message : "Failed to generate payment request",
@@ -998,7 +1195,7 @@ function BillToDateButton({ clientId }: Readonly<{ clientId: string }>) {
 
 // ─── Grant Credits Dialog ────────────────────────────────────
 
-function GrantCreditsDialog({ clientId }: Readonly<{ clientId: string }>) {
+function GrantCreditsDialog({ clientId, onSuccess }: Readonly<{ clientId: string; onSuccess?: () => void }>) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(1);
   const [reason, setReason] = useState("");
@@ -1010,6 +1207,7 @@ function GrantCreditsDialog({ clientId }: Readonly<{ clientId: string }>) {
       setOpen(false);
       setAmount(1);
       setReason("");
+      onSuccess?.();
     });
   }
 
@@ -1072,7 +1270,7 @@ interface LineItemDraft {
   unitPriceRands: string; // text input, converted to cents on submit
 }
 
-function CreateInvoiceDialog({ clientId }: Readonly<{ clientId: string }>) {
+function CreateInvoiceDialog({ clientId, onSuccess }: Readonly<{ clientId: string; onSuccess?: () => void }>) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [method, setMethod] = useState<"eft" | "cash" | "card">("eft");
@@ -1137,6 +1335,7 @@ function CreateInvoiceDialog({ clientId }: Readonly<{ clientId: string }>) {
         setOpen(false);
         setLines([{ id: crypto.randomUUID(), description: "", quantity: 1, unitPriceRands: "" }]);
         setReference("");
+        onSuccess?.();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to create invoice");
       }

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useCallback, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useClientRelationships } from "../use-client-data";
+import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,18 +86,37 @@ interface RelationshipsTabProps {
 export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
   const clientId = client.id as string;
   const clientName = `${client.firstName} ${client.lastName}`;
-  const relationshipsFrom = (client.relationshipsFrom as RelationshipData[]) || [];
-  const relationshipsTo = (client.relationshipsTo as RelationshipData[]) || [];
+  const queryClient = useQueryClient();
+  const { data: personalData, isLoading } = useClientRelationships(clientId);
+
+  const mergedClient = personalData ? { ...client, ...personalData } : client;
+  const relationshipsFrom = (mergedClient.relationshipsFrom as RelationshipData[]) || [];
+  const relationshipsTo = (mergedClient.relationshipsTo as RelationshipData[]) || [];
 
   const [isPending, startTransition] = useTransition();
   const [editingRel, setEditingRel] = useState<RelationshipData | null>(null);
+
+  function invalidatePersonal() {
+    void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.personal(clientId) });
+  }
 
   function handleRemove(relationshipId: string) {
     if (!confirm("Remove this relationship?")) return;
     startTransition(async () => {
       await removeRelationshipAction(relationshipId, clientId);
       toast.success("Relationship removed");
+      invalidatePersonal();
     });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/4" />
+        <div className="h-24 bg-muted rounded" />
+        <div className="h-24 bg-muted rounded" />
+      </div>
+    );
   }
 
   // Merge both directions for display
@@ -123,7 +145,7 @@ export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-lg font-semibold">Relationships</h2>
-        <AddRelationshipDialog clientId={clientId} clientName={clientName} />
+        <AddRelationshipDialog clientId={clientId} clientName={clientName} onSuccess={invalidatePersonal} />
       </div>
 
       {allRelationships.length === 0 ? (
@@ -204,6 +226,7 @@ export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
           relationship={editingRel}
           clientId={clientId}
           onClose={() => setEditingRel(null)}
+          onSuccess={invalidatePersonal}
         />
       )}
     </div>
@@ -216,10 +239,12 @@ function EditRelationshipDialog({
   relationship,
   clientId,
   onClose,
+  onSuccess,
 }: Readonly<{
   relationship: RelationshipData;
   clientId: string;
   onClose: () => void;
+  onSuccess?: () => void;
 }>) {
   const [isPending, startTransition] = useTransition();
   const [type, setType] = useState(relationship.relationshipType);
@@ -233,6 +258,7 @@ function EditRelationshipDialog({
           relationshipLabel: label || undefined,
         });
         toast.success("Relationship updated");
+        onSuccess?.();
         onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to update");
@@ -299,9 +325,11 @@ function EditRelationshipDialog({
 function AddRelationshipDialog({
   clientId,
   clientName,
+  onSuccess,
 }: Readonly<{
   clientId: string;
   clientName: string;
+  onSuccess?: () => void;
 }>) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -405,6 +433,7 @@ function AddRelationshipDialog({
           });
         }
         toast.success(mode === "new_client" ? "Client created & relationship added" : "Relationship added");
+        onSuccess?.();
         reset();
         setOpen(false);
       } catch (err) {

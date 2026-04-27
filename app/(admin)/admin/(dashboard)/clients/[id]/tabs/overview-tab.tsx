@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useClientInsights } from "../use-client-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,10 +69,11 @@ interface SerializedInsights {
 
 interface OverviewTabProps {
   client: Record<string, unknown>;
-  insights?: SerializedInsights | null;
 }
 
-export function OverviewTab({ client, insights }: OverviewTabProps) {
+export function OverviewTab({ client }: OverviewTabProps) {
+  const { data: insightsRaw } = useClientInsights(client.id as string);
+  const insights = insightsRaw as SerializedInsights | undefined;
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState((client.adminNotes as string) || "");
   const [isPending, startTransition] = useTransition();

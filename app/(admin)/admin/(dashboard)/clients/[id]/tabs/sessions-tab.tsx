@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useClientBookings } from "../use-client-data";
+import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,8 +88,25 @@ const STATUS_ICONS: Record<string, string> = {
 export function SessionsTab({ client }: SessionsTabProps) {
   const clientId = client.id as string;
   const isPostpaid = client.billingType === "postpaid";
-  const bookings = (client.bookings as BookingData[]) || [];
+  const queryClient = useQueryClient();
+  const { data: bookingsData, isLoading } = useClientBookings(clientId);
+  const bookings = (bookingsData as BookingData[] | undefined) ?? [];
   const today = startOfDay(new Date());
+
+  function invalidateBookings() {
+    void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.bookings(clientId) });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/4" />
+        <div className="h-28 bg-muted rounded" />
+        <div className="h-28 bg-muted rounded" />
+        <div className="h-28 bg-muted rounded" />
+      </div>
+    );
+  }
 
   const upcoming = bookings
     .filter(
@@ -139,6 +159,7 @@ export function SessionsTab({ client }: SessionsTabProps) {
               clientId={clientId}
               isUpcoming
               isPostpaid={isPostpaid}
+              onMutationSuccess={invalidateBookings}
             />
           ))}
         </div>
@@ -151,7 +172,7 @@ export function SessionsTab({ client }: SessionsTabProps) {
             Past
           </h3>
           {past.map((b) => (
-            <BookingCard key={b.id} booking={b} clientId={clientId} isPostpaid={isPostpaid} />
+            <BookingCard key={b.id} booking={b} clientId={clientId} isPostpaid={isPostpaid} onMutationSuccess={invalidateBookings} />
           ))}
         </div>
       )}
@@ -171,10 +192,12 @@ function QuickStatusEdit({
   bookingId,
   currentStatus,
   clientId: _clientId,
+  onSuccess,
 }: {
   bookingId: string;
   currentStatus: string;
   clientId: string;
+  onSuccess?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -187,6 +210,7 @@ function QuickStatusEdit({
     startTransition(async () => {
       await updateBookingStatus(bookingId, newStatus as BookingStatus);
       setEditing(false);
+      onSuccess?.();
     });
   }
 
@@ -229,11 +253,13 @@ function BookingCard({
   clientId,
   isUpcoming = false,
   isPostpaid = false,
+  onMutationSuccess,
 }: {
   booking: BookingData;
   clientId: string;
   isUpcoming?: boolean;
   isPostpaid?: boolean;
+  onMutationSuccess?: () => void;
 }) {
   const b = booking;
   const dateStr = format(new Date(b.date), "EEE d MMM yyyy");
@@ -267,6 +293,7 @@ function BookingCard({
                   bookingId={b.id}
                   currentStatus={b.status}
                   clientId={clientId}
+                  onSuccess={onMutationSuccess}
                 />
               )}
               {b.teamsMeetingUrl && isUpcoming && !["cancelled", "no_show"].includes(b.status) && (
@@ -348,8 +375,9 @@ function BookingCard({
                 bookingDate={b.date}
                 bookingStartTime={b.startTime}
                 priceZarCents={b.priceZarCents}
+                onSuccess={onMutationSuccess}
               />
-              <NoShowDialog bookingId={b.id} clientId={clientId} />
+              <NoShowDialog bookingId={b.id} clientId={clientId} onSuccess={onMutationSuccess} />
             </div>
           )}
         </div>
@@ -361,9 +389,11 @@ function BookingCard({
 function NoShowDialog({
   bookingId,
   clientId,
+  onSuccess,
 }: {
   bookingId: string;
   clientId: string;
+  onSuccess?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -372,6 +402,7 @@ function NoShowDialog({
     startTransition(async () => {
       await markNoShowAction(bookingId, clientId);
       setOpen(false);
+      onSuccess?.();
     });
   }
 
@@ -418,12 +449,14 @@ function CancelDialog({
   bookingDate,
   bookingStartTime,
   priceZarCents,
+  onSuccess,
 }: {
   bookingId: string;
   clientId: string;
   bookingDate: string;
   bookingStartTime: string;
   priceZarCents: number;
+  onSuccess?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -442,6 +475,7 @@ function CancelDialog({
     startTransition(async () => {
       await adminCancelBookingAction(bookingId, clientId, refund);
       setOpen(false);
+      onSuccess?.();
     });
   }
 
@@ -449,6 +483,7 @@ function CancelDialog({
     startTransition(async () => {
       await adminLateCancelWithFeeAction(bookingId, clientId);
       setOpen(false);
+      onSuccess?.();
     });
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import { useClientFinances } from "../use-client-data";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -72,10 +73,22 @@ interface PurchasesTabProps {
 
 export function PurchasesTab({ client }: PurchasesTabProps) {
   const clientId = client.id as string;
-  const orders = (client.orders as OrderData[]) || [];
-  const enrollments = (client.enrollments as EnrollmentData[]) || [];
-  const digitalAccess = (client.digitalProductAccess as DigitalAccessData[]) || [];
-  const creditTxns = (client.creditTransactions as CreditTxnData[]) || [];
+  const { data: financeData, isLoading } = useClientFinances(clientId);
+  const mergedClient = financeData ? { ...client, ...financeData } : client;
+  const orders = (mergedClient.orders as OrderData[]) || [];
+  const enrollments = (mergedClient.enrollments as EnrollmentData[]) || [];
+  const digitalAccess = (mergedClient.digitalProductAccess as DigitalAccessData[]) || [];
+  const creditTxns = (mergedClient.creditTransactions as CreditTxnData[]) || [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/4" />
+        <div className="h-24 bg-muted rounded" />
+        <div className="h-24 bg-muted rounded" />
+      </div>
+    );
+  }
 
   // Build session packages from orders with hybridPackage items
   const packageItems = orders.flatMap((order) =>

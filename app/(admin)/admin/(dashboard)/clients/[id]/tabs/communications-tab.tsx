@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useClientCommunications } from "../use-client-data";
+import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,20 +101,38 @@ const PREF_FIELDS = [
 
 export function CommunicationsTab({ client }: CommunicationsTabProps) {
   const clientId = client.id as string;
-  const drip = client.dripProgress as DripData | null;
-  const campaigns = (client.campaignProgress as CampaignProgressData[]) || [];
-  const emailLogs = (client.emailLogs as EmailLogData[]) || [];
-  const tags = ((client.tags as string[]) || []);
+  const queryClient = useQueryClient();
+  const { data: commsData, isLoading } = useClientCommunications(clientId);
+
+  const mergedClient = commsData ? { ...client, ...commsData } : client;
+  const drip = mergedClient.dripProgress as DripData | null;
+  const campaigns = (mergedClient.campaignProgress as CampaignProgressData[]) || [];
+  const emailLogs = (mergedClient.emailLogs as EmailLogData[]) || [];
+  const tags = ((mergedClient.tags as string[]) || []);
+
+  function invalidateComms() {
+    void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.communications(clientId) });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/4" />
+        <div className="h-32 bg-muted rounded" />
+        <div className="h-24 bg-muted rounded" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <h2 className="font-heading text-lg font-semibold">Communications</h2>
 
       {/* Email Preferences */}
-      <EmailPreferences client={client} clientId={clientId} />
+      <EmailPreferences client={mergedClient} clientId={clientId} onSuccess={invalidateComms} />
 
       {/* Drip Sequence */}
-      <DripSection drip={drip} clientId={clientId} />
+      <DripSection drip={drip} clientId={clientId} onSuccess={invalidateComms} />
 
       {/* Campaign History */}
       <section>
@@ -220,7 +241,7 @@ export function CommunicationsTab({ client }: CommunicationsTabProps) {
       </section>
 
       {/* Tags */}
-      <TagsSection tags={tags} clientId={clientId} />
+      <TagsSection tags={tags} clientId={clientId} onSuccess={invalidateComms} />
     </div>
   );
 }
@@ -228,15 +249,18 @@ export function CommunicationsTab({ client }: CommunicationsTabProps) {
 function EmailPreferences({
   client,
   clientId,
+  onSuccess,
 }: {
   client: Record<string, unknown>;
   clientId: string;
+  onSuccess?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
 
   function handleToggle(field: string, currentValue: boolean) {
     startTransition(async () => {
       await updateCommPrefAction(clientId, field, !currentValue);
+      onSuccess?.();
     });
   }
 
@@ -298,9 +322,11 @@ function EmailPreferences({
 function DripSection({
   drip,
   clientId,
+  onSuccess,
 }: {
   drip: DripData | null;
   clientId: string;
+  onSuccess?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -359,7 +385,7 @@ function DripSection({
                     size="sm"
                     disabled={isPending}
                     onClick={() =>
-                      startTransition(() => resumeDripAction(clientId))
+                      startTransition(async () => { await resumeDripAction(clientId); onSuccess?.(); })
                     }
                   >
                     <Play className="mr-1 h-3.5 w-3.5" />
@@ -371,7 +397,7 @@ function DripSection({
                     size="sm"
                     disabled={isPending}
                     onClick={() =>
-                      startTransition(() => pauseDripAction(clientId))
+                      startTransition(async () => { await pauseDripAction(clientId); onSuccess?.(); })
                     }
                   >
                     <Pause className="mr-1 h-3.5 w-3.5" />
@@ -405,7 +431,7 @@ function DripSection({
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => startTransition(() => resetDripAction(clientId))}
+                      onClick={() => startTransition(async () => { await resetDripAction(clientId); onSuccess?.(); })}
                       disabled={isPending}
                     >
                       Yes, Reset Sequence
@@ -424,9 +450,11 @@ function DripSection({
 function TagsSection({
   tags,
   clientId,
+  onSuccess,
 }: {
   tags: string[];
   clientId: string;
+  onSuccess?: () => void;
 }) {
   const [localTags, setLocalTags] = useState(tags);
   const [newTag, setNewTag] = useState("");
@@ -438,13 +466,13 @@ function TagsSection({
     const updated = [...localTags, tag];
     setLocalTags(updated);
     setNewTag("");
-    startTransition(() => updateTagsAction(clientId, updated));
+    startTransition(async () => { await updateTagsAction(clientId, updated); onSuccess?.(); });
   }
 
   function handleRemove(tag: string) {
     const updated = localTags.filter((t) => t !== tag);
     setLocalTags(updated);
-    startTransition(() => updateTagsAction(clientId, updated));
+    startTransition(async () => { await updateTagsAction(clientId, updated); onSuccess?.(); });
   }
 
   return (

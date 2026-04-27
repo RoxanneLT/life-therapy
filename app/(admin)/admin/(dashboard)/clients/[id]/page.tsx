@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { getClientInsights } from "@/lib/admin/client-insights";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -21,121 +20,23 @@ export default async function ClientDetailPage({
   const { tab } = await searchParams;
   await requireRole("super_admin", "marketing");
 
+  const activeTab = tab || "overview";
+
   const client = await prisma.student.findUnique({
     where: { id },
     include: {
       _count: { select: { bookings: true, enrollments: true, orders: true } },
       creditBalance: true,
       intake: true,
-      commitmentAcks: { orderBy: { acknowledgedAt: "desc" } },
-      documentAcceptances: {
-        orderBy: { acceptedAt: "desc" },
-        include: { document: { select: { title: true } } },
-      },
-      bookings: { orderBy: { date: "desc" }, take: 50 },
-      enrollments: {
-        include: { course: { select: { title: true, slug: true } } },
-        orderBy: { enrolledAt: "desc" },
-      },
-      orders: {
-        where: { status: "paid" },
-        include: { items: true },
-        orderBy: { createdAt: "desc" },
-      },
-      digitalProductAccess: {
-        include: { digitalProduct: { select: { title: true, slug: true } } },
-      },
-      creditTransactions: { orderBy: { createdAt: "desc" }, take: 50 },
-      dripProgress: true,
-      campaignProgress: {
-        include: { campaign: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
-      emailLogs: {
-        orderBy: { sentAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          subject: true,
-          status: true,
-          sentAt: true,
-          openedAt: true,
-          opensCount: true,
-          clickedAt: true,
-          clicksCount: true,
-          templateKey: true,
-        },
-      },
-      relationshipsFrom: {
-        include: {
-          relatedStudent: { select: { id: true, firstName: true, lastName: true, email: true } },
-          billingEntity: true,
-        },
-      },
-      relationshipsTo: {
-        include: {
-          student: { select: { id: true, firstName: true, lastName: true, email: true } },
-          billingEntity: true,
-        },
-      },
-      individualBilledTo: {
-        include: {
-          student: { select: { id: true, firstName: true, lastName: true } },
-          relatedStudent: { select: { id: true, firstName: true, lastName: true } },
-          billingEntity: { select: { id: true, name: true } },
-        },
-      },
-      couplesBilledTo: {
-        include: {
-          student: { select: { id: true, firstName: true, lastName: true } },
-          relatedStudent: { select: { id: true, firstName: true, lastName: true } },
-          billingEntity: { select: { id: true, name: true } },
-        },
-      },
-      invoices: { orderBy: { createdAt: "desc" }, take: 50 },
-      paymentRequests: { orderBy: { createdAt: "desc" }, take: 50 },
     },
   });
 
   if (!client) notFound();
 
-  const activeTab = tab || "overview";
-  const insights = await getClientInsights(client.id);
-
-  // Billing indicator: find students whose billing is assigned to this person
-  const billedToMeRaw = await prisma.student.findMany({
-    where: {
-      id: { not: id },
-      OR: [
-        { individualBilledTo: { OR: [{ studentId: id }, { relatedStudentId: id }] } },
-        { couplesBilledTo: { OR: [{ studentId: id }, { relatedStudentId: id }] } },
-      ],
-    },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      individualBilledTo: { select: { studentId: true, relatedStudentId: true } },
-      couplesBilledTo: { select: { studentId: true, relatedStudentId: true } },
-    },
-  });
-  const billedToMe = billedToMeRaw
-    .map((s) => {
-      const types: string[] = [];
-      if (s.individualBilledTo && (s.individualBilledTo.studentId === id || s.individualBilledTo.relatedStudentId === id)) {
-        types.push("individual");
-      }
-      if (s.couplesBilledTo && (s.couplesBilledTo.studentId === id || s.couplesBilledTo.relatedStudentId === id)) {
-        types.push("couples");
-      }
-      return { id: s.id, name: `${s.firstName} ${s.lastName}`, types };
-    })
-    .filter((s) => s.types.length > 0);
+  const coreClient = JSON.parse(JSON.stringify(client)) as Record<string, unknown>;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/admin/clients">
@@ -167,12 +68,7 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
-      {/* Tabs */}
-      <ClientProfileTabs
-        client={{ ...JSON.parse(JSON.stringify(client)), _billedToMe: billedToMe }}
-        activeTab={activeTab}
-        insights={JSON.parse(JSON.stringify(insights))}
-      />
+      <ClientProfileTabs client={coreClient} activeTab={activeTab} />
     </div>
   );
 }

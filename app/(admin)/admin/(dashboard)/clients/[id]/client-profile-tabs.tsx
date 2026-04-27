@@ -41,10 +41,9 @@ const FINANCE_SECTIONS = [
 interface ClientProfileTabsProps {
   client: Record<string, unknown>;
   activeTab: string;
-  insights?: Record<string, unknown> | null;
 }
 
-export function ClientProfileTabs({ client, activeTab, insights }: ClientProfileTabsProps) {
+export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileTabsProps>) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -97,7 +96,7 @@ export function ClientProfileTabs({ client, activeTab, insights }: ClientProfile
       {/* Tab content */}
       <div className="pt-6">
         {currentTab === "overview" && (
-          <OverviewTab client={client} insights={insights as never} />
+          <OverviewTab client={client} />
         )}
 
         {currentTab === "personal" && (

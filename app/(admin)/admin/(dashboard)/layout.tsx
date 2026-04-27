@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminHeader } from "@/components/admin/admin-header";
+import { AdminProviders } from "@/components/providers/admin-providers";
 
 export default async function DashboardLayout({
   children,
@@ -21,7 +22,7 @@ export default async function DashboardLayout({
           role={adminUser.role}
         />
         <main className="flex-1 overflow-y-auto bg-muted/30 p-6">
-          {children}
+          <AdminProviders>{children}</AdminProviders>
         </main>
       </div>
     </div>
