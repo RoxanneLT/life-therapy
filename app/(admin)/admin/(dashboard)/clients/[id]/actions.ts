@@ -390,12 +390,130 @@ export async function updateBillingTypeAction(studentId: string, billingType: st
   await requireRole("super_admin");
   if (!["prepaid", "postpaid"].includes(billingType)) throw new Error("Invalid billing type");
 
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { billingType: true },
+  });
+
   await prisma.student.update({
     where: { id: studentId },
     data: { billingType },
   });
 
+  let restoredCount = 0;
+
+  // When switching prepaid → postpaid, restore prices on zero-price unbilled completed sessions
+  if (student?.billingType === "prepaid" && billingType === "postpaid") {
+    const zeroPriceSessions = await prisma.booking.findMany({
+      where: {
+        studentId,
+        priceZarCents: 0,
+        status: { in: ["completed", "no_show"] },
+        paymentRequestId: null,
+        invoiceId: null,
+        sessionType: { not: "free_consultation" },
+      },
+      select: { id: true, sessionType: true, priceCurrency: true },
+    });
+
+    if (zeroPriceSessions.length > 0) {
+      const settings = await getSiteSettings();
+
+      for (const booking of zeroPriceSessions) {
+        const currency = (booking.priceCurrency as string) || "ZAR";
+        let rateCents = 0;
+
+        if (booking.sessionType === "individual") {
+          if (currency === "ZAR") rateCents = settings.sessionPriceIndividualZar ?? 0;
+          else if (currency === "USD") rateCents = settings.sessionPriceIndividualUsd ?? 0;
+          else if (currency === "EUR") rateCents = settings.sessionPriceIndividualEur ?? 0;
+          else rateCents = settings.sessionPriceIndividualGbp ?? 0;
+        } else if (booking.sessionType === "couples") {
+          if (currency === "ZAR") rateCents = settings.sessionPriceCouplesZar ?? 0;
+          else if (currency === "USD") rateCents = settings.sessionPriceCouplesUsd ?? 0;
+          else if (currency === "EUR") rateCents = settings.sessionPriceCouplesEur ?? 0;
+          else rateCents = settings.sessionPriceCouplesGbp ?? 0;
+        }
+
+        if (rateCents > 0) {
+          await prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              priceZarCents: rateCents,
+              billingNote: "(price restored — billing type changed to postpaid)",
+            },
+          });
+          restoredCount++;
+        }
+      }
+    }
+  }
+
   revalidatePath(`/admin/clients/${studentId}`);
+  return { restoredCount };
+}
+
+// ────────────────────────────────────────────────────────────
+// Billing — Restore zero-price sessions for postpaid clients
+// ────────────────────────────────────────────────────────────
+
+export async function restoreZeroPriceSessionsAction(
+  clientId: string,
+): Promise<{ restored: number }> {
+  await requireRole("super_admin", "editor");
+
+  const student = await prisma.student.findUnique({
+    where: { id: clientId },
+    select: { billingType: true },
+  });
+
+  if (student?.billingType !== "postpaid") return { restored: 0 };
+
+  const settings = await getSiteSettings();
+  const zeroPriceSessions = await prisma.booking.findMany({
+    where: {
+      studentId: clientId,
+      priceZarCents: 0,
+      status: { in: ["completed", "no_show"] },
+      paymentRequestId: null,
+      invoiceId: null,
+      sessionType: { not: "free_consultation" },
+    },
+    select: { id: true, sessionType: true, priceCurrency: true },
+  });
+
+  let restored = 0;
+  for (const booking of zeroPriceSessions) {
+    const currency = (booking.priceCurrency as string) || "ZAR";
+    let rateCents = 0;
+
+    if (booking.sessionType === "individual") {
+      if (currency === "ZAR") rateCents = settings.sessionPriceIndividualZar ?? 0;
+      else if (currency === "USD") rateCents = settings.sessionPriceIndividualUsd ?? 0;
+      else if (currency === "EUR") rateCents = settings.sessionPriceIndividualEur ?? 0;
+      else rateCents = settings.sessionPriceIndividualGbp ?? 0;
+    } else if (booking.sessionType === "couples") {
+      if (currency === "ZAR") rateCents = settings.sessionPriceCouplesZar ?? 0;
+      else if (currency === "USD") rateCents = settings.sessionPriceCouplesUsd ?? 0;
+      else if (currency === "EUR") rateCents = settings.sessionPriceCouplesEur ?? 0;
+      else rateCents = settings.sessionPriceCouplesGbp ?? 0;
+    }
+
+    if (rateCents > 0) {
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          priceZarCents: rateCents,
+          billingNote: "(price restored — originally credit-paid, now postpaid)",
+        },
+      });
+      restored++;
+    }
+  }
+
+  revalidatePath(`/admin/clients/${clientId}`);
+  revalidatePath("/admin/invoices");
+  return { restored };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -1525,56 +1643,32 @@ export async function resendPaymentRequestAction(
 ): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin", "editor");
 
-  const pr = await prisma.paymentRequest.findUnique({
-    where: { id: paymentRequestId },
-    select: { status: true, totalCents: true, paymentUrl: true, studentId: true, currency: true },
-  });
-
-  if (!pr) return { success: false, error: "Payment request not found" };
-  if (pr.status === "paid" || pr.status === "cancelled") {
-    return { success: false, error: "Cannot resend a paid or voided request" };
-  }
-
-  // Generate Paystack link if missing (e.g. draft with no URL)
-  if (!pr.paymentUrl) {
-    const sid = pr.studentId || studentId;
-    const student = await prisma.student.findUnique({
-      where: { id: sid },
-      select: { email: true, billingEmail: true },
-    });
-    const email = student?.billingEmail || student?.email || "";
-    if (email) {
-      try {
-        const reference = `pr-${paymentRequestId.slice(-8)}-${Date.now()}`;
-        const result = await initializeTransaction({
-          email,
-          amount: pr.totalCents,
-          currency: pr.currency || "ZAR",
-          reference,
-          callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
-          metadata: { paymentRequestId },
-        });
-        await prisma.paymentRequest.update({
-          where: { id: paymentRequestId },
-          data: { paymentUrl: result.authorization_url, paystackReference: reference },
-        });
-      } catch (err) {
-        console.error("Paystack link generation failed:", err);
-      }
-    }
-  }
-
-  if (pr.status === "draft") {
-    await prisma.paymentRequest.update({
+  try {
+    const pr = await prisma.paymentRequest.findUnique({
       where: { id: paymentRequestId },
-      data: { status: "pending" },
+      select: { status: true },
     });
+
+    if (!pr) return { success: false, error: "Payment request not found" };
+    if (pr.status === "paid" || pr.status === "cancelled") {
+      return { success: false, error: "Cannot resend a paid or voided request" };
+    }
+
+    if (pr.status === "draft") {
+      await prisma.paymentRequest.update({
+        where: { id: paymentRequestId },
+        data: { status: "pending" },
+      });
+    }
+
+    const { sendPaymentRequestEmail } = await import("@/lib/send-invoice");
+    await sendPaymentRequestEmail(paymentRequestId);
+
+    revalidatePath(`/admin/clients/${studentId}`);
+    revalidatePath("/admin/invoices");
+    return { success: true };
+  } catch (err) {
+    console.error("resendPaymentRequestAction error:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Failed to send payment request" };
   }
-
-  const { sendPaymentRequestEmail } = await import("@/lib/send-invoice");
-  await sendPaymentRequestEmail(paymentRequestId);
-
-  revalidatePath(`/admin/clients/${studentId}`);
-  revalidatePath("/admin/invoices");
-  return { success: true };
 }

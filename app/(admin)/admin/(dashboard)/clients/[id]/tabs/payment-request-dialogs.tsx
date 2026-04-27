@@ -731,14 +731,17 @@ export function ResendPRButton({
 
   function handleConfirmed() {
     startTransition(async () => {
-      const result = await resendPaymentRequestAction(paymentRequestId, clientId);
-      if (result.success) {
-        toast.success(`Payment request sent to ${billingEmail}`);
-        setConfirm(false);
-      } else {
-        toast.error(result.error ?? "Failed to send");
-        setConfirm(false);
+      try {
+        const result = await resendPaymentRequestAction(paymentRequestId, clientId);
+        if (result.success) {
+          toast.success(`Payment request sent to ${billingEmail}`);
+        } else {
+          toast.error(result.error ?? "Failed to send");
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to send payment request");
       }
+      setConfirm(false);
     });
   }
 
