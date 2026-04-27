@@ -14,9 +14,10 @@ const eslintConfig = [
         "warn",
         { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
       ],
-      // New React 19 strict rules — downgrade to warnings for now
+      // New React 19 strict rules — set-state-in-effect over-fires on valid
+      // async-load and conditional-reset patterns; disable until upstream improves.
       "react-hooks/purity": "warn",
-      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/set-state-in-effect": "off",
       "react-hooks/immutability": "warn",
     },
   },

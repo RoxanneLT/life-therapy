@@ -21,7 +21,7 @@ const CURRENCY_LABELS: Record<Currency, string> = {
 export function CurrencySelector() {
   const { region, currency, setCurrency, isInternational } = useRegion();
   const [mounted, setMounted] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional mounted check
+   
   useEffect(() => setMounted(true), []);
 
   if (!mounted || !isInternational) return null;

@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Johannesburg
+    open-pull-requests-limit: 10
+    # Group all minor + patch updates into one PR per week — reduces noise.
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    # Major version bumps always get individual PRs so they can be reviewed.
+    ignore:
+      # ESLint 10 requires config audit — pin at 9.x until ready.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint-config-next
+        update-types: ["version-update:semver-major"]
+      # @supabase/ssr follows 0.x semver where minor = breaking; review manually.
+      - dependency-name: "@supabase/ssr"
+        update-types: ["version-update:semver-minor"]
+    labels:
+      - dependencies
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope

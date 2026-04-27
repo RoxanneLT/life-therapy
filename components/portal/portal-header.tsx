@@ -32,7 +32,7 @@ export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, 
 
   // Close mobile sheet on navigation
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset on route change
+     
     setSheetOpen(false);
   }, [pathname]);
 

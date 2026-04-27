@@ -5,7 +5,7 @@ import pg from "pg";
 async function main() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
   const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter } as any);
+  const prisma = new PrismaClient({ adapter });
 
   // Delete all existing testimonials
   await prisma.testimonial.deleteMany();

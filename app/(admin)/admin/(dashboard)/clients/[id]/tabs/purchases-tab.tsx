@@ -304,7 +304,7 @@ function EnrolCourseDialog({ clientId }: { clientId: string }) {
 
   useEffect(() => {
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional loading state before async fetch
+       
       setLoading(true);
       let cancelled = false;
       getAvailableCoursesAction(clientId).then((c) => {

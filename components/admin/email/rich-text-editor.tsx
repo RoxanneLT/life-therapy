@@ -173,7 +173,7 @@ export function RichTextEditor({
     }
   }, [onChange]);
 
-  function exec(command: string, val?: string) {
+  const exec = useCallback((command: string, val?: string) => {
     // Use semantic tags (e.g. <b>) instead of <span style="font-weight:bold">
     document.execCommand("styleWithCSS", false, "false");
     document.execCommand(command, false, val);
@@ -181,7 +181,7 @@ export function RichTextEditor({
     // sanitizeHtml runs in handleInput's onChange path (saved value only).
     editorRef.current?.focus();
     handleInput();
-  }
+  }, [handleInput]);
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -225,12 +225,12 @@ export function RichTextEditor({
     }
   }
 
-  function insertVariable(variable: string) {
+  const insertVariable = useCallback((variable: string) => {
     const html = `<span style="background: #f0f4f0; color: #5a7a58; padding: 1px 6px; border-radius: 4px; font-size: 13px; font-family: monospace;">{{${variable}}}</span>&nbsp;`;
     exec("insertHTML", html);
-  }
+  }, [exec]);
 
-  function insertLink() {
+  const insertLink = useCallback(() => {
     // If cursor is already inside a link, pre-fill with existing href
     const sel = globalThis.getSelection();
     const anchor = sel?.anchorNode && (sel.anchorNode as Element).closest
@@ -239,7 +239,7 @@ export function RichTextEditor({
     const existing = anchor?.getAttribute("href") ?? "https://";
     const url = prompt("Enter URL:", existing);
     if (url) exec("createLink", url);
-  }
+  }, [exec]);
 
   const toolbarGroups = [
     {
@@ -280,6 +280,7 @@ export function RichTextEditor({
     <div className="space-y-2">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-input bg-muted/30 p-1.5">
+        {/* eslint-disable-next-line react-hooks/refs -- toolbar actions only fire in onMouseDown event handlers, never during render */}
         {toolbarGroups.map((group, gi) => (
           <div key={group.label} className="flex items-center">
             {gi > 0 && <div className="mx-1 h-5 w-px bg-border" />}

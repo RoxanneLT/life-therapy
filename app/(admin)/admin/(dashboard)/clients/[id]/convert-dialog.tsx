@@ -91,7 +91,7 @@ export function ConvertDialog({
   // Load packages when dialog opens
   useEffect(() => {
     if (open && packages.length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional loading state before async fetch
+       
       setLoadingPkgs(true);
       let cancelled = false;
       getPackagesForConvertAction()
