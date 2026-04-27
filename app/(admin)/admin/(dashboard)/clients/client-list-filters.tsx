@@ -39,12 +39,12 @@ export function ClientListFilters({ activeTab, search, counts }: ClientListFilte
 
   function handleTabClick(tab: string) {
     setQuery("");
-    navigate({ status: tab === "all" ? undefined : tab, q: undefined });
+    navigate({ status: tab, q: undefined, page: undefined });
   }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    navigate({ q: query.trim() || undefined });
+    navigate({ q: query.trim() || undefined, page: undefined });
   }
 
   return (

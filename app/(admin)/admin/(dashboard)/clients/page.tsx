@@ -19,6 +19,7 @@ import { SortableHeader } from "@/components/admin/sortable-header";
 import { CreateClientDialog } from "./create-client-dialog";
 
 import { CLIENT_STATUS_BADGE } from "@/lib/status-styles";
+import { PaginationControls } from "@/components/admin/pagination-controls";
 
 const STATUS_TABS = ["all", "active", "at_risk", "potential", "inactive", "archived"] as const;
 
@@ -59,19 +60,24 @@ function getOrderBy(sort: SortField, dir: SortDir) {
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; sort?: string; dir?: string }>;
+  readonly searchParams: Promise<{ status?: string; q?: string; sort?: string; dir?: string; page?: string }>;
 }) {
   await requireRole("super_admin", "marketing");
 
-  const { status, q, sort, dir } = await searchParams;
+  const { status, q, sort, dir, page: pageParam } = await searchParams;
   const activeTab = STATUS_TABS.includes(status as (typeof STATUS_TABS)[number])
     ? (status as (typeof STATUS_TABS)[number])
-    : "all";
+    : "active";
 
   const sortField: SortField = VALID_SORT_FIELDS.includes(sort as SortField)
     ? (sort as SortField)
     : "created";
   const sortDir: SortDir = dir === "asc" ? "asc" : "desc";
+
+  const isAtRisk = activeTab === "at_risk";
+  const page = isAtRisk ? 1 : (Number(pageParam) || 1);
+  const pageSize = 50;
+  const skip = (page - 1) * pageSize;
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -94,15 +100,16 @@ export default async function ClientsPage({
     ];
   }
 
-  const [allClients, counts] = await Promise.all([
+  const [allClients, filteredTotal, counts] = await Promise.all([
     prisma.student.findMany({
       where,
-      take: 500,
+      take: isAtRisk ? 500 : pageSize,
+      skip: isAtRisk ? 0 : skip,
       orderBy: getOrderBy(sortField, sortDir) as never,
       include: {
         _count: { select: { bookings: true, enrollments: true } },
         creditBalance: { select: { balance: true } },
-        ...(activeTab === "at_risk"
+        ...(isAtRisk
           ? {
               bookings: {
                 where: { status: { in: ["completed", "confirmed", "pending"] } },
@@ -114,11 +121,25 @@ export default async function ClientsPage({
           : {}),
       },
     }),
+    isAtRisk ? Promise.resolve(0) : prisma.student.count({ where }),
     prisma.student.groupBy({
       by: ["clientStatus"],
       _count: true,
     }),
   ]);
+
+  const totalPages = isAtRisk ? 0 : Math.ceil(filteredTotal / pageSize);
+
+  function buildPageUrl(targetPage: number): string {
+    const params = new URLSearchParams();
+    params.set("status", activeTab);
+    if (sort) params.set("sort", sort);
+    if (dir) params.set("dir", dir);
+    if (q) params.set("q", q);
+    if (targetPage > 1) params.set("page", String(targetPage));
+    const qs = params.toString();
+    return qs ? `/admin/clients?${qs}` : "/admin/clients";
+  }
 
   // For at_risk, filter in JS: last session must be completed & 30+ days ago
   let clients = allClients;
@@ -279,6 +300,13 @@ export default async function ClientsPage({
               ))}
             </TableBody>
           </Table>
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            totalCount={filteredTotal}
+            pageSize={pageSize}
+            buildUrl={buildPageUrl}
+          />
         </div>
       )}
     </div>

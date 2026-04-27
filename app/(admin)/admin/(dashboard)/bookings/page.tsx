@@ -27,6 +27,7 @@ import { CreateBookingDialog } from "./create-booking-dialog";
 import { CalendarShell } from "./calendar-shell";
 import { SeriesTimeline } from "./series-timeline";
 import { ClientQuickView } from "@/components/admin/client-quick-view";
+import { PaginationControls } from "@/components/admin/pagination-controls";
 
 const VALID_VIEWS = ["list", "day", "week", "month"] as const;
 type ViewMode = (typeof VALID_VIEWS)[number];
@@ -61,6 +62,7 @@ interface Props {
     view?: string;
     date?: string;
     series?: string;
+    page?: string;
   }>;
 }
 
@@ -135,12 +137,21 @@ export default async function BookingsPage({ searchParams }: Props) {
 
   const where = { ...statusWhere, ...dateWhere, ...seriesWhere };
 
+  const shouldPaginate = view === "list" && !seriesFilter;
+  const page = shouldPaginate ? (Number(sp.page) || 1) : 1;
+  const pageSize = 50;
+  const skip = (page - 1) * pageSize;
+
   // Fetch bookings + counts in parallel
-  const [bookings, counts, staleCount] = await Promise.all([
+  const [bookings, totalCount, counts, staleCount] = await Promise.all([
     prisma.booking.findMany({
       where,
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      ...(shouldPaginate ? { take: pageSize, skip } : {}),
     }),
+    shouldPaginate
+      ? prisma.booking.count({ where })
+      : Promise.resolve(0),
     prisma.booking.groupBy({
       by: ["status"],
       _count: true,
@@ -150,6 +161,19 @@ export default async function BookingsPage({ searchParams }: Props) {
       where: { status: "confirmed", date: { lt: new Date(todaySast + "T00:00:00Z") } },
     }),
   ]);
+
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  function buildPageUrl(targetPage: number): string {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set("status", statusFilter);
+    if (sp.view) params.set("view", sp.view);
+    if (sp.date) params.set("date", sp.date);
+    if (sp.series) params.set("series", sp.series);
+    if (targetPage > 1) params.set("page", String(targetPage));
+    const qs = params.toString();
+    return `/admin/bookings${qs ? `?${qs}` : ""}`;
+  }
 
   // Fetch business hours + overrides for calendar views
   let businessHours = null;
@@ -232,7 +256,7 @@ export default async function BookingsPage({ searchParams }: Props) {
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 dark:border-amber-800 dark:bg-amber-900/20">
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span className="flex-1 text-sm font-medium text-amber-800 dark:text-amber-300">
-            {bookings.length} past session{bookings.length !== 1 ? "s" : ""} still confirmed — mark each individually or use the dashboard to bulk-complete.
+            {totalCount} past session{totalCount === 1 ? "" : "s"} still confirmed — mark each individually or use the dashboard to bulk-complete.
           </span>
           <Link href="/admin/bookings">
             <Button variant="ghost" size="sm" className="h-7 gap-1 text-amber-700 hover:text-amber-900 dark:text-amber-400">
@@ -411,6 +435,13 @@ export default async function BookingsPage({ searchParams }: Props) {
                   })}
                 </TableBody>
               </Table>
+              <PaginationControls
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                buildUrl={buildPageUrl}
+              />
             </div>
           )}
         </>

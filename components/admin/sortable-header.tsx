@@ -35,6 +35,7 @@ export function SortableHeader({
     } else {
       sp.set("dir", "asc");
     }
+    sp.delete("page");
     router.push(`${basePath ?? pathname}?${sp.toString()}`);
   }
 
