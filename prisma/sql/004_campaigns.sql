@@ -2,7 +2,7 @@
 -- 004: Campaigns — Multi-Step Campaigns, Drip Emails, Reengagement Seed
 -- =============================================================================
 -- Idempotent: safe to run multiple times.
--- DEPENDS ON: 003_email_system.sql (contacts, campaigns, email_logs tables)
+-- DEPENDS ON: 003_email_system.sql (campaigns, email_logs tables)
 -- Covers: multi-step campaign extensions, drip email system (2-year sequence),
 --         and the initial re-engagement campaign for Sage-imported clients.
 -- =============================================================================
@@ -50,11 +50,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS "campaign_emails_campaignId_step_key"
 CREATE INDEX IF NOT EXISTS "campaign_emails_campaignId_idx"
   ON "campaign_emails"("campaignId");
 
--- CampaignProgress table (per-contact tracking through campaign)
+-- CampaignProgress table (per-student tracking through campaign)
 CREATE TABLE IF NOT EXISTS "campaign_progress" (
   "id"          TEXT PRIMARY KEY,
   "campaignId"  TEXT NOT NULL REFERENCES "campaigns"("id") ON DELETE CASCADE,
-  "contactId"   TEXT NOT NULL REFERENCES "contacts"("id") ON DELETE CASCADE,
+  "studentId"   TEXT NOT NULL REFERENCES "students"("id") ON DELETE CASCADE,
   "currentStep" INTEGER NOT NULL DEFAULT 0,
   "lastSentAt"  TIMESTAMP(3),
   "completedAt" TIMESTAMP(3),
@@ -63,12 +63,12 @@ CREATE TABLE IF NOT EXISTS "campaign_progress" (
   "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "campaign_progress_campaignId_contactId_key"
-  ON "campaign_progress"("campaignId", "contactId");
+CREATE UNIQUE INDEX IF NOT EXISTS "campaign_progress_campaignId_studentId_key"
+  ON "campaign_progress"("campaignId", "studentId");
 CREATE INDEX IF NOT EXISTS "campaign_progress_campaignId_completedAt_idx"
   ON "campaign_progress"("campaignId", "completedAt");
-CREATE INDEX IF NOT EXISTS "campaign_progress_contactId_idx"
-  ON "campaign_progress"("contactId");
+CREATE INDEX IF NOT EXISTS "campaign_progress_studentId_idx"
+  ON "campaign_progress"("studentId");
 
 -- Email tracking fields on EmailLog
 ALTER TABLE "email_logs" ADD COLUMN IF NOT EXISTS "trackingId"  TEXT;
@@ -80,12 +80,12 @@ ALTER TABLE "email_logs" ADD COLUMN IF NOT EXISTS "clicksCount" INTEGER NOT NULL
 CREATE UNIQUE INDEX IF NOT EXISTS "email_logs_trackingId_key"
   ON "email_logs"("trackingId") WHERE "trackingId" IS NOT NULL;
 
--- Contact engagement pause fields
-ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "emailPaused"      BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "emailPausedAt"    TIMESTAMP(3);
-ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "emailPauseReason" TEXT;
+-- Student engagement pause fields (contacts table was merged into students and dropped)
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "emailPaused"      BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "emailPausedAt"    TIMESTAMP(3);
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "emailPauseReason" TEXT;
 
-CREATE INDEX IF NOT EXISTS "contacts_emailPaused_idx" ON "contacts"("emailPaused");
+CREATE INDEX IF NOT EXISTS "students_emailPaused_idx" ON "students"("emailPaused");
 
 -- ============================================================
 -- Drip Email System (Automated 2-Year Nurture Sequence)
@@ -115,10 +115,10 @@ CREATE TABLE IF NOT EXISTS "drip_emails" (
 CREATE UNIQUE INDEX IF NOT EXISTS "drip_emails_type_step_key" ON "drip_emails"("type", "step");
 CREATE INDEX IF NOT EXISTS "drip_emails_type_idx" ON "drip_emails"("type");
 
--- Drip Progress table (tracks per-contact position)
+-- Drip Progress table (tracks per-student position)
 CREATE TABLE IF NOT EXISTS "drip_progress" (
   "id"           TEXT PRIMARY KEY,
-  "contactId"    TEXT NOT NULL REFERENCES "contacts"("id") ON DELETE CASCADE,
+  "studentId"    TEXT NOT NULL REFERENCES "students"("id") ON DELETE CASCADE,
   "currentPhase" "DripEmailType" NOT NULL DEFAULT 'onboarding',
   "currentStep"  INTEGER NOT NULL DEFAULT 0,
   "lastSentAt"   TIMESTAMP(3),
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS "drip_progress" (
   "updatedAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "drip_progress_contactId_key" ON "drip_progress"("contactId");
+CREATE UNIQUE INDEX IF NOT EXISTS "drip_progress_studentId_key" ON "drip_progress"("studentId");
 CREATE INDEX IF NOT EXISTS "drip_progress_phase_step_idx" ON "drip_progress"("currentPhase", "currentStep");
 CREATE INDEX IF NOT EXISTS "drip_progress_isPaused_idx" ON "drip_progress"("isPaused");
 

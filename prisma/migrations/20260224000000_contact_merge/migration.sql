@@ -56,8 +56,12 @@ ALTER TABLE "bookings" ADD COLUMN IF NOT EXISTS "creditRefunded" BOOLEAN NOT NUL
 ALTER TABLE "bookings" ADD COLUMN IF NOT EXISTS "isLateCancel" BOOLEAN NOT NULL DEFAULT false;
 
 -- Booking → Student FK
-ALTER TABLE "bookings" ADD CONSTRAINT "bookings_studentId_fkey"
-  FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_studentId_fkey') THEN
+    ALTER TABLE "bookings" ADD CONSTRAINT "bookings_studentId_fkey"
+      FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS "bookings_studentId_idx" ON "bookings"("studentId");
 
@@ -98,75 +102,64 @@ FROM "contacts" c
 WHERE c."studentId" = s."id";
 
 -- 7. Migrate DripProgress: contactId → studentId
--- First add the studentId column to drip_progress
 ALTER TABLE "drip_progress" ADD COLUMN IF NOT EXISTS "studentId" TEXT;
 
--- Copy studentId from linked contacts
 UPDATE "drip_progress" dp
 SET "studentId" = c."studentId"
 FROM "contacts" c
 WHERE dp."contactId" = c."id"
   AND c."studentId" IS NOT NULL;
 
--- For drip progress records where the contact has no linked student, we need to
--- create Student records for those contacts first (orphaned newsletter contacts)
--- Skip these for now — they'll be handled by the new upsertContact flow going forward.
-
--- Drop old FK and add new one
 ALTER TABLE "drip_progress" DROP CONSTRAINT IF EXISTS "drip_progress_contactId_fkey";
 
--- Remove drip_progress records that couldn't be migrated (no linked student)
 DELETE FROM "drip_progress" WHERE "studentId" IS NULL;
 
--- Make studentId required and unique
 ALTER TABLE "drip_progress" ALTER COLUMN "studentId" SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS "drip_progress_studentId_key" ON "drip_progress"("studentId");
-ALTER TABLE "drip_progress" ADD CONSTRAINT "drip_progress_studentId_fkey"
-  FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Drop old contactId column and index
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'drip_progress_studentId_fkey') THEN
+    ALTER TABLE "drip_progress" ADD CONSTRAINT "drip_progress_studentId_fkey"
+      FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 DROP INDEX IF EXISTS "drip_progress_contactId_key";
 ALTER TABLE "drip_progress" DROP COLUMN IF EXISTS "contactId";
 
 -- 8. Migrate CampaignProgress: contactId → studentId
 ALTER TABLE "campaign_progress" ADD COLUMN IF NOT EXISTS "studentId" TEXT;
 
--- Copy studentId from linked contacts
 UPDATE "campaign_progress" cp
 SET "studentId" = c."studentId"
 FROM "contacts" c
 WHERE cp."contactId" = c."id"
   AND c."studentId" IS NOT NULL;
 
--- Drop old FK
 ALTER TABLE "campaign_progress" DROP CONSTRAINT IF EXISTS "campaign_progress_contactId_fkey";
 
--- Remove records that couldn't be migrated
 DELETE FROM "campaign_progress" WHERE "studentId" IS NULL;
 
--- Make studentId required
 ALTER TABLE "campaign_progress" ALTER COLUMN "studentId" SET NOT NULL;
-ALTER TABLE "campaign_progress" ADD CONSTRAINT "campaign_progress_studentId_fkey"
-  FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Update unique constraint
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'campaign_progress_studentId_fkey') THEN
+    ALTER TABLE "campaign_progress" ADD CONSTRAINT "campaign_progress_studentId_fkey"
+      FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 DROP INDEX IF EXISTS "campaign_progress_campaignId_contactId_key";
 CREATE UNIQUE INDEX IF NOT EXISTS "campaign_progress_campaignId_studentId_key"
   ON "campaign_progress"("campaignId", "studentId");
 
--- Drop old contactId column and indexes
 DROP INDEX IF EXISTS "campaign_progress_contactId_idx";
 ALTER TABLE "campaign_progress" DROP COLUMN IF EXISTS "contactId";
 
 CREATE INDEX IF NOT EXISTS "campaign_progress_studentId_idx" ON "campaign_progress"("studentId");
 
 -- 9. Remove student relation from contacts (Contact is now deprecated)
--- Drop the FK constraint and column
 ALTER TABLE "contacts" DROP CONSTRAINT IF EXISTS "contacts_studentId_fkey";
--- Keep studentId column on contacts for backward compat during transition
--- (admin pages still read it for linked student display)
-
--- 10. (Moved to step 5b above)
 
 -- 11. Create ClientIntake table
 CREATE TABLE IF NOT EXISTS "client_intakes" (
@@ -190,8 +183,13 @@ CREATE TABLE IF NOT EXISTS "client_intakes" (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS "client_intakes_studentId_key" ON "client_intakes"("studentId");
-ALTER TABLE "client_intakes" ADD CONSTRAINT "client_intakes_studentId_fkey"
-  FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'client_intakes_studentId_fkey') THEN
+    ALTER TABLE "client_intakes" ADD CONSTRAINT "client_intakes_studentId_fkey"
+      FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- 12. Create CommitmentAcknowledgement table
 CREATE TABLE IF NOT EXISTS "commitment_acknowledgements" (
@@ -207,8 +205,13 @@ CREATE TABLE IF NOT EXISTS "commitment_acknowledgements" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "commitment_acknowledgements_studentId_version_key"
   ON "commitment_acknowledgements"("studentId", "version");
-ALTER TABLE "commitment_acknowledgements" ADD CONSTRAINT "commitment_acknowledgements_studentId_fkey"
-  FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'commitment_acknowledgements_studentId_fkey') THEN
+    ALTER TABLE "commitment_acknowledgements" ADD CONSTRAINT "commitment_acknowledgements_studentId_fkey"
+      FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- 13. Register portal_welcome email template
 INSERT INTO "email_templates" ("id", "key", "name", "category", "subject", "bodyHtml", "variables", "isActive", "createdAt", "updatedAt")

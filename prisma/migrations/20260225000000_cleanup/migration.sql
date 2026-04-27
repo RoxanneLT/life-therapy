@@ -1,5 +1,11 @@
+-- =============================================================================
+-- Cleanup: merge contacts → students, data fixes, proforma PDF column
+-- Merged from: merge_contacts_data_drop_table + fix_client_statuses_and_booking_link
+--              + add_proforma_pdf_url
+-- =============================================================================
+
 -- ============================================================
--- Migration: Merge contacts data into students, then drop contacts table
+-- 1. Merge contacts data into students, then drop contacts table
 --
 -- Rules:
 --   newsletter source → source='newsletter', newsletterOptIn=true,  marketingOptIn=true
@@ -10,7 +16,7 @@
 --   merge fields into existing student without overwriting non-null values
 -- ============================================================
 
--- 1. Insert contacts that have NO matching student (by email)
+-- Insert contacts that have NO matching student (by email)
 INSERT INTO "students" (
   "id",
   "email",
@@ -68,22 +74,19 @@ WHERE NOT EXISTS (
   SELECT 1 FROM "students" s WHERE s."email" = c."email"
 );
 
--- 2. For contacts that DO have a matching student, merge non-null fields
---    Never overwrite existing non-null values; only fill blanks
+-- For contacts that DO have a matching student, merge non-null fields
 UPDATE "students" s
 SET
   "phone"            = COALESCE(s."phone", c."phone"),
   "gender"           = COALESCE(s."gender", c."gender"),
   "tags"             = COALESCE(s."tags", c."tags"),
   "adminNotes"       = COALESCE(s."adminNotes", c."notes"),
-  -- Upgrade consent: only go from false→true, never downgrade
   "consentGiven"     = s."consentGiven" OR c."consentGiven",
   "consentDate"      = COALESCE(s."consentDate", c."consentDate"),
   "consentMethod"    = COALESCE(s."consentMethod", c."consentMethod"),
-  -- Respect newsletter/import source preferences for communication
   "newsletterOptIn"  = CASE
-    WHEN c."source"::text = 'import' THEN s."newsletterOptIn" -- don't change existing student prefs
-    ELSE s."newsletterOptIn" OR true  -- newsletter contacts: ensure opted in
+    WHEN c."source"::text = 'import' THEN s."newsletterOptIn"
+    ELSE s."newsletterOptIn" OR true
   END,
   "marketingOptIn"   = CASE
     WHEN c."source"::text = 'import' THEN s."marketingOptIn"
@@ -92,10 +95,33 @@ SET
   "updatedAt"        = NOW()
 FROM "contacts" c
 WHERE s."email" = c."email"
-  AND s."id" != c."id";  -- only where contact is a separate record
+  AND s."id" != c."id";
 
--- 3. Drop the contacts table
+-- Drop the contacts table (CASCADE removes FKs from drip_progress, campaign_progress, etc.)
 DROP TABLE IF EXISTS "contacts" CASCADE;
 
--- 4. Drop the ContactSource enum (no longer used)
+-- Drop the ContactSource enum (no longer used)
 DROP TYPE IF EXISTS "ContactSource";
+
+-- ============================================================
+-- 2. Data fixes: client statuses + orphan booking linking
+-- ============================================================
+
+-- Set all existing clients to "active" except test accounts
+UPDATE "students"
+SET "clientStatus" = 'active'
+WHERE "email" NOT IN ('bouwer.stean@gmail.com', 'roxannebouwer@gmail.com')
+  AND "clientStatus" = 'potential';
+
+-- Link orphan bookings to their student record by matching email
+UPDATE "bookings" b
+SET "studentId" = s."id"
+FROM "students" s
+WHERE b."clientEmail" = s."email"
+  AND b."studentId" IS NULL;
+
+-- ============================================================
+-- 3. Add proformaPdfUrl to payment_requests
+-- ============================================================
+
+ALTER TABLE "payment_requests" ADD COLUMN IF NOT EXISTS "proformaPdfUrl" TEXT;
