@@ -38,6 +38,7 @@ import {
   Info,
   RefreshCw,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -57,6 +58,7 @@ import {
   regeneratePaymentLinkAction,
   generateAdHocInvoiceAction,
   getSessionRatesAction,
+  restoreZeroPriceSessionsAction,
 } from "../actions";
 import {
   CreatePaymentRequestDialog,
@@ -194,7 +196,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
 
   const clientName = `${mergedClient.firstName as string} ${mergedClient.lastName as string}`.trim();
   const billingType = (mergedClient.billingType as string) || "prepaid";
-  const billingEmail = (mergedClient.billingEmail as string) || "";
+  const billingEmail = (mergedClient.billingEmail as string) || (mergedClient.email as string) || "";
   const standingDiscountPercent = (mergedClient.standingDiscountPercent as number) || 0;
   const standingDiscountFixed = (mergedClient.standingDiscountFixed as number) || 0;
   const individualBilledToId = (mergedClient.individualBilledToId as string | null) ?? null;
@@ -398,6 +400,16 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
           </div>
 
           {isPostpaid && (() => {
+            const bookingsList = (mergedClient.bookings as BookingData[]) || [];
+            const zeroPriceCount = bookingsList.filter(
+              (b) =>
+                b.priceZarCents === 0 &&
+                !b.paymentRequestId &&
+                !b.invoiceId &&
+                (b.status === "completed" || b.status === "no_show") &&
+                b.sessionType !== "free_consultation",
+            ).length;
+
             // Resolve billing assignment label + link
             const indivBilledTo = mergedClient.individualBilledTo as {
               studentId?: string | null;
@@ -428,14 +440,23 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
             }
 
             return (
-              <UnbilledSessionsSection
-                bookings={(mergedClient.bookings as BookingData[]) || []}
-                discountPercent={standingDiscountPercent}
-                discountFixed={standingDiscountFixed}
-                currency={(mergedClient.bookings as BookingData[])?.[0]?.priceCurrency || "ZAR"}
-                billedToLabel={billedToLabel}
-                billedToId={billedToId}
-              />
+              <>
+                {zeroPriceCount > 0 && (
+                  <RestoreSessionPricesBanner
+                    clientId={clientId}
+                    count={zeroPriceCount}
+                    onSuccess={invalidateFinances}
+                  />
+                )}
+                <UnbilledSessionsSection
+                  bookings={bookingsList}
+                  discountPercent={standingDiscountPercent}
+                  discountFixed={standingDiscountFixed}
+                  currency={bookingsList[0]?.priceCurrency || "ZAR"}
+                  billedToLabel={billedToLabel}
+                  billedToId={billedToId}
+                />
+              </>
             );
           })()}
 
@@ -493,8 +514,12 @@ function BillingConfigCard({
   function handleBillingTypeChange(checked: boolean) {
     const newType = checked ? "postpaid" : "prepaid";
     startTransition(async () => {
-      await updateBillingTypeAction(clientId, newType);
-      toast.success(`Billing type set to ${newType}`);
+      const result = await updateBillingTypeAction(clientId, newType);
+      let msg = `Billing type set to ${newType}`;
+      if (result.restoredCount > 0) {
+        msg += ` · ${result.restoredCount} session price${result.restoredCount !== 1 ? "s" : ""} restored`;
+      }
+      toast.success(msg);
       onSuccess?.();
     });
   }
@@ -1161,6 +1186,48 @@ function UnbilledSessionsSection({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+// ─── Restore Session Prices Banner ──────────────────────────
+
+function RestoreSessionPricesBanner({
+  clientId,
+  count,
+  onSuccess,
+}: Readonly<{ clientId: string; count: number; onSuccess?: () => void }>) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleRestore() {
+    startTransition(async () => {
+      try {
+        const result = await restoreZeroPriceSessionsAction(clientId);
+        toast.success(
+          `${result.restored} session price${result.restored !== 1 ? "s" : ""} restored`,
+        );
+        onSuccess?.();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to restore prices");
+      }
+    });
+  }
+
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <div className="flex-1 text-sm text-amber-800">
+        <p className="font-medium">
+          {count} session{count !== 1 ? "s" : ""} with no price set
+        </p>
+        <p className="mt-0.5 text-xs">
+          These were originally paid with credits. Restore prices so they are included in the next billing run.
+        </p>
+      </div>
+      <Button variant="outline" size="sm" onClick={handleRestore} disabled={isPending}>
+        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+        {isPending ? "Restoring..." : "Restore Prices"}
+      </Button>
+    </div>
   );
 }
 
