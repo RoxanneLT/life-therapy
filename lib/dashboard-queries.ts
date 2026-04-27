@@ -1,9 +1,15 @@
 import { prisma } from "@/lib/prisma";
 
-const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+// Financial year runs March → February.
+// "year N" means Mar N – Feb N+1.
+const FY_MONTH_LABELS = [
+  "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb",
 ];
+
+// Convert UTC month (0 = Jan … 11 = Dec) → FY slot index (0 = Mar … 11 = Feb)
+function fyIdx(utcMonth: number): number {
+  return (utcMonth - 2 + 12) % 12;
+}
 
 const SESSION_PRICE_CENTS: Record<string, number> = {
   individual: 85000,
@@ -31,18 +37,18 @@ export type MonthlyRevenueData = {
 // ── Bookings per Month ──────────────────────────────────────
 
 export async function getBookingsByMonth(year: number): Promise<MonthlyBookingData[]> {
+  const fyStart = new Date(`${year}-03-01T00:00:00Z`);
+  const fyEnd   = new Date(`${year + 1}-03-01T00:00:00Z`);
+
   const bookings = await prisma.booking.findMany({
     where: {
-      date: {
-        gte: new Date(`${year}-01-01`),
-        lt: new Date(`${year + 1}-01-01`),
-      },
+      date: { gte: fyStart, lt: fyEnd },
       status: { in: ["pending", "confirmed", "completed"] },
     },
     select: { date: true, sessionType: true },
   });
 
-  const months: MonthlyBookingData[] = MONTH_LABELS.map((m) => ({
+  const months: MonthlyBookingData[] = FY_MONTH_LABELS.map((m) => ({
     month: m,
     individual: 0,
     couples: 0,
@@ -51,7 +57,7 @@ export async function getBookingsByMonth(year: number): Promise<MonthlyBookingDa
   }));
 
   for (const b of bookings) {
-    const idx = b.date.getUTCMonth();
+    const idx = fyIdx(b.date.getUTCMonth());
     months[idx].total++;
     if (b.sessionType === "individual") months[idx].individual++;
     else if (b.sessionType === "couples") months[idx].couples++;
@@ -64,8 +70,16 @@ export async function getBookingsByMonth(year: number): Promise<MonthlyBookingDa
 // ── Revenue per Month ───────────────────────────────────────
 
 export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueData[]> {
-  const yearStart = new Date(`${year}-01-01`);
-  const yearEnd   = new Date(`${year + 1}-01-01`);
+  const fyStart = new Date(`${year}-03-01T00:00:00Z`);
+  const fyEnd   = new Date(`${year + 1}-03-01T00:00:00Z`);
+
+  // Billing months spanning this FY: Mar–Dec of `year` plus Jan–Feb of `year+1`
+  const billingMonthWhere = {
+    OR: [
+      { billingMonth: { gte: `${year}-03`, lte: `${year}-12` } },
+      { billingMonth: { gte: `${year + 1}-01`, lte: `${year + 1}-02` } },
+    ],
+  };
 
   const [paidInvoices, pendingRequests, unbilledCompleted, upcomingBookings] = await Promise.all([
     // Actual revenue from paid invoices
@@ -73,7 +87,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
       by: ["billingMonth"],
       where: {
         status: "paid",
-        billingMonth: { startsWith: `${year}`, not: null },
+        OR: billingMonthWhere.OR,
       },
       _sum: { paidAmountCents: true },
     }),
@@ -81,7 +95,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     prisma.paymentRequest.findMany({
       where: {
         status: "pending",
-        billingMonth: { startsWith: `${year}` },
+        OR: billingMonthWhere.OR,
       },
       select: { billingMonth: true, totalCents: true },
     }),
@@ -89,7 +103,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     prisma.booking.findMany({
       where: {
         status: { in: ["completed", "no_show"] },
-        date: { gte: yearStart, lt: yearEnd },
+        date: { gte: fyStart, lt: fyEnd },
         invoiceId: null,
         paymentRequestId: null,
         sessionType: { in: ["individual", "couples"] },
@@ -100,7 +114,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     prisma.booking.findMany({
       where: {
         status: { in: ["pending", "confirmed"] },
-        date: { gte: new Date(), lt: yearEnd },
+        date: { gte: new Date(), lt: fyEnd },
         invoiceId: null,
         sessionType: { in: ["individual", "couples"] },
       },
@@ -108,7 +122,7 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     }),
   ]);
 
-  const months: MonthlyRevenueData[] = MONTH_LABELS.map((m) => ({
+  const months: MonthlyRevenueData[] = FY_MONTH_LABELS.map((m) => ({
     month: m,
     actual: 0,
     requested: 0,
@@ -118,26 +132,28 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
   // Paid invoices → actual
   for (const row of paidInvoices) {
     if (!row.billingMonth) continue;
-    const idx = Number.parseInt(row.billingMonth.split("-")[1], 10) - 1;
+    const utcMonth = Number.parseInt(row.billingMonth.split("-")[1], 10) - 1; // 0-indexed
+    const idx = fyIdx(utcMonth);
     if (idx >= 0 && idx < 12) months[idx].actual = row._sum.paidAmountCents ?? 0;
   }
 
   // Pending payment requests → requested
   for (const pr of pendingRequests) {
     if (!pr.billingMonth) continue;
-    const idx = Number.parseInt(pr.billingMonth.split("-")[1], 10) - 1;
+    const utcMonth = Number.parseInt(pr.billingMonth.split("-")[1], 10) - 1;
+    const idx = fyIdx(utcMonth);
     if (idx >= 0 && idx < 12) months[idx].requested += pr.totalCents;
   }
 
   // Completed unbilled → estimated (known amount, just not yet invoiced)
   for (const b of unbilledCompleted) {
-    const idx = b.date.getUTCMonth();
+    const idx = fyIdx(b.date.getUTCMonth());
     months[idx].estimated += b.priceZarCents ?? 0;
   }
 
   // Upcoming bookings → estimated
   for (const b of upcomingBookings) {
-    const idx = b.date.getUTCMonth();
+    const idx = fyIdx(b.date.getUTCMonth());
     months[idx].estimated += b.priceZarCents ?? SESSION_PRICE_CENTS[b.sessionType] ?? 0;
   }
 

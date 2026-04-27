@@ -35,7 +35,7 @@ export function BookingsChart({ data }: BookingsChartProps) {
     <ChartContainer config={chartConfig} className="h-[300px] w-full">
       <BarChart data={data} accessibilityLayer>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
         <YAxis tickLine={false} axisLine={false} allowDecimals={false} width={30} />
         <ChartTooltip content={<ChartTooltipContent />} />
         <ChartLegend content={<ChartLegendContent />} />
