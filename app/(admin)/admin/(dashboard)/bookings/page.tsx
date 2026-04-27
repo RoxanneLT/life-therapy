@@ -17,7 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CalendarDays, Settings, ShieldOff, Repeat, X } from "lucide-react";
+import { CalendarDays, Settings, ShieldOff, Repeat, X, AlertTriangle } from "lucide-react";
+import { StaleQuickActions } from "./stale-quick-actions";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { ViewSwitcher } from "./view-switcher";
@@ -68,6 +69,7 @@ export default async function BookingsPage({ searchParams }: Props) {
 
   const sp = await searchParams;
   const statusFilter = sp.status || undefined;
+  const isStale = statusFilter === "stale";
   const seriesFilter = sp.series || undefined;
   const view: ViewMode = VALID_VIEWS.includes(sp.view as ViewMode)
     ? (sp.view as ViewMode)
@@ -81,8 +83,11 @@ export default async function BookingsPage({ searchParams }: Props) {
 
   // Build status filter
   // Calendar views default to excluding cancelled/no_show; list shows everything
+  // "stale" is a pseudo-status meaning: confirmed + date < today
   let statusWhere: Record<string, unknown> = {};
-  if (statusFilter) {
+  if (isStale) {
+    statusWhere = { status: "confirmed" as BookingStatus };
+  } else if (statusFilter) {
     statusWhere = { status: statusFilter as BookingStatus };
   } else if (view === "day" || view === "week" || view === "month") {
     statusWhere = { status: { notIn: ["cancelled", "no_show"] as BookingStatus[] } };
@@ -120,15 +125,18 @@ export default async function BookingsPage({ searchParams }: Props) {
 
   // List view defaults to upcoming bookings only (today forward, nearest first)
   // Exception: series filter shows ALL bookings (past + future) for the full timeline
+  // Exception: stale filter shows only past bookings
+  const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
   if (view === "list" && !dateWhere.date && !seriesFilter) {
-    const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
-    dateWhere = { date: { gte: new Date(todaySast + "T00:00:00Z") } };
+    dateWhere = isStale
+      ? { date: { lt: new Date(todaySast + "T00:00:00Z") } }
+      : { date: { gte: new Date(todaySast + "T00:00:00Z") } };
   }
 
   const where = { ...statusWhere, ...dateWhere, ...seriesWhere };
 
   // Fetch bookings + counts in parallel
-  const [bookings, counts] = await Promise.all([
+  const [bookings, counts, staleCount] = await Promise.all([
     prisma.booking.findMany({
       where,
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
@@ -136,7 +144,10 @@ export default async function BookingsPage({ searchParams }: Props) {
     prisma.booking.groupBy({
       by: ["status"],
       _count: true,
-      where: view === "list" ? { date: { gte: new Date(formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd") + "T00:00:00Z") } } : undefined,
+      where: view === "list" ? { date: { gte: new Date(todaySast + "T00:00:00Z") } } : undefined,
+    }),
+    prisma.booking.count({
+      where: { status: "confirmed", date: { lt: new Date(todaySast + "T00:00:00Z") } },
     }),
   ]);
 
@@ -216,6 +227,22 @@ export default async function BookingsPage({ searchParams }: Props) {
         </div>
       </div>
 
+      {/* Stale sessions banner */}
+      {isStale && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="flex-1 text-sm font-medium text-amber-800 dark:text-amber-300">
+            {bookings.length} past session{bookings.length !== 1 ? "s" : ""} still confirmed — mark each individually or use the dashboard to bulk-complete.
+          </span>
+          <Link href="/admin/bookings">
+            <Button variant="ghost" size="sm" className="h-7 gap-1 text-amber-700 hover:text-amber-900 dark:text-amber-400">
+              <X className="h-3 w-3" />
+              Clear filter
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Series filter banner */}
       {seriesFilter && (
         <div className="flex items-center gap-2 rounded-md border bg-purple-50 px-4 py-2 dark:bg-purple-900/20 dark:text-purple-300">
@@ -239,7 +266,7 @@ export default async function BookingsPage({ searchParams }: Props) {
       <div className="flex flex-wrap gap-2">
         <Link href={view === "list" ? "/admin/bookings" : `/admin/bookings?view=${view}&date=${selectedDate}`}>
           <Badge
-            variant={statusFilter ? "outline-solid" : "default"}
+            variant={!statusFilter ? "default" : "outline-solid"}
             className="cursor-pointer"
           >
             All ({total})
@@ -265,6 +292,15 @@ export default async function BookingsPage({ searchParams }: Props) {
             </Link>
           );
         })}
+        <Link href="/admin/bookings?status=stale">
+          <Badge
+            variant={isStale ? "default" : "outline-solid"}
+            className="cursor-pointer"
+          >
+            <AlertTriangle className="mr-1 h-3 w-3" />
+            Stale ({staleCount})
+          </Badge>
+        </Link>
       </div>
 
       {/* View content */}
@@ -353,11 +389,22 @@ export default async function BookingsPage({ searchParams }: Props) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Link href={`/admin/bookings/${booking.id}`}>
-                            <Button variant="ghost" size="sm">
-                              View
-                            </Button>
-                          </Link>
+                          {isStale ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <StaleQuickActions bookingId={booking.id} />
+                              <Link href={`/admin/bookings/${booking.id}`}>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs">
+                                  View
+                                </Button>
+                              </Link>
+                            </div>
+                          ) : (
+                            <Link href={`/admin/bookings/${booking.id}`}>
+                              <Button variant="ghost" size="sm">
+                                View
+                              </Button>
+                            </Link>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

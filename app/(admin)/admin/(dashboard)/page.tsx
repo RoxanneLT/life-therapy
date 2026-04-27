@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video, ArrowRight } from "lucide-react";
+import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video, ArrowRight, AlertTriangle } from "lucide-react";
+import { MarkAllCompletedButton } from "./mark-all-completed-button";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
@@ -74,6 +75,7 @@ export default async function AdminDashboard({
     allStudentsWithDob,
     bookingsByMonth,
     revenueByMonth,
+    staleSessionCount,
   ] = await Promise.all([
     prisma.student.count({ where: { clientStatus: "active" } }),
     prisma.invoice.aggregate({
@@ -111,6 +113,7 @@ export default async function AdminDashboard({
     }),
     getBookingsByMonth(validYear),
     getRevenueByMonth(validYear),
+    prisma.booking.count({ where: { status: "confirmed", date: { lt: now } } }),
   ]);
 
   // Show next 3 birthdays regardless of timeframe
@@ -164,6 +167,23 @@ export default async function AdminDashboard({
           Here&apos;s what&apos;s happening on your platform today.
         </p>
       </div>
+
+      {/* Stale sessions warning */}
+      {staleSessionCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="flex-1 text-sm font-medium text-amber-800 dark:text-amber-300">
+            {staleSessionCount} past session{staleSessionCount !== 1 ? "s" : ""} still marked as{" "}
+            <em>confirmed</em> — review and update their status.
+          </p>
+          <div className="flex gap-2">
+            <Button asChild size="sm" variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:text-amber-300">
+              <Link href="/admin/bookings?status=stale">Review</Link>
+            </Button>
+            <MarkAllCompletedButton count={staleSessionCount} />
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -873,6 +873,21 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 }
 
 // ────────────────────────────────────────────────────────────
+// Bulk-complete stale (past confirmed) sessions
+// ────────────────────────────────────────────────────────────
+
+export async function markStaleSessionsCompletedAction() {
+  await requireRole("super_admin", "editor");
+  const result = await prisma.booking.updateMany({
+    where: { status: "confirmed", date: { lt: new Date() } },
+    data: { status: "completed" },
+  });
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin");
+  return { count: result.count };
+}
+
+// ────────────────────────────────────────────────────────────
 // Search clients for booking dialog
 // ────────────────────────────────────────────────────────────
 
