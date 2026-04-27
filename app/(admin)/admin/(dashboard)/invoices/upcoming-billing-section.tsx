@@ -24,6 +24,7 @@ export interface UpcomingBooking {
   startTime: string;
   endTime: string;
   priceZarCents: number;
+  priceCurrency: string;
   billingNote: string | null;
   status: string;
   isLateCancel: boolean;
@@ -53,8 +54,16 @@ function applyDiscount(
   return Math.max(0, priceCents - disc);
 }
 
-function fmt(cents: number) {
-  return `R\u00a0${(cents / 100).toLocaleString("en-ZA", {
+const CURRENCY_FMT: Record<string, { symbol: string; locale: string }> = {
+  ZAR: { symbol: "R", locale: "en-ZA" },
+  USD: { symbol: "$", locale: "en-US" },
+  EUR: { symbol: "\u20ac", locale: "en-IE" },
+  GBP: { symbol: "\u00a3", locale: "en-GB" },
+};
+
+function fmt(cents: number, currency = "ZAR") {
+  const { symbol, locale } = CURRENCY_FMT[currency] ?? CURRENCY_FMT.ZAR;
+  return `${symbol}\u00a0${(cents / 100).toLocaleString(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -129,23 +138,20 @@ export function UpcomingBillingSection({
     );
   }
 
-  const grandTotal = groups.reduce((sum, g) => {
-    return (
-      sum +
-      g.bookings.reduce(
-        (s, b) =>
-          s +
-          (b.priceZarCents > 0
-            ? applyDiscount(
-                b.priceZarCents,
-                g.student.standingDiscountPercent,
-                g.student.standingDiscountFixed,
-              )
-            : 0),
-        0,
-      )
-    );
-  }, 0);
+  // Grand totals grouped by currency (can't add EUR + ZAR)
+  const grandTotalByCurrency = new Map<string, number>();
+  for (const g of groups) {
+    for (const b of g.bookings) {
+      if (b.priceZarCents > 0) {
+        const curr = b.priceCurrency || "ZAR";
+        const net = applyDiscount(b.priceZarCents, g.student.standingDiscountPercent, g.student.standingDiscountFixed);
+        grandTotalByCurrency.set(curr, (grandTotalByCurrency.get(curr) ?? 0) + net);
+      }
+    }
+  }
+  const grandTotalsDisplay = [...grandTotalByCurrency.entries()]
+    .map(([curr, total]) => fmt(total, curr))
+    .join(" · ") || fmt(0);
 
   const totalSessions = bookings.length;
   const totalClients = groups.length;
@@ -185,7 +191,7 @@ export function UpcomingBillingSection({
             <ChevronsUpDown className="mr-1 h-3 w-3" />
             {allExpanded ? "Collapse all" : "Expand all"}
           </Button>
-          <span className="font-mono font-bold">Est. {fmt(grandTotal)}</span>
+          <span className="font-mono font-bold">Est. {grandTotalsDisplay}</span>
         </div>
       </div>
 
@@ -193,6 +199,9 @@ export function UpcomingBillingSection({
       {groups.map(({ student, bookings: studentBookings }) => {
         const { standingDiscountPercent: discPct, standingDiscountFixed: discFixed } = student;
         const isOpen = expanded.has(student.id);
+
+        // All bookings for one client share the same currency
+        const clientCurrency = studentBookings.find(b => b.priceZarCents > 0)?.priceCurrency ?? "ZAR";
 
         const subtotal = studentBookings.reduce(
           (s, b) =>
@@ -205,7 +214,7 @@ export function UpcomingBillingSection({
 
         let discountLabel: string | null = null;
         if (discPct) discountLabel = `${discPct}% discount`;
-        else if (discFixed) discountLabel = `${fmt(discFixed)} discount`;
+        else if (discFixed) discountLabel = `${fmt(discFixed, clientCurrency)} discount`;
 
         return (
           <div key={student.id} className="rounded-md border">
@@ -236,7 +245,7 @@ export function UpcomingBillingSection({
                 {discountLabel && (
                   <span className="text-xs text-muted-foreground">{discountLabel}</span>
                 )}
-                <span className="font-mono text-sm font-semibold">{fmt(subtotal)}</span>
+                <span className="font-mono text-sm font-semibold">{fmt(subtotal, clientCurrency)}</span>
               </div>
             </div>
 
@@ -287,7 +296,7 @@ export function UpcomingBillingSection({
                             {b.priceZarCents === 0 ? (
                               <span className="text-xs text-muted-foreground">credit</span>
                             ) : (
-                              fmt(net)
+                              fmt(net, b.priceCurrency || "ZAR")
                             )}
                           </td>
                           <td className="px-2 py-2">

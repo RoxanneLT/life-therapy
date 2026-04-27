@@ -13,7 +13,6 @@ import { Prisma, type Booking, type Student } from "@/lib/generated/prisma/clien
 import { getSiteSettings } from "@/lib/settings";
 import {
   resolveBillingContact,
-  getSessionRate,
   calculateInvoiceTotals,
   getBillingPeriod,
   calculateDueDate,
@@ -136,6 +135,29 @@ function addToGroup(
   groups.get(key)!.entries.push({ student, bookings });
 }
 
+function bookingCurrency(booking: Booking): string {
+  return (booking.priceCurrency as string) || "ZAR";
+}
+
+/** Partition bookings by currency and add each currency slice as its own group. */
+function addBookingsByCurrency(
+  groups: Map<string, PostpaidGroup>,
+  baseKey: string,
+  contact: BillingContact,
+  student: Student,
+  bookings: Booking[],
+) {
+  const byCurrency = new Map<string, Booking[]>();
+  for (const b of bookings) {
+    const curr = bookingCurrency(b);
+    if (!byCurrency.has(curr)) byCurrency.set(curr, []);
+    byCurrency.get(curr)!.push(b);
+  }
+  for (const [curr, currBookings] of byCurrency) {
+    addToGroup(groups, `${baseKey}:${curr}`, contact, student, currBookings);
+  }
+}
+
 async function buildGroupLineItems(
   entries: { student: Student; bookings: Booking[] }[],
 ): Promise<InvoiceLineItem[]> {
@@ -145,10 +167,9 @@ async function buildGroupLineItems(
       // Skip credit-paid bookings (priceZarCents = 0 means a session credit was used)
       if (booking.priceZarCents === 0) continue;
 
-      const rate = await getSessionRate(
-        booking.sessionType as "individual" | "couples" | "free_consultation",
-        "ZAR",
-      );
+      // Use the booking's stored price — the amount in the booking's currency
+      // that the client agreed to at booking time.
+      const rate = booking.priceZarCents;
       lineItems.push(
         buildLineItemFromBooking(booking, rate, student, student.standingDiscountPercent, student.standingDiscountFixed),
       );
@@ -171,15 +192,16 @@ async function createGroupPaymentRequest(
   // to the payment request and aren't picked up again next month
   const allBookingIds = group.entries.flatMap(e => e.bookings.map(b => b.id));
 
-  // If no billable line items, just mark the credit-paid bookings as processed
   if (lineItems.length === 0) {
-    if (allBookingIds.length > 0) {
-      // Create a dummy "no charge" marker — just link bookings without a PR
-      // Actually, set a dummy paymentRequestId? No — better to set invoiceId to a sentinel.
-      // Simplest: just return null, these bookings will be picked up but produce no PR.
-    }
     return null;
   }
+
+  // All bookings in a group share the same currency (enforced by addBookingsByCurrency)
+  const currency = (group.entries[0]?.bookings[0]?.priceCurrency as string) || "ZAR";
+
+  // Append currency to billingMonth for non-ZAR so the [studentId, billingMonth] unique
+  // constraint doesn't conflict when a client somehow has bookings in two currencies.
+  const prBillingMonth = currency === "ZAR" ? billingMonth : `${billingMonth}-${currency}`;
 
   const lineCalcs = lineItems.map((li) => ({
     unitPriceCents: li.unitPriceCents,
@@ -188,8 +210,9 @@ async function createGroupPaymentRequest(
     lineDiscountCents: li.discountCents || undefined,
   }));
 
-  const isVat = settings.vatRegistered;
-  const vatPercent = isVat ? settings.vatPercent : 0;
+  // International currencies are VAT zero-rated (exported services)
+  const isVat = currency === "ZAR" ? settings.vatRegistered : false;
+  const vatPercent = isVat ? (settings.vatPercent ?? 0) : 0;
   const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
 
   try {
@@ -197,10 +220,10 @@ async function createGroupPaymentRequest(
       data: {
         studentId: group.contact.type === "corporate" ? undefined : group.contact.studentId,
         billingEntityId: group.contact.billingEntityId,
-        billingMonth,
+        billingMonth: prBillingMonth,
         periodStart,
         periodEnd,
-        currency: "ZAR",
+        currency,
         subtotalCents: totals.subtotalCents,
         discountCents: totals.discountCents,
         vatAmountCents: totals.vatAmountCents,
@@ -222,7 +245,7 @@ async function createGroupPaymentRequest(
     return pr;
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.log(`Payment request already exists for ${billingMonth} — skipping`);
+      console.log(`Payment request already exists for ${prBillingMonth} — skipping`);
       return null;
     }
     throw err;
@@ -235,6 +258,9 @@ async function createGroupPaymentRequest(
  * Bookings are partitioned by session type (individual vs couples) and
  * billing contacts are resolved per type. When both types resolve to the
  * same payer, they're merged into a single payment request.
+ *
+ * Bookings are further partitioned by currency — a client with EUR bookings
+ * gets a EUR payment request; ZAR clients are unaffected.
  *
  * @param billingDate - The date to bill for (typically today or the billing day)
  * @returns Array of created PaymentRequest records
@@ -261,7 +287,7 @@ export async function generateMonthlyPaymentRequests(
 
   if (postpaidStudents.length === 0) return [];
 
-  // 2. Group by billing contact, partitioning by session type
+  // 2. Group by billing contact, partitioning by session type and currency
   const groups = new Map<string, PostpaidGroup>();
 
   for (const student of postpaidStudents) {
@@ -279,18 +305,15 @@ export async function generateMonthlyPaymentRequests(
       ? await resolveBillingContact(student.id, "couples")
       : null;
 
-    // If both resolve to same payer, merge into one group
+    // If both resolve to same payer, merge into one group (still split by currency)
     if (indivContact && couplesContact && isSameContact(indivContact, couplesContact)) {
-      const key = contactKey(indivContact);
-      addToGroup(groups, key, indivContact, student, bookings);
+      addBookingsByCurrency(groups, contactKey(indivContact), indivContact, student, bookings);
     } else {
       if (indivContact && indivBookings.length > 0) {
-        const key = `${contactKey(indivContact)}:individual`;
-        addToGroup(groups, key, indivContact, student, indivBookings);
+        addBookingsByCurrency(groups, `${contactKey(indivContact)}:individual`, indivContact, student, indivBookings);
       }
       if (couplesContact && couplesBookings.length > 0) {
-        const key = `${contactKey(couplesContact)}:couples`;
-        addToGroup(groups, key, couplesContact, student, couplesBookings);
+        addBookingsByCurrency(groups, `${contactKey(couplesContact)}:couples`, couplesContact, student, couplesBookings);
       }
     }
   }
