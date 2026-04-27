@@ -156,24 +156,48 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     </table>`,
     total: "R1,700.00",
     dueDate: "28 February 2026",
-    paymentUrl: "https://paystack.com/pay/sample",
+    bankingDetails: `<div style="background: #f8faf8; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #e5e7eb;">
+      <p style="margin: 0 0 8px; font-weight: 600; color: #333;">EFT Payment Details</p>
+      <table style="width: 100%; font-size: 14px;">
+        <tr><td style="padding: 2px 0; color: #6b7280; width: 120px;">Account Holder</td><td style="padding: 2px 0; font-weight: 500;">Life Therapy PTY Ltd</td></tr>
+        <tr><td style="padding: 2px 0; color: #6b7280;">Bank</td><td style="padding: 2px 0; font-weight: 500;">First National Bank</td></tr>
+        <tr><td style="padding: 2px 0; color: #6b7280;">Account Number</td><td style="padding: 2px 0; font-weight: 500;">1234567890</td></tr>
+        <tr><td style="padding: 2px 0; color: #6b7280;">Branch Code</td><td style="padding: 2px 0; font-weight: 500;">250655</td></tr>
+      </table>
+    </div>`,
+    paymentReference: "LT-2026-02-JD",
   },
   payment_request_reminder: {
     billingName: "Jane Doe",
+    month: "February 2026",
+    sessionSummary: `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">
+      <tr><td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">Individual Session — 3 Feb 2026, 10:00–11:00</td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb;">R850.00</td></tr>
+      <tr><td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">Individual Session — 10 Feb 2026, 10:00–11:00</td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb;">R850.00</td></tr>
+    </table>`,
     total: "R1,700.00",
     dueDate: "28 February 2026",
-    paymentUrl: "https://paystack.com/pay/sample",
+    bankingDetails: `<div style="background: #f8faf8; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #e5e7eb;"><p style="margin: 0 0 8px; font-weight: 600; color: #333;">EFT Payment Details</p><table style="width: 100%; font-size: 14px;"><tr><td style="color: #6b7280;">Bank</td><td>First National Bank</td></tr><tr><td style="color: #6b7280;">Account</td><td>1234567890</td></tr></table></div>`,
+    paymentReference: "LT-2026-02-JD",
   },
   payment_request_due_today: {
     billingName: "Jane Doe",
-    total: "R1,700.00",
-    paymentUrl: "https://paystack.com/pay/sample",
+    month: "February 2026",
+    sessionSummary: `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">
+      <tr><td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">Individual Session — 3 Feb 2026, 10:00–11:00</td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb;">R850.00</td></tr>
+    </table>`,
+    total: "R850.00",
+    bankingDetails: `<div style="background: #f8faf8; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #e5e7eb;"><p style="margin: 0 0 8px; font-weight: 600; color: #333;">EFT Payment Details</p><table style="width: 100%; font-size: 14px;"><tr><td style="color: #6b7280;">Bank</td><td>First National Bank</td></tr><tr><td style="color: #6b7280;">Account</td><td>1234567890</td></tr></table></div>`,
+    paymentReference: "LT-2026-02-JD",
   },
   payment_request_overdue: {
     billingName: "Jane Doe",
     month: "February 2026",
-    total: "R1,700.00",
-    paymentUrl: "https://paystack.com/pay/sample",
+    sessionSummary: `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">
+      <tr><td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">Individual Session — 3 Feb 2026, 10:00–11:00</td><td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb;">R850.00</td></tr>
+    </table>`,
+    total: "R850.00",
+    bankingDetails: `<div style="background: #f8faf8; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #e5e7eb;"><p style="margin: 0 0 8px; font-weight: 600; color: #333;">EFT Payment Details</p><table style="width: 100%; font-size: 14px;"><tr><td style="color: #6b7280;">Bank</td><td>First National Bank</td></tr><tr><td style="color: #6b7280;">Account</td><td>1234567890</td></tr></table></div>`,
+    paymentReference: "LT-2026-02-JD",
   },
   relationship_invite: {
     fromName: "Jane Doe",
@@ -532,15 +556,15 @@ function renderFallback(
         html: bt(
           "Payment Request",
           `<p>Hi ${variables.billingName || ""},</p>
-          <p>Here is a summary of sessions for <strong>${variables.month || ""}</strong>:</p>
+          <p>Here is a summary of your sessions for <strong>${variables.month || ""}</strong>:</p>
           ${variables.sessionSummary || ""}
           <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
             <p style="margin: 4px 0;"><strong>Total Due:</strong> ${variables.total || ""}</p>
             <p style="margin: 4px 0;"><strong>Due Date:</strong> ${variables.dueDate || ""}</p>
+            <p style="margin: 4px 0;"><strong>Payment Reference:</strong> ${variables.paymentReference || ""}</p>
           </div>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
-          </div>
+          ${variables.bankingDetails || ""}
+          <p style="font-size: 13px; color: #6b7280;">A detailed pro-forma invoice is attached to this email for your records.</p>
           <p>If you have any questions, please reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
@@ -552,9 +576,12 @@ function renderFallback(
           "Payment Reminder",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>Just a friendly reminder that your payment of <strong>${variables.total || ""}</strong> is due on <strong>${variables.dueDate || ""}</strong>.</p>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          ${variables.sessionSummary || ""}
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Payment Reference:</strong> ${variables.paymentReference || ""}</p>
           </div>
+          ${variables.bankingDetails || ""}
+          <p style="font-size: 13px; color: #6b7280;">The pro-forma invoice is attached for your convenience.</p>
           <p>If you&rsquo;ve already made payment, please disregard this message.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
@@ -566,9 +593,12 @@ function renderFallback(
           "Payment Due Today",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>This is a reminder that your payment of <strong>${variables.total || ""}</strong> is <strong>due today</strong>.</p>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          ${variables.sessionSummary || ""}
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Payment Reference:</strong> ${variables.paymentReference || ""}</p>
           </div>
+          ${variables.bankingDetails || ""}
+          <p style="font-size: 13px; color: #6b7280;">The pro-forma invoice is attached for your convenience.</p>
           <p>If you&rsquo;ve already made payment, please disregard this message.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
@@ -580,10 +610,13 @@ function renderFallback(
           "Payment Overdue",
           `<p>Hi ${variables.billingName || ""},</p>
           <p>We notice that your payment of <strong>${variables.total || ""}</strong> for <strong>${variables.month || ""}</strong> is now overdue.</p>
-          <p>Please arrange payment at your earliest convenience:</p>
-          <div style="text-align: center; margin: 24px 0;">
-            <a href="${variables.paymentUrl || "#"}" style="display: inline-block; background: #dc2626; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+          ${variables.sessionSummary || ""}
+          <p>Please arrange payment at your earliest convenience using the details below:</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Payment Reference:</strong> ${variables.paymentReference || ""}</p>
           </div>
+          ${variables.bankingDetails || ""}
+          <p style="font-size: 13px; color: #6b7280;">The pro-forma invoice is attached for your records.</p>
           <p>If you&rsquo;ve already made payment or have any questions, please reply to this email.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),

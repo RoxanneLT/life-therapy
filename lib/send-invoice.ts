@@ -9,6 +9,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { getSiteSettings } from "@/lib/settings";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
@@ -72,6 +73,37 @@ function buildProformaFilename(billingName: string, periodEnd: Date): string {
     .toUpperCase()
     .slice(0, 3);
   return `ProForma_${monthLabel}_${initials}.pdf`;
+}
+
+async function getBankingDetailsHtml(): Promise<string> {
+  const settings = await getSiteSettings();
+  const bank = settings.bankName;
+  const holder = settings.bankAccountHolder;
+  const account = settings.bankAccountNumber;
+  const branch = settings.bankBranchCode;
+
+  if (!bank || !account) return "";
+
+  return `
+    <div style="background: #f8faf8; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #e5e7eb;">
+      <p style="margin: 0 0 8px; font-weight: 600; color: #333;">EFT Payment Details</p>
+      <table style="width: 100%; font-size: 14px;">
+        ${holder ? `<tr><td style="padding: 2px 0; color: #6b7280; width: 120px;">Account Holder</td><td style="padding: 2px 0; font-weight: 500;">${holder}</td></tr>` : ""}
+        <tr><td style="padding: 2px 0; color: #6b7280;">Bank</td><td style="padding: 2px 0; font-weight: 500;">${bank}</td></tr>
+        <tr><td style="padding: 2px 0; color: #6b7280;">Account Number</td><td style="padding: 2px 0; font-weight: 500;">${account}</td></tr>
+        ${branch ? `<tr><td style="padding: 2px 0; color: #6b7280;">Branch Code</td><td style="padding: 2px 0; font-weight: 500;">${branch}</td></tr>` : ""}
+      </table>
+    </div>`;
+}
+
+function buildPaymentReference(billingMonth: string, billingName: string): string {
+  const initials = billingName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 3);
+  return `LT-${billingMonth}-${initials}`;
 }
 
 // ─── Send Invoice Email ──────────────────────────────────────
@@ -171,7 +203,8 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
     sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
     total: fmt(pr.totalCents, pr.currency),
     dueDate: fmtDate(pr.dueDate),
-    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+    bankingDetails: await getBankingDetailsHtml(),
+    paymentReference: buildPaymentReference(pr.billingMonth, billingName),
   });
 
   await sendEmail({
@@ -233,14 +266,20 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
 
   if (!to) return;
 
+  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
+
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
   const { subject, html } = await renderEmail("payment_request_reminder", {
     billingName,
+    month: monthLabel,
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
     total: fmt(pr.totalCents, pr.currency),
     dueDate: fmtDate(pr.dueDate),
-    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+    bankingDetails: await getBankingDetailsHtml(),
+    paymentReference: buildPaymentReference(pr.billingMonth, billingName),
   });
 
   await sendEmail({
@@ -293,13 +332,19 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
 
   if (!to) return;
 
+  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
+
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
   const { subject, html } = await renderEmail("payment_request_due_today", {
     billingName,
+    month: monthLabel,
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
     total: fmt(pr.totalCents, pr.currency),
-    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+    bankingDetails: await getBankingDetailsHtml(),
+    paymentReference: buildPaymentReference(pr.billingMonth, billingName),
   });
 
   await sendEmail({
@@ -355,14 +400,18 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
 
   if (!to) return;
 
+  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
   const { subject, html } = await renderEmail("payment_request_overdue", {
     billingName,
     month: monthLabel,
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
     total: fmt(pr.totalCents, pr.currency),
-    paymentUrl: pr.paymentUrl || `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+    bankingDetails: await getBankingDetailsHtml(),
+    paymentReference: buildPaymentReference(pr.billingMonth, billingName),
   });
 
   await sendEmail({

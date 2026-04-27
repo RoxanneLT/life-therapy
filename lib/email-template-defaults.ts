@@ -295,15 +295,15 @@ const defaults: Record<string, TemplateDefault> = {
   payment_request: {
     subject: "Your Life Therapy sessions for {{month}}",
     bodyHtml: `<p>Hi {{billingName}},</p>
-<p>Here is a summary of sessions for <strong>{{month}}</strong>:</p>
+<p>Here is a summary of your sessions for <strong>{{month}}</strong>:</p>
 {{sessionSummary}}
 <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
   <p style="margin: 4px 0;"><strong>Total Due:</strong> {{total}}</p>
   <p style="margin: 4px 0;"><strong>Due Date:</strong> {{dueDate}}</p>
+  <p style="margin: 4px 0;"><strong>Payment Reference:</strong> {{paymentReference}}</p>
 </div>
-<div style="text-align: center; margin: 24px 0;">
-  <a href="{{paymentUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
-</div>
+{{bankingDetails}}
+<p style="font-size: 13px; color: #6b7280;">A detailed pro-forma invoice is attached to this email for your records.</p>
 <p>If you have any questions, please reply to this email.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
@@ -311,9 +311,12 @@ const defaults: Record<string, TemplateDefault> = {
     subject: "Friendly reminder — payment due {{dueDate}}",
     bodyHtml: `<p>Hi {{billingName}},</p>
 <p>Just a friendly reminder that your payment of <strong>{{total}}</strong> is due on <strong>{{dueDate}}</strong>.</p>
-<div style="text-align: center; margin: 24px 0;">
-  <a href="{{paymentUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+{{sessionSummary}}
+<div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+  <p style="margin: 4px 0;"><strong>Payment Reference:</strong> {{paymentReference}}</p>
 </div>
+{{bankingDetails}}
+<p style="font-size: 13px; color: #6b7280;">The pro-forma invoice is attached for your convenience.</p>
 <p>If you&rsquo;ve already made payment, please disregard this message.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
@@ -321,9 +324,12 @@ const defaults: Record<string, TemplateDefault> = {
     subject: "Payment due today — Life Therapy",
     bodyHtml: `<p>Hi {{billingName}},</p>
 <p>This is a reminder that your payment of <strong>{{total}}</strong> is <strong>due today</strong>.</p>
-<div style="text-align: center; margin: 24px 0;">
-  <a href="{{paymentUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+{{sessionSummary}}
+<div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+  <p style="margin: 4px 0;"><strong>Payment Reference:</strong> {{paymentReference}}</p>
 </div>
+{{bankingDetails}}
+<p style="font-size: 13px; color: #6b7280;">The pro-forma invoice is attached for your convenience.</p>
 <p>If you&rsquo;ve already made payment, please disregard this message.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
@@ -331,10 +337,13 @@ const defaults: Record<string, TemplateDefault> = {
     subject: "Payment overdue — Life Therapy {{month}}",
     bodyHtml: `<p>Hi {{billingName}},</p>
 <p>We notice that your payment of <strong>{{total}}</strong> for <strong>{{month}}</strong> is now overdue.</p>
-<p>Please arrange payment at your earliest convenience:</p>
-<div style="text-align: center; margin: 24px 0;">
-  <a href="{{paymentUrl}}" style="display: inline-block; background: #dc2626; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Pay Now</a>
+{{sessionSummary}}
+<p>Please arrange payment at your earliest convenience using the details below:</p>
+<div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+  <p style="margin: 4px 0;"><strong>Payment Reference:</strong> {{paymentReference}}</p>
 </div>
+{{bankingDetails}}
+<p style="font-size: 13px; color: #6b7280;">The pro-forma invoice is attached for your records.</p>
 <p>If you&rsquo;ve already made payment or have any questions, please reply to this email.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
