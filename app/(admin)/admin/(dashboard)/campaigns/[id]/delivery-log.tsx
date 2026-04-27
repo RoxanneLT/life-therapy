@@ -21,11 +21,11 @@ interface LogEntry {
   to: string;
   status: string;
   templateKey: string | null;
-  openedAt: Date | null;
+  openedAt: string | null;
   opensCount: number;
-  clickedAt: Date | null;
+  clickedAt: string | null;
   clicksCount: number;
-  sentAt: Date;
+  sentAt: string;
   error: string | null;
 }
 

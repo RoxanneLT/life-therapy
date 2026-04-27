@@ -472,11 +472,11 @@ export default async function CampaignDetailPage({
               to: l.to,
               status: l.status,
               templateKey: l.templateKey,
-              openedAt: l.openedAt,
+              openedAt: l.openedAt?.toISOString() ?? null,
               opensCount: l.opensCount,
-              clickedAt: l.clickedAt,
+              clickedAt: l.clickedAt?.toISOString() ?? null,
               clicksCount: l.clicksCount,
-              sentAt: l.sentAt,
+              sentAt: l.sentAt.toISOString(),
               error: l.error,
             }))}
             isMultiStep={campaign.isMultiStep}
