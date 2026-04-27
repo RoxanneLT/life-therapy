@@ -150,7 +150,7 @@ export async function adminCancelBookingAction(
       status: "cancelled",
       cancelledAt: new Date(),
       cancelledBy: "admin",
-      isLateCancel: !refundCredit,
+      isLateCancel: false,
       creditRefunded: refundCredit,
     },
   });
