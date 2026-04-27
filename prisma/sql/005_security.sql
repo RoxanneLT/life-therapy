@@ -1,9 +1,12 @@
 -- =============================================================================
--- Enable RLS + deny-all policies on ALL tables in public schema
+-- 005: Security — Row Level Security (RLS)
 -- =============================================================================
--- Dynamic: automatically covers every table (existing + future).
 -- Idempotent: safe to run multiple times (skips existing policies).
--- Service_role (used by Prisma) bypasses RLS — app is unaffected.
+-- Dynamic: automatically covers every table in public schema (existing + future).
+-- Service_role (used by Prisma/server) bypasses RLS — app is unaffected.
+--
+-- Run this LAST, after all other migration files have been applied.
+-- Re-run whenever new tables are added.
 -- =============================================================================
 
 DO $$

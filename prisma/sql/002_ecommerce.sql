@@ -1,11 +1,102 @@
 -- =============================================================================
--- Migration: Digital Products + Pick-Your-Own Packages
+-- 002: E-Commerce — Sellable Modules + Digital Products + Packages
 -- =============================================================================
--- Run in Supabase SQL Editor. Idempotent (safe to run multiple times).
--- Run enable-rls.sql after this to cover new tables.
+-- Idempotent: safe to run multiple times.
+-- Covers: module_access, standalone module columns, digital_products,
+--         digital_product_access, hybrid_package slot columns,
+--         and seed data for digital products and pick-your-own packages.
 -- =============================================================================
 
--- 1. NEW TABLE: digital_products
+-- ─── NEW TABLE: module_access ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.module_access (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "studentId" TEXT NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  "moduleId" TEXT NOT NULL REFERENCES public.modules(id) ON DELETE CASCADE,
+  "courseId" TEXT NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  "orderId" TEXT,
+  "pricePaid" INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'purchase',
+  "grantedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT module_access_student_module_unique UNIQUE ("studentId", "moduleId")
+);
+
+CREATE INDEX IF NOT EXISTS module_access_studentId_idx ON public.module_access ("studentId");
+CREATE INDEX IF NOT EXISTS module_access_moduleId_idx ON public.module_access ("moduleId");
+
+-- ─── ALTER TABLE: courses ──────────────────────────────────────────────────
+
+ALTER TABLE public.courses
+  ADD COLUMN IF NOT EXISTS "previewVideoUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "facilitatorScript" TEXT,
+  ADD COLUMN IF NOT EXISTS "relatedCourseIds" JSONB;
+
+-- ─── ALTER TABLE: modules ──────────────────────────────────────────────────
+
+ALTER TABLE public.modules
+  ADD COLUMN IF NOT EXISTS "standaloneSlug" TEXT,
+  ADD COLUMN IF NOT EXISTS "standaloneTitle" TEXT,
+  ADD COLUMN IF NOT EXISTS "standaloneDescription" TEXT,
+  ADD COLUMN IF NOT EXISTS "standaloneImageUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "standalonePrice" INTEGER,
+  ADD COLUMN IF NOT EXISTS "isStandalonePublished" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "standaloneCategory" TEXT,
+  ADD COLUMN IF NOT EXISTS "previewVideoUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "facilitatorScript" TEXT;
+
+-- Unique index on standaloneSlug (only non-null values)
+CREATE UNIQUE INDEX IF NOT EXISTS modules_standaloneSlug_unique
+  ON public.modules ("standaloneSlug")
+  WHERE "standaloneSlug" IS NOT NULL;
+
+-- ─── ALTER TABLE: lectures ─────────────────────────────────────────────────
+
+ALTER TABLE public.lectures
+  ADD COLUMN IF NOT EXISTS context TEXT NOT NULL DEFAULT 'both';
+
+-- ─── ALTER TABLE: cart_items ───────────────────────────────────────────────
+
+ALTER TABLE public.cart_items
+  ADD COLUMN IF NOT EXISTS "moduleId" TEXT;
+
+-- ─── ALTER TABLE: order_items ──────────────────────────────────────────────
+
+ALTER TABLE public.order_items
+  ADD COLUMN IF NOT EXISTS "moduleId" TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'order_items_moduleId_fkey'
+      AND table_name = 'order_items'
+  ) THEN
+    ALTER TABLE public.order_items
+      ADD CONSTRAINT "order_items_moduleId_fkey"
+      FOREIGN KEY ("moduleId") REFERENCES public.modules(id);
+  END IF;
+END $$;
+
+-- ─── ALTER TABLE: gifts ────────────────────────────────────────────────────
+
+ALTER TABLE public.gifts
+  ADD COLUMN IF NOT EXISTS "moduleId" TEXT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'gifts_moduleId_fkey'
+      AND table_name = 'gifts'
+  ) THEN
+    ALTER TABLE public.gifts
+      ADD CONSTRAINT "gifts_moduleId_fkey"
+      FOREIGN KEY ("moduleId") REFERENCES public.modules(id);
+  END IF;
+END $$;
+
+-- ─── NEW TABLE: digital_products ───────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS public.digital_products (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   title TEXT NOT NULL,
@@ -26,7 +117,6 @@ CREATE TABLE IF NOT EXISTS public.digital_products (
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Add unique constraint on slug if not exists
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -36,7 +126,8 @@ BEGIN
   END IF;
 END $$;
 
--- 2. NEW TABLE: digital_product_access
+-- ─── NEW TABLE: digital_product_access ─────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS public.digital_product_access (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   "studentId" TEXT NOT NULL,
@@ -46,7 +137,6 @@ CREATE TABLE IF NOT EXISTS public.digital_product_access (
   "grantedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Add foreign keys
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -73,7 +163,6 @@ BEGIN
   END IF;
 END $$;
 
--- Add unique constraint + indexes
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -87,7 +176,8 @@ END $$;
 CREATE INDEX IF NOT EXISTS dpa_studentId_idx ON public.digital_product_access ("studentId");
 CREATE INDEX IF NOT EXISTS dpa_digitalProductId_idx ON public.digital_product_access ("digitalProductId");
 
--- 3. ALTER hybrid_packages: add slot columns
+-- ─── ALTER hybrid_packages: slot columns ───────────────────────────────────
+
 ALTER TABLE public.hybrid_packages
   ADD COLUMN IF NOT EXISTS "courseSlots" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE public.hybrid_packages
@@ -111,7 +201,8 @@ BEGIN
   END IF;
 END $$;
 
--- 4. ALTER cart_items: add digitalProductId + packageSelections
+-- ─── ALTER cart_items and order_items: digital product columns ──────────────
+
 ALTER TABLE public.cart_items
   ADD COLUMN IF NOT EXISTS "digitalProductId" TEXT;
 ALTER TABLE public.cart_items
@@ -130,7 +221,6 @@ BEGIN
   END IF;
 END $$;
 
--- 5. ALTER order_items: add digitalProductId + packageSelections
 ALTER TABLE public.order_items
   ADD COLUMN IF NOT EXISTS "digitalProductId" TEXT;
 ALTER TABLE public.order_items
@@ -149,7 +239,8 @@ BEGIN
   END IF;
 END $$;
 
--- 6. ALTER gifts: add digitalProductId + packageSelections
+-- ─── ALTER gifts: digital product columns ──────────────────────────────────
+
 ALTER TABLE public.gifts
   ADD COLUMN IF NOT EXISTS "digitalProductId" TEXT;
 ALTER TABLE public.gifts
@@ -169,18 +260,9 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- 7. DROP old join table + documentUrl (uncomment when ready)
--- =============================================================================
--- Run these AFTER confirming the slot migration worked and all code is updated:
---
--- DROP TABLE IF EXISTS public.hybrid_package_courses;
--- ALTER TABLE public.hybrid_packages DROP COLUMN IF EXISTS "documentUrl";
-
--- =============================================================================
--- 8. SEED DATA: 5 Digital Products + 3 Pick-Your-Own Packages
+-- SEED: 5 Digital Products
 -- =============================================================================
 
--- Digital Products (use placeholder file URLs)
 INSERT INTO public.digital_products (id, title, slug, description, "fileUrl", "fileName", "priceCents", "priceCentsUsd", "priceCentsEur", "priceCentsGbp", category, "isPublished", "sortOrder", "createdAt", "updatedAt")
 VALUES
   ('dp_self_esteem_workbook', 'Self-Esteem Workbook', 'self-esteem-workbook',
@@ -209,7 +291,10 @@ VALUES
    4900, 299, 279, 249, 'cheat_sheet', true, 4, now(), now())
 ON CONFLICT (slug) DO NOTHING;
 
--- Pick-Your-Own Packages (replace/seed alongside existing packages)
+-- =============================================================================
+-- SEED: 3 Pick-Your-Own Packages
+-- =============================================================================
+
 INSERT INTO public.hybrid_packages (id, title, slug, description, "priceCents", "priceCentsUsd", "priceCentsEur", "priceCentsGbp", credits, "courseSlots", "digitalProductSlots", "isPublished", "sortOrder", "createdAt", "updatedAt")
 VALUES
   ('pkg_starter', 'Starter Bundle', 'starter-bundle',

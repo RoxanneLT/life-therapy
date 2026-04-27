@@ -7,7 +7,7 @@ import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.online";
+  process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
 
 interface ResetState {
   error?: string;
@@ -110,7 +110,7 @@ export async function requestPasswordResetAction(
     }
 
     // Build URL pointing directly to our /auth/callback (bypasses Supabase redirect)
-    const actionLink = `${BASE_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
+    const actionLink = `${BASE_URL}/auth/callback?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery&next=/reset-password`;
 
     // Step 4: Render and send email via Resend
     console.log(`[password-reset] Sending reset email to ${email}`);

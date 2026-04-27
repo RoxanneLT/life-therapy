@@ -313,3 +313,34 @@ export async function exportInvoicesCsvAction(
 
   return csv;
 }
+
+// ────────────────────────────────────────────────────────────
+// Upcoming billing: exclude / cancel sessions
+// ────────────────────────────────────────────────────────────
+
+export async function excludeFromBillingAction(bookingId: string) {
+  await requireRole("super_admin", "editor");
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      billingNote: "(excluded from billing — admin override)",
+      priceZarCents: 0,
+    },
+  });
+
+  revalidatePath("/admin/invoices");
+  return { success: true };
+}
+
+export async function cancelBookingFromBillingAction(bookingId: string) {
+  await requireRole("super_admin", "editor");
+
+  const { updateBookingStatus } = await import(
+    "@/app/(admin)/admin/(dashboard)/bookings/actions"
+  );
+  await updateBookingStatus(bookingId, "cancelled");
+
+  revalidatePath("/admin/invoices");
+  return { success: true };
+}

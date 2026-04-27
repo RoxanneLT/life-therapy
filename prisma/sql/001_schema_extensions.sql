@@ -1,10 +1,16 @@
--- Multi-Region & Multi-Currency Migration
--- Run in Supabase SQL Editor
--- Idempotent: safe to run multiple times
+-- =============================================================================
+-- 001: Schema Extensions — Multi-Region, Recurring Bookings, Patch Columns
+-- =============================================================================
+-- Idempotent: safe to run multiple times.
+-- Covers: international price columns, recurring booking fields,
+--         and miscellaneous column patches added after initial schema push.
+-- =============================================================================
 
 -- ============================================================
--- Course: international price columns
+-- Multi-Region & Multi-Currency
 -- ============================================================
+
+-- Course: international price columns
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'courses' AND column_name = 'priceUsd') THEN
     ALTER TABLE courses ADD COLUMN "priceUsd" INTEGER;
@@ -17,9 +23,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ============================================================
 -- Module: international standalone price columns
--- ============================================================
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'modules' AND column_name = 'standalonePriceUsd') THEN
     ALTER TABLE modules ADD COLUMN "standalonePriceUsd" INTEGER;
@@ -32,9 +36,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ============================================================
 -- HybridPackage: international price columns
--- ============================================================
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'hybrid_packages' AND column_name = 'priceCentsUsd') THEN
     ALTER TABLE hybrid_packages ADD COLUMN "priceCentsUsd" INTEGER;
@@ -47,9 +49,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ============================================================
 -- SiteSetting: session pricing (all currencies)
--- ============================================================
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'sessionPriceIndividualZar') THEN
     ALTER TABLE site_settings ADD COLUMN "sessionPriceIndividualZar" INTEGER DEFAULT 85000;
@@ -77,18 +77,14 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ============================================================
 -- Booking: priceCurrency column
--- ============================================================
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'priceCurrency') THEN
     ALTER TABLE bookings ADD COLUMN "priceCurrency" TEXT NOT NULL DEFAULT 'ZAR';
   END IF;
 END $$;
 
--- ============================================================
 -- SessionCreditPack: international price columns
--- ============================================================
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'session_credit_packs' AND column_name = 'priceCentsUsd') THEN
     ALTER TABLE session_credit_packs ADD COLUMN "priceCentsUsd" INTEGER;
@@ -101,10 +97,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- ============================================================
 -- Seed default international prices for existing data
--- ============================================================
-
 -- Full courses: $24.99 / €22.99 / £19.99
 UPDATE courses SET
   "priceUsd" = 2499,
@@ -119,5 +112,62 @@ UPDATE modules SET
   "standalonePriceGbp" = 399
 WHERE "standalonePriceUsd" IS NULL AND "isStandalonePublished" = true;
 
--- Re-run RLS after adding columns
--- (columns don't need separate RLS, but re-run if you added new tables)
+-- ============================================================
+-- Recurring Booking Fields
+-- ============================================================
+
+ALTER TABLE "bookings" ADD COLUMN IF NOT EXISTS "recurringSeriesId" TEXT;
+ALTER TABLE "bookings" ADD COLUMN IF NOT EXISTS "recurringPattern" TEXT;
+CREATE INDEX IF NOT EXISTS "bookings_recurringSeriesId_idx" ON "bookings" ("recurringSeriesId");
+
+-- ============================================================
+-- Patch: Missing Columns (post-initial-schema)
+-- ============================================================
+
+-- COUPONS: packageIds, maxUsesPerUser, minOrderCents
+ALTER TABLE public.coupons
+  ADD COLUMN IF NOT EXISTS "packageIds" JSONB;
+
+ALTER TABLE public.coupons
+  ADD COLUMN IF NOT EXISTS "maxUsesPerUser" INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE public.coupons
+  ADD COLUMN IF NOT EXISTS "minOrderCents" INTEGER;
+
+-- COUPONS: Multi-currency values for fixed_amount coupons
+ALTER TABLE public.coupons
+  ADD COLUMN IF NOT EXISTS "valueUsd" INTEGER;
+ALTER TABLE public.coupons
+  ADD COLUMN IF NOT EXISTS "valueEur" INTEGER;
+ALTER TABLE public.coupons
+  ADD COLUMN IF NOT EXISTS "valueGbp" INTEGER;
+
+-- ORDERS: refundedAt
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS "refundedAt" TIMESTAMPTZ;
+
+-- GIFTS: redeemToken, redeemedAt
+ALTER TABLE public.gifts
+  ADD COLUMN IF NOT EXISTS "redeemedAt" TIMESTAMPTZ;
+
+ALTER TABLE public.gifts
+  ADD COLUMN IF NOT EXISTS "redeemToken" TEXT;
+
+-- Set default for redeemToken on rows that don't have one
+UPDATE public.gifts
+SET "redeemToken" = gen_random_uuid()::text
+WHERE "redeemToken" IS NULL;
+
+-- Add unique constraint on redeemToken if not exists
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE indexname = 'gifts_redeemToken_key'
+  ) THEN
+    ALTER TABLE public.gifts ADD CONSTRAINT "gifts_redeemToken_key" UNIQUE ("redeemToken");
+  END IF;
+END $$;
+
+-- HYBRID_PACKAGES: credits
+ALTER TABLE public.hybrid_packages
+  ADD COLUMN IF NOT EXISTS credits INTEGER NOT NULL DEFAULT 0;
