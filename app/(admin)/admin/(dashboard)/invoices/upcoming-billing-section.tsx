@@ -19,7 +19,7 @@ import { toast } from "sonner";
 
 export interface UpcomingBooking {
   id: string;
-  date: Date;
+  date: string;
   sessionType: string;
   startTime: string;
   endTime: string;
@@ -39,8 +39,8 @@ export interface UpcomingBooking {
 
 interface UpcomingBillingSectionProps {
   readonly bookings: UpcomingBooking[];
-  readonly periodStart: Date;
-  readonly periodEnd: Date;
+  readonly periodStart: string;
+  readonly periodEnd: string;
 }
 
 function applyDiscount(

@@ -198,9 +198,27 @@ export default async function InvoicesPage({
         orderBy: [{ student: { firstName: "asc" } }, { date: "asc" }],
       })
     : [];
-  const upcomingBookings = upcomingBookingsRaw.filter(
-    (b): b is typeof b & { student: NonNullable<(typeof b)["student"]> } => b.student !== null,
-  ) satisfies UpcomingBooking[];
+  const upcomingBookings: UpcomingBooking[] = upcomingBookingsRaw
+    .filter((b): b is typeof b & { student: NonNullable<(typeof b)["student"]> } => b.student !== null)
+    .map((b) => ({
+      id: b.id,
+      date: b.date.toISOString(),
+      sessionType: b.sessionType,
+      startTime: b.startTime,
+      endTime: b.endTime,
+      priceZarCents: b.priceZarCents,
+      priceCurrency: (b.priceCurrency as string) ?? "ZAR",
+      billingNote: b.billingNote,
+      status: b.status,
+      isLateCancel: b.isLateCancel,
+      student: {
+        id: b.student.id,
+        firstName: b.student.firstName,
+        lastName: b.student.lastName,
+        standingDiscountPercent: b.student.standingDiscountPercent,
+        standingDiscountFixed: b.student.standingDiscountFixed,
+      },
+    }));
 
   // Status count map (for filter tabs)
   const countMap: Record<string, number> = {};
@@ -290,8 +308,8 @@ export default async function InvoicesPage({
       {showUpcoming ? (
         <UpcomingBillingSection
           bookings={upcomingBookings}
-          periodStart={billingPeriodStart}
-          periodEnd={billingPeriodEnd}
+          periodStart={billingPeriodStart.toISOString()}
+          periodEnd={billingPeriodEnd.toISOString()}
         />
       ) : showPaymentRequests ? (
         pendingRequests.length === 0 ? (
