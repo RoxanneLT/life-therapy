@@ -123,8 +123,7 @@ export function CartPageClient() {
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 401) {
-          // Not logged in — redirect to portal login
-          globalThis.location.href = "/portal/login";
+          globalThis.location.href = "/portal/login?redirect=/cart";
           return;
         }
         setCheckoutError(data.error || "Checkout failed");
