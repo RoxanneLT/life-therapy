@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -25,8 +25,12 @@ export default function PortalRegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/portal";
+  const [redirectTo, setRedirectTo] = useState("/portal");
+
+  useEffect(() => {
+    const p = new URLSearchParams(globalThis.location.search).get("redirect");
+    if (p) setRedirectTo(p);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,7 +64,8 @@ export default function PortalRegisterPage() {
         return;
       }
 
-      router.push(redirectTo);
+      const dest = new URLSearchParams(globalThis.location.search).get("redirect") || "/portal";
+      router.push(dest);
       router.refresh();
     } catch (err) {
       setError(
