@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Eye, EyeOff } from "lucide-react";
 
-async function redirectByRole(router: ReturnType<typeof useRouter>) {
+async function redirectByRole(router: ReturnType<typeof useRouter>, redirectTo?: string) {
   const res = await fetch("/api/auth/role");
   const { role } = await res.json();
   if (role === "admin") {
@@ -25,7 +25,11 @@ async function redirectByRole(router: ReturnType<typeof useRouter>) {
     return true;
   }
   if (role === "student") {
-    router.replace("/portal");
+    // Honour ?redirect= for students, but only to safe same-site paths
+    const dest = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("/admin")
+      ? redirectTo
+      : "/portal";
+    router.replace(dest);
     return true;
   }
   return false;
@@ -43,9 +47,10 @@ export default function LoginPage() {
   // Auto-redirect if already authenticated
   useEffect(() => {
     const supabase = createBrowserClient();
+    const redirectTo = new URLSearchParams(globalThis.location.search).get("redirect") ?? undefined;
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
-        const redirected = await redirectByRole(router);
+        const redirected = await redirectByRole(router, redirectTo);
         if (!redirected) {
           // Stale session — server doesn't recognize this user
           await supabase.auth.signOut({ scope: "local" });
@@ -76,7 +81,8 @@ export default function LoginPage() {
       }
 
       // Determine role via server-side lookup and redirect
-      const redirected = await redirectByRole(router);
+      const redirectTo = new URLSearchParams(globalThis.location.search).get("redirect") ?? undefined;
+      const redirected = await redirectByRole(router, redirectTo);
       if (!redirected) {
         setError("Your account is not linked to any portal. Please contact support.");
         setLoading(false);
@@ -172,7 +178,7 @@ export default function LoginPage() {
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
           <Link
-            href="/portal/register"
+            href={`/portal/register${globalThis.location?.search || ""}`}
             className="text-brand-700 underline hover:text-brand-800"
           >
             Register
