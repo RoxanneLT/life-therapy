@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatPrice } from "@/lib/utils";
 import { useRegion } from "@/lib/region-store";
-import { ShoppingBag, ArrowRight, Loader2 } from "lucide-react";
+import { createBrowserClient } from "@/lib/supabase";
+import { ShoppingBag, ArrowRight, Loader2, LogIn, UserPlus } from "lucide-react";
 import Link from "next/link";
 
 interface AppliedCoupon {
@@ -21,17 +22,28 @@ interface AppliedCoupon {
 export function CartPageClient() {
   const { items, removeItem, updateItem, clearCart } = useCart();
   const { currency } = useRegion();
-  const [products, setProducts] = useState<
-    Map<string, CartProductInfo>
-  >(new Map());
+  const [products, setProducts] = useState<Map<string, CartProductInfo>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string[] | null>(null);
 
+  // Check auth state once on mount, then listen for changes
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsAuthenticated(!!user);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session?.user);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Build a stable key that only changes when the *product identity* of the
-  // cart changes (add / remove / swap items).  Gift-field edits don't alter
+  // cart changes (add / remove / swap items). Gift-field edits don't alter
   // this key, so we won't re-fetch products on every keystroke.
   const structuralKey = items
     .map((i) => `${i.id}:${i.courseId || ""}:${i.hybridPackageId || ""}:${i.moduleId || ""}:${i.digitalProductId || ""}:${i.quantity}`)
@@ -71,17 +83,10 @@ export function CartPageClient() {
   const discountCents = coupon?.discountCents || 0;
   const totalCents = Math.max(0, subtotalCents - discountCents);
 
-  // Coupon handlers
   async function handleApplyCoupon(code: string) {
-    const courseIds = items
-      .filter((i) => i.courseId)
-      .map((i) => i.courseId!);
-    const packageIds = items
-      .filter((i) => i.hybridPackageId)
-      .map((i) => i.hybridPackageId!);
-
+    const courseIds = items.filter((i) => i.courseId).map((i) => i.courseId!);
+    const packageIds = items.filter((i) => i.hybridPackageId).map((i) => i.hybridPackageId!);
     const result = await applyCoupon(code, courseIds, packageIds, subtotalCents, currency);
-
     if (result.valid) {
       setCoupon({ code: result.code, discountCents: result.discountCents });
       return { valid: true, code: result.code, discountCents: result.discountCents };
@@ -94,7 +99,6 @@ export function CartPageClient() {
     if (item) {
       updateItem(id, {
         isGift: !item.isGift,
-        // Clear gift fields when toggling off
         ...(!item.isGift
           ? {}
           : {
@@ -130,7 +134,6 @@ export function CartPageClient() {
         return;
       }
       if (data.url) {
-        // Redirect to Paystack — cart will be cleared on the success page
         globalThis.location.href = data.url;
       }
     } catch {
@@ -140,7 +143,6 @@ export function CartPageClient() {
     }
   }
 
-  // Checkout handler — soft-blocks on fixed package duplicates
   async function handleCheckout() {
     setCheckoutError(null);
     const fixedPackageIds = items
@@ -157,7 +159,6 @@ export function CartPageClient() {
     await proceedToCheckout();
   }
 
-  // Valid items (those that resolved to a real product)
   const validItems = items.filter((item) => products.has(item.id));
 
   if (loading) {
@@ -175,9 +176,7 @@ export function CartPageClient() {
       <section className="px-4 py-16">
         <div className="mx-auto max-w-3xl text-center">
           <ShoppingBag className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
-          <h1 className="font-heading text-2xl font-bold">
-            Your cart is empty
-          </h1>
+          <h1 className="font-heading text-2xl font-bold">Your cart is empty</h1>
           <p className="mt-2 text-muted-foreground">
             Browse our courses and add something to your cart.
           </p>
@@ -228,9 +227,7 @@ export function CartPageClient() {
           <div>
             <Card>
               <CardContent className="space-y-4 pt-6">
-                <h2 className="font-heading text-lg font-semibold">
-                  Order Summary
-                </h2>
+                <h2 className="font-heading text-lg font-semibold">Order Summary</h2>
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -282,30 +279,49 @@ export function CartPageClient() {
                   </div>
                 )}
 
-                <Button
-                  className="w-full gap-2"
-                  size="lg"
-                  disabled={checkingOut || validItems.length === 0}
-                  onClick={handleCheckout}
-                >
-                  {checkingOut ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      Proceed to Checkout
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </Button>
+                {/* Auth-aware checkout section */}
+                {isAuthenticated === false ? (
+                  <div className="space-y-3">
+                    <div className="rounded-md bg-muted/50 px-3 py-2.5 text-center text-sm text-muted-foreground">
+                      Sign in to complete your purchase
+                    </div>
+                    <Button className="w-full gap-2" size="lg" asChild>
+                      <Link href="/portal/login?redirect=/cart">
+                        <LogIn className="h-4 w-4" />
+                        Sign In
+                      </Link>
+                    </Button>
+                    <Button variant="outline" className="w-full gap-2" size="lg" asChild>
+                      <Link href="/portal/register?redirect=/cart">
+                        <UserPlus className="h-4 w-4" />
+                        Create Account
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full gap-2"
+                    size="lg"
+                    disabled={checkingOut || validItems.length === 0 || isAuthenticated === null}
+                    onClick={handleCheckout}
+                  >
+                    {checkingOut || isAuthenticated === null ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        Proceed to Checkout
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                )}
+
                 {checkoutError && (
-                  <p className="text-center text-xs text-destructive">
-                    {checkoutError}
-                  </p>
+                  <p className="text-center text-xs text-destructive">{checkoutError}</p>
                 )}
                 {currency !== "ZAR" && (
                   <p className="text-center text-xs text-amber-600">
-                    You&apos;ll be charged in ZAR (South African Rand). Your
-                    bank will convert at the current exchange rate.
+                    You&apos;ll be charged in ZAR (South African Rand). Your bank will convert at the current exchange rate.
                   </p>
                 )}
                 <p className="text-center text-xs text-muted-foreground">

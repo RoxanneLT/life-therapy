@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ export default function PortalRegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/portal";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,7 +60,7 @@ export default function PortalRegisterPage() {
         return;
       }
 
-      router.push("/portal");
+      router.push(redirectTo);
       router.refresh();
     } catch (err) {
       setError(
@@ -130,7 +132,7 @@ export default function PortalRegisterPage() {
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            href="/portal/login"
+            href={redirectTo === "/portal" ? "/portal/login" : `/portal/login?redirect=${redirectTo}`}
             className="text-brand-600 hover:underline"
           >
             Sign in
