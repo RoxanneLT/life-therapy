@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedStudent } from "@/lib/student-auth";
+import { getOptionalStudent } from "@/lib/student-auth";
 import { initializeTransaction } from "@/lib/paystack";
 import { resolveCartItems, validateCoupon } from "@/lib/cart";
 import { createOrderNumber, processCheckoutCompleted } from "@/lib/order";
@@ -160,8 +160,8 @@ async function persistGiftCartItems(studentId: string, resolved: ResolvedItem[])
  */
 export async function POST(request: Request) {
   try {
-    const auth = await getAuthenticatedStudent();
-    if (!auth) {
+    const student = await getOptionalStudent();
+    if (!student) {
       return NextResponse.json({ error: "Please log in to checkout" }, { status: 401 });
     }
 
@@ -180,7 +180,7 @@ export async function POST(request: Request) {
     }
 
     // Duplicate purchase prevention (self)
-    const duplicateError = await checkDuplicatePurchases(auth.student.id, resolved);
+    const duplicateError = await checkDuplicatePurchases(student.id, resolved);
     if (duplicateError) {
       return NextResponse.json({ error: duplicateError }, { status: 400 });
     }
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
     const subtotalCents = resolved.reduce((sum, r) => sum + r.product.priceCents * r.quantity, 0);
 
     // Upgrade discount: buyer/recipient already owns short courses from this full course
-    const upgradeDiscountCents = await calculateUpgradeDiscounts(auth.student.id, resolved);
+    const upgradeDiscountCents = await calculateUpgradeDiscounts(student.id, resolved);
 
     // Validate coupon if provided
     let discountCents = upgradeDiscountCents;
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
 
     const totalCents = Math.max(0, subtotalCents - discountCents);
 
-    await persistGiftCartItems(auth.student.id, resolved);
+    await persistGiftCartItems(student.id, resolved);
 
     // Create order in our DB
     const orderNumber = await createOrderNumber();
@@ -220,7 +220,7 @@ export async function POST(request: Request) {
     const order = await prisma.order.create({
       data: {
         orderNumber,
-        studentId: auth.student.id,
+        studentId: student.id,
         status: "pending",
         subtotalCents,
         discountCents,
@@ -254,7 +254,7 @@ export async function POST(request: Request) {
 
     // Create Paystack transaction
     const paystack = await initializeTransaction({
-      email: auth.student.email,
+      email: student.email,
       amount: totalCents,
       currency: "ZAR",
       reference,
