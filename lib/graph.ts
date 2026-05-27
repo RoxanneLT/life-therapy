@@ -302,14 +302,10 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
   const config = getGraphConfig();
   if (!config) return;
 
-  try {
-    const client = createGraphClient(config);
-    await client
-      .api(`/users/${config.userEmail}/events/${eventId}`)
-      .delete();
-  } catch (error) {
-    console.error("Graph API cancelCalendarEvent error:", error);
-  }
+  const client = createGraphClient(config);
+  await client
+    .api(`/users/${config.userEmail}/events/${eventId}`)
+    .delete();
 }
 
 export async function testGraphConnection(): Promise<{

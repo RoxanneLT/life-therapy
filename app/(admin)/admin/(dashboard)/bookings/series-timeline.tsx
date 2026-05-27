@@ -84,6 +84,9 @@ export function SeriesTimeline({ seriesId, bookings }: SeriesTimelineProps) {
       try {
         const result = await cancelSeriesAction(seriesId);
         toast.success(`Cancelled ${result.cancelled} session${result.cancelled !== 1 ? "s" : ""}`);
+        if (result.calendarWarning) {
+          toast.warning(result.calendarWarning, { duration: 8000 });
+        }
         setCancelled(true);
       } catch (err) {
         toast.error("Failed to cancel series");

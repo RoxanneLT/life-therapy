@@ -359,7 +359,7 @@ export async function rescheduleSeriesAction(
 // Cancel entire recurring series (future bookings only)
 // ────────────────────────────────────────────────────────────
 
-export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled: number }> {
+export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled: number; calendarWarning?: string }> {
   await requireRole("super_admin", "editor");
 
   const today = new Date();
@@ -377,10 +377,24 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
 
   if (bookings.length === 0) return { cancelled: 0 };
 
-  // Delete the recurring calendar event once (all bookings share the same series event ID)
-  const seriesGraphEventId = bookings[0].graphEventId;
+  // Search ALL bookings in the series (past + future) for a graphEventId — future bookings
+  // may have a null graphEventId if the series was created before calendar sync was active.
+  const withGraphId = await prisma.booking.findFirst({
+    where: { recurringSeriesId: seriesId, graphEventId: { not: null } },
+    select: { graphEventId: true },
+  });
+  const seriesGraphEventId = withGraphId?.graphEventId ?? null;
+
+  let calendarWarning: string | undefined;
   if (seriesGraphEventId) {
-    await cancelCalendarEvent(seriesGraphEventId).catch(console.error);
+    try {
+      await cancelCalendarEvent(seriesGraphEventId);
+    } catch (err) {
+      console.error("cancelSeriesAction: Graph calendar sync failed:", err);
+      calendarWarning = "Sessions cancelled in the system, but the Outlook calendar event could not be removed. Please delete it manually.";
+    }
+  } else {
+    calendarWarning = "No calendar event found for this series — nothing to remove from Outlook.";
   }
 
   // Cancel each booking record
@@ -419,7 +433,7 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
   }
 
   revalidatePath("/admin/bookings");
-  return { cancelled: bookings.length };
+  return { cancelled: bookings.length, calendarWarning };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -885,6 +899,37 @@ export async function markStaleSessionsCompletedAction() {
   revalidatePath("/admin/bookings");
   revalidatePath("/admin");
   return { count: result.count };
+}
+
+// ────────────────────────────────────────────────────────────
+// Bulk delete cancelled future bookings for a client
+// ────────────────────────────────────────────────────────────
+
+export async function bulkDeleteCancelledFutureBookingsAction(studentId: string): Promise<{ deleted: number }> {
+  await requireRole("super_admin");
+  const now = new Date();
+  const toDelete = await prisma.booking.findMany({
+    where: { studentId, status: "cancelled", date: { gt: now }, paymentRequestId: null, invoiceId: null },
+    select: { id: true, graphEventId: true, recurringSeriesId: true, date: true },
+  });
+  if (toDelete.length === 0) return { deleted: 0 };
+  for (const booking of toDelete) {
+    if (booking.graphEventId) {
+      try {
+        if (booking.recurringSeriesId) {
+          await deleteRecurringEventOccurrences(booking.graphEventId, [format(new Date(booking.date), "yyyy-MM-dd")]);
+        } else {
+          await cancelCalendarEvent(booking.graphEventId);
+        }
+      } catch {
+        // calendar event may already be deleted
+      }
+    }
+  }
+  const result = await prisma.booking.deleteMany({ where: { id: { in: toDelete.map((b) => b.id) } } });
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/clients/${studentId}`);
+  return { deleted: result.count };
 }
 
 // ────────────────────────────────────────────────────────────
