@@ -8,7 +8,7 @@ import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings } from "@/lib/settings";
-import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, getBillingPeriod, type BillingContact } from "@/lib/billing";
+import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, type BillingContact } from "@/lib/billing";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
 import { initializeTransaction } from "@/lib/paystack";
@@ -1094,11 +1094,8 @@ export async function billToDateAction(studentId: string) {
   }
 
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const { start: periodStart } = getBillingPeriod(year, month);
 
-  const bookings = await getUnbilledBookings(studentId, periodStart, now);
+  const bookings = await getUnbilledBookings(studentId, now);
   if (bookings.length === 0) {
     throw new Error("No unbilled sessions found for the current period");
   }

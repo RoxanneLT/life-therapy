@@ -29,7 +29,6 @@ import { format } from "date-fns";
  */
 export async function getUnbilledBookings(
   studentId: string,
-  periodStart: Date,
   periodEnd: Date,
 ): Promise<Booking[]> {
   return prisma.booking.findMany({
@@ -39,7 +38,10 @@ export async function getUnbilledBookings(
         { status: { in: ["completed", "no_show"] } },
         { status: "cancelled", isLateCancel: true },
       ],
-      date: { gte: periodStart, lte: periodEnd },
+      // No lower-bound on date — paymentRequestId: null already prevents double-billing,
+      // and removing gte means sessions that were completed after the previous billing run
+      // (e.g. on the last day of the prior month) are caught in the next cycle.
+      date: { lte: periodEnd },
       paymentRequestId: null,
       invoiceId: null,
     },
@@ -291,7 +293,7 @@ export async function generateMonthlyPaymentRequests(
   const groups = new Map<string, PostpaidGroup>();
 
   for (const student of postpaidStudents) {
-    const bookings = await getUnbilledBookings(student.id, periodStart, periodEnd);
+    const bookings = await getUnbilledBookings(student.id, periodEnd);
     if (bookings.length === 0) continue;
 
     // Partition into individual (includes free_consultation) and couples
