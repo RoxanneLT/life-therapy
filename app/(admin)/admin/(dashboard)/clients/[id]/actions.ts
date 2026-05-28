@@ -1117,7 +1117,10 @@ export async function billToDateAction(studentId: string) {
       || (!indivContact.billingEntityId && !couplesContact.billingEntityId && indivContact.studentId === couplesContact.studentId));
 
   const settings = await getSiteSettings();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
   const billingMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const periodStart = new Date(year, month - 1, 1); // first of current month
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 7);
 
