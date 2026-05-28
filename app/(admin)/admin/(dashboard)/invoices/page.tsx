@@ -111,17 +111,30 @@ export default async function InvoicesPage({
   const now = new Date();
 
   // Billing period for upcoming run tab
-  const { start: billingPeriodStart, end: billingPeriodEnd } = getBillingPeriod(
+  const { end: billingPeriodEnd } = getBillingPeriod(
     now.getFullYear(),
     now.getMonth() + 1,
   );
+
+  // Display start = periodEnd of the most recent payment request (the last billing cutoff).
+  // Using periodEnd (not +1 day) means any session on that cutoff date that was missed
+  // (e.g. still "confirmed" when billing ran) appears in the upcoming period display.
+  const lastPaymentRequest = await prisma.paymentRequest.findFirst({
+    orderBy: { periodEnd: "desc" },
+    select: { periodEnd: true },
+  });
+  const displayPeriodStart = lastPaymentRequest?.periodEnd ?? billingPeriodEnd;
+
   const unbilledWhere = {
     student: { billingType: "postpaid" },
     OR: [
       { status: { in: [BookingStatus.completed, BookingStatus.no_show] } },
       { status: BookingStatus.cancelled, isLateCancel: true },
     ],
-    date: { gte: billingPeriodStart, lte: billingPeriodEnd },
+    // No lower-bound — paymentRequestId: null prevents double-billing, and sessions
+    // that slipped past the previous cutoff (e.g. completed on the last day of the
+    // prior month after the run fired) are correctly swept into the next cycle.
+    date: { lte: billingPeriodEnd },
     paymentRequestId: null,
     invoiceId: null,
   };
@@ -308,7 +321,7 @@ export default async function InvoicesPage({
       {showUpcoming ? (
         <UpcomingBillingSection
           bookings={upcomingBookings}
-          periodStart={billingPeriodStart.toISOString()}
+          periodStart={displayPeriodStart.toISOString()}
           periodEnd={billingPeriodEnd.toISOString()}
         />
       ) : showPaymentRequests ? (
