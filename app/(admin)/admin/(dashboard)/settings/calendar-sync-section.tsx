@@ -429,6 +429,99 @@ function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileRe
   );
 }
 
+function cmpKey(date: string, start: string, name: string): string {
+  return `${date}|${start}|${name.toLowerCase().replace(/\s+/g, " ").trim()}`;
+}
+
+function WeekComparison({
+  portal,
+  events,
+}: Readonly<{
+  portal: DiagnosticsResponse["portal"];
+  events: NonNullable<DiagnosticsResponse["account"]["upcomingEvents"]>;
+}>) {
+  const portalKeys = new Set(portal.map((p) => cmpKey(p.date, p.start, p.clientName)));
+
+  // Session events use the "{label} — {client}" pattern; others are personal.
+  const teamsSession = events
+    .filter((e) => e.subject.includes(" — "))
+    .map((e) => ({
+      ...e,
+      date: e.start.slice(0, 10),
+      time: e.start.slice(11, 16),
+      clientName: e.subject.split(" — ").slice(1).join(" — ").trim(),
+    }));
+  const teamsKeys = new Set(teamsSession.map((e) => cmpKey(e.date, e.time, e.clientName)));
+
+  const ghostCount = teamsSession.filter(
+    (e) => !portalKeys.has(cmpKey(e.date, e.time, e.clientName)),
+  ).length;
+  const missingInTeams = portal.filter(
+    (p) => !teamsKeys.has(cmpKey(p.date, p.start, p.clientName)),
+  ).length;
+
+  return (
+    <div className="space-y-3">
+      {(ghostCount > 0 || missingInTeams > 0) && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {missingInTeams > 0 && <div>⚠ {missingInTeams} portal booking(s) have no matching Teams event.</div>}
+          {ghostCount > 0 && (
+            <div>⚠ {ghostCount} Teams event(s) have no matching booking — these are ghost/stale events.</div>
+          )}
+        </div>
+      )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <h4 className="mb-1.5 text-sm font-semibold">Portal bookings ({portal.length})</h4>
+          {portal.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No bookings in this range.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {portal.map((p) => {
+                const inTeams = teamsKeys.has(cmpKey(p.date, p.start, p.clientName));
+                return (
+                  <li
+                    key={p.bookingId}
+                    className={`rounded border px-2 py-1 ${inTeams ? "" : "border-red-200 bg-red-50"}`}
+                  >
+                    {p.date} {p.start}–{p.end} · {p.clientName}
+                    {!inTeams && <span className="ml-1 text-xs font-medium text-red-700">· not in Teams</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        <div>
+          <h4 className="mb-1.5 text-sm font-semibold">Teams / Outlook events ({events.length})</h4>
+          {events.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No events on the connected calendar in this range.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {events.map((e, i) => {
+                const isSession = e.subject.includes(" — ");
+                const name = isSession ? e.subject.split(" — ").slice(1).join(" — ").trim() : "";
+                const ghost = isSession && !portalKeys.has(cmpKey(e.start.slice(0, 10), e.start.slice(11, 16), name));
+                return (
+                  <li
+                    key={`${e.subject}-${e.start}-${i}`}
+                    className={`rounded border px-2 py-1 ${ghost ? "border-amber-300 bg-amber-50" : ""}`}
+                  >
+                    {e.start.slice(11, 16)}–{e.end} · {e.subject}
+                    {e.isOnlineMeeting && <span className="ml-1 text-xs text-brand-700">· Teams</span>}
+                    {ghost && <span className="ml-1 text-xs font-medium text-amber-700">· ghost (no booking)</span>}
+                    {!isSession && <span className="ml-1 text-xs text-muted-foreground">· personal</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarSyncSection({
   recentLogs,
   lastReconcileResult,
@@ -566,47 +659,8 @@ export function CalendarSyncSection({
                 </p>
               )}
 
-              {/* Side-by-side week */}
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <h4 className="mb-1.5 text-sm font-semibold">
-                    Portal bookings ({diag.portalCount})
-                  </h4>
-                  {diag.portal.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No bookings in the next 7 days.</p>
-                  ) : (
-                    <ul className="space-y-1 text-sm">
-                      {diag.portal.map((p) => (
-                        <li key={p.bookingId} className="rounded border px-2 py-1">
-                          {p.date} {p.start}–{p.end} · {p.clientName}
-                          {!p.synced && (
-                            <span className="ml-1 text-xs font-medium text-red-700">· not synced</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div>
-                  <h4 className="mb-1.5 text-sm font-semibold">
-                    Teams / Outlook events ({diag.teamsCount})
-                  </h4>
-                  {(diag.account.upcomingEvents?.length ?? 0) === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      No events on the connected calendar in this range.
-                    </p>
-                  ) : (
-                    <ul className="space-y-1 text-sm">
-                      {(diag.account.upcomingEvents ?? []).map((e, i) => (
-                        <li key={`${e.subject}-${e.start}-${i}`} className="rounded border px-2 py-1">
-                          {e.start}–{e.end} · {e.subject}
-                          {e.isOnlineMeeting && <span className="ml-1 text-xs text-brand-700">· Teams</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
+              {/* Side-by-side week with cross-matching */}
+              <WeekComparison portal={diag.portal} events={diag.account.upcomingEvents ?? []} />
             </div>
           )}
         </CardContent>
