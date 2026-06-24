@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cancelCalendarEvent, createCalendarEvent, createRecurringCalendarEvent, deleteRecurringEventOccurrences } from "@/lib/graph";
@@ -23,7 +24,7 @@ function toSastDateStr(date: Date | string): string {
 }
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const billingNotes: Partial<Record<BookingStatus, string>> = {
     cancelled: "(cancelled)",
@@ -31,9 +32,23 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
   };
   const billingNote = billingNotes[status];
 
+  const prev = await prisma.booking.findUnique({
+    where: { id },
+    select: { status: true },
+  });
+
   const booking = await prisma.booking.update({
     where: { id },
     data: { status, ...(billingNote ? { billingNote } : {}) },
+  });
+
+  await recordAudit({
+    action: `booking_status_${status}`,
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    before: { status: prev?.status ?? null },
+    after: { status },
   });
 
   let calendarWarning: string | undefined;
@@ -145,7 +160,11 @@ export async function rescheduleBooking(
         calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
       }
     } else {
-      await cancelCalendarEvent(booking.graphEventId);
+      try {
+        await cancelCalendarEvent(booking.graphEventId);
+      } catch {
+        calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
+      }
     }
   }
 
@@ -979,9 +998,9 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
   for (const booking of toDelete) {
     if (booking.graphEventId) {
       if (booking.recurringSeriesId) {
-        await deleteRecurringEventOccurrences(booking.graphEventId, [toSastDateStr(booking.date)]);
+        await deleteRecurringEventOccurrences(booking.graphEventId, [toSastDateStr(booking.date)]).catch(console.error);
       } else {
-        await cancelCalendarEvent(booking.graphEventId);
+        await cancelCalendarEvent(booking.graphEventId).catch(console.error);
       }
     }
   }
@@ -1088,7 +1107,7 @@ export async function togglePolicyOverrideAction(bookingId: string) {
 // ────────────────────────────────────────────────────────────
 
 export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) throw new Error("Booking not found");
@@ -1122,7 +1141,11 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
         calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
       }
     } else {
-      await cancelCalendarEvent(booking.graphEventId);
+      try {
+        await cancelCalendarEvent(booking.graphEventId);
+      } catch {
+        calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
+      }
     }
   }
 
@@ -1170,6 +1193,16 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
     }
     // Prepaid without credit: shouldn't happen (can't book without credit), but no action needed
   }
+
+  await recordAudit({
+    action: isLateCancel ? "booking_late_cancel" : "booking_cancel",
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    before: { status: booking.status },
+    after: { status: "cancelled", isLateCancel },
+    metadata: { chargeLateFee },
+  });
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${id}`);

@@ -340,6 +340,23 @@ model CronRun {
   @@map("cron_runs")
 }
 
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String // "billing_type_changed" | "booking_cancelled" | "payment_recorded" | etc.
+  entityType String // "student" | "booking" | "invoice" | "payment_request"
+  entityId   String
+  actorEmail String // who performed the action
+  before     Json? // snapshot of relevant fields before change
+  after      Json? // snapshot of relevant fields after change
+  metadata   Json? // extra context (e.g. reason, IP)
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
 model CalendarSyncLog {
   id            String   @id @default(cuid())
   bookingId     String?

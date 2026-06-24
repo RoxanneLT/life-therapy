@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
@@ -387,7 +388,7 @@ export async function getAvailableCoursesAction(studentId: string) {
 // ────────────────────────────────────────────────────────────
 
 export async function updateBillingTypeAction(studentId: string, billingType: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   if (!["prepaid", "postpaid"].includes(billingType)) throw new Error("Invalid billing type");
 
   const student = await prisma.student.findUnique({
@@ -398,6 +399,15 @@ export async function updateBillingTypeAction(studentId: string, billingType: st
   await prisma.student.update({
     where: { id: studentId },
     data: { billingType },
+  });
+
+  await recordAudit({
+    action: "billing_type_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: { billingType: student?.billingType ?? null },
+    after: { billingType },
   });
 
   let restoredCount = 0;
@@ -540,7 +550,12 @@ export async function updateStandingDiscountAction(
   percent: number | null,
   fixed: number | null,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
+
+  const before = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { standingDiscountPercent: true, standingDiscountFixed: true },
+  });
 
   await prisma.student.update({
     where: { id: studentId },
@@ -548,6 +563,18 @@ export async function updateStandingDiscountAction(
       standingDiscountPercent: percent,
       standingDiscountFixed: fixed,
     },
+  });
+
+  await recordAudit({
+    action: "discount_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: {
+      standingDiscountPercent: before?.standingDiscountPercent ?? null,
+      standingDiscountFixed: before?.standingDiscountFixed ?? null,
+    },
+    after: { standingDiscountPercent: percent, standingDiscountFixed: fixed },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -871,7 +898,7 @@ export async function markInvoicePaidAction(
   reference: string | undefined,
   studentId: string,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.invoice.update({
     where: { id: invoiceId },
@@ -895,6 +922,16 @@ export async function markInvoicePaidAction(
     });
   }
 
+  await recordAudit({
+    action: "payment_recorded",
+    entityType: "invoice",
+    entityId: invoiceId,
+    actorEmail: adminUser.email,
+    before: { status: "pending" },
+    after: { status: "paid", paymentMethod: method, reference: reference ?? null },
+    metadata: { studentId },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
@@ -903,7 +940,12 @@ export async function markInvoicePaidAction(
 // ────────────────────────────────────────────────────────────
 
 export async function voidInvoiceAction(invoiceId: string, studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
+
+  const before = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { status: true },
+  });
 
   await prisma.invoice.update({
     where: { id: invoiceId },
@@ -914,6 +956,16 @@ export async function voidInvoiceAction(invoiceId: string, studentId: string) {
   await prisma.booking.updateMany({
     where: { invoiceId },
     data: { invoiceId: null, paymentRequestId: null },
+  });
+
+  await recordAudit({
+    action: "invoice_voided",
+    entityType: "invoice",
+    entityId: invoiceId,
+    actorEmail: adminUser.email,
+    before: { status: before?.status ?? null },
+    after: { status: "cancelled" },
+    metadata: { studentId },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -1212,7 +1264,12 @@ export async function updateClientEmailAction(
 // ────────────────────────────────────────────────────────────
 
 export async function voidPaymentRequestAction(paymentRequestId: string, studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
+
+  const before = await prisma.paymentRequest.findUnique({
+    where: { id: paymentRequestId },
+    select: { status: true },
+  });
 
   await prisma.paymentRequest.update({
     where: { id: paymentRequestId },
@@ -1223,6 +1280,16 @@ export async function voidPaymentRequestAction(paymentRequestId: string, student
   await prisma.booking.updateMany({
     where: { paymentRequestId },
     data: { paymentRequestId: null },
+  });
+
+  await recordAudit({
+    action: "invoice_voided",
+    entityType: "payment_request",
+    entityId: paymentRequestId,
+    actorEmail: adminUser.email,
+    before: { status: before?.status ?? null },
+    after: { status: "cancelled" },
+    metadata: { studentId },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -1238,7 +1305,7 @@ export async function markPaymentRequestPaidAction(
   reference: string | undefined,
   studentId: string,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
 
@@ -1246,6 +1313,16 @@ export async function markPaymentRequestPaidAction(
     reference: reference || `manual-${Date.now()}`,
     method: method as "eft" | "cash" | "card",
     amountCents: 0, // Will be set from the PR's totalCents
+  });
+
+  await recordAudit({
+    action: "payment_recorded",
+    entityType: "payment_request",
+    entityId: paymentRequestId,
+    actorEmail: adminUser.email,
+    before: { status: "pending" },
+    after: { status: "paid", paymentMethod: method, reference: reference ?? null },
+    metadata: { studentId },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);

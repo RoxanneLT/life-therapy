@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole, getAuthenticatedAdmin } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { upsertContact } from "@/lib/contacts";
 import { createOrderNumber } from "@/lib/order";
@@ -161,20 +162,31 @@ export async function updateClientProfileAction(clientId: string, formData: Form
 // ────────────────────────────────────────────────────────────
 
 export async function updateClientStatusAction(clientId: string, status: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const validStatuses = ["potential", "active", "inactive", "archived"];
   if (!validStatuses.includes(status)) throw new Error("Invalid status");
 
+  const existing = await prisma.student.findUnique({
+    where: { id: clientId },
+    select: { clientStatus: true, convertedAt: true },
+  });
+
   const data: Record<string, unknown> = { clientStatus: status };
-  if (status === "active") {
-    const student = await prisma.student.findUnique({ where: { id: clientId }, select: { convertedAt: true } });
-    if (!student?.convertedAt) {
-      data.convertedAt = new Date();
-    }
+  if (status === "active" && !existing?.convertedAt) {
+    data.convertedAt = new Date();
   }
 
   await prisma.student.update({ where: { id: clientId }, data });
+
+  await recordAudit({
+    action: "client_status_changed",
+    entityType: "student",
+    entityId: clientId,
+    actorEmail: adminUser.email,
+    before: { clientStatus: existing?.clientStatus ?? null },
+    after: { clientStatus: status },
+  });
 
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath("/admin/clients");

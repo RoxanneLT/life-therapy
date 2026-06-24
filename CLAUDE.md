@@ -30,6 +30,7 @@ Life-Therapy is an online counselling and life coaching platform built with **Ne
 - **Use confirmation dialogs for destructive actions** (cancel, void, delete, send).
 - **Handle errors with try/catch and user-friendly messages.** Never let raw errors reach the UI.
 - **Use the existing `formatPrice(cents, currency)` utility** for all currency display.
+- **Use `recordAudit()` from `lib/audit.ts`** for billing type changes, booking cancellations, payment recording, invoice voiding, client status changes, and discount changes.
 
 ---
 
@@ -182,6 +183,24 @@ GRAPH_CLIENT_SECRET               — Azure AD secret
 GRAPH_USER_EMAIL                  — Roxanne's Microsoft 365 email (calendar owner)
 RESEND_API_KEY                    — Email delivery via Resend
 ```
+
+---
+
+## Pre-Commit Check
+
+Run before every commit:
+```bash
+npm run check
+```
+
+This runs TypeScript type checking (`tsc --noEmit`) + ESLint. If it
+fails, fix the errors before committing. Do not push code that fails
+`npm run check`.
+
+Quick commands:
+- `npm run typecheck` — TypeScript only
+- `npm run lint` — ESLint only
+- `npm run check` — both (run this before every commit)
 
 ---
 

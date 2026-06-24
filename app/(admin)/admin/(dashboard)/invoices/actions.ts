@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
@@ -15,7 +16,7 @@ export async function markInvoicePaidFromListAction(
   method: string,
   reference?: string,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const invoice = await prisma.invoice.update({
     where: { id: invoiceId },
@@ -35,6 +36,16 @@ export async function markInvoicePaidFromListAction(
     });
   }
 
+  await recordAudit({
+    action: "payment_recorded",
+    entityType: "invoice",
+    entityId: invoiceId,
+    actorEmail: adminUser.email,
+    before: { status: "pending" },
+    after: { status: "paid", paymentMethod: method, reference: reference ?? null },
+    metadata: { studentId: invoice.studentId, source: "invoice_list" },
+  });
+
   revalidatePath("/admin/invoices");
   if (invoice.studentId) {
     revalidatePath(`/admin/clients/${invoice.studentId}`);
@@ -46,7 +57,12 @@ export async function markInvoicePaidFromListAction(
 // ────────────────────────────────────────────────────────────
 
 export async function voidInvoiceFromListAction(invoiceId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
+
+  const prevInvoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { status: true },
+  });
 
   const invoice = await prisma.invoice.update({
     where: { id: invoiceId },
@@ -57,6 +73,16 @@ export async function voidInvoiceFromListAction(invoiceId: string) {
   await prisma.booking.updateMany({
     where: { invoiceId },
     data: { invoiceId: null, paymentRequestId: null },
+  });
+
+  await recordAudit({
+    action: "invoice_voided",
+    entityType: "invoice",
+    entityId: invoiceId,
+    actorEmail: adminUser.email,
+    before: { status: prevInvoice?.status ?? null },
+    after: { status: "cancelled" },
+    metadata: { studentId: invoice.studentId, source: "invoice_list" },
   });
 
   revalidatePath("/admin/invoices");
@@ -88,11 +114,22 @@ export async function markPaymentRequestPaidFromListAction(
   amountCents: number,
   reference?: string,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const pr = await prisma.paymentRequest.findUniqueOrThrow({
     where: { id: paymentRequestId },
   });
+
+  const auditPayment = (fullyPaid: boolean) =>
+    recordAudit({
+      action: "payment_recorded",
+      entityType: "payment_request",
+      entityId: paymentRequestId,
+      actorEmail: adminUser.email,
+      before: { status: "pending" },
+      after: { status: fullyPaid ? "paid" : "partial", paymentMethod: method, reference: reference ?? null },
+      metadata: { studentId: pr.studentId, amountCents, source: "invoice_list" },
+    });
 
   // Check if an invoice already exists for this PR (from a prior partial payment)
   const existingInvoice = await prisma.invoice.findFirst({
@@ -128,6 +165,7 @@ export async function markPaymentRequestPaidFromListAction(
       await sendInvoiceEmail(existingInvoice.id).catch(console.error);
     }
 
+    await auditPayment(isFullyPaid);
     revalidatePath("/admin/invoices");
     return;
   }
@@ -161,6 +199,7 @@ export async function markPaymentRequestPaidFromListAction(
   await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
   await sendInvoiceEmail(invoice.id).catch(console.error);
 
+  await auditPayment(!isPartial);
   revalidatePath("/admin/invoices");
 }
 

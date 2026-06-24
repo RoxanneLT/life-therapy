@@ -14,6 +14,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { formatPrice } from "@/lib/utils";
+import { logQueryResult } from "@/lib/log-query-error";
 import { format } from "date-fns";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 
@@ -176,12 +177,14 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
 
   if (pr.studentId) {
     const student = await prisma.student.findUnique({ where: { id: pr.studentId } });
+    logQueryResult("sendInvoiceFlow:getStudent", student, { paymentRequestId, studentId: pr.studentId });
     if (student) {
       billingName = `${student.firstName} ${student.lastName}`;
       to = student.billingEmail ?? student.email;
     }
   } else if (pr.billingEntityId) {
     const entity = await prisma.billingEntity.findUnique({ where: { id: pr.billingEntityId } });
+    logQueryResult("sendInvoiceFlow:getEntity", entity, { paymentRequestId, billingEntityId: pr.billingEntityId });
     if (entity) {
       billingName = entity.contactPerson || entity.name;
       to = entity.email;
@@ -252,12 +255,14 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
 
   if (pr.studentId) {
     const student = await prisma.student.findUnique({ where: { id: pr.studentId } });
+    logQueryResult("sendInvoiceFlow:getStudent", student, { paymentRequestId, studentId: pr.studentId });
     if (student) {
       billingName = `${student.firstName} ${student.lastName}`;
       to = student.billingEmail ?? student.email;
     }
   } else if (pr.billingEntityId) {
     const entity = await prisma.billingEntity.findUnique({ where: { id: pr.billingEntityId } });
+    logQueryResult("sendInvoiceFlow:getEntity", entity, { paymentRequestId, billingEntityId: pr.billingEntityId });
     if (entity) {
       billingName = entity.contactPerson || entity.name;
       to = entity.email;
@@ -318,12 +323,14 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
 
   if (pr.studentId) {
     const student = await prisma.student.findUnique({ where: { id: pr.studentId } });
+    logQueryResult("sendInvoiceFlow:getStudent", student, { paymentRequestId, studentId: pr.studentId });
     if (student) {
       billingName = `${student.firstName} ${student.lastName}`;
       to = student.billingEmail ?? student.email;
     }
   } else if (pr.billingEntityId) {
     const entity = await prisma.billingEntity.findUnique({ where: { id: pr.billingEntityId } });
+    logQueryResult("sendInvoiceFlow:getEntity", entity, { paymentRequestId, billingEntityId: pr.billingEntityId });
     if (entity) {
       billingName = entity.contactPerson || entity.name;
       to = entity.email;
@@ -386,12 +393,14 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
 
   if (pr.studentId) {
     const student = await prisma.student.findUnique({ where: { id: pr.studentId } });
+    logQueryResult("sendInvoiceFlow:getStudent", student, { paymentRequestId, studentId: pr.studentId });
     if (student) {
       billingName = `${student.firstName} ${student.lastName}`;
       to = student.billingEmail ?? student.email;
     }
   } else if (pr.billingEntityId) {
     const entity = await prisma.billingEntity.findUnique({ where: { id: pr.billingEntityId } });
+    logQueryResult("sendInvoiceFlow:getEntity", entity, { paymentRequestId, billingEntityId: pr.billingEntityId });
     if (entity) {
       billingName = entity.contactPerson || entity.name;
       to = entity.email;
