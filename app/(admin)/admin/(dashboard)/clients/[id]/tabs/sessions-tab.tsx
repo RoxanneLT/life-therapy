@@ -141,8 +141,11 @@ export function SessionsTab({ client }: SessionsTabProps) {
     startTransition(async () => {
       try {
         const result = await bulkDeleteCancelledFutureBookingsAction(clientId);
+        const base = `${result.deleted} cancelled booking${result.deleted !== 1 ? "s" : ""} deleted`;
         toast.success(
-          `${result.deleted} cancelled booking${result.deleted !== 1 ? "s" : ""} deleted`,
+          result.skippedLateCancels > 0
+            ? `${base} — ${result.skippedLateCancels} late-cancel${result.skippedLateCancels !== 1 ? "s" : ""} kept for billing`
+            : base,
         );
         invalidateBookings();
       } catch (err) {

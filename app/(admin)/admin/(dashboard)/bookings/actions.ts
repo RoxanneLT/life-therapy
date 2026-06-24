@@ -110,10 +110,13 @@ export async function updateSessionNotes(id: string, formData: FormData) {
 }
 
 export async function deleteBooking(id: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const booking = await prisma.booking.findUnique({ where: { id } });
-  if (booking?.graphEventId) {
+  if (!booking) throw new Error("Booking not found");
+
+  // Calendar cleanup
+  if (booking.graphEventId) {
     if (booking.recurringSeriesId) {
       const dateStr = toSastDateStr(booking.date);
       await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
@@ -121,6 +124,34 @@ export async function deleteBooking(id: string) {
       await cancelCalendarEvent(booking.graphEventId).catch(console.error);
     }
   }
+
+  // Check if this is the last booking in its series — clean up orphaned Graph event
+  if (booking.recurringSeriesId) {
+    const siblingCount = await prisma.booking.count({
+      where: { recurringSeriesId: booking.recurringSeriesId, id: { not: id } },
+    });
+    if (siblingCount === 0 && booking.graphEventId) {
+      // Last booking in the series — delete the master recurring event
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    }
+  }
+
+  // Audit log before deletion (can't log after — data is gone)
+  await recordAudit({
+    action: "booking_deleted",
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    before: {
+      clientName: booking.clientName,
+      date: toSastDateStr(booking.date),
+      startTime: booking.startTime,
+      status: booking.status,
+      sessionType: booking.sessionType,
+      recurringSeriesId: booking.recurringSeriesId,
+    },
+    after: null,
+  });
 
   await prisma.booking.delete({ where: { id } });
   revalidatePath("/admin/bookings");
@@ -420,8 +451,8 @@ export async function rescheduleSeriesAction(
 // Cancel entire recurring series (future bookings only)
 // ────────────────────────────────────────────────────────────
 
-export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled: number; calendarWarning?: string }> {
-  await requireRole("super_admin", "editor");
+export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled: number; creditsRestored?: number; calendarWarning?: string }> {
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -474,18 +505,47 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
     }
   }
 
-  // Cancel each booking record
+  // Cancel each booking record + restore credits where applicable
+  let creditsRestored = 0;
   for (const booking of bookings) {
+    // Check if a credit was used for this booking
+    const creditTx = await prisma.sessionCreditTransaction.findFirst({
+      where: { bookingId: booking.id, type: "used" },
+    });
+
     await prisma.booking.update({
       where: { id: booking.id },
       data: {
         status: "cancelled",
         cancelledAt: new Date(),
         cancelledBy: "admin",
-        billingNote: "(series cancelled — no charge)",
+        billingNote: creditTx
+          ? "(series cancelled — credit restored)"
+          : "(series cancelled — no charge)",
       },
     });
+
+    // Restore the credit if one was used
+    if (creditTx && booking.studentId) {
+      try {
+        const { refundCredit } = await import("@/lib/credits");
+        await refundCredit(booking.studentId, booking.id, "Series cancelled — credit restored");
+        creditsRestored++;
+      } catch (err) {
+        console.error(`Failed to restore credit for booking ${booking.id}:`, err);
+      }
+    }
   }
+
+  // Audit log
+  await recordAudit({
+    action: "series_cancelled",
+    entityType: "booking",
+    entityId: seriesId,
+    actorEmail: adminUser.email,
+    before: { count: bookings.length, status: "confirmed" },
+    after: { count: bookings.length, status: "cancelled", creditsRestored },
+  });
 
   // Send ONE cancellation email to the client
   const first = bookings[0];
@@ -510,7 +570,7 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
   }
 
   revalidatePath("/admin/bookings");
-  return { cancelled: bookings.length, calendarWarning };
+  return { cancelled: bookings.length, creditsRestored: creditsRestored > 0 ? creditsRestored : undefined, calendarWarning };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -987,14 +1047,37 @@ export async function markStaleSessionsCompletedAction() {
 // Bulk delete cancelled future bookings for a client
 // ────────────────────────────────────────────────────────────
 
-export async function bulkDeleteCancelledFutureBookingsAction(studentId: string): Promise<{ deleted: number }> {
+export async function bulkDeleteCancelledFutureBookingsAction(studentId: string): Promise<{ deleted: number; skippedLateCancels: number }> {
   await requireRole("super_admin");
   const now = new Date();
+
+  // Exclude late-cancel bookings — they may still need to be billed
   const toDelete = await prisma.booking.findMany({
-    where: { studentId, status: "cancelled", date: { gt: now }, paymentRequestId: null, invoiceId: null },
+    where: {
+      studentId,
+      status: "cancelled",
+      isLateCancel: false,
+      date: { gt: now },
+      paymentRequestId: null,
+      invoiceId: null,
+    },
     select: { id: true, graphEventId: true, recurringSeriesId: true, date: true },
   });
-  if (toDelete.length === 0) return { deleted: 0 };
+
+  const lateCancelCount = await prisma.booking.count({
+    where: {
+      studentId,
+      status: "cancelled",
+      isLateCancel: true,
+      date: { gt: now },
+      paymentRequestId: null,
+      invoiceId: null,
+    },
+  });
+
+  if (toDelete.length === 0) return { deleted: 0, skippedLateCancels: lateCancelCount };
+
+  // Calendar cleanup
   for (const booking of toDelete) {
     if (booking.graphEventId) {
       if (booking.recurringSeriesId) {
@@ -1004,10 +1087,27 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
       }
     }
   }
+
+  // Check for orphaned series Graph events after deletion
+  const seriesIds = [...new Set(toDelete.filter(b => b.recurringSeriesId).map(b => b.recurringSeriesId!))];
+  for (const sid of seriesIds) {
+    const remainingCount = await prisma.booking.count({
+      where: {
+        recurringSeriesId: sid,
+        id: { notIn: toDelete.map(b => b.id) },
+      },
+    });
+    if (remainingCount === 0) {
+      // Last bookings in the series are being deleted — clean up master event
+      const gid = toDelete.find(b => b.recurringSeriesId === sid)?.graphEventId;
+      if (gid) await cancelCalendarEvent(gid).catch(console.error);
+    }
+  }
+
   const result = await prisma.booking.deleteMany({ where: { id: { in: toDelete.map((b) => b.id) } } });
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/clients/${studentId}`);
-  return { deleted: result.count };
+  return { deleted: result.count, skippedLateCancels: lateCancelCount };
 }
 
 // ────────────────────────────────────────────────────────────
