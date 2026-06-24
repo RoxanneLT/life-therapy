@@ -1,12 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { withCronRun } from "@/lib/cron/with-cron-run";
 import { processBookingReminders } from "@/lib/cron/booking-reminders";
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+async function handler() {
   const result = await processBookingReminders();
-  return NextResponse.json(result);
+  return Response.json({ ok: true, ...result });
 }
+
+export const GET = withCronRun("booking_reminders", handler);

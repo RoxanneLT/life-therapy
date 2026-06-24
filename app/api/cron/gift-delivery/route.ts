@@ -1,12 +1,9 @@
-import { NextResponse } from "next/server";
+import { withCronRun } from "@/lib/cron/with-cron-run";
 import { processGiftDelivery } from "@/lib/cron/gift-delivery";
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+async function handler() {
   const result = await processGiftDelivery();
-  return NextResponse.json(result);
+  return Response.json({ ok: true, ...result });
 }
+
+export const GET = withCronRun("gift_delivery", handler);

@@ -1,29 +1,21 @@
-import { NextRequest, NextResponse } from "next/server";
+import { withCronRun } from "@/lib/cron/with-cron-run";
 import { reconcileCalendar } from "@/lib/calendar-reconcile";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 
 export const maxDuration = 120; // 2 minutes max (Vercel)
 
-export async function GET(request: NextRequest) {
-  // Verify cron secret
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+async function handler() {
   const result = await reconcileCalendar({
     autoFix: true, // auto-create missing events
     daysAhead: 60, // check next 60 days
   });
 
   const unfixedMissing = result.missing.filter((m) => !m.autoFixed);
+  const driftCount = result.mismatched.length + unfixedMissing.length;
 
   await logCalendarOp({
     operation: "reconcile",
-    status:
-      result.mismatched.length > 0 || unfixedMissing.length > 0
-        ? "partial"
-        : "success",
+    status: driftCount > 0 ? "partial" : "success",
     metadata: {
       checked: result.checked,
       matched: result.matched,
@@ -34,8 +26,8 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  // Send alert email if there are unfixed issues
-  if (result.mismatched.length > 0 || unfixedMissing.length > 0) {
+  // Send an immediate alert email if there are unfixed issues
+  if (driftCount > 0) {
     try {
       const { sendEmail } = await import("@/lib/email");
       const { getSiteSettings } = await import("@/lib/settings");
@@ -70,5 +62,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(result);
+  // `failed` lets withCronRun mark this run as failed when there is drift
+  return Response.json({ ok: true, failed: driftCount, ...result });
 }
+
+export const GET = withCronRun("reconcile_calendar", handler);
