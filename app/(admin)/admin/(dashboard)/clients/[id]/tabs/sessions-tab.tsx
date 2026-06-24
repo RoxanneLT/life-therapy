@@ -22,6 +22,7 @@ import {
   Video,
   AlertTriangle,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   Select,
@@ -32,7 +33,8 @@ import {
 } from "@/components/ui/select";
 import { format, isAfter, startOfDay } from "date-fns";
 import { markNoShowAction, adminCancelBookingAction, adminLateCancelWithFeeAction } from "../actions";
-import { updateBookingStatus } from "../../../bookings/actions";
+import { updateBookingStatus, bulkDeleteCancelledFutureBookingsAction } from "../../../bookings/actions";
+import { toast } from "sonner";
 import { RescheduleDialog } from "../../../bookings/[id]/reschedule-dialog";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
@@ -92,6 +94,7 @@ export function SessionsTab({ client }: SessionsTabProps) {
   const { data: bookingsData, isLoading } = useClientBookings(clientId);
   const bookings = (bookingsData as BookingData[] | undefined) ?? [];
   const today = startOfDay(new Date());
+  const [isPending, startTransition] = useTransition();
 
   function invalidateBookings() {
     void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.bookings(clientId) });
@@ -124,6 +127,30 @@ export function SessionsTab({ client }: SessionsTabProps) {
     )
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const cancelledFutureCount = bookings.filter(
+    (b) => b.status === "cancelled" && isAfter(new Date(b.date), today),
+  ).length;
+
+  function handleBulkDeleteCancelled() {
+    if (
+      !confirm(
+        `Delete ${cancelledFutureCount} cancelled future booking${cancelledFutureCount !== 1 ? "s" : ""}? This cannot be undone.`,
+      )
+    )
+      return;
+    startTransition(async () => {
+      try {
+        const result = await bulkDeleteCancelledFutureBookingsAction(clientId);
+        toast.success(
+          `${result.deleted} cancelled booking${result.deleted !== 1 ? "s" : ""} deleted`,
+        );
+        invalidateBookings();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to delete cancelled bookings");
+      }
+    });
+  }
+
   if (bookings.length === 0) {
     return (
       <Card>
@@ -139,11 +166,25 @@ export function SessionsTab({ client }: SessionsTabProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-lg font-semibold">Sessions</h2>
-        <Button variant="outline" asChild>
-          <a href="/book" target="_blank" rel="noopener noreferrer">
-            Book on Behalf
-          </a>
-        </Button>
+        <div className="flex gap-2">
+          {cancelledFutureCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600"
+              onClick={handleBulkDeleteCancelled}
+              disabled={isPending}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Delete Cancelled ({cancelledFutureCount})
+            </Button>
+          )}
+          <Button variant="outline" asChild>
+            <a href="/book" target="_blank" rel="noopener noreferrer">
+              Book on Behalf
+            </a>
+          </Button>
+        </div>
       </div>
 
       {/* Upcoming */}

@@ -431,6 +431,21 @@ async function skipDripIfNeeded(studentId: string) {
   });
 }
 
+// ────────────────────────────────────────────────────────────
+// Check future confirmed bookings (used before deactivation)
+// ────────────────────────────────────────────────────────────
+
+export async function checkFutureBookingsAction(clientId: string): Promise<number> {
+  await requireRole("super_admin");
+  return prisma.booking.count({
+    where: {
+      studentId: clientId,
+      status: { in: ["confirmed", "pending"] },
+      date: { gt: new Date() },
+    },
+  });
+}
+
 export async function importContactsAction(rows: ImportRow[], options: ImportOptions) {
   await requireRole("super_admin", "marketing");
 

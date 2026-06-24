@@ -1,4 +1,4 @@
-import { PrismaClient } from './lib/generated/prisma/index.js';
+import { PrismaClient } from '../lib/generated/prisma/index.js';
 const prisma = new PrismaClient();
 
 const student = await prisma.student.findUnique({ where: { email: 'roxannebouwer@gmail.com' }, select: { id: true, email: true } });

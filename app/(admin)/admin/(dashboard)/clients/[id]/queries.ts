@@ -9,7 +9,7 @@ export async function fetchClientBookings(clientId: string) {
   const result = await prisma.student.findUnique({
     where: { id: clientId },
     select: {
-      bookings: { orderBy: { date: "desc" }, take: 50 },
+      bookings: { orderBy: { date: "desc" }, take: 200 },
     },
   });
   return JSON.parse(JSON.stringify(result?.bookings ?? [])) as unknown[];
@@ -20,7 +20,7 @@ export async function fetchClientFinances(clientId: string) {
   const result = await prisma.student.findUnique({
     where: { id: clientId },
     select: {
-      bookings: { orderBy: { date: "desc" }, take: 50 },
+      bookings: { orderBy: { date: "desc" }, take: 200 },
       creditTransactions: { orderBy: { createdAt: "desc" }, take: 50 },
       orders: {
         where: { status: "paid" },

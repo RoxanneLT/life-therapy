@@ -18,7 +18,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { updateClientStatusAction, checkClientDocumentAcceptanceAction } from "../actions";
+import { updateClientStatusAction, checkClientDocumentAcceptanceAction, checkFutureBookingsAction } from "../actions";
 import { AlertTriangle, Loader2, UserCheck, ShieldAlert } from "lucide-react";
 
 const STATUSES = [
@@ -44,6 +44,7 @@ export function StatusSelect({
   const [showTandCWarning, setShowTandCWarning] = useState(false);
   const [showDeactivateWarning, setShowDeactivateWarning] = useState(false);
   const [checkingDocs, setCheckingDocs] = useState(false);
+  const [futureBookingCount, setFutureBookingCount] = useState(0);
 
   async function handleChange(value: string) {
     if (value === currentStatus) return;
@@ -66,6 +67,10 @@ export function StatusSelect({
       (value === "inactive" || value === "archived") &&
       currentStatus === "active"
     ) {
+      setCheckingDocs(true);
+      const count = await checkFutureBookingsAction(clientId);
+      setFutureBookingCount(count);
+      setCheckingDocs(false);
       setPendingStatus(value);
       setShowDeactivateWarning(true);
       return;
@@ -193,6 +198,15 @@ export function StatusSelect({
             <AlertDialogDescription asChild>
               {isArchiving ? (
                 <div className="space-y-3 text-sm text-muted-foreground">
+                  {futureBookingCount > 0 && (
+                    <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-red-800">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        <strong>{futureBookingCount} upcoming confirmed booking{futureBookingCount === 1 ? "" : "s"}</strong>{" "}
+                        will not be cancelled automatically. Consider cancelling them first.
+                      </span>
+                    </div>
+                  )}
                   <p>
                     Archiving is intended for clients you no longer work with.
                     This will:
@@ -213,6 +227,15 @@ export function StatusSelect({
                 </div>
               ) : (
                 <div className="space-y-3 text-sm text-muted-foreground">
+                  {futureBookingCount > 0 && (
+                    <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-red-800">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        <strong>{futureBookingCount} upcoming confirmed booking{futureBookingCount === 1 ? "" : "s"}</strong>{" "}
+                        will not be cancelled automatically. Consider cancelling them first.
+                      </span>
+                    </div>
+                  )}
                   <p>
                     Setting this client to Inactive will:
                   </p>
