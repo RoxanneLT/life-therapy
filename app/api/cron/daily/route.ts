@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { processBookingReminders } from "@/lib/cron/booking-reminders";
+import { processSessionReminders } from "@/lib/cron/session-reminders";
 import { processGiftDelivery } from "@/lib/cron/gift-delivery";
 import { processOrderCleanup } from "@/lib/cron/order-cleanup";
 import { processDripEmails } from "@/lib/drip-emails";
@@ -76,7 +76,9 @@ export async function GET(request: NextRequest) {
 
   // Run all tasks sequentially with timing
   await runTask("orderCleanup", () => processOrderCleanup(), detail);
-  await runTask("bookingReminders", () => processBookingReminders(), detail);
+  // Safety net — session reminders are primarily driven by the every-2h
+  // /api/cron/reminders trigger; this daily pass catches anything missed.
+  await runTask("sessionReminders", () => processSessionReminders(), detail);
   await runTask("giftDelivery", () => processGiftDelivery(), detail);
   await runTask("monthlyBilling", () => processMonthlyBilling(), detail);
   await runTask("dripEmails", () => processDripEmails(), detail);
