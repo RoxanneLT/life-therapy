@@ -368,6 +368,61 @@ export async function deleteRecurringEventOccurrences(
   try {
     const client = createGraphClient(config);
 
+    // Detect whether this event is actually a recurring series master. After a
+    // reschedule, a booking's graphEventId can point at a standalone single
+    // event — calling /instances (expand-series) on it errors with
+    // "ExpandSeries can only be performed against a series", silently no-opping
+    // the delete and leaving a stale event behind. Handle that case directly.
+    let eventType: string;
+    try {
+      const ev = await withRetry(
+        () =>
+          client
+            .api(`/users/${config.userEmail}/events/${seriesEventId}`)
+            .select("id,type")
+            .get(),
+        "deleteRecurringEventOccurrences:type",
+        1,
+      );
+      eventType = (ev.type as string) || "singleInstance";
+    } catch (error) {
+      const status = (error as { statusCode?: number }).statusCode;
+      if (status === 404) {
+        // Whole event already gone — treat every requested date as deleted
+        result.deleted.push(...datesToDelete);
+        return result;
+      }
+      throw error;
+    }
+
+    if (eventType !== "seriesMaster") {
+      // Standalone single event — delete it directly by ID instead of expanding.
+      try {
+        await withRetry(
+          () =>
+            client.api(`/users/${config.userEmail}/events/${seriesEventId}`).delete(),
+          "deleteRecurringEventOccurrences:single",
+          1,
+        );
+        result.deleted.push(...datesToDelete);
+      } catch (error) {
+        const status = (error as { statusCode?: number }).statusCode;
+        if (status === 404) {
+          result.deleted.push(...datesToDelete);
+        } else {
+          console.error("[Graph] single-event delete failed:", error);
+          result.failed.push(...datesToDelete);
+        }
+      }
+      await logCalendarOp({
+        operation: "delete_occurrence",
+        status: result.failed.length > 0 ? "partial" : "success",
+        graphEventId: seriesEventId,
+        metadata: { mode: "single", deleted: result.deleted, failed: result.failed },
+      });
+      return result;
+    }
+
     // Sort dates to get the range
     const sorted = [...datesToDelete].sort();
     const earliest = sorted[0];

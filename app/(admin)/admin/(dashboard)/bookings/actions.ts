@@ -419,25 +419,40 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
 
   if (bookings.length === 0) return { cancelled: 0 };
 
-  // Search ALL bookings in the series (past + future) for a graphEventId — future bookings
-  // may have a null graphEventId if the series was created before calendar sync was active.
-  const withGraphId = await prisma.booking.findFirst({
+  // Bookings in a series can have DIFFERENT graphEventIds: most share the
+  // recurring series master, but any that were individually rescheduled point
+  // at a standalone single event. Group the future occurrences by their own
+  // graphEventId so each is deleted correctly (series master → expand occurrence,
+  // single event → direct delete, handled inside deleteRecurringEventOccurrences).
+  // Bookings with a null graphEventId fall back to the series master found on
+  // any sibling booking (covers series created before calendar sync was active).
+  const seriesFallback = await prisma.booking.findFirst({
     where: { recurringSeriesId: seriesId, graphEventId: { not: null } },
     select: { graphEventId: true },
   });
-  const seriesGraphEventId = withGraphId?.graphEventId ?? null;
+  const fallbackId = seriesFallback?.graphEventId ?? null;
+
+  const datesByEvent = new Map<string, string[]>();
+  for (const b of bookings) {
+    const gid = b.graphEventId ?? fallbackId;
+    if (!gid) continue;
+    const dates = datesByEvent.get(gid) ?? [];
+    dates.push(toSastDateStr(b.date));
+    datesByEvent.set(gid, dates);
+  }
 
   let calendarWarning: string | undefined;
-  if (seriesGraphEventId) {
-    // Delete only the future occurrences, not the series master — this preserves past calendar
-    // entries in attendees' calendars while removing the upcoming sessions.
-    const futureDates = bookings.map((b) => toSastDateStr(b.date));
-    const delResult = await deleteRecurringEventOccurrences(seriesGraphEventId, futureDates);
-    if (delResult.failed.length > 0) {
-      calendarWarning = `${delResult.failed.length} Outlook occurrence(s) could not be removed — please delete them manually.`;
-    }
-  } else {
+  if (datesByEvent.size === 0) {
     calendarWarning = "No calendar event found for this series — nothing to remove from Outlook.";
+  } else {
+    let failedCount = 0;
+    for (const [gid, dates] of datesByEvent) {
+      const delResult = await deleteRecurringEventOccurrences(gid, dates);
+      failedCount += delResult.failed.length;
+    }
+    if (failedCount > 0) {
+      calendarWarning = `${failedCount} Outlook occurrence(s) could not be removed — please delete them manually.`;
+    }
   }
 
   // Cancel each booking record
