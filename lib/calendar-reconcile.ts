@@ -88,8 +88,12 @@ export async function reconcileCalendar(options?: {
     orderBy: { date: "asc" },
   });
 
-  // 2. Cache events by graphEventId to avoid re-fetching the same series master
-  const eventCache = new Map<string, { start: string; end: string; subject: string } | null>();
+  // 2. Cache event metadata by graphEventId (a series master is shared by
+  //    many bookings, so we only fetch each event once).
+  const eventMetaCache = new Map<
+    string,
+    { type: string; start: string; end: string } | null
+  >();
 
   for (const booking of bookings) {
     result.checked++;
@@ -98,79 +102,48 @@ export async function reconcileCalendar(options?: {
     const expectedStart = booking.startTime;
     const expectedEnd = booking.endTime;
 
-    // No Graph event ID — booking was never synced
-    if (!booking.graphEventId) {
+    const recordMissing = async (reason: string) => {
       const detail: MissingDetail = {
         bookingId: booking.id,
         clientName: booking.clientName,
         date: expectedDate,
         time: `${expectedStart}–${expectedEnd}`,
-        reason: "no_graph_id",
+        reason,
         autoFixed: false,
       };
       result.missing.push(detail);
       if (autoFix) {
         await tryCreateMissingEvent(booking, expectedDate, expectedStart, expectedEnd, detail, result);
       }
+    };
+
+    // No Graph event ID — booking was never synced
+    if (!booking.graphEventId) {
+      await recordMissing("no_graph_id");
       continue;
     }
 
-    // Fetch the event from Outlook (cached per eventId for single events)
-    let outlookEvent = eventCache.get(booking.graphEventId);
-    if (outlookEvent === undefined) {
+    // Fetch the event itself. This works for BOTH single events and series
+    // masters — we then branch on its actual `type`, rather than assuming a
+    // booking with recurringSeriesId points at a series master (after a
+    // reschedule it can point at a standalone single event).
+    let meta = eventMetaCache.get(booking.graphEventId);
+    if (meta === undefined) {
       try {
-        if (booking.recurringSeriesId) {
-          // Recurring — fetch the specific occurrence by date.
-          // Build the window in UTC (.toISOString ends in "Z"); a literal
-          // "+02:00" offset decodes to a space in the query string and Graph
-          // rejects it.
-          const dayStart = fromZonedTime(`${expectedDate}T00:00:00`, TIMEZONE).toISOString();
-          const dayEnd = fromZonedTime(`${expectedDate}T23:59:59`, TIMEZONE).toISOString();
-          const instances = await client
-            .api(`/users/${config.userEmail}/events/${booking.graphEventId}/instances`)
-            .query({
-              startDateTime: dayStart,
-              endDateTime: dayEnd,
-              $select: "id,start,end,subject",
-              $top: 5,
-            })
-            .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
-            .get();
-
-          const match = (instances.value || []).find(
-            (i: { start?: { dateTime?: string } }) =>
-              i.start?.dateTime?.startsWith(expectedDate),
-          );
-
-          if (match) {
-            const startTime = (match.start.dateTime as string).substring(11, 16);
-            const endTime = (match.end.dateTime as string).substring(11, 16);
-            outlookEvent = {
-              start: `${expectedDate}T${startTime}`,
-              end: `${expectedDate}T${endTime}`,
-              subject: match.subject || "",
-            };
-          } else {
-            outlookEvent = null; // occurrence not found
-          }
-        } else {
-          // Single event — fetch directly
-          const event = await client
-            .api(`/users/${config.userEmail}/events/${booking.graphEventId}`)
-            .select("id,start,end,subject")
-            .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
-            .get();
-
-          outlookEvent = {
-            start: event.start.dateTime as string,
-            end: event.end.dateTime as string,
-            subject: event.subject || "",
-          };
-        }
+        const ev = await client
+          .api(`/users/${config.userEmail}/events/${booking.graphEventId}`)
+          .select("id,start,end,type")
+          .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+          .get();
+        meta = {
+          type: (ev.type as string) || "singleInstance",
+          start: ev.start.dateTime as string,
+          end: ev.end.dateTime as string,
+        };
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         if (status === 404) {
-          outlookEvent = null;
+          meta = null;
         } else {
           result.errors.push(
             `Failed to fetch event for ${booking.clientName} on ${expectedDate}: ${error}`,
@@ -178,26 +151,49 @@ export async function reconcileCalendar(options?: {
           continue;
         }
       }
-      // Only cache single events (recurring occurrences vary by date)
-      if (!booking.recurringSeriesId) {
-        eventCache.set(booking.graphEventId, outlookEvent);
-      }
+      eventMetaCache.set(booking.graphEventId, meta);
     }
 
-    // Event not found in Outlook
-    if (!outlookEvent) {
-      const detail: MissingDetail = {
-        bookingId: booking.id,
-        clientName: booking.clientName,
-        date: expectedDate,
-        time: `${expectedStart}–${expectedEnd}`,
-        reason: "event_not_found",
-        autoFixed: false,
-      };
-      result.missing.push(detail);
-      if (autoFix) {
-        await tryCreateMissingEvent(booking, expectedDate, expectedStart, expectedEnd, detail, result);
+    // Event ID no longer exists in Outlook
+    if (!meta) {
+      await recordMissing("event_not_found");
+      continue;
+    }
+
+    // Resolve the Outlook start/end for THIS booking's date.
+    let outlookEvent: { start: string; end: string } | null;
+    if (meta.type === "seriesMaster") {
+      // Genuine recurring series — expand to the occurrence on this date.
+      // Window built in UTC (.toISOString ends in "Z"); a literal "+02:00"
+      // offset decodes to a space in the query string and Graph rejects it.
+      try {
+        const dayStart = fromZonedTime(`${expectedDate}T00:00:00`, TIMEZONE).toISOString();
+        const dayEnd = fromZonedTime(`${expectedDate}T23:59:59`, TIMEZONE).toISOString();
+        const instances = await client
+          .api(`/users/${config.userEmail}/events/${booking.graphEventId}/instances`)
+          .query({ startDateTime: dayStart, endDateTime: dayEnd, $select: "id,start,end", $top: 5 })
+          .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+          .get();
+        const match = (instances.value || []).find(
+          (i: { start?: { dateTime?: string } }) => i.start?.dateTime?.startsWith(expectedDate),
+        );
+        outlookEvent = match
+          ? { start: match.start.dateTime as string, end: match.end.dateTime as string }
+          : null;
+      } catch (error) {
+        result.errors.push(
+          `Failed to expand series for ${booking.clientName} on ${expectedDate}: ${error}`,
+        );
+        continue;
       }
+    } else {
+      // Single event (or a standalone occurrence created by a past reschedule)
+      outlookEvent = { start: meta.start, end: meta.end };
+    }
+
+    // Series occurrence not present on this date
+    if (!outlookEvent) {
+      await recordMissing("event_not_found");
       continue;
     }
 
