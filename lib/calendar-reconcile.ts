@@ -218,18 +218,25 @@ export async function reconcileCalendar(options?: {
       continue;
     }
 
-    // Event exists — check date and time
-    const outlookStartTime = outlookEvent.start.substring(11, 16);
+    // Event exists — validate date, start time AND end time (second pass).
+    // Requiring the end time to agree too means a "match" really is identical,
+    // not just coincidentally sharing a start — it catches wrong-duration events.
     const outlookDate = outlookEvent.start.substring(0, 10);
+    const outlookStartTime = outlookEvent.start.substring(11, 16);
+    const outlookEndTime = outlookEvent.end.substring(11, 16);
 
-    if (outlookDate !== expectedDate || outlookStartTime !== expectedStart) {
+    const dateOrStartWrong =
+      outlookDate !== expectedDate || outlookStartTime !== expectedStart;
+    const durationWrong = outlookEndTime !== expectedEnd;
+
+    if (dateOrStartWrong || durationWrong) {
       result.mismatched.push({
         bookingId: booking.id,
         clientName: booking.clientName,
         bookingDate: expectedDate,
         bookingTime: `${expectedStart}–${expectedEnd}`,
         outlookDate,
-        outlookTime: outlookStartTime,
+        outlookTime: `${outlookStartTime}–${outlookEndTime}`,
         autoFixed: false,
       });
       // Mismatches are flagged for manual review only — changing an event's
