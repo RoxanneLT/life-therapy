@@ -12,15 +12,15 @@ import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { randomUUID } from "node:crypto";
+import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
+import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 
 /** Extract SAST date string from a booking date for Graph API occurrence operations. */
 function toSastDateStr(date: Date | string): string {
   return formatInTimeZone(new Date(date), TIMEZONE, "yyyy-MM-dd");
 }
-import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
-import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   await requireRole("super_admin", "editor");
@@ -47,7 +47,11 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
           calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
         }
       } else {
-        await cancelCalendarEvent(booking.graphEventId);
+        try {
+          await cancelCalendarEvent(booking.graphEventId);
+        } catch {
+          calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
+        }
       }
     }
     const config = getSessionTypeConfig(booking.sessionType);
@@ -97,9 +101,9 @@ export async function deleteBooking(id: string) {
   if (booking?.graphEventId) {
     if (booking.recurringSeriesId) {
       const dateStr = toSastDateStr(booking.date);
-      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
+      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
     } else {
-      await cancelCalendarEvent(booking.graphEventId);
+      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
     }
   }
 
@@ -287,9 +291,14 @@ export async function rescheduleSeriesAction(
   }
 
   // ── Delete old recurring calendar event once ─────────────────────────
+  let seriesCalendarWarning: string | undefined;
   const oldSeriesEventId = bookings[0].graphEventId;
   if (oldSeriesEventId) {
-    await cancelCalendarEvent(oldSeriesEventId);
+    try {
+      await cancelCalendarEvent(oldSeriesEventId);
+    } catch {
+      seriesCalendarWarning = "Old recurring calendar event could not be removed — delete manually in Outlook.";
+    }
   }
 
   // ── Create ONE new recurring event on the new day ──────────────────
@@ -378,9 +387,11 @@ export async function rescheduleSeriesAction(
     console.error("Failed to send series reschedule email:", err);
   }
 
-  const seriesCalendarWarning = updatedBookings.length > 0 && !newSeriesEventId
-    ? "Recurring calendar event could not be created — please add it manually in Outlook."
-    : undefined;
+  if (updatedBookings.length > 0 && !newSeriesEventId) {
+    seriesCalendarWarning = seriesCalendarWarning
+      ? seriesCalendarWarning + " New recurring event also failed."
+      : "Recurring calendar event could not be created — please add it manually in Outlook.";
+  }
 
   revalidatePath("/admin/bookings");
   return { updated, skipped, calendarWarning: seriesCalendarWarning };
@@ -499,6 +510,7 @@ export async function checkSeriesConflictsAction(
   const endM = (startM + duration) % 60;
   const newEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
+  const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
   const results: { date: string; conflict: string | null }[] = [];
 
   for (const booking of bookings) {
@@ -526,9 +538,6 @@ export async function checkSeriesConflictsAction(
     const override = await prisma.availabilityOverride.findUnique({
       where: { date: new Date(newDateStr + "T00:00:00Z") },
     });
-
-    // Check SA public holidays
-    const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
 
     let conflict: string | null = null;
     if (isSAPublicHoliday(newDate)) {
@@ -1070,9 +1079,8 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   if (!booking) throw new Error("Booking not found");
 
   // Server-side late cancel check: is the session within 24 hours?
-  const bookingDateTime = new Date(booking.date);
-  const [h, m] = booking.startTime.split(":").map(Number);
-  bookingDateTime.setHours(h, m, 0, 0);
+  const dateStr = toSastDateStr(booking.date);
+  const bookingDateTime = fromZonedTime(`${dateStr}T${booking.startTime}:00`, TIMEZONE);
   const hoursUntil = (bookingDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
   const isActuallyLate = hoursUntil < 24 && hoursUntil > -2;
 

@@ -414,7 +414,8 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
       return;
     }
     console.error("[Graph] cancelCalendarEvent error:", error);
-    // Don't rethrow — calendar failures shouldn't block booking operations
+    // Rethrow so callers can set calendarWarning
+    throw error;
   }
 }
 
