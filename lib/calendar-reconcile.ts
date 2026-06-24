@@ -14,6 +14,9 @@ export interface ReconcileResult {
   onHoliday: HolidayDetail[];
   fixed: number;
   errors: string[];
+  // Diagnostics for the reverse scan — confirms it actually inspected Outlook
+  scannedEvents: number; // total events returned by calendarView
+  sessionEventsScanned: number; // of those, ones matching our "{label} — {client}" pattern
 }
 
 interface MismatchDetail {
@@ -71,6 +74,8 @@ export async function reconcileCalendar(options?: {
     onHoliday: [],
     fixed: 0,
     errors: [],
+    scannedEvents: 0,
+    sessionEventsScanned: 0,
   };
 
   const config = getGraphConfig();
@@ -313,10 +318,13 @@ async function findOrphanEvents(
     guard++;
   }
 
+  result.scannedEvents = events.length;
+
   for (const ev of events) {
     const subject: string = ev.subject || "";
     // Only our session events use the "{label} — {clientName}" pattern.
     if (!subject.includes(" — ")) continue;
+    result.sessionEventsScanned++;
     const startDt: string | undefined = ev.start?.dateTime;
     if (!startDt) continue;
 

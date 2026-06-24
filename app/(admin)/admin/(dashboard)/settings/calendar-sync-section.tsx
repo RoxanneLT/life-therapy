@@ -70,6 +70,8 @@ interface ReconcileResult {
   onHoliday: HolidayDetail[];
   fixed: number;
   errors: string[];
+  scannedEvents?: number;
+  sessionEventsScanned?: number;
 }
 
 interface CalendarSyncSectionProps {
@@ -206,6 +208,12 @@ function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileRe
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {mode} · {format(ranAt, "d MMM yyyy, HH:mm")}
+            {result.scannedEvents != null && (
+              <>
+                {" "}· reverse-scanned {result.scannedEvents} Outlook event
+                {result.scannedEvents === 1 ? "" : "s"} ({result.sessionEventsScanned ?? 0} session)
+              </>
+            )}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleCopy}>
