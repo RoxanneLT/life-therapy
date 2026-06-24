@@ -5,7 +5,7 @@ import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video, ArrowRight, AlertTriangle } from "lucide-react";
 import { MarkAllCompletedButton } from "./mark-all-completed-button";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, cn } from "@/lib/utils";
 import Link from "next/link";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
 import { BookingsChart } from "@/components/admin/bookings-chart";
@@ -76,6 +76,8 @@ export default async function AdminDashboard({
     bookingsByMonth,
     revenueByMonth,
     staleSessionCount,
+    lastReconcile,
+    recentSyncFailures,
   ] = await Promise.all([
     prisma.student.count({ where: { clientStatus: "active" } }),
     prisma.invoice.aggregate({
@@ -114,6 +116,17 @@ export default async function AdminDashboard({
     getBookingsByMonth(validYear),
     getRevenueByMonth(validYear),
     prisma.booking.count({ where: { status: "confirmed", date: { lt: now } } }),
+    prisma.calendarSyncLog.findFirst({
+      where: { operation: "reconcile" },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, metadata: true, createdAt: true },
+    }),
+    prisma.calendarSyncLog.count({
+      where: {
+        status: "failed",
+        createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+      },
+    }),
   ]);
 
   // Show next 3 birthdays regardless of timeframe
@@ -184,6 +197,51 @@ export default async function AdminDashboard({
           </div>
         </div>
       )}
+
+      {/* Calendar sync health */}
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm",
+          recentSyncFailures > 0
+            ? "border-red-200 bg-red-50"
+            : lastReconcile?.status === "partial"
+              ? "border-amber-200 bg-amber-50"
+              : "border-green-200 bg-green-50",
+        )}
+      >
+        <div
+          className={cn(
+            "h-2 w-2 rounded-full",
+            recentSyncFailures > 0
+              ? "bg-red-500"
+              : lastReconcile?.status === "partial"
+                ? "bg-amber-500"
+                : "bg-green-500",
+          )}
+        />
+        <span className="text-muted-foreground">
+          Calendar sync:
+          {recentSyncFailures > 0 && (
+            <span className="ml-1 font-medium text-red-700">
+              {recentSyncFailures} failure{recentSyncFailures !== 1 ? "s" : ""} in last 24h
+            </span>
+          )}
+          {recentSyncFailures === 0 && lastReconcile?.status === "success" && (
+            <span className="ml-1 font-medium text-green-700">Healthy</span>
+          )}
+          {recentSyncFailures === 0 && lastReconcile?.status === "partial" && (
+            <span className="ml-1 font-medium text-amber-700">
+              {(lastReconcile.metadata as { mismatched?: number } | null)?.mismatched || 0} mismatch(es)
+            </span>
+          )}
+          {!lastReconcile && (
+            <span className="ml-1 text-muted-foreground">No data yet</span>
+          )}
+        </span>
+        <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" asChild>
+          <Link href="/admin/settings?tab=calendar-sync">View</Link>
+        </Button>
+      </div>
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

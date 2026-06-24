@@ -9,6 +9,7 @@ const TABS = [
   { key: "finance", label: "Finance" },
   { key: "legal", label: "Legal Documents" },
   { key: "whatsapp", label: "WhatsApp" },
+  { key: "calendar-sync", label: "Calendar Sync" },
 ] as const;
 
 interface SettingsTabsProps {

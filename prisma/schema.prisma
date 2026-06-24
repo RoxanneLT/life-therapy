@@ -323,6 +323,23 @@ model AvailabilityOverride {
   @@map("availability_overrides")
 }
 
+model CalendarSyncLog {
+  id            String   @id @default(cuid())
+  bookingId     String?
+  seriesId      String? // recurringSeriesId
+  operation     String // "create" | "delete" | "delete_occurrence" | "resync" | "reconcile"
+  status        String // "success" | "failed" | "partial"
+  graphEventId  String? // the Graph event ID involved
+  errorMessage  String?
+  metadata      Json? // any extra context (dates, times, etc.)
+  createdAt     DateTime @default(now())
+
+  @@index([bookingId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("calendar_sync_logs")
+}
+
 // ============================================================
 // LMS Enums
 // ============================================================

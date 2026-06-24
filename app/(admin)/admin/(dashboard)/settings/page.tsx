@@ -22,9 +22,10 @@ import {
 } from "@/lib/legal-documents";
 import { LegalDocumentsClient } from "../legal-documents/legal-documents-client";
 import { WhatsAppPanel } from "./whatsapp-panel";
+import { CalendarSyncSection } from "./calendar-sync-section";
 import { format } from "date-fns";
 
-const VALID_TABS = ["settings", "users", "finance", "legal", "whatsapp"] as const;
+const VALID_TABS = ["settings", "users", "finance", "legal", "whatsapp", "calendar-sync"] as const;
 type SettingsTab = (typeof VALID_TABS)[number];
 const ALL_LEGAL_SLUGS: LegalDocumentSlug[] = ["commitment", "terms", "privacy"];
 
@@ -90,6 +91,46 @@ export default async function AdminSettingsPage({ searchParams }: Props) {
     legalDocuments = await loadLegalDocuments();
   }
 
+  // Calendar sync tab data
+  let calendarSync: {
+    recentLogs: {
+      id: string;
+      operation: string;
+      status: string;
+      graphEventId: string | null;
+      errorMessage: string | null;
+      metadata: Record<string, unknown> | null;
+      createdAt: string;
+    }[];
+    lastReconcileResult: Record<string, unknown> | null;
+    lastReconcileAt: string | null;
+  } | null = null;
+  if (activeTab === "calendar-sync") {
+    const [logs, lastReconcile] = await Promise.all([
+      prisma.calendarSyncLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      prisma.calendarSyncLog.findFirst({
+        where: { operation: "reconcile" },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    calendarSync = {
+      recentLogs: logs.map((l) => ({
+        id: l.id,
+        operation: l.operation,
+        status: l.status,
+        graphEventId: l.graphEventId,
+        errorMessage: l.errorMessage,
+        metadata: l.metadata as Record<string, unknown> | null,
+        createdAt: l.createdAt.toISOString(),
+      })),
+      lastReconcileResult: (lastReconcile?.metadata as Record<string, unknown> | null) ?? null,
+      lastReconcileAt: lastReconcile?.createdAt.toISOString() ?? null,
+    };
+  }
+
   return (
     <div className="space-y-6">
       <SettingsTabs activeTab={activeTab} />
@@ -110,6 +151,13 @@ export default async function AdminSettingsPage({ searchParams }: Props) {
         <LegalDocumentsClient
           documents={legalDocuments}
           adminUserId={adminUser.id}
+        />
+      )}
+      {activeTab === "calendar-sync" && calendarSync && (
+        <CalendarSyncSection
+          recentLogs={calendarSync.recentLogs}
+          lastReconcileResult={calendarSync.lastReconcileResult}
+          lastReconcileAt={calendarSync.lastReconcileAt}
         />
       )}
     </div>

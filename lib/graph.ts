@@ -8,6 +8,7 @@ import {
 } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import { TIMEZONE } from "@/lib/booking-config";
 import { formatInTimeZone } from "date-fns-tz";
+import { logCalendarOp } from "@/lib/calendar-sync-log";
 
 // ────────────────────────────────────────────────────────────
 // Config & client
@@ -20,7 +21,7 @@ interface GraphConfig {
   userEmail: string;
 }
 
-function getGraphConfig(): GraphConfig | null {
+export function getGraphConfig(): GraphConfig | null {
   const tenantId = process.env.MS_GRAPH_TENANT_ID;
   const clientId = process.env.MS_GRAPH_CLIENT_ID;
   const clientSecret = process.env.MS_GRAPH_CLIENT_SECRET;
@@ -31,7 +32,7 @@ function getGraphConfig(): GraphConfig | null {
   return { tenantId, clientId, clientSecret, userEmail };
 }
 
-function createGraphClient(config: GraphConfig): Client {
+export function createGraphClient(config: GraphConfig): Client {
   const credential = new ClientSecretCredential(
     config.tenantId,
     config.clientId,
@@ -158,6 +159,11 @@ export async function createCalendarEvent(params: {
   clientEmail: string;
   description?: string;
   isOnlineMeeting?: boolean;
+  /** When true, omit the client attendee so Outlook does not email a meeting invite.
+   *  Used by reconciliation auto-fix — the client already has their original invite. */
+  suppressAttendees?: boolean;
+  /** Optional booking ID for audit-log correlation. */
+  bookingId?: string;
 }): Promise<{ eventId: string; teamsMeetingUrl: string } | null> {
   const config = getGraphConfig();
   if (!config) return null;
@@ -177,15 +183,19 @@ export async function createCalendarEvent(params: {
             },
             start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
             end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
-            attendees: [
-              {
-                emailAddress: {
-                  address: params.clientEmail,
-                  name: params.clientName,
-                },
-                type: "required",
-              },
-            ],
+            ...(params.suppressAttendees
+              ? {}
+              : {
+                  attendees: [
+                    {
+                      emailAddress: {
+                        address: params.clientEmail,
+                        name: params.clientName,
+                      },
+                      type: "required",
+                    },
+                  ],
+                }),
             ...(params.isOnlineMeeting !== false && {
               isOnlineMeeting: true,
               onlineMeetingProvider: "teamsForBusiness",
@@ -194,12 +204,27 @@ export async function createCalendarEvent(params: {
       "createCalendarEvent",
     );
 
+    await logCalendarOp({
+      bookingId: params.bookingId,
+      operation: "create",
+      status: event.id ? "success" : "failed",
+      graphEventId: event.id,
+      metadata: { subject: params.subject, start: params.startDateTime },
+    });
+
     return {
       eventId: event.id ?? "",
       teamsMeetingUrl: event.onlineMeeting?.joinUrl ?? "",
     };
   } catch (error) {
     console.error("[Graph] createCalendarEvent error:", error);
+    await logCalendarOp({
+      bookingId: params.bookingId,
+      operation: "create",
+      status: "failed",
+      errorMessage: String(error),
+      metadata: { subject: params.subject, start: params.startDateTime },
+    });
     return null;
   }
 }
@@ -303,12 +328,25 @@ export async function createRecurringCalendarEvent(params: {
       "createRecurringCalendarEvent",
     );
 
+    await logCalendarOp({
+      operation: "create",
+      status: event.id ? "success" : "failed",
+      graphEventId: event.id,
+      metadata: { subject: params.subject, start: params.startDateTime, recurring: true },
+    });
+
     return {
       seriesEventId: event.id ?? "",
       teamsMeetingUrl: event.onlineMeeting?.joinUrl ?? "",
     };
   } catch (error) {
     console.error("[Graph] createRecurringCalendarEvent error:", error);
+    await logCalendarOp({
+      operation: "create",
+      status: "failed",
+      errorMessage: String(error),
+      metadata: { subject: params.subject, start: params.startDateTime, recurring: true },
+    });
     return null;
   }
 }
@@ -382,9 +420,23 @@ export async function deleteRecurringEventOccurrences(
       }
     }
 
+    await logCalendarOp({
+      operation: "delete_occurrence",
+      status: result.failed.length > 0 ? "partial" : "success",
+      graphEventId: seriesEventId,
+      metadata: { deleted: result.deleted, failed: result.failed },
+    });
+
     return result;
   } catch (error) {
     console.error("[Graph] deleteRecurringEventOccurrences error:", error);
+    await logCalendarOp({
+      operation: "delete_occurrence",
+      status: "failed",
+      graphEventId: seriesEventId,
+      errorMessage: String(error),
+      metadata: { requested: datesToDelete },
+    });
     return result;
   }
 }
@@ -406,14 +458,31 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
           .delete(),
       "cancelCalendarEvent",
     );
+    await logCalendarOp({
+      operation: "delete",
+      status: "success",
+      graphEventId: eventId,
+    });
   } catch (error) {
     const status = (error as { statusCode?: number }).statusCode;
     if (status === 404) {
       // Event already deleted — not an error
       console.info(`[Graph] Event ${eventId} already deleted (404)`);
+      await logCalendarOp({
+        operation: "delete",
+        status: "success",
+        graphEventId: eventId,
+        metadata: { note: "already deleted (404)" },
+      });
       return;
     }
     console.error("[Graph] cancelCalendarEvent error:", error);
+    await logCalendarOp({
+      operation: "delete",
+      status: "failed",
+      graphEventId: eventId,
+      errorMessage: String(error),
+    });
     // Rethrow so callers can set calendarWarning
     throw error;
   }
