@@ -1,6 +1,8 @@
 "use client";
 
 import { useTransition, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { cancelBookingAction } from "../actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +37,7 @@ export function CancelBookingButton({
 }: CancelBookingButtonProps) {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   const [hoursUntilBooking] = useState(() => {
     const dt = new Date(bookingDate);
@@ -47,7 +50,11 @@ export function CancelBookingButton({
 
   function handleCancel(chargeLateFee: boolean) {
     startTransition(async () => {
-      await cancelBookingAction(bookingId, chargeLateFee);
+      const result = await cancelBookingAction(bookingId, chargeLateFee);
+      if (result.calendarWarning) {
+        toast.warning(result.calendarWarning, { duration: 10000 });
+      }
+      router.push("/admin/bookings");
     });
   }
 

@@ -9,6 +9,10 @@ import {
 import { TIMEZONE } from "@/lib/booking-config";
 import { formatInTimeZone } from "date-fns-tz";
 
+// ────────────────────────────────────────────────────────────
+// Config & client
+// ────────────────────────────────────────────────────────────
+
 interface GraphConfig {
   tenantId: string;
   clientId: string;
@@ -40,12 +44,53 @@ function createGraphClient(config: GraphConfig): Client {
   return Client.initWithMiddleware({ authProvider });
 }
 
+// ────────────────────────────────────────────────────────────
+// Retry helper for transient Graph API failures
+// ────────────────────────────────────────────────────────────
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = 2,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      lastError = error;
+      const status = (error as { statusCode?: number }).statusCode;
+      const retryable = status === 429 || status === 503 || status === 504;
+
+      if (!retryable || attempt === maxRetries) {
+        throw error;
+      }
+
+      // Respect Retry-After header if present, otherwise exponential backoff
+      const retryAfter = (error as { headers?: { get?: (k: string) => string } }).headers?.get?.("Retry-After");
+      const delayMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : Math.min(1000 * Math.pow(2, attempt), 8000);
+
+      console.warn(
+        `[Graph] ${label} attempt ${attempt + 1} failed (${status}), retrying in ${delayMs}ms`,
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastError;
+}
+
+// ────────────────────────────────────────────────────────────
+// Free/busy
+// ────────────────────────────────────────────────────────────
+
 export async function getFreeBusy(
   startDate: Date,
   endDate: Date
-): Promise<{ start: string; end: string }[]> {
+): Promise<{ slots: { start: string; end: string }[]; failed: boolean }> {
   const config = getGraphConfig();
-  if (!config) return [];
+  if (!config) return { slots: [], failed: true };
 
   try {
     const client = createGraphClient(config);
@@ -54,26 +99,24 @@ export async function getFreeBusy(
     const startLocal = formatInTimeZone(startDate, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss");
     const endLocal = formatInTimeZone(endDate, TIMEZONE, "yyyy-MM-dd'T'HH:mm:ss");
 
-    const response = await client
-      .api(`/users/${config.userEmail}/calendar/getSchedule`)
-      .post({
-        schedules: [config.userEmail],
-        startTime: {
-          dateTime: startLocal,
-          timeZone: TIMEZONE,
-        },
-        endTime: {
-          dateTime: endLocal,
-          timeZone: TIMEZONE,
-        },
-        availabilityViewInterval: 15,
-      });
+    const response = await withRetry(
+      () =>
+        client
+          .api(`/users/${config.userEmail}/calendar/getSchedule`)
+          .post({
+            schedules: [config.userEmail],
+            startTime: { dateTime: startLocal, timeZone: TIMEZONE },
+            endTime: { dateTime: endLocal, timeZone: TIMEZONE },
+            availabilityViewInterval: 15,
+          }),
+      "getFreeBusy",
+    );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const schedule = (response as any).value?.[0];
-    if (!schedule?.scheduleItems) return [];
+    if (!schedule?.scheduleItems) return { slots: [], failed: false };
 
-    return schedule.scheduleItems
+    const slots = schedule.scheduleItems
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .filter((item: any) => item.status !== "free")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,7 +126,6 @@ export async function getFreeBusy(
         const endDt = item.end.dateTime as string;
         const endTz = (item.end.timeZone as string) || "UTC";
 
-        // Convert to SAST so availability.ts can compare directly
         const startSast = formatInTimeZone(
           startTz === "UTC" ? new Date(startDt + "Z") : new Date(startDt),
           TIMEZONE,
@@ -97,11 +139,16 @@ export async function getFreeBusy(
 
         return { start: startSast, end: endSast };
       });
+    return { slots, failed: false };
   } catch (error) {
-    console.error("Graph API getFreeBusy error:", error);
-    return [];
+    console.error("[Graph] getFreeBusy error:", error);
+    return { slots: [], failed: true };
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// Create single calendar event
+// ────────────────────────────────────────────────────────────
 
 export async function createCalendarEvent(params: {
   subject: string;
@@ -118,43 +165,47 @@ export async function createCalendarEvent(params: {
   try {
     const client = createGraphClient(config);
 
-    const event = await client
-      .api(`/users/${config.userEmail}/events`)
-      .post({
-        subject: params.subject,
-        body: {
-          contentType: "HTML",
-          content: params.description || "",
-        },
-        start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
-        end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
-        attendees: [
-          {
-            emailAddress: {
-              address: params.clientEmail,
-              name: params.clientName,
+    const event = await withRetry(
+      () =>
+        client
+          .api(`/users/${config.userEmail}/events`)
+          .post({
+            subject: params.subject,
+            body: {
+              contentType: "HTML",
+              content: params.description || "",
             },
-            type: "required",
-          },
-        ],
-        ...(params.isOnlineMeeting !== false && {
-          isOnlineMeeting: true,
-          onlineMeetingProvider: "teamsForBusiness",
-        }),
-      });
+            start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
+            end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
+            attendees: [
+              {
+                emailAddress: {
+                  address: params.clientEmail,
+                  name: params.clientName,
+                },
+                type: "required",
+              },
+            ],
+            ...(params.isOnlineMeeting !== false && {
+              isOnlineMeeting: true,
+              onlineMeetingProvider: "teamsForBusiness",
+            }),
+          }),
+      "createCalendarEvent",
+    );
 
     return {
       eventId: event.id ?? "",
       teamsMeetingUrl: event.onlineMeeting?.joinUrl ?? "",
     };
   } catch (error) {
-    console.error("Graph API createCalendarEvent error:", error);
+    console.error("[Graph] createCalendarEvent error:", error);
     return null;
   }
 }
 
 // ────────────────────────────────────────────────────────────
-// Create a single recurring calendar event (one invite for the entire series)
+// Create recurring calendar event
 // ────────────────────────────────────────────────────────────
 
 const GRAPH_DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
@@ -176,10 +227,22 @@ export async function createRecurringCalendarEvent(params: {
   try {
     const client = createGraphClient(config);
 
-    // Extract day of week from the start date
+    // Use formatInTimeZone to get the correct day-of-week in SAST,
+    // not the system timezone (which differs on Vercel vs dev machine)
     const startDate = new Date(params.startDateTime);
-    const dayOfWeek = GRAPH_DAY_NAMES[startDate.getDay()];
-    const startDateStr = params.startDateTime.split("T")[0];
+    const dayIndexSast = parseInt(
+      formatInTimeZone(startDate, TIMEZONE, "e"), // 1=Monday, 7=Sunday (ISO)
+      10,
+    );
+    // Convert ISO day index to JS getDay() style (0=Sunday, 6=Saturday)
+    const jsDayIndex = dayIndexSast === 7 ? 0 : dayIndexSast;
+    const dayOfWeek = GRAPH_DAY_NAMES[jsDayIndex];
+
+    const startDateStr = formatInTimeZone(startDate, TIMEZONE, "yyyy-MM-dd");
+
+    // Compute the week-of-month index in SAST
+    const dayOfMonth = parseInt(formatInTimeZone(startDate, TIMEZONE, "d"), 10);
+    const weekIndex = Math.min(Math.ceil(dayOfMonth / 7) - 1, 4); // 0-4
 
     // Build the recurrence object based on pattern
     let recurrence: Record<string, unknown>;
@@ -199,8 +262,6 @@ export async function createRecurringCalendarEvent(params: {
       };
     } else {
       // monthly — use "relativeMonthly" (nth weekday of month)
-      const dayOfMonth = startDate.getDate();
-      const weekIndex = Math.min(Math.ceil(dayOfMonth / 7) - 1, 4); // 0-4
       recurrence = {
         pattern: {
           type: "relativeMonthly",
@@ -216,94 +277,150 @@ export async function createRecurringCalendarEvent(params: {
       };
     }
 
-    const event = await client
-      .api(`/users/${config.userEmail}/events`)
-      .post({
-        subject: params.subject,
-        start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
-        end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
-        recurrence,
-        attendees: [
-          {
-            emailAddress: {
-              address: params.clientEmail,
-              name: params.clientName,
-            },
-            type: "required",
-          },
-        ],
-        ...(params.isOnlineMeeting !== false && {
-          isOnlineMeeting: true,
-          onlineMeetingProvider: "teamsForBusiness",
-        }),
-      });
+    const event = await withRetry(
+      () =>
+        client
+          .api(`/users/${config.userEmail}/events`)
+          .post({
+            subject: params.subject,
+            start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
+            end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
+            recurrence,
+            attendees: [
+              {
+                emailAddress: {
+                  address: params.clientEmail,
+                  name: params.clientName,
+                },
+                type: "required",
+              },
+            ],
+            ...(params.isOnlineMeeting !== false && {
+              isOnlineMeeting: true,
+              onlineMeetingProvider: "teamsForBusiness",
+            }),
+          }),
+      "createRecurringCalendarEvent",
+    );
 
     return {
       seriesEventId: event.id ?? "",
       teamsMeetingUrl: event.onlineMeeting?.joinUrl ?? "",
     };
   } catch (error) {
-    console.error("Graph API createRecurringCalendarEvent error:", error);
+    console.error("[Graph] createRecurringCalendarEvent error:", error);
     return null;
   }
 }
 
 // ────────────────────────────────────────────────────────────
 // Delete specific occurrences from a recurring event
-// (used when dates are skipped due to holidays/conflicts)
 // ────────────────────────────────────────────────────────────
 
 export async function deleteRecurringEventOccurrences(
   seriesEventId: string,
   datesToDelete: string[], // ["2026-05-01", "2026-06-16", ...]
-): Promise<void> {
-  if (datesToDelete.length === 0) return;
+): Promise<{ deleted: string[]; failed: string[] }> {
+  const result = { deleted: [] as string[], failed: [] as string[] };
+  if (datesToDelete.length === 0) return result;
 
   const config = getGraphConfig();
-  if (!config) return;
+  if (!config) return result;
 
   try {
     const client = createGraphClient(config);
 
-    // Fetch all instances in the series date range.
-    // SAST is UTC+2 with no DST — include explicit offset so Graph API doesn't
-    // interpret the datetimes as UTC and miss occurrences near midnight.
-    const earliest = datesToDelete[0];
-    const latest = datesToDelete[datesToDelete.length - 1];
-    const instances = await client
-      .api(`/users/${config.userEmail}/events/${seriesEventId}/instances`)
-      .query({
-        startDateTime: `${earliest}T00:00:00+02:00`,
-        endDateTime: `${latest}T23:59:59+02:00`,
-        $select: "id,start",
-        $top: 200,
-      })
-      .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
-      .get();
+    // Sort dates to get the range
+    const sorted = [...datesToDelete].sort();
+    const earliest = sorted[0];
+    const latest = sorted[sorted.length - 1];
+
+    // SAST is UTC+2 with no DST — include explicit offset so Graph API
+    // doesn't interpret the datetimes as UTC and miss occurrences near midnight.
+    const instances = await withRetry(
+      () =>
+        client
+          .api(`/users/${config.userEmail}/events/${seriesEventId}/instances`)
+          .query({
+            startDateTime: `${earliest}T00:00:00+02:00`,
+            endDateTime: `${latest}T23:59:59+02:00`,
+            $select: "id,start",
+            $top: 200,
+          })
+          .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+          .get(),
+      "deleteRecurringEventOccurrences:list",
+    );
 
     const deleteSet = new Set(datesToDelete);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const instance of (instances.value || []) as any[]) {
+      // Extract date in SAST (Graph returns in requested timezone via Prefer header)
       const instanceDate = (instance.start?.dateTime as string)?.split("T")[0];
-      if (instanceDate && deleteSet.has(instanceDate)) {
-        await client
-          .api(`/users/${config.userEmail}/events/${instance.id}`)
-          .delete();
+      if (!instanceDate || !deleteSet.has(instanceDate)) continue;
+
+      try {
+        await withRetry(
+          () =>
+            client
+              .api(`/users/${config.userEmail}/events/${instance.id}`)
+              .delete(),
+          `deleteOccurrence:${instanceDate}`,
+          1, // fewer retries for individual deletions
+        );
+        result.deleted.push(instanceDate);
+      } catch (error) {
+        const status = (error as { statusCode?: number }).statusCode;
+        if (status === 404) {
+          // Already deleted — treat as success
+          result.deleted.push(instanceDate);
+        } else {
+          console.error(`[Graph] Failed to delete occurrence ${instanceDate}:`, error);
+          result.failed.push(instanceDate);
+        }
       }
     }
+
+    return result;
+  } catch (error) {
+    console.error("[Graph] deleteRecurringEventOccurrences error:", error);
+    return result;
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// Cancel (delete) a single calendar event
+// ────────────────────────────────────────────────────────────
 
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
   const config = getGraphConfig();
   if (!config) return;
 
-  const client = createGraphClient(config);
-  await client
-    .api(`/users/${config.userEmail}/events/${eventId}`)
-    .delete();
+  try {
+    const client = createGraphClient(config);
+    await withRetry(
+      () =>
+        client
+          .api(`/users/${config.userEmail}/events/${eventId}`)
+          .delete(),
+      "cancelCalendarEvent",
+    );
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode;
+    if (status === 404) {
+      // Event already deleted — not an error
+      console.info(`[Graph] Event ${eventId} already deleted (404)`);
+      return;
+    }
+    console.error("[Graph] cancelCalendarEvent error:", error);
+    // Don't rethrow — calendar failures shouldn't block booking operations
+  }
 }
+
+// ────────────────────────────────────────────────────────────
+// Test connection
+// ────────────────────────────────────────────────────────────
 
 export async function testGraphConnection(): Promise<{
   success: boolean;

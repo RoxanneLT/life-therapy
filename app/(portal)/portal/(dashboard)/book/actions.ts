@@ -171,7 +171,7 @@ export async function createPortalBooking(formData: FormData) {
     : getSessionPrice(parsed.sessionType as "individual" | "couples", currency, settings);
 
   // Re-validate slot availability (race condition guard)
-  const slots = await getAvailableSlots(parsed.date, sessionConfig);
+  const { slots } = await getAvailableSlots(parsed.date, sessionConfig);
   const slotAvailable = slots.some((s) => s.start === parsed.startTime);
   if (!slotAvailable) {
     throw new Error("This time slot is no longer available. Please choose another.");

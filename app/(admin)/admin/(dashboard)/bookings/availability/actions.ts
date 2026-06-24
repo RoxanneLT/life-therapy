@@ -55,7 +55,7 @@ export async function debugAvailability(dateStr: string) {
   // 2. Graph calendar busy times
   const dayStartUtc = fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
   const dayEndUtc = fromZonedTime(`${dateStr}T23:59:59`, TIMEZONE);
-  const busyTimes = await getFreeBusy(dayStartUtc, dayEndUtc);
+  const { slots: busySlots, failed: freeBusyFailed } = await getFreeBusy(dayStartUtc, dayEndUtc);
 
   // 3. Existing DB bookings
   const bookings = await prisma.booking.findMany({
@@ -69,7 +69,8 @@ export async function debugAvailability(dateStr: string) {
   return {
     date: dateStr,
     override: override ? { isBlocked: override.isBlocked, startTime: override.startTime, endTime: override.endTime, reason: override.reason } : null,
-    graphBusyTimes: busyTimes,
+    graphBusyTimes: busySlots,
+    freeBusyFailed,
     dbBookings: bookings,
     graphQueryWindow: {
       start: dayStartUtc.toISOString(),

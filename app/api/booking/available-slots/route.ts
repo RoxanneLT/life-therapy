@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const slots = await getAvailableSlots(dateStr, config, { skipMinNotice });
+  const { slots, freeBusyFailed } = await getAvailableSlots(dateStr, config, { skipMinNotice });
 
-  return NextResponse.json({ slots });
+  return NextResponse.json({ slots, freeBusyFailed });
 }

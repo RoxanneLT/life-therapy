@@ -64,6 +64,7 @@ export function ReschedulePicker({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(!!defaultDate);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [freeBusyFailed, setFreeBusyFailed] = useState(false);
 
   const fetchDates = useCallback(async () => {
     setLoadingDates(true);
@@ -92,6 +93,7 @@ export function ReschedulePicker({
       .then((data) => {
         const fetched: Slot[] = data.slots || [];
         setSlots(fetched);
+        setFreeBusyFailed(!!data.freeBusyFailed);
         if (defaultTime) {
           const match = fetched.find((s) => s.start === defaultTime);
           if (match) setSelectedSlot(match);
@@ -116,6 +118,7 @@ export function ReschedulePicker({
     setSelectedSlot(null);
     setLoadingSlots(true);
     setSlots([]);
+    setFreeBusyFailed(false);
     try {
       const res = await fetch(
         `/api/booking/available-slots?type=${sessionType}&date=${dateStr}${isAdmin ? "&admin=1" : ""}`
@@ -123,6 +126,7 @@ export function ReschedulePicker({
       if (res.ok) {
         const data = await res.json();
         setSlots(data.slots || []);
+        setFreeBusyFailed(!!data.freeBusyFailed);
       }
     } finally {
       setLoadingSlots(false);
@@ -239,6 +243,12 @@ export function ReschedulePicker({
 
           {/* Right: Time slots */}
           <div className="min-w-0 flex-1">
+            {isAdmin && freeBusyFailed && (
+              <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                ⚠ Calendar sync unavailable — slots may conflict with existing appointments
+              </div>
+            )}
+
             {!selectedDate ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Select a date to see available times

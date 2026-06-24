@@ -7,12 +7,18 @@ import { redirect } from "next/navigation";
 import { cancelCalendarEvent, createCalendarEvent, createRecurringCalendarEvent, deleteRecurringEventOccurrences } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
-import { getSessionTypeConfig } from "@/lib/booking-config";
+import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { randomUUID } from "node:crypto";
+
+/** Extract SAST date string from a booking date for Graph API occurrence operations. */
+function toSastDateStr(date: Date | string): string {
+  return formatInTimeZone(new Date(date), TIMEZONE, "yyyy-MM-dd");
+}
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 
@@ -30,14 +36,18 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
     data: { status, ...(billingNote ? { billingNote } : {}) },
   });
 
+  let calendarWarning: string | undefined;
+
   if (status === "cancelled") {
     if (booking.graphEventId) {
       if (booking.recurringSeriesId) {
-        // Part of a recurring series — delete only this occurrence, not the whole series
-        const dateStr = new Date(booking.date).toISOString().split("T")[0];
-        await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
+        const dateStr = toSastDateStr(booking.date);
+        const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
+        if (delResult.failed.length > 0) {
+          calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
+        }
       } else {
-        await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+        await cancelCalendarEvent(booking.graphEventId);
       }
     }
     const config = getSessionTypeConfig(booking.sessionType);
@@ -53,6 +63,9 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${id}`);
+  if (calendarWarning) {
+    redirect(`/admin/bookings/${id}?calendarWarning=${encodeURIComponent(calendarWarning)}`);
+  }
 }
 
 export async function updateBookingNotes(id: string, formData: FormData) {
@@ -83,10 +96,10 @@ export async function deleteBooking(id: string) {
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (booking?.graphEventId) {
     if (booking.recurringSeriesId) {
-      const dateStr = new Date(booking.date).toISOString().split("T")[0];
-      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
+      const dateStr = toSastDateStr(booking.date);
+      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
     } else {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+      await cancelCalendarEvent(booking.graphEventId);
     }
   }
 
@@ -106,23 +119,7 @@ export async function rescheduleBooking(
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) throw new Error("Booking not found");
 
-  // Cancel old calendar event (or just the occurrence if part of a series)
-  let calendarWarning: string | undefined;
-  if (booking.graphEventId) {
-    try {
-      if (booking.recurringSeriesId) {
-        const oldDateStr = new Date(booking.date).toISOString().split("T")[0];
-        await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]);
-      } else {
-        await cancelCalendarEvent(booking.graphEventId);
-      }
-    } catch (err) {
-      console.error("rescheduleBooking: failed to remove old calendar event:", err);
-      calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
-    }
-  }
-
-  // Create new calendar event
+  // Step 1: Create new calendar event FIRST — a temporary duplicate is better than losing both
   const config = getSessionTypeConfig(booking.sessionType);
   const dateObj = new Date(newDate + "T00:00:00Z");
   const calResult = await createCalendarEvent({
@@ -131,11 +128,28 @@ export async function rescheduleBooking(
     endDateTime: `${newDate}T${newEndTime}:00`,
     clientName: booking.clientName,
     clientEmail: booking.clientEmail,
-  }).catch((err: unknown) => {
-    console.error("rescheduleBooking: failed to create new calendar event:", err);
-    if (!calendarWarning) calendarWarning = "New Outlook event could not be created — please add it manually.";
-    return null;
   });
+
+  let calendarWarning: string | undefined;
+
+  // Step 2: Only then remove the old calendar event
+  if (booking.graphEventId) {
+    if (booking.recurringSeriesId) {
+      const oldDateStr = toSastDateStr(booking.date);
+      const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]);
+      if (delResult.failed.length > 0) {
+        calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
+      }
+    } else {
+      await cancelCalendarEvent(booking.graphEventId);
+    }
+  }
+
+  if (!calResult) {
+    calendarWarning = calendarWarning
+      ? "Both old and new Outlook events failed — please update calendar manually."
+      : "New Outlook event could not be created — please add it manually.";
+  }
 
   // Update booking record
   await prisma.booking.update({
@@ -190,7 +204,7 @@ export async function rescheduleSeriesAction(
   seriesId: string,
   newDayOfWeek: number, // 1=Mon..5=Fri
   newStartTime: string, // HH:mm
-): Promise<{ updated: number; skipped: { id: string; date: string; reason: string }[] }> {
+): Promise<{ updated: number; skipped: { id: string; date: string; reason: string }[]; calendarWarning?: string }> {
   await requireRole("super_admin", "editor");
 
   const today = new Date();
@@ -275,7 +289,7 @@ export async function rescheduleSeriesAction(
   // ── Delete old recurring calendar event once ─────────────────────────
   const oldSeriesEventId = bookings[0].graphEventId;
   if (oldSeriesEventId) {
-    await cancelCalendarEvent(oldSeriesEventId).catch(console.error);
+    await cancelCalendarEvent(oldSeriesEventId);
   }
 
   // ── Create ONE new recurring event on the new day ──────────────────
@@ -319,7 +333,7 @@ export async function rescheduleSeriesAction(
         }
       }
       if (skippedISODates.length > 0) {
-        await deleteRecurringEventOccurrences(newSeriesEventId, skippedISODates).catch(console.error);
+        await deleteRecurringEventOccurrences(newSeriesEventId, skippedISODates);
       }
     }
   }
@@ -364,8 +378,12 @@ export async function rescheduleSeriesAction(
     console.error("Failed to send series reschedule email:", err);
   }
 
+  const seriesCalendarWarning = updatedBookings.length > 0 && !newSeriesEventId
+    ? "Recurring calendar event could not be created — please add it manually in Outlook."
+    : undefined;
+
   revalidatePath("/admin/bookings");
-  return { updated, skipped };
+  return { updated, skipped, calendarWarning: seriesCalendarWarning };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -400,11 +418,12 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
 
   let calendarWarning: string | undefined;
   if (seriesGraphEventId) {
-    try {
-      await cancelCalendarEvent(seriesGraphEventId);
-    } catch (err) {
-      console.error("cancelSeriesAction: Graph calendar sync failed:", err);
-      calendarWarning = "Sessions cancelled in the system, but the Outlook calendar event could not be removed. Please delete it manually.";
+    // Delete only the future occurrences, not the series master — this preserves past calendar
+    // entries in attendees' calendars while removing the upcoming sessions.
+    const futureDates = bookings.map((b) => toSastDateStr(b.date));
+    const delResult = await deleteRecurringEventOccurrences(seriesGraphEventId, futureDates);
+    if (delResult.failed.length > 0) {
+      calendarWarning = `${delResult.failed.length} Outlook occurrence(s) could not be removed — please delete them manually.`;
     }
   } else {
     calendarWarning = "No calendar event found for this series — nothing to remove from Outlook.";
@@ -561,7 +580,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
   const settings = await getSiteSettings();
 
   // Validate slot availability (race condition guard)
-  const slots = await getAvailableSlots(data.date, config, { skipMinNotice: true });
+  const { slots } = await getAvailableSlots(data.date, config, { skipMinNotice: true });
   const slotAvailable = slots.some((s) => s.start === data.startTime);
   if (!slotAvailable) {
     throw new Error("This time slot is no longer available. Please choose another.");
@@ -700,7 +719,11 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
   }
 
   revalidatePath("/admin/bookings");
-  return { success: true, bookingId: booking.id };
+  return {
+    success: true,
+    bookingId: booking.id,
+    calendarWarning: !calResult ? "Calendar event could not be created — please add it manually in Outlook." : undefined,
+  };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -757,7 +780,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
   // ── Step 1: Check which dates are available ──────────────────────
   const availableDates: string[] = [];
   for (const dateStr of dates) {
-    const slots = await getAvailableSlots(dateStr, config);
+    const { slots } = await getAvailableSlots(dateStr, config);
     const slotAvailable = slots.some((s) => s.start === data.startTime);
     if (!slotAvailable) {
       skippedDates.push({ date: dateStr, reason: "Slot unavailable" });
@@ -792,7 +815,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     // Delete Graph occurrences for skipped dates (holidays, conflicts)
     if (seriesEventId && skippedDates.length > 0) {
       const skippedDateStrings = skippedDates.map(s => s.date);
-      await deleteRecurringEventOccurrences(seriesEventId, skippedDateStrings).catch(console.error);
+      await deleteRecurringEventOccurrences(seriesEventId, skippedDateStrings);
     }
   }
 
@@ -896,6 +919,9 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     skipped: skippedDates,
     creditsUsed,
     seriesId: recurringSeriesId,
+    calendarWarning: availableDates.length > 0 && !seriesEventId
+      ? "Recurring calendar event could not be created — please add it manually in Outlook."
+      : undefined,
   };
 }
 
@@ -928,14 +954,10 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
   if (toDelete.length === 0) return { deleted: 0 };
   for (const booking of toDelete) {
     if (booking.graphEventId) {
-      try {
-        if (booking.recurringSeriesId) {
-          await deleteRecurringEventOccurrences(booking.graphEventId, [format(new Date(booking.date), "yyyy-MM-dd")]);
-        } else {
-          await cancelCalendarEvent(booking.graphEventId);
-        }
-      } catch {
-        // calendar event may already be deleted
+      if (booking.recurringSeriesId) {
+        await deleteRecurringEventOccurrences(booking.graphEventId, [toSastDateStr(booking.date)]);
+      } else {
+        await cancelCalendarEvent(booking.graphEventId);
       }
     }
   }
@@ -1068,12 +1090,16 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
     },
   });
 
+  let calendarWarning: string | undefined;
   if (booking.graphEventId) {
     if (booking.recurringSeriesId) {
-      const dateStr = new Date(booking.date).toISOString().split("T")[0];
-      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
+      const dateStr = toSastDateStr(booking.date);
+      const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
+      if (delResult.failed.length > 0) {
+        calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
+      }
     } else {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+      await cancelCalendarEvent(booking.graphEventId);
     }
   }
 
@@ -1124,7 +1150,7 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${id}`);
-  redirect("/admin/bookings");
+  return { success: true as const, calendarWarning };
 }
 
 // ────────────────────────────────────────────────────────────

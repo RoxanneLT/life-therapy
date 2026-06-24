@@ -27,7 +27,7 @@ export async function portalCancelBookingAction(
 
   // Cancel calendar event
   if (booking.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    await cancelCalendarEvent(booking.graphEventId);
   }
 
   const isLate = result.type === "late" || result.type === "anti_abuse";
@@ -107,7 +107,7 @@ export async function portalRescheduleBookingAction(
 
   // Re-validate slot availability (race condition guard)
   const config = getSessionTypeConfig(booking.sessionType);
-  const slots = await getAvailableSlots(newDate, config);
+  const { slots } = await getAvailableSlots(newDate, config);
   const slotValid = slots.some(
     (s) => s.start === newStartTime && s.end === newEndTime
   );
@@ -115,7 +115,7 @@ export async function portalRescheduleBookingAction(
 
   // Cancel old calendar event
   if (booking.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    await cancelCalendarEvent(booking.graphEventId);
   }
 
   // Create new calendar event

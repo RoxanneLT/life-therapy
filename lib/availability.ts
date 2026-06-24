@@ -89,7 +89,7 @@ export async function getAvailableSlots(
   dateStr: string,
   sessionConfig: SessionTypeConfig,
   options?: { skipMinNotice?: boolean }
-): Promise<TimeSlot[]> {
+): Promise<{ slots: TimeSlot[]; freeBusyFailed: boolean }> {
   const settings = await getSiteSettings();
   const businessHours = getBusinessHours(settings);
 
@@ -97,14 +97,14 @@ export async function getAvailableSlots(
   const noonUtc = new Date(`${dateStr}T12:00:00Z`);
   const dayKey = DAY_MAP[noonUtc.getUTCDay()];
   const dayHours: BusinessHoursDay = businessHours[dayKey];
-  if (dayHours.closed) return [];
+  if (dayHours.closed) return { slots: [], freeBusyFailed: false };
 
   // 2. Check availability override — midnight UTC for @db.Date
   const dateUtc = new Date(`${dateStr}T00:00:00Z`);
   const override = await prisma.availabilityOverride.findUnique({
     where: { date: dateUtc },
   });
-  if (override?.isBlocked) return [];
+  if (override?.isBlocked) return { slots: [], freeBusyFailed: false };
 
   const openTime = override?.startTime || dayHours.open;
   const closeTime = override?.endTime || dayHours.close;
@@ -114,12 +114,12 @@ export async function getAvailableSlots(
   const buffer = settings.bookingBufferMinutes ?? 15;
   const candidates = generateSlots(openTime, closeTime, slotDuration, buffer);
 
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) return { slots: [], freeBusyFailed: false };
 
   // 4. Get Exchange calendar busy times (proper UTC boundaries for SAST day)
   const dayStartUtc = fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
   const dayEndUtc = fromZonedTime(`${dateStr}T23:59:59`, TIMEZONE);
-  const busyTimes = await getFreeBusy(dayStartUtc, dayEndUtc);
+  const { slots: busyTimes, failed: freeBusyFailed } = await getFreeBusy(dayStartUtc, dayEndUtc);
 
   // 5. Get existing bookings from our DB (resilience layer)
   const existingBookings = await prisma.booking.findMany({
@@ -147,11 +147,12 @@ export async function getAvailableSlots(
   const nowMs = Date.now();
   const minNoticeMs = (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
 
-  return candidates.filter((slot) => {
+  const slots = candidates.filter((slot) => {
     const slotUtc = fromZonedTime(`${dateStr}T${slot.start}:00`, TIMEZONE);
     if (!options?.skipMinNotice && slotUtc.getTime() - nowMs < minNoticeMs) return false;
     return !blockedRanges.some((r) => timeRangesOverlap(slot.start, slot.end, r.start, r.end));
   });
+  return { slots, freeBusyFailed };
 }
 
 export async function getAvailableDates(options?: { includeToday?: boolean; maxDaysOverride?: number }): Promise<string[]> {
