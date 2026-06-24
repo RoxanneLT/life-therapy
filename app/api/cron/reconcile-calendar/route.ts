@@ -7,11 +7,15 @@ export const maxDuration = 120; // 2 minutes max (Vercel)
 async function handler() {
   const result = await reconcileCalendar({
     autoFix: true, // auto-create missing events
-    daysAhead: 60, // check next 60 days
+    daysAhead: 365, // check the full booking horizon
   });
 
   const unfixedMissing = result.missing.filter((m) => !m.autoFixed);
-  const driftCount = result.mismatched.length + unfixedMissing.length;
+  const driftCount =
+    result.mismatched.length +
+    unfixedMissing.length +
+    result.orphaned.length +
+    result.onHoliday.length;
 
   await logCalendarOp({
     operation: "reconcile",
@@ -21,6 +25,8 @@ async function handler() {
       matched: result.matched,
       mismatched: result.mismatched.length,
       missing: result.missing.length,
+      orphaned: result.orphaned.length,
+      onHoliday: result.onHoliday.length,
       fixed: result.fixed,
       errors: result.errors,
     },
@@ -44,14 +50,24 @@ async function handler() {
         .map((m) => `• ${m.clientName} on ${m.date} at ${m.time} (${m.reason})`)
         .join("\n");
 
+      const orphanList = result.orphaned
+        .map((o) => `• ${o.subject} — ${o.date}`)
+        .join("\n");
+
+      const holidayList = result.onHoliday
+        .map((h) => `• ${h.clientName} on ${h.date} at ${h.time}`)
+        .join("\n");
+
       await sendEmail({
         to: settings.email || "hello@life-therapy.co.za",
-        subject: `⚠️ Calendar sync: ${result.mismatched.length} mismatched, ${unfixedMissing.length} missing`,
+        subject: `⚠️ Calendar sync: ${result.mismatched.length} mismatched, ${unfixedMissing.length} missing, ${result.orphaned.length} stale`,
         html: `
           <h3>Calendar Reconciliation Report</h3>
           <p>Checked ${result.checked} bookings, ${result.matched} matched, ${result.fixed} auto-fixed.</p>
           ${mismatchList ? `<h4>Mismatched (wrong date/time in Outlook):</h4><pre>${mismatchList}</pre>` : ""}
           ${missingList ? `<h4>Missing from Outlook (could not auto-fix):</h4><pre>${missingList}</pre>` : ""}
+          ${orphanList ? `<h4>Stale / wrong events in Outlook (no matching booking — delete manually):</h4><pre>${orphanList}</pre>` : ""}
+          ${holidayList ? `<h4>Bookings on public holidays (should not exist):</h4><pre>${holidayList}</pre>` : ""}
           ${result.errors.length > 0 ? `<h4>Errors:</h4><pre>${result.errors.join("\n")}</pre>` : ""}
         `,
         templateKey: "system_notification",

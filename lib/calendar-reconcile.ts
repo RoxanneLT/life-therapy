@@ -11,6 +11,7 @@ export interface ReconcileResult {
   mismatched: MismatchDetail[];
   missing: MissingDetail[];
   orphaned: OrphanedDetail[];
+  onHoliday: HolidayDetail[];
   fixed: number;
   errors: string[];
 }
@@ -40,12 +41,26 @@ interface OrphanedDetail {
   date: string;
 }
 
+interface HolidayDetail {
+  bookingId: string;
+  clientName: string;
+  date: string;
+  time: string;
+  holiday: string;
+}
+
+/** Normalised match key: a booking and a Teams event are "the same" if their
+ *  SAST date, start time, and client name agree. */
+function reconcileKey(date: string, time: string, clientName: string): string {
+  return `${date}|${time}|${clientName.toLowerCase().replace(/\s+/g, " ").trim()}`;
+}
+
 export async function reconcileCalendar(options?: {
   autoFix?: boolean;
   daysAhead?: number;
 }): Promise<ReconcileResult> {
   const autoFix = options?.autoFix ?? false;
-  const daysAhead = options?.daysAhead ?? 90;
+  const daysAhead = options?.daysAhead ?? 365;
 
   const result: ReconcileResult = {
     checked: 0,
@@ -53,6 +68,7 @@ export async function reconcileCalendar(options?: {
     mismatched: [],
     missing: [],
     orphaned: [],
+    onHoliday: [],
     fixed: 0,
     errors: [],
   };
@@ -223,7 +239,98 @@ export async function reconcileCalendar(options?: {
     }
   }
 
+  // 3. Business-rule check: confirmed/pending bookings on SA public holidays
+  try {
+    const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
+    for (const booking of bookings) {
+      const dateStr = formatInTimeZone(new Date(booking.date), TIMEZONE, "yyyy-MM-dd");
+      const d = new Date(`${dateStr}T12:00:00Z`);
+      if (isSAPublicHoliday(d)) {
+        result.onHoliday.push({
+          bookingId: booking.id,
+          clientName: booking.clientName,
+          date: dateStr,
+          time: `${booking.startTime}–${booking.endTime}`,
+          holiday: "Public holiday",
+        });
+      }
+    }
+  } catch (error) {
+    result.errors.push(`Holiday check failed: ${error}`);
+  }
+
+  // 4. Reverse scan: Teams session-events with no matching active booking
+  //    (stale/duplicate/wrong-time events left behind — the "incorrect" cases
+  //    a forward-only scan can't see).
+  try {
+    await findOrphanEvents(client, config, now, futureLimit, bookings, result);
+  } catch (error) {
+    result.errors.push(`Orphan scan failed: ${error}`);
+  }
+
   return result;
+}
+
+/**
+ * List every Outlook event in the window (calendarView expands recurrences),
+ * keep only our session events ("{label} — {clientName}"), and flag any whose
+ * date/time/client doesn't match an active booking — i.e. stale, duplicated,
+ * or wrong-time events that should not be on the calendar.
+ */
+async function findOrphanEvents(
+  client: ReturnType<typeof createGraphClient>,
+  config: NonNullable<ReturnType<typeof getGraphConfig>>,
+  windowStart: Date,
+  windowEnd: Date,
+  bookings: { date: Date; startTime: string; clientName: string }[],
+  result: ReconcileResult,
+): Promise<void> {
+  const expected = new Set<string>();
+  for (const b of bookings) {
+    const date = formatInTimeZone(new Date(b.date), TIMEZONE, "yyyy-MM-dd");
+    expected.add(reconcileKey(date, b.startTime, b.clientName));
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let page: any = await client
+    .api(`/users/${config.userEmail}/calendarView`)
+    .query({
+      // UTC ("Z") — a literal "+02:00" would be decoded as a space and rejected
+      startDateTime: windowStart.toISOString(),
+      endDateTime: windowEnd.toISOString(),
+      $select: "id,subject,start,end",
+      $top: 999,
+    })
+    .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+    .get();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const events: any[] = [...(page.value || [])];
+  let guard = 0;
+  while (page["@odata.nextLink"] && guard < 25) {
+    page = await client.api(page["@odata.nextLink"]).get();
+    events.push(...(page.value || []));
+    guard++;
+  }
+
+  for (const ev of events) {
+    const subject: string = ev.subject || "";
+    // Only our session events use the "{label} — {clientName}" pattern.
+    if (!subject.includes(" — ")) continue;
+    const startDt: string | undefined = ev.start?.dateTime;
+    if (!startDt) continue;
+
+    const date = startDt.substring(0, 10);
+    const time = startDt.substring(11, 16);
+    const clientName = subject.split(" — ").slice(1).join(" — ");
+
+    if (expected.has(reconcileKey(date, time, clientName))) continue; // legit
+    result.orphaned.push({
+      graphEventId: ev.id,
+      subject,
+      date: `${date} ${time}`,
+    });
+  }
 }
 
 /** Auto-fix a booking whose Outlook event is missing by creating a new one.

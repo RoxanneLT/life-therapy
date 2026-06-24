@@ -47,12 +47,27 @@ interface MissingDetail {
   autoFixed: boolean;
 }
 
+interface OrphanDetail {
+  graphEventId: string;
+  subject: string;
+  date: string;
+}
+
+interface HolidayDetail {
+  bookingId: string;
+  clientName: string;
+  date: string;
+  time: string;
+  holiday: string;
+}
+
 interface ReconcileResult {
   checked: number;
   matched: number;
   mismatched: MismatchDetail[];
   missing: MissingDetail[];
-  orphaned: { graphEventId: string; subject: string; date: string }[];
+  orphaned: OrphanDetail[];
+  onHoliday: HolidayDetail[];
   fixed: number;
   errors: string[];
 }
@@ -80,7 +95,8 @@ function buildReport(r: ReconcileResult, mode: string, ranAt: Date): string {
   lines.push(`Mode: ${mode}`);
   lines.push(
     `Checked ${r.checked} · Matched ${r.matched} · Auto-fixed ${r.fixed} · ` +
-      `Mismatched ${r.mismatched.length} · Missing ${r.missing.length} · Errors ${r.errors.length}`,
+      `Mismatched ${r.mismatched.length} · Missing ${r.missing.length} · ` +
+      `Stale ${r.orphaned.length} · Holiday ${r.onHoliday.length} · Errors ${r.errors.length}`,
   );
 
   if (r.mismatched.length) {
@@ -107,12 +123,22 @@ function buildReport(r: ReconcileResult, mode: string, ranAt: Date): string {
     }
   }
 
+  if (r.orphaned.length) {
+    lines.push("", `STALE / WRONG EVENTS IN OUTLOOK (${r.orphaned.length}) — no matching booking, delete manually:`);
+    for (const o of r.orphaned) lines.push(`  • ${o.subject} — ${o.date}`);
+  }
+
+  if (r.onHoliday.length) {
+    lines.push("", `BOOKINGS ON PUBLIC HOLIDAYS (${r.onHoliday.length}):`);
+    for (const h of r.onHoliday) lines.push(`  • ${h.clientName} ${h.date} ${h.time}`);
+  }
+
   if (r.errors.length) {
     lines.push("", `ERRORS (${r.errors.length}):`);
     for (const e of r.errors) lines.push(`  • ${e}`);
   }
 
-  if (!r.mismatched.length && !unfixed.length && !r.errors.length) {
+  if (!r.mismatched.length && !unfixed.length && !r.orphaned.length && !r.onHoliday.length && !r.errors.length) {
     lines.push("", "✓ No issues — every booking matches Outlook.");
   }
   return lines.join("\n");
@@ -146,7 +172,12 @@ function StatChip({
 function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileResult; mode: string; ranAt: Date }>) {
   const unfixedMissing = result.missing.filter((m) => !m.autoFixed);
   const fixedMissing = result.missing.filter((m) => m.autoFixed);
-  const issueCount = result.mismatched.length + unfixedMissing.length + result.errors.length;
+  const issueCount =
+    result.mismatched.length +
+    unfixedMissing.length +
+    result.orphaned.length +
+    result.onHoliday.length +
+    result.errors.length;
 
   function handleCopy() {
     const text = buildReport(result, mode, ranAt);
@@ -190,6 +221,8 @@ function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileRe
         <StatChip label="Auto-fixed" value={result.fixed} tone={result.fixed > 0 ? "good" : "neutral"} />
         <StatChip label="Mismatched" value={result.mismatched.length} tone={result.mismatched.length ? "warn" : "neutral"} />
         <StatChip label="Missing" value={unfixedMissing.length} tone={unfixedMissing.length ? "bad" : "neutral"} />
+        <StatChip label="Stale" value={result.orphaned.length} tone={result.orphaned.length ? "warn" : "neutral"} />
+        <StatChip label="Holiday" value={result.onHoliday.length} tone={result.onHoliday.length ? "warn" : "neutral"} />
         <StatChip label="Errors" value={result.errors.length} tone={result.errors.length ? "bad" : "neutral"} />
       </div>
 
@@ -271,6 +304,60 @@ function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileRe
                 className="rounded-md border border-green-200 bg-green-50/50 px-3 py-2 text-sm"
               >
                 <strong>{m.clientName}</strong> — {m.date} {m.time} · recreated in Outlook
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Stale / wrong events in Outlook (no matching booking) */}
+      {result.orphaned.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
+            <CalendarClock className="h-4 w-4" /> Stale / wrong events in Outlook ({result.orphaned.length})
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            These events are on the calendar but have <strong>no matching booking</strong> at that time — usually
+            leftover events from a past reschedule/cancel. This is what makes a session look &quot;at the wrong
+            time&quot;. Delete them manually in Outlook.
+          </p>
+          <ul className="space-y-1.5">
+            {result.orphaned.map((o) => (
+              <li
+                key={o.graphEventId}
+                className="rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm"
+              >
+                <strong>{o.subject}</strong> — {o.date}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Bookings on public holidays */}
+      {result.onHoliday.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
+            <CalendarX className="h-4 w-4" /> Bookings on public holidays ({result.onHoliday.length})
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            These confirmed bookings fall on SA public holidays. Confirm whether they should be cancelled.
+          </p>
+          <ul className="space-y-1.5">
+            {result.onHoliday.map((h) => (
+              <li
+                key={h.bookingId}
+                className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm"
+              >
+                <span>
+                  <strong>{h.clientName}</strong> — {h.date} {h.time}
+                </span>
+                <Link
+                  href={`/admin/bookings/${h.bookingId}`}
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+                >
+                  Open <ExternalLink className="h-3 w-3" />
+                </Link>
               </li>
             ))}
           </ul>

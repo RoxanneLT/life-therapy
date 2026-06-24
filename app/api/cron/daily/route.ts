@@ -102,14 +102,16 @@ export async function GET(request: NextRequest) {
     "calendarReconcile",
     async () => {
       const { reconcileCalendar } = await import("@/lib/calendar-reconcile");
-      const r = await reconcileCalendar({ autoFix: true, daysAhead: 60 });
+      const r = await reconcileCalendar({ autoFix: true, daysAhead: 365 });
       const unfixedMissing = r.missing.filter((m) => !m.autoFixed).length;
       return {
         checked: r.checked,
         matched: r.matched,
         fixed: r.fixed,
-        // Surface drift as "failed" count so it shows up in the digest
-        failed: r.mismatched.length + unfixedMissing,
+        // Surface all drift (mismatched + missing + stale + holiday) so it
+        // shows up in the digest
+        failed:
+          r.mismatched.length + unfixedMissing + r.orphaned.length + r.onHoliday.length,
       };
     },
     detail,

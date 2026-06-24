@@ -15,20 +15,24 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const autoFix = body.autoFix === true;
 
-  const result = await reconcileCalendar({ autoFix, daysAhead: 90 });
+  const result = await reconcileCalendar({ autoFix, daysAhead: 540 });
+
+  const unresolved =
+    result.mismatched.length +
+    result.missing.filter((m) => !m.autoFixed).length +
+    result.orphaned.length +
+    result.onHoliday.length;
 
   await logCalendarOp({
     operation: "reconcile",
-    status:
-      result.mismatched.length > 0 ||
-      result.missing.filter((m) => !m.autoFixed).length > 0
-        ? "partial"
-        : "success",
+    status: unresolved > 0 ? "partial" : "success",
     metadata: {
       checked: result.checked,
       matched: result.matched,
       mismatched: result.mismatched.length,
       missing: result.missing.length,
+      orphaned: result.orphaned.length,
+      onHoliday: result.onHoliday.length,
       fixed: result.fixed,
       manual: true,
       autoFix,
