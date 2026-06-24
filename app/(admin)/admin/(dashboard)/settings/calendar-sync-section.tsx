@@ -51,6 +51,7 @@ interface OrphanDetail {
   graphEventId: string;
   subject: string;
   date: string;
+  deleted: boolean;
 }
 
 interface HolidayDetail {
@@ -355,17 +356,24 @@ function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileRe
             <CalendarClock className="h-4 w-4" /> Stale / wrong events in Outlook ({result.orphaned.length})
           </h4>
           <p className="text-xs text-muted-foreground">
-            These events are on the calendar but have <strong>no matching booking</strong> at that time — usually
-            leftover events from a past reschedule/cancel. This is what makes a session look &quot;at the wrong
-            time&quot;. Delete them manually in Outlook.
+            Events on the calendar with <strong>no matching booking</strong> — leftovers from past
+            reschedules/cancels, the cause of &quot;wrong time&quot; sessions. Portal is the source of truth, so{" "}
+            <strong>Check &amp; Auto-Fix deletes these</strong>. Check-only just lists them.
           </p>
           <ul className="space-y-1.5">
             {result.orphaned.map((o) => (
               <li
                 key={o.graphEventId}
-                className="rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm"
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  o.deleted ? "border-green-200 bg-green-50/50" : "border-amber-200 bg-amber-50/50"
+                }`}
               >
                 <strong>{o.subject}</strong> — {o.date}
+                {o.deleted ? (
+                  <span className="ml-1 text-xs font-medium text-green-700">· deleted</span>
+                ) : (
+                  <span className="ml-1 text-xs font-medium text-amber-700">· will be deleted on auto-fix</span>
+                )}
               </li>
             ))}
           </ul>
@@ -543,9 +551,15 @@ export function CalendarSyncSection({
     if (diagEnd) params.set("end", diagEnd);
     fetch(`/api/admin/calendar-diagnostics?${params.toString()}`)
       .then(async (res) => {
-        const data = await res.json();
+        const text = await res.text();
+        let data: DiagnosticsResponse & { error?: string };
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`Server error (${res.status}). ${text.slice(0, 120)}`);
+        }
         if (!res.ok) throw new Error(data.error || "Diagnostics failed");
-        setDiag(data as DiagnosticsResponse);
+        setDiag(data);
       })
       .catch((err) => toast.error(err instanceof Error ? err.message : "Diagnostics failed"))
       .finally(() => setDiagLoading(false));
@@ -555,7 +569,7 @@ export function CalendarSyncSection({
     if (
       !confirm(
         autoFix
-          ? "Run reconciliation and auto-fix missing events? This creates new calendar events for bookings that are missing from Outlook."
+          ? "Run reconciliation and auto-fix? This CREATES calendar events for bookings missing from Outlook, and DELETES stale 'ghost' events that have no matching booking (portal is the source of truth). Up to 60 changes per run."
           : "Run reconciliation in check-only mode? No changes will be made.",
       )
     )
@@ -568,9 +582,19 @@ export function CalendarSyncSection({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ autoFix }),
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data: ReconcileResult & { error?: string };
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(
+            res.status === 504
+              ? "Timed out — too many bookings to process in one go. Try again (it resumes where it left off)."
+              : `Server error (${res.status}). ${text.slice(0, 120)}`,
+          );
+        }
         if (!res.ok) throw new Error(data.error || "Reconciliation failed");
-        setReconcileResult(data as ReconcileResult);
+        setReconcileResult(data);
         setRanMode(autoFix ? "Check & auto-fix" : "Check only");
         setRanAt(new Date());
         toast.success(

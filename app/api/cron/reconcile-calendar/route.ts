@@ -11,10 +11,11 @@ async function handler() {
   });
 
   const unfixedMissing = result.missing.filter((m) => !m.autoFixed);
+  const unresolvedOrphans = result.orphaned.filter((o) => !o.deleted);
   const driftCount =
     result.mismatched.length +
     unfixedMissing.length +
-    result.orphaned.length +
+    unresolvedOrphans.length +
     result.onHoliday.length;
 
   await logCalendarOp({
@@ -50,7 +51,7 @@ async function handler() {
         .map((m) => `• ${m.clientName} on ${m.date} at ${m.time} (${m.reason})`)
         .join("\n");
 
-      const orphanList = result.orphaned
+      const orphanList = unresolvedOrphans
         .map((o) => `• ${o.subject} — ${o.date}`)
         .join("\n");
 
@@ -58,15 +59,17 @@ async function handler() {
         .map((h) => `• ${h.clientName} on ${h.date} at ${h.time}`)
         .join("\n");
 
+      const ghostsDeleted = result.orphaned.filter((o) => o.deleted).length;
+
       await sendEmail({
         to: settings.email || "hello@life-therapy.co.za",
-        subject: `⚠️ Calendar sync: ${result.mismatched.length} mismatched, ${unfixedMissing.length} missing, ${result.orphaned.length} stale`,
+        subject: `⚠️ Calendar sync: ${result.mismatched.length} mismatched, ${unfixedMissing.length} missing, ${unresolvedOrphans.length} stale`,
         html: `
           <h3>Calendar Reconciliation Report</h3>
-          <p>Checked ${result.checked} bookings, ${result.matched} matched, ${result.fixed} auto-fixed.</p>
+          <p>Checked ${result.checked} bookings, ${result.matched} matched, ${result.fixed} auto-fixed (incl. ${ghostsDeleted} ghost event(s) deleted).</p>
           ${mismatchList ? `<h4>Mismatched (wrong date/time in Outlook):</h4><pre>${mismatchList}</pre>` : ""}
           ${missingList ? `<h4>Missing from Outlook (could not auto-fix):</h4><pre>${missingList}</pre>` : ""}
-          ${orphanList ? `<h4>Stale / wrong events in Outlook (no matching booking — delete manually):</h4><pre>${orphanList}</pre>` : ""}
+          ${orphanList ? `<h4>Stale / wrong events still in Outlook (no matching booking):</h4><pre>${orphanList}</pre>` : ""}
           ${holidayList ? `<h4>Bookings on public holidays (should not exist):</h4><pre>${holidayList}</pre>` : ""}
           ${result.errors.length > 0 ? `<h4>Errors:</h4><pre>${result.errors.join("\n")}</pre>` : ""}
         `,
