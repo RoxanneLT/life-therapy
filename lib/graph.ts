@@ -7,7 +7,7 @@ import {
   TokenCredentialAuthenticationProvider,
 } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import { TIMEZONE } from "@/lib/booking-config";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 
 // ────────────────────────────────────────────────────────────
@@ -373,15 +373,18 @@ export async function deleteRecurringEventOccurrences(
     const earliest = sorted[0];
     const latest = sorted[sorted.length - 1];
 
-    // SAST is UTC+2 with no DST — include explicit offset so Graph API
-    // doesn't interpret the datetimes as UTC and miss occurrences near midnight.
+    // Build the window in UTC (.toISOString ends in "Z"). A literal "+02:00"
+    // offset decodes to a space in the query string ("...T00:00:00 02:00") and
+    // Graph rejects it as an invalid StartDateTime — silently failing the delete.
+    const windowStart = fromZonedTime(`${earliest}T00:00:00`, TIMEZONE).toISOString();
+    const windowEnd = fromZonedTime(`${latest}T23:59:59`, TIMEZONE).toISOString();
     const instances = await withRetry(
       () =>
         client
           .api(`/users/${config.userEmail}/events/${seriesEventId}/instances`)
           .query({
-            startDateTime: `${earliest}T00:00:00+02:00`,
-            endDateTime: `${latest}T23:59:59+02:00`,
+            startDateTime: windowStart,
+            endDateTime: windowEnd,
             $select: "id,start",
             $top: 200,
           })

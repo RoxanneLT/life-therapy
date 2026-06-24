@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createGraphClient, getGraphConfig, createCalendarEvent } from "@/lib/graph";
 import { TIMEZONE, getSessionTypeConfig } from "@/lib/booking-config";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 import type { SessionType } from "@/lib/generated/prisma/client";
 
@@ -120,12 +120,17 @@ export async function reconcileCalendar(options?: {
     if (outlookEvent === undefined) {
       try {
         if (booking.recurringSeriesId) {
-          // Recurring — fetch the specific occurrence by date
+          // Recurring — fetch the specific occurrence by date.
+          // Build the window in UTC (.toISOString ends in "Z"); a literal
+          // "+02:00" offset decodes to a space in the query string and Graph
+          // rejects it.
+          const dayStart = fromZonedTime(`${expectedDate}T00:00:00`, TIMEZONE).toISOString();
+          const dayEnd = fromZonedTime(`${expectedDate}T23:59:59`, TIMEZONE).toISOString();
           const instances = await client
             .api(`/users/${config.userEmail}/events/${booking.graphEventId}/instances`)
             .query({
-              startDateTime: `${expectedDate}T00:00:00+02:00`,
-              endDateTime: `${expectedDate}T23:59:59+02:00`,
+              startDateTime: dayStart,
+              endDateTime: dayEnd,
               $select: "id,start,end,subject",
               $top: 5,
             })
