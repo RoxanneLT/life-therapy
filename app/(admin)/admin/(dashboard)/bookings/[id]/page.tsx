@@ -48,6 +48,7 @@ import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { RescheduleSeriesDialog } from "./reschedule-series-dialog";
 import { CancelBookingButton } from "./cancel-booking-button";
+import { CalendarWarningToast } from "./calendar-warning-toast";
 
 const PATTERN_LABELS: Record<string, string> = {
   weekly: "Weekly",
@@ -125,6 +126,7 @@ export default async function BookingDetailPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
+      <CalendarWarningToast />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/admin/bookings">

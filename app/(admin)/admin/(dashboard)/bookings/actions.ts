@@ -107,12 +107,18 @@ export async function rescheduleBooking(
   if (!booking) throw new Error("Booking not found");
 
   // Cancel old calendar event (or just the occurrence if part of a series)
+  let calendarWarning: string | undefined;
   if (booking.graphEventId) {
-    if (booking.recurringSeriesId) {
-      const oldDateStr = new Date(booking.date).toISOString().split("T")[0];
-      await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]).catch(console.error);
-    } else {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
+    try {
+      if (booking.recurringSeriesId) {
+        const oldDateStr = new Date(booking.date).toISOString().split("T")[0];
+        await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]);
+      } else {
+        await cancelCalendarEvent(booking.graphEventId);
+      }
+    } catch (err) {
+      console.error("rescheduleBooking: failed to remove old calendar event:", err);
+      calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
     }
   }
 
@@ -125,7 +131,11 @@ export async function rescheduleBooking(
     endDateTime: `${newDate}T${newEndTime}:00`,
     clientName: booking.clientName,
     clientEmail: booking.clientEmail,
-  }).catch(() => null);
+  }).catch((err: unknown) => {
+    console.error("rescheduleBooking: failed to create new calendar event:", err);
+    if (!calendarWarning) calendarWarning = "New Outlook event could not be created — please add it manually.";
+    return null;
+  });
 
   // Update booking record
   await prisma.booking.update({
@@ -166,7 +176,10 @@ export async function rescheduleBooking(
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${id}`);
-  redirect(`/admin/bookings/${id}`);
+  const redirectUrl = calendarWarning
+    ? `/admin/bookings/${id}?calendarWarning=${encodeURIComponent(calendarWarning)}`
+    : `/admin/bookings/${id}`;
+  redirect(redirectUrl);
 }
 
 // ────────────────────────────────────────────────────────────

@@ -265,14 +265,16 @@ export async function deleteRecurringEventOccurrences(
   try {
     const client = createGraphClient(config);
 
-    // Fetch all instances in the series date range
+    // Fetch all instances in the series date range.
+    // SAST is UTC+2 with no DST — include explicit offset so Graph API doesn't
+    // interpret the datetimes as UTC and miss occurrences near midnight.
     const earliest = datesToDelete[0];
     const latest = datesToDelete[datesToDelete.length - 1];
     const instances = await client
       .api(`/users/${config.userEmail}/events/${seriesEventId}/instances`)
       .query({
-        startDateTime: `${earliest}T00:00:00`,
-        endDateTime: `${latest}T23:59:59`,
+        startDateTime: `${earliest}T00:00:00+02:00`,
+        endDateTime: `${latest}T23:59:59+02:00`,
         $select: "id,start",
         $top: 200,
       })
@@ -287,14 +289,9 @@ export async function deleteRecurringEventOccurrences(
       if (instanceDate && deleteSet.has(instanceDate)) {
         await client
           .api(`/users/${config.userEmail}/events/${instance.id}`)
-          .delete()
-          .catch((err: unknown) =>
-            console.error(`Failed to delete occurrence ${instanceDate}:`, err)
-          );
+          .delete();
       }
     }
-  } catch (error) {
-    console.error("Graph API deleteRecurringEventOccurrences error:", error);
   }
 }
 
