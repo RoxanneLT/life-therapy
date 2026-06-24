@@ -87,6 +87,7 @@ interface DiagnosticsResponse {
     displayName?: string;
     mail?: string;
     error?: string;
+    identityError?: string;
     upcomingEvents?: {
       subject: string;
       start: string;
@@ -535,7 +536,7 @@ export function CalendarSyncSection({
 
           {diag && (
             <div className="space-y-4">
-              {/* Connected account banner */}
+              {/* Connected account banner — only a calendar-read error is fatal */}
               <div
                 className={`rounded-md border px-3 py-2 text-sm ${
                   diag.account.error
@@ -544,24 +545,26 @@ export function CalendarSyncSection({
                 }`}
               >
                 {diag.account.error ? (
-                  <span>Graph error: {diag.account.error}</span>
+                  <span>Calendar read failed: {diag.account.error}</span>
                 ) : (
                   <span>
-                    Connected to <strong>{diag.account.displayName ?? "unknown"}</strong> &lt;
-                    {diag.account.mail ?? diag.account.configuredEmail}&gt;
-                    {diag.account.mail &&
-                      diag.account.configuredEmail &&
-                      diag.account.mail.toLowerCase() !== diag.account.configuredEmail.toLowerCase() && (
-                        <span className="ml-1 font-medium text-amber-700">
-                          ⚠ configured as {diag.account.configuredEmail}
-                        </span>
-                      )}
+                    Connected to{" "}
+                    <strong>{diag.account.displayName ?? diag.account.configuredEmail ?? "unknown"}</strong>
+                    {diag.account.mail ? ` <${diag.account.mail}>` : ""}
                   </span>
                 )}
                 <span className="ml-1 text-muted-foreground">
                   — is this the calendar Roxanne uses in Teams?
                 </span>
               </div>
+
+              {/* Identity lookup failed but calendar read is what matters */}
+              {diag.account.identityError && !diag.account.error && (
+                <p className="text-xs text-muted-foreground">
+                  (Couldn&apos;t read the account name — the app lacks the User.Read.All permission — but the
+                  calendar read below succeeded, which is what matters.)
+                </p>
+              )}
 
               {/* Side-by-side week */}
               <div className="grid gap-4 md:grid-cols-2">

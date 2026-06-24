@@ -580,6 +580,7 @@ export interface CalendarDiagnostics {
   configuredEmail?: string; // the address from MS_GRAPH_USER_EMAIL
   displayName?: string; // the account's real display name in M365
   mail?: string; // the account's primary SMTP address
+  identityError?: string; // identity lookup failed (needs User.Read.All) — non-fatal
   upcomingEvents?: {
     subject: string;
     start: string;
@@ -587,7 +588,7 @@ export interface CalendarDiagnostics {
     isOnlineMeeting: boolean;
     organizer?: string;
   }[];
-  error?: string;
+  error?: string; // calendar read failed (the real signal)
 }
 
 /**
@@ -604,14 +605,25 @@ export async function getCalendarDiagnostics(
     return { configured: false, error: "Microsoft Graph credentials not configured" };
   }
 
-  try {
-    const client = createGraphClient(config);
+  const client = createGraphClient(config);
+  const out: CalendarDiagnostics = { configured: true, configuredEmail: config.userEmail };
 
+  // Identity lookup — needs User.Read.All. Non-fatal: many app registrations
+  // only grant Calendars permissions, so don't let this block the calendar read.
+  try {
     const user = await client
       .api(`/users/${config.userEmail}`)
       .select("displayName,mail,userPrincipalName")
       .get();
+    out.displayName = user.displayName as string;
+    out.mail = (user.mail as string) ?? (user.userPrincipalName as string);
+  } catch (error) {
+    out.identityError = error instanceof Error ? error.message : String(error);
+  }
 
+  // Calendar read — needs Calendars.Read(Write). This is the real test of
+  // whether we can see the connected mailbox's events.
+  try {
     const view = await client
       .api(`/users/${config.userEmail}/calendarView`)
       .query({
@@ -619,32 +631,22 @@ export async function getCalendarDiagnostics(
         endDateTime: endDate.toISOString(),
         $select: "subject,start,end,isOnlineMeeting,organizer",
         $orderby: "start/dateTime",
-        $top: 20,
+        $top: 50,
       })
       .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
       .get();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const upcomingEvents = (view.value || []).map((e: any) => ({
+    out.upcomingEvents = (view.value || []).map((e: any) => ({
       subject: e.subject || "(no subject)",
       start: (e.start?.dateTime as string)?.slice(0, 16).replace("T", " ") ?? "",
       end: (e.end?.dateTime as string)?.slice(11, 16) ?? "",
       isOnlineMeeting: !!e.isOnlineMeeting,
       organizer: e.organizer?.emailAddress?.address as string | undefined,
     }));
-
-    return {
-      configured: true,
-      configuredEmail: config.userEmail,
-      displayName: user.displayName as string,
-      mail: (user.mail as string) ?? (user.userPrincipalName as string),
-      upcomingEvents,
-    };
   } catch (error) {
-    return {
-      configured: true,
-      configuredEmail: config.userEmail,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    out.error = error instanceof Error ? error.message : String(error);
   }
+
+  return out;
 }
