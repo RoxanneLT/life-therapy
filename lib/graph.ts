@@ -292,7 +292,6 @@ export async function deleteRecurringEventOccurrences(
           .delete();
       }
     }
-  }
 }
 
 export async function cancelCalendarEvent(eventId: string): Promise<void> {
