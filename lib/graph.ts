@@ -570,3 +570,81 @@ export async function testGraphConnection(): Promise<{
     };
   }
 }
+
+// ────────────────────────────────────────────────────────────
+// Connection diagnostics — which mailbox are we actually on?
+// ────────────────────────────────────────────────────────────
+
+export interface CalendarDiagnostics {
+  configured: boolean;
+  configuredEmail?: string; // the address from MS_GRAPH_USER_EMAIL
+  displayName?: string; // the account's real display name in M365
+  mail?: string; // the account's primary SMTP address
+  upcomingEvents?: {
+    subject: string;
+    start: string;
+    end: string;
+    isOnlineMeeting: boolean;
+    organizer?: string;
+  }[];
+  error?: string;
+}
+
+/**
+ * Returns the identity of the mailbox the app is actually connected to, plus
+ * its next 2 weeks of events — so an admin can confirm we're reading/writing
+ * the same calendar Roxanne sees in Teams/Outlook (and not a different mailbox).
+ */
+export async function getCalendarDiagnostics(
+  startDate: Date,
+  endDate: Date,
+): Promise<CalendarDiagnostics> {
+  const config = getGraphConfig();
+  if (!config) {
+    return { configured: false, error: "Microsoft Graph credentials not configured" };
+  }
+
+  try {
+    const client = createGraphClient(config);
+
+    const user = await client
+      .api(`/users/${config.userEmail}`)
+      .select("displayName,mail,userPrincipalName")
+      .get();
+
+    const view = await client
+      .api(`/users/${config.userEmail}/calendarView`)
+      .query({
+        startDateTime: startDate.toISOString(),
+        endDateTime: endDate.toISOString(),
+        $select: "subject,start,end,isOnlineMeeting,organizer",
+        $orderby: "start/dateTime",
+        $top: 20,
+      })
+      .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+      .get();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const upcomingEvents = (view.value || []).map((e: any) => ({
+      subject: e.subject || "(no subject)",
+      start: (e.start?.dateTime as string)?.slice(0, 16).replace("T", " ") ?? "",
+      end: (e.end?.dateTime as string)?.slice(11, 16) ?? "",
+      isOnlineMeeting: !!e.isOnlineMeeting,
+      organizer: e.organizer?.emailAddress?.address as string | undefined,
+    }));
+
+    return {
+      configured: true,
+      configuredEmail: config.userEmail,
+      displayName: user.displayName as string,
+      mail: (user.mail as string) ?? (user.userPrincipalName as string),
+      upcomingEvents,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      configuredEmail: config.userEmail,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}

@@ -80,6 +80,35 @@ interface CalendarSyncSectionProps {
   lastReconcileAt: string | null;
 }
 
+interface DiagnosticsResponse {
+  account: {
+    configured: boolean;
+    configuredEmail?: string;
+    displayName?: string;
+    mail?: string;
+    error?: string;
+    upcomingEvents?: {
+      subject: string;
+      start: string;
+      end: string;
+      isOnlineMeeting: boolean;
+      organizer?: string;
+    }[];
+  };
+  range: { start: string; end: string };
+  portal: {
+    bookingId: string;
+    date: string;
+    start: string;
+    end: string;
+    clientName: string;
+    status: string;
+    synced: boolean;
+  }[];
+  portalCount: number;
+  teamsCount: number;
+}
+
 const REASON_LABEL: Record<string, string> = {
   no_graph_id: "Never synced to Outlook",
   event_not_found: "Missing from Outlook",
@@ -408,6 +437,25 @@ export function CalendarSyncSection({
   const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
   const [ranMode, setRanMode] = useState<string>("");
   const [ranAt, setRanAt] = useState<Date | null>(null);
+  const [diag, setDiag] = useState<DiagnosticsResponse | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagStart, setDiagStart] = useState("");
+  const [diagEnd, setDiagEnd] = useState("");
+
+  function handleDiagnostics() {
+    setDiagLoading(true);
+    const params = new URLSearchParams();
+    if (diagStart) params.set("start", diagStart);
+    if (diagEnd) params.set("end", diagEnd);
+    fetch(`/api/admin/calendar-diagnostics?${params.toString()}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Diagnostics failed");
+        setDiag(data as DiagnosticsResponse);
+      })
+      .catch((err) => toast.error(err instanceof Error ? err.message : "Diagnostics failed"))
+      .finally(() => setDiagLoading(false));
+  }
 
   function handleReconcile(autoFix: boolean) {
     if (
@@ -448,6 +496,119 @@ export function CalendarSyncSection({
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Connection Check — Portal vs Teams</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Pulls live data straight from the calendar we&apos;re connected to. Use it to confirm we&apos;re reading
+            the same Outlook/Teams calendar Roxanne sees — pick a date range and compare side by side.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-muted-foreground">
+              From
+              <input
+                type="date"
+                value={diagStart}
+                onChange={(e) => setDiagStart(e.target.value)}
+                className="mt-1 block rounded-md border px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="text-xs text-muted-foreground">
+              To
+              <input
+                type="date"
+                value={diagEnd}
+                onChange={(e) => setDiagEnd(e.target.value)}
+                className="mt-1 block rounded-md border px-2 py-1 text-sm"
+              />
+            </label>
+            <Button variant="outline" size="sm" onClick={handleDiagnostics} disabled={diagLoading}>
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${diagLoading ? "animate-spin" : ""}`} />
+              Check connection &amp; compare
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Leave blank for the next 7 days. (e.g. set 2026-07-20 → 2026-07-24.)
+          </p>
+
+          {diag && (
+            <div className="space-y-4">
+              {/* Connected account banner */}
+              <div
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  diag.account.error
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-green-200 bg-green-50 text-green-800"
+                }`}
+              >
+                {diag.account.error ? (
+                  <span>Graph error: {diag.account.error}</span>
+                ) : (
+                  <span>
+                    Connected to <strong>{diag.account.displayName ?? "unknown"}</strong> &lt;
+                    {diag.account.mail ?? diag.account.configuredEmail}&gt;
+                    {diag.account.mail &&
+                      diag.account.configuredEmail &&
+                      diag.account.mail.toLowerCase() !== diag.account.configuredEmail.toLowerCase() && (
+                        <span className="ml-1 font-medium text-amber-700">
+                          ⚠ configured as {diag.account.configuredEmail}
+                        </span>
+                      )}
+                  </span>
+                )}
+                <span className="ml-1 text-muted-foreground">
+                  — is this the calendar Roxanne uses in Teams?
+                </span>
+              </div>
+
+              {/* Side-by-side week */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <h4 className="mb-1.5 text-sm font-semibold">
+                    Portal bookings ({diag.portalCount})
+                  </h4>
+                  {diag.portal.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No bookings in the next 7 days.</p>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {diag.portal.map((p) => (
+                        <li key={p.bookingId} className="rounded border px-2 py-1">
+                          {p.date} {p.start}–{p.end} · {p.clientName}
+                          {!p.synced && (
+                            <span className="ml-1 text-xs font-medium text-red-700">· not synced</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h4 className="mb-1.5 text-sm font-semibold">
+                    Teams / Outlook events ({diag.teamsCount})
+                  </h4>
+                  {(diag.account.upcomingEvents?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No events on the connected calendar in this range.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {(diag.account.upcomingEvents ?? []).map((e, i) => (
+                        <li key={`${e.subject}-${e.start}-${i}`} className="rounded border px-2 py-1">
+                          {e.start}–{e.end} · {e.subject}
+                          {e.isOnlineMeeting && <span className="ml-1 text-xs text-brand-700">· Teams</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Calendar Reconciliation</CardTitle>
