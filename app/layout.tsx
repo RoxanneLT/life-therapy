@@ -28,10 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(baseUrl),
-    icons: {
-      icon: "/favicon.ico",
-      apple: "/favicon.ico",
-    },
+    // Favicon is provided by the app/favicon.ico file convention, which emits a
+    // content-hashed URL (cache-busting). Declaring icons here too produced a
+    // duplicate, non-hashed <link> that let browsers keep a stale cached copy.
     title: {
       default: title,
       template: `%s | ${settings.siteName || "Life-Therapy"}`,
