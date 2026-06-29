@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Pencil, Save, X, Mail } from "lucide-react";
+import { Pencil, Save, X } from "lucide-react";
 import { updateClientProfileAction } from "../../actions";
 import { updateClientEmailAction } from "../actions";
 import { format } from "date-fns";
@@ -55,28 +55,6 @@ function FormField({
   );
 }
 
-function CheckboxField({
-  label,
-  name,
-  defaultChecked,
-}: Readonly<{
-  label: string;
-  name: string;
-  defaultChecked?: boolean;
-}>) {
-  return (
-    <label className="flex items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={defaultChecked}
-        className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-      />
-      {label}
-    </label>
-  );
-}
-
 function UpdateEmailDialog({ clientId, currentEmail }: Readonly<{ clientId: string; currentEmail: string }>) {
   const [open, setOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -101,9 +79,13 @@ function UpdateEmailDialog({ clientId, currentEmail }: Readonly<{ clientId: stri
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); setError(""); setSuccess(false); setNewEmail(""); }}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground">
-          <Mail className="h-3 w-3" />
-          Update email
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+          aria-label="Update email"
+        >
+          <Pencil className="h-3 w-3" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
@@ -212,16 +194,6 @@ export function PersonalTab({ client }: PersonalTabProps) {
                 className="mt-0.5 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               />
             </div>
-
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Communication Preferences</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <CheckboxField label="Newsletter" name="newsletterOptIn" defaultChecked={client.newsletterOptIn as boolean} />
-                <CheckboxField label="Marketing emails" name="marketingOptIn" defaultChecked={client.marketingOptIn as boolean} />
-                <CheckboxField label="WhatsApp notifications" name="smsOptIn" defaultChecked={client.smsOptIn as boolean} />
-                <CheckboxField label="Session reminders" name="sessionReminders" defaultChecked={client.sessionReminders as boolean} />
-              </div>
-            </div>
           </CardContent>
         </Card>
       </form>
@@ -242,11 +214,11 @@ export function PersonalTab({ client }: PersonalTabProps) {
           <DisplayField label="First Name" value={client.firstName as string} />
           <DisplayField label="Last Name" value={client.lastName as string} />
           <div>
-            <dt className="text-xs font-medium text-muted-foreground">Email</dt>
-            <dd className="mt-0.5 flex items-center gap-2 text-sm">
-              {(client.email as string) || "—"}
+            <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              Email
               <UpdateEmailDialog clientId={client.id as string} currentEmail={client.email as string} />
-            </dd>
+            </dt>
+            <dd className="mt-0.5 break-all text-sm">{(client.email as string) || "—"}</dd>
           </div>
           <DisplayField label="Phone" value={formatPhoneDisplay(client.phone as string)} />
           <DisplayField label="Date of Birth" value={dateOfBirthDisplay} />
@@ -258,26 +230,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
           <DisplayField label="Address" value={client.address as string} />
           <DisplayField label="Source" value={client.source as string} />
         </dl>
-
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Communication Preferences</p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <CommPref label="Newsletter" active={client.newsletterOptIn as boolean} />
-            <CommPref label="Marketing" active={client.marketingOptIn as boolean} />
-            <CommPref label="WhatsApp" active={client.smsOptIn as boolean} />
-            <CommPref label="Session Reminders" active={client.sessionReminders as boolean} />
-          </div>
-        </div>
       </CardContent>
     </Card>
-  );
-}
-
-function CommPref({ label, active }: Readonly<{ label: string; active: boolean }>) {
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <div className={`h-2 w-2 rounded-full ${active ? "bg-green-500" : "bg-gray-300"}`} />
-      <span className={active ? "text-foreground" : "text-muted-foreground"}>{label}</span>
-    </div>
   );
 }

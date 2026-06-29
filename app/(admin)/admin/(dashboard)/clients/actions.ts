@@ -137,12 +137,7 @@ export async function updateClientProfileAction(clientId: string, formData: Form
   const referralDetail = (formData.get("referralDetail") as string)?.trim() || null;
   const dateOfBirth = (formData.get("dateOfBirth") as string)?.trim() || null;
 
-  // Communication preferences (checkboxes)
-  const newsletterOptIn = formData.get("newsletterOptIn") === "on";
-  const marketingOptIn = formData.get("marketingOptIn") === "on";
-  const smsOptIn = formData.get("smsOptIn") === "on";
-  const sessionReminders = formData.get("sessionReminders") === "on";
-
+  // Communication preferences are managed on the Communications tab, not here.
   await prisma.student.update({
     where: { id: clientId },
     data: {
@@ -156,10 +151,6 @@ export async function updateClientProfileAction(clientId: string, formData: Form
       referralSource,
       referralDetail,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-      newsletterOptIn,
-      marketingOptIn,
-      smsOptIn,
-      sessionReminders,
     },
   });
 

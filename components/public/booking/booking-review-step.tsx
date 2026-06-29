@@ -28,6 +28,10 @@ interface BookingReviewStepProps {
 export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPrices, currency }: BookingReviewStepProps) {
   const [submitting, setSubmitting] = useState(false);
   const [useCredit, setUseCredit] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+
+  // Paid session types must accept the agreements; free consultations may accept later.
+  const isPaid = !data.sessionType!.isFree;
 
   const dateObj = parse(data.date!, "yyyy-MM-dd", new Date());
   const dateLabel = format(dateObj, "EEEE, d MMMM yyyy");
@@ -38,6 +42,10 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPric
   const canUseCredit = creditBalance > 0 && !data.sessionType!.isFree;
 
   async function handleConfirm() {
+    if (isPaid && !agreed) {
+      toast.error("Please accept the Terms & Conditions and Therapeutic Commitment to continue.");
+      return;
+    }
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -49,6 +57,7 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPric
       if (data.clientPhone) formData.set("clientPhone", data.clientPhone);
       if (data.clientNotes) formData.set("clientNotes", data.clientNotes);
       if (useCredit) formData.set("useSessionCredit", "true");
+      formData.set("agreedToTerms", String(agreed));
 
       await createBooking(formData);
       // redirect happens in the server action
@@ -181,12 +190,39 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPric
         </CardContent>
       </Card>
 
+      {/* Agreement — required for paid sessions, optional for free consultations */}
+      <div className="mx-auto max-w-md">
+        <label className="flex items-start gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300"
+          />
+          <span>
+            I have read and agree to the{" "}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-600 underline hover:text-brand-800">
+              Terms &amp; Conditions
+            </a>{" "}
+            and{" "}
+            <a href="/commitment" target="_blank" rel="noopener noreferrer" className="text-brand-600 underline hover:text-brand-800">
+              Therapeutic Commitment
+            </a>
+            {isPaid ? (
+              <span className="text-destructive"> *</span>
+            ) : (
+              <span> (optional — you can confirm this later)</span>
+            )}
+          </span>
+        </label>
+      </div>
+
       <div className="mx-auto flex max-w-md justify-between pt-2">
         <Button variant="ghost" onClick={onBack} disabled={submitting}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button onClick={handleConfirm} disabled={submitting}>
+        <Button onClick={handleConfirm} disabled={submitting || (isPaid && !agreed)}>
           {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Confirm Booking
         </Button>

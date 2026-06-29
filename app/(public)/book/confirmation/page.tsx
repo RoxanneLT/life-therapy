@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { CheckCircle, CalendarDays, Clock, Video } from "lucide-react";
+import { getOutstandingDocuments } from "@/lib/legal-documents";
+import { AgreementAcceptance } from "@/components/public/booking/agreement-acceptance";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -41,6 +43,11 @@ export default async function BookingConfirmationPage({
 
   const config = getSessionTypeConfig(booking.sessionType);
   const dateLabel = format(new Date(booking.date), "EEEE, d MMMM yyyy");
+
+  // Outstanding agreements (e.g. a free consultation where the optional box was skipped)
+  const outstanding = booking.studentId
+    ? await getOutstandingDocuments(booking.studentId)
+    : [];
 
   return (
     <section className="container mx-auto max-w-2xl px-4 py-16">
@@ -104,6 +111,8 @@ export default async function BookingConfirmationPage({
           )}
         </CardContent>
       </Card>
+
+      {outstanding.length > 0 && <AgreementAcceptance token={token} />}
 
       <div className="mt-8 space-y-4 rounded-lg bg-muted/50 p-6">
         <h3 className="font-heading text-lg font-semibold">

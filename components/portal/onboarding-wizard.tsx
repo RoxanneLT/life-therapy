@@ -59,6 +59,8 @@ interface OnboardingWizardProps {
   student: StudentData;
   intake: IntakeData | null;
   onboardingDocuments: LegalDocumentData[];
+  /** True when the client already accepted the required docs (e.g. at booking). */
+  agreementsOnFile?: boolean;
   initialStep?: number;
 }
 
@@ -68,6 +70,7 @@ export function OnboardingWizard({
   student,
   intake,
   onboardingDocuments,
+  agreementsOnFile = false,
   initialStep,
 }: OnboardingWizardProps) {
   // Clamp initial step: can't skip ahead past onboardingStep + 1
@@ -181,6 +184,7 @@ export function OnboardingWizard({
       {currentStep === 3 && (
         <AgreementStep
           documents={onboardingDocuments}
+          agreementsOnFile={agreementsOnFile}
           isPending={isPending}
           onBack={() => goToStep(2)}
           onSubmit={() => {
@@ -419,11 +423,13 @@ function AssessmentStep({
 
 function AgreementStep({
   documents,
+  agreementsOnFile,
   isPending,
   onBack,
   onSubmit,
 }: {
   documents: LegalDocumentData[];
+  agreementsOnFile: boolean;
   isPending: boolean;
   onBack: () => void;
   onSubmit: () => void;
@@ -478,26 +484,36 @@ function AgreementStep({
         </Card>
       ))}
 
-      <label className="flex items-start gap-3 rounded-md border p-4">
-        <input
-          type="checkbox"
-          checked={agreed}
-          onChange={(e) => setAgreed(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-        />
-        <span className="text-sm font-medium">
-          I have read and agree to the Commitment Agreement and Terms &amp; Conditions
-        </span>
-      </label>
+      {agreementsOnFile ? (
+        <div className="flex items-start gap-3 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/30">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+          <span className="text-sm">
+            You already agreed to these when you booked — feel free to review them above.
+            No need to sign again.
+          </span>
+        </div>
+      ) : (
+        <label className="flex items-start gap-3 rounded-md border p-4">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span className="text-sm font-medium">
+            I have read and agree to the Commitment Agreement and Terms &amp; Conditions
+          </span>
+        </label>
+      )}
 
       <div className="flex justify-between">
         <Button type="button" variant="outline" onClick={onBack} disabled={isPending}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
-        <Button type="button" onClick={onSubmit} disabled={!agreed || isPending}>
+        <Button type="button" onClick={onSubmit} disabled={(!agreed && !agreementsOnFile) || isPending}>
           {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          I Agree — Let&apos;s Start
+          {agreementsOnFile ? "Finish Setup" : "I Agree — Let's Start"}
         </Button>
       </div>
     </div>

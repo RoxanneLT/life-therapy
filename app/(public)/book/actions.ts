@@ -15,6 +15,7 @@ import type { Currency } from "@/lib/region";
 import { getSiteSettings } from "@/lib/settings";
 import { getCurrency, getBaseUrl } from "@/lib/get-region";
 import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
+import { acceptRequiredDocuments } from "@/lib/legal-documents";
 import { getSessionPrice } from "@/lib/pricing";
 import { rateLimitBooking } from "@/lib/rate-limit";
 import { getOptionalStudent } from "@/lib/student-auth";
@@ -64,7 +65,7 @@ async function provisionFreeConsultation(
   bookingId: string,
   booking: { date: Date; startTime: string; endTime: string },
   client: { email: string; firstName: string; lastName: string; phone: string | null },
-) {
+): Promise<string | null> {
   const existingStudent = await prisma.student.findUnique({
     where: { email: client.email },
   });
@@ -74,7 +75,7 @@ async function provisionFreeConsultation(
       where: { id: bookingId },
       data: { studentId: existingStudent.id },
     });
-    return;
+    return existingStudent.id;
   }
 
   const tempPassword = generateTempPassword();
@@ -87,7 +88,7 @@ async function provisionFreeConsultation(
 
   if (authError || !authData.user) {
     console.error("Failed to create auth user for booking:", authError?.message);
-    return;
+    return null;
   }
 
   const student = await prisma.student.create({
@@ -132,30 +133,47 @@ async function provisionFreeConsultation(
   ).catch((err) =>
     console.error("Failed to send portal welcome email:", err)
   );
+
+  return student.id;
 }
 
-/** Link booking to logged-in student + sync to Student list */
+/**
+ * Link booking to its student + sync to the Student list. Logged-in clients link to
+ * their own record; otherwise the contact is upserted (a "potential" student) and the
+ * booking is linked to it. Returns the studentId so the caller can record agreements.
+ */
 async function linkPaidBookingToStudent(
   bookingId: string,
   client: { email: string; firstName: string; lastName: string; phone: string | null },
-) {
+): Promise<string | null> {
   const loggedInStudent = await getOptionalStudent();
   if (loggedInStudent) {
     await prisma.booking.update({
       where: { id: bookingId },
       data: { studentId: loggedInStudent.id },
     });
+    return loggedInStudent.id;
   }
 
-  upsertContact({
-    email: client.email,
-    firstName: client.firstName,
-    lastName: client.lastName || undefined,
-    phone: client.phone || undefined,
-    source: "booking",
-    consentGiven: true,
-    consentMethod: "booking_form",
-  }).catch((err) => console.error("Failed to sync booking contact:", err));
+  try {
+    const student = await upsertContact({
+      email: client.email,
+      firstName: client.firstName,
+      lastName: client.lastName || undefined,
+      phone: client.phone || undefined,
+      source: "booking",
+      consentGiven: true,
+      consentMethod: "booking_form",
+    });
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { studentId: student.id },
+    });
+    return student.id;
+  } catch (err) {
+    console.error("Failed to sync booking contact:", err);
+    return null;
+  }
 }
 
 /** Send booking confirmation + admin notification emails */
@@ -266,6 +284,12 @@ export async function createBooking(formData: FormData) {
 
   const sessionConfig = getSessionTypeConfig(parsed.sessionType as SessionType);
 
+  // Terms + commitment: required for paid sessions, optional for free consultations.
+  const agreedToTerms = raw.agreedToTerms === "true";
+  if (!sessionConfig.isFree && !agreedToTerms) {
+    throw new Error("Please accept the Terms & Conditions and Therapeutic Commitment to book this session.");
+  }
+
   // Compute session price in the user's currency
   const settings = await getSiteSettings();
   const currency = await getCurrency();
@@ -335,12 +359,23 @@ export async function createBooking(formData: FormData) {
     phone: clientPhone,
   };
 
+  let studentId: string | null = null;
   if (sessionConfig.isFree) {
-    await provisionFreeConsultation(booking.id, booking, client).catch((err) =>
-      console.error("Auto-provisioning failed:", err)
-    );
+    studentId = await provisionFreeConsultation(booking.id, booking, client).catch((err) => {
+      console.error("Auto-provisioning failed:", err);
+      return null;
+    });
   } else {
-    await linkPaidBookingToStudent(booking.id, client);
+    studentId = await linkPaidBookingToStudent(booking.id, client);
+  }
+
+  // Record terms + commitment acceptance against the linked student (IP + timestamp).
+  // Stored on the student, so it carries through to active once they convert.
+  if (agreedToTerms && studentId) {
+    const hdrs = await headers();
+    const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    const ua = hdrs.get("user-agent") ?? null;
+    await acceptRequiredDocuments(studentId, ip, ua);
   }
 
   // Send emails
@@ -354,4 +389,33 @@ export async function createBooking(formData: FormData) {
 
   revalidatePath("/admin/bookings");
   redirect(`/book/confirmation?token=${confirmationToken}`);
+}
+
+/**
+ * Record terms + commitment acceptance from the booking confirmation page — the no-login
+ * path for clients (typically free consultations) who didn't accept at booking. Resolves
+ * the student from the booking's confirmation token, so no auth is required.
+ */
+export async function acceptBookingAgreementsAction(
+  token: string,
+): Promise<{ success: boolean; error?: string }> {
+  const booking = await prisma.booking.findUnique({
+    where: { confirmationToken: token },
+    select: { studentId: true },
+  });
+  if (!booking?.studentId) {
+    return { success: false, error: "We couldn't find your booking. Please use the link from your confirmation email." };
+  }
+
+  try {
+    const hdrs = await headers();
+    const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+    const ua = hdrs.get("user-agent") ?? null;
+    await acceptRequiredDocuments(booking.studentId, ip, ua);
+    revalidatePath("/book/confirmation");
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to record booking agreements:", err);
+    return { success: false, error: "Something went wrong. Please try again." };
+  }
 }

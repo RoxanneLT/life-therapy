@@ -98,6 +98,25 @@ export async function acceptDocument(
 }
 
 /**
+ * Record acceptance of every required document (terms + commitment) for a student.
+ * Per-document failures are logged but never throw, so a missing/inactive doc can't
+ * block the surrounding flow (e.g. a booking).
+ */
+export async function acceptRequiredDocuments(
+  studentId: string,
+  ipAddress: string | null,
+  userAgent: string | null
+) {
+  for (const slug of REQUIRED_DOCUMENTS) {
+    try {
+      await acceptDocument(studentId, slug, ipAddress, userAgent);
+    } catch (err) {
+      console.error(`[legal] failed to record ${slug} acceptance for ${studentId}:`, err);
+    }
+  }
+}
+
+/**
  * Publish a new version of a document. Deactivates previous version.
  * Returns the new document and count of clients who need to re-accept.
  */

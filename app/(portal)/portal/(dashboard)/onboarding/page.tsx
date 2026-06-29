@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { OnboardingWizard } from "@/components/portal/onboarding-wizard";
 import { format } from "date-fns";
-import { getActiveDocument, ONBOARDING_DOCUMENTS } from "@/lib/legal-documents";
+import { getActiveDocument, ONBOARDING_DOCUMENTS, getOutstandingDocuments } from "@/lib/legal-documents";
 
 interface Props {
   readonly searchParams: Promise<{ step?: string }>;
@@ -36,6 +36,9 @@ export default async function OnboardingPage({ searchParams }: Props) {
     }),
     ...ONBOARDING_DOCUMENTS.map((slug) => getActiveDocument(slug)),
   ]);
+
+  // Already accepted (e.g. consented at booking)? Then don't make them re-sign.
+  const agreementsOnFile = (await getOutstandingDocuments(student.id)).length === 0;
 
   // Serialize documents for the client component
   const onboardingDocuments = legalDocs
@@ -71,6 +74,7 @@ export default async function OnboardingPage({ searchParams }: Props) {
         student={serializedStudent}
         intake={intake}
         onboardingDocuments={onboardingDocuments}
+        agreementsOnFile={agreementsOnFile}
         initialStep={step ? parseInt(step, 10) : undefined}
       />
     </div>
