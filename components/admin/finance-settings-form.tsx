@@ -271,10 +271,10 @@ export function FinanceSettingsForm({
                     type="button"
                     onClick={() => setActiveSection(section.id)}
                     className={cn(
-                      "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                      "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
                       activeSection === section.id
                         ? "border-brand-600 text-brand-700"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
+                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -305,10 +305,10 @@ export function FinanceSettingsForm({
                 type="button"
                 onClick={() => setActiveSection(section.id)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                  "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
                   activeSection === section.id
                     ? "border-brand-600 text-brand-700"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -365,8 +365,8 @@ export function FinanceSettingsForm({
         </>
       )}
 
-      {/* Content area */}
-      <div className={embedded ? "min-w-0 space-y-6" : "min-w-0 flex-1 space-y-6 overflow-y-auto pr-1"}>
+      {/* Content area (flex column so the Banking & VAT tab can order Banking first) */}
+      <div className={embedded ? "flex min-w-0 flex-col gap-6" : "flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1"}>
         {/* ── Business Details ── */}
         {activeSection === "business" && (
           <Card>
@@ -769,7 +769,7 @@ export function FinanceSettingsForm({
 
         {/* ── Banking Details ── */}
         {activeSection === "banking-vat" && (
-          <Card>
+          <Card className="order-first">
             <CardHeader>
               <CardTitle>Banking Details</CardTitle>
               <CardDescription>

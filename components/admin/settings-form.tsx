@@ -247,10 +247,10 @@ export function SettingsForm({
                     type="button"
                     onClick={() => setActiveSection(section.id)}
                     className={cn(
-                      "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                      "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
                       activeSection === section.id
                         ? "border-brand-600 text-brand-700"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
+                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -281,10 +281,10 @@ export function SettingsForm({
                 type="button"
                 onClick={() => setActiveSection(section.id)}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                  "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
                   activeSection === section.id
                     ? "border-brand-600 text-brand-700"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />

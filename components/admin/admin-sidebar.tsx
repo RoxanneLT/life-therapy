@@ -171,6 +171,12 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
               {!collapsed && "Dashboard"}
             </Link>
 
+            {!collapsed && (
+              <h2 className="px-3 font-heading text-lg font-bold text-foreground">
+                Settings
+              </h2>
+            )}
+
             <div className="space-y-0.5">
               <Link
                 href="/admin/settings"
