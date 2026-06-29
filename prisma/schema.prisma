@@ -120,13 +120,14 @@ enum AdminRole {
 }
 
 model AdminUser {
-  id             String    @id @default(cuid())
-  supabaseUserId String    @unique
-  email          String    @unique
-  name           String?
-  role           AdminRole @default(editor)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  supabaseUserId     String    @unique
+  email              String    @unique
+  name               String?
+  role               AdminRole @default(editor)
+  settingsPageVisits Json? // per-admin settings page visit tallies (most-used)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@map("admin_users")
 }

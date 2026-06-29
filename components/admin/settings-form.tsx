@@ -23,9 +23,13 @@ import {
   Calendar,
   Plus,
   Trash2,
+  PanelBottom,
+  MapPin,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
 import { updateSettings } from "@/app/(admin)/admin/(dashboard)/settings/actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 import type { BusinessHours, BranchAddress } from "@/lib/settings";
@@ -67,17 +71,24 @@ interface SettingsSection {
 }
 
 const SECTIONS: SettingsSection[] = [
-  { id: "branding", label: "Branding", group: "General", icon: Palette },
-  { id: "contact", label: "Contact & Hours", group: "General", icon: Phone },
-  { id: "social", label: "Social Links", group: "General", icon: Share2 },
-  { id: "seo", label: "SEO & Analytics", group: "General", icon: Search },
+  // Brand
+  { id: "identity", label: "Identity", group: "Brand", icon: Palette },
+  { id: "footer", label: "Footer", group: "Brand", icon: PanelBottom },
+  // Contact & Locations
+  { id: "contact", label: "Contact", group: "Contact", icon: Phone },
+  { id: "locations", label: "Locations", group: "Contact", icon: MapPin },
+  { id: "hours", label: "Hours", group: "Contact", icon: Clock },
+  // Marketing
+  { id: "social", label: "Social", group: "Marketing", icon: Share2 },
+  { id: "seo", label: "SEO & Analytics", group: "Marketing", icon: Search },
+  { id: "newsletter", label: "Newsletter", group: "Marketing", icon: Newspaper },
+  // Integrations
   { id: "email", label: "Email", group: "Integrations", icon: Mail },
-  { id: "newsletter", label: "Newsletter", group: "Integrations", icon: Newspaper },
   { id: "payments", label: "Payments", group: "Integrations", icon: CreditCard },
   { id: "calendar", label: "Calendar", group: "Integrations", icon: Calendar },
 ];
 
-const GROUPS = ["General", "Integrations"];
+const GROUPS = ["Brand", "Contact", "Marketing", "Integrations"];
 
 interface SecretStatus {
   msGraphConfigured: boolean;
@@ -89,11 +100,26 @@ interface SecretStatus {
 interface SettingsFormProps {
   initialSettings: SiteSetting;
   secretStatus: SecretStatus;
+  /** When set, render only this group's sections inside the shared sticky
+   *  settings header (no internal sidebar/heading) — used by the settings shell. */
+  embeddedGroup?: string;
+  headerTitle?: string;
+  headerDescription?: string;
 }
 
-export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProps) {
+export function SettingsForm({
+  initialSettings,
+  secretStatus,
+  embeddedGroup,
+  headerTitle,
+  headerDescription,
+}: SettingsFormProps) {
+  const embedded = !!embeddedGroup;
+  const visibleSections = embeddedGroup
+    ? SECTIONS.filter((s) => s.group === embeddedGroup)
+    : SECTIONS;
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState("branding");
+  const [activeSection, setActiveSection] = useState(visibleSections[0]?.id ?? "branding");
 
   // Branding
   const [siteName, setSiteName] = useState(initialSettings.siteName);
@@ -196,7 +222,48 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+    <form
+      onSubmit={handleSubmit}
+      className={embedded ? "flex flex-col" : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}
+    >
+      {embedded && (
+        <SettingsPageHeader
+          backHref="/admin/settings"
+          title={headerTitle ?? "Settings"}
+          description={headerDescription}
+          actions={
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          }
+          tabs={
+            <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {visibleSections.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                      activeSection === section.id
+                        ? "border-brand-600 text-brand-700"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {section.label}
+                  </button>
+                );
+              })}
+            </div>
+          }
+        />
+      )}
+      {!embedded && (
+        <>
       {/* Mobile nav — horizontal scrollable strip */}
       <div className="md:hidden space-y-4">
         <div>
@@ -278,11 +345,14 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
           </Button>
         </div>
       </div>
+        </>
+      )}
 
-      {/* Content area — scrolls independently */}
-      <div className="min-w-0 flex-1 overflow-y-auto pr-1">
-          {/* Branding */}
-          {activeSection === "branding" && (
+      {/* Content area. Embedded: flows normally so the PAGE scrolls under the
+          sticky header. Standalone: its own scroll column beside the sidebar. */}
+      <div className={embedded ? "min-w-0" : "min-w-0 flex-1 overflow-y-auto pr-1"}>
+          {/* Identity */}
+          {activeSection === "identity" && (
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -304,7 +374,12 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
 
+          {/* Footer */}
+          {activeSection === "footer" && (
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Footer</CardTitle>
@@ -324,7 +399,7 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
             </div>
           )}
 
-          {/* Contact & Hours */}
+          {/* Contact */}
           {activeSection === "contact" && (
             <div className="space-y-6">
               <Card>
@@ -354,7 +429,12 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
 
+          {/* Locations */}
+          {activeSection === "locations" && (
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Office Locations</CardTitle>
@@ -439,7 +519,12 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
                   </Button>
                 </CardContent>
               </Card>
+            </div>
+          )}
 
+          {/* Hours */}
+          {activeSection === "hours" && (
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Business Hours</CardTitle>

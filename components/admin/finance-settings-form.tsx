@@ -23,7 +23,6 @@ import {
 import {
   Loader2,
   Building2,
-  Receipt,
   DollarSign,
   CalendarClock,
   Landmark,
@@ -34,6 +33,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
 import {
   updateFinanceSettings,
   getBillingPresetsAction,
@@ -52,10 +52,9 @@ interface Section {
 
 const SECTIONS: Section[] = [
   { id: "business", label: "Business Details", icon: Building2 },
-  { id: "vat", label: "VAT Configuration", icon: Receipt },
   { id: "pricing", label: "Session Rates", icon: DollarSign },
   { id: "billing", label: "Billing Schedule", icon: CalendarClock },
-  { id: "banking", label: "Banking Details", icon: Landmark },
+  { id: "banking-vat", label: "Banking & VAT", icon: Landmark },
   { id: "billing-items", label: "Billing Items", icon: ListChecks },
   { id: "invoice", label: "Invoice Template", icon: FileText },
 ];
@@ -78,9 +77,19 @@ interface NextDates {
 interface Props {
   initialSettings: SiteSetting;
   nextDates?: NextDates;
+  /** Render inside the shared sticky settings header (no internal sidebar/heading). */
+  embedded?: boolean;
+  headerTitle?: string;
+  headerDescription?: string;
 }
 
-export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Props>) {
+export function FinanceSettingsForm({
+  initialSettings,
+  nextDates,
+  embedded,
+  headerTitle,
+  headerDescription,
+}: Readonly<Props>) {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState("business");
   const [isDirty, setIsDirty] = useState(false);
@@ -233,7 +242,52 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
   }
 
   return (
-    <form onSubmit={handleSubmit} onChange={markDirty} className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+    <form
+      onSubmit={handleSubmit}
+      onChange={markDirty}
+      className={embedded ? "flex flex-col" : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}
+    >
+      {embedded && (
+        <SettingsPageHeader
+          backHref="/admin/settings"
+          title={headerTitle ?? "Finance"}
+          description={headerDescription}
+          actions={
+            <>
+              {isDirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save
+              </Button>
+            </>
+          }
+          tabs={
+            <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {SECTIONS.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                      activeSection === section.id
+                        ? "border-brand-600 text-brand-700"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {section.label}
+                  </button>
+                );
+              })}
+            </div>
+          }
+        />
+      )}
+      {!embedded && (
+        <>
       {/* Mobile nav — horizontal scrollable strip */}
       <div className="md:hidden space-y-4">
         <div>
@@ -308,9 +362,11 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
           )}
         </div>
       </div>
+        </>
+      )}
 
       {/* Content area */}
-      <div className="min-w-0 flex-1 overflow-y-auto pr-1">
+      <div className={embedded ? "min-w-0 space-y-6" : "min-w-0 flex-1 space-y-6 overflow-y-auto pr-1"}>
         {/* ── Business Details ── */}
         {activeSection === "business" && (
           <Card>
@@ -364,7 +420,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
         )}
 
         {/* ── VAT Configuration ── */}
-        {activeSection === "vat" && (
+        {activeSection === "banking-vat" && (
           <Card>
             <CardHeader>
               <CardTitle>VAT Configuration</CardTitle>
@@ -712,7 +768,7 @@ export function FinanceSettingsForm({ initialSettings, nextDates }: Readonly<Pro
         )}
 
         {/* ── Banking Details ── */}
-        {activeSection === "banking" && (
+        {activeSection === "banking-vat" && (
           <Card>
             <CardHeader>
               <CardTitle>Banking Details</CardTitle>

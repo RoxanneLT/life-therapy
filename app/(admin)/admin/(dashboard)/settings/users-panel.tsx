@@ -21,6 +21,7 @@ import {
 import { Pencil, Plus, Key, Users, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -35,8 +36,8 @@ const ROLE_VARIANTS: Record<string, "default" | "secondary" | "outline-solid"> =
 };
 
 const SECTIONS = [
-  { id: "all", label: "All Users", icon: Users },
-  { id: "roles", label: "Role Overview", icon: Shield },
+  { id: "all", label: "Members", icon: Users },
+  { id: "roles", label: "Roles", icon: Shield },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -51,9 +52,12 @@ interface UserRow {
 
 interface UsersPanelProps {
   readonly users: UserRow[];
+  readonly embedded?: boolean;
+  readonly headerTitle?: string;
+  readonly headerDescription?: string;
 }
 
-export function UsersPanel({ users }: UsersPanelProps) {
+export function UsersPanel({ users, embedded, headerTitle, headerDescription }: UsersPanelProps) {
   const [activeSection, setActiveSection] = useState<SectionId>("all");
 
   const roleCounts = users.reduce<Record<string, number>>((acc, u) => {
@@ -62,7 +66,55 @@ export function UsersPanel({ users }: UsersPanelProps) {
   }, {});
 
   return (
-    <div className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+    <div className={embedded ? undefined : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}>
+      {embedded && (
+        <SettingsPageHeader
+          backHref="/admin/settings"
+          title={headerTitle ?? "Team"}
+          description={headerDescription ?? `${users.length} admin user${users.length === 1 ? "" : "s"}`}
+          actions={
+            <>
+              <Button size="sm" variant="outline" asChild>
+                <Link href="/admin/users/change-password">
+                  <Key className="mr-1.5 h-3.5 w-3.5" />
+                  Password
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/admin/users/new">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Invite
+                </Link>
+              </Button>
+            </>
+          }
+          tabs={
+            <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {SECTIONS.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                      activeSection === section.id
+                        ? "border-brand-600 text-brand-700"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {section.label}
+                  </button>
+                );
+              })}
+            </div>
+          }
+        />
+      )}
+      {!embedded && (
+        <>
       {/* Mobile nav */}
       <div className="md:hidden space-y-4">
         <div className="flex items-center justify-between">
@@ -156,9 +208,11 @@ export function UsersPanel({ users }: UsersPanelProps) {
           </Button>
         </div>
       </div>
+        </>
+      )}
 
       {/* Content area */}
-      <div className="min-w-0 flex-1 overflow-y-auto pr-1">
+      <div className={embedded ? "min-w-0" : "min-w-0 flex-1 overflow-y-auto pr-1"}>
         {activeSection === "all" && (
           <Card>
             <CardHeader>

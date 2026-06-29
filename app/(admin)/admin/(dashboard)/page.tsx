@@ -239,7 +239,7 @@ export default async function AdminDashboard({
           )}
         </span>
         <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" asChild>
-          <Link href="/admin/settings?tab=calendar-sync">View</Link>
+          <Link href="/admin/settings/calendar-sync">View</Link>
         </Button>
       </div>
 

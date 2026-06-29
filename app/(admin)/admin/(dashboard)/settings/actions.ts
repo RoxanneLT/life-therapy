@@ -2,7 +2,28 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth";
+import { requireRole, getAuthenticatedAdmin } from "@/lib/auth";
+import { getSettingsPageVisits } from "@/lib/settings-ui-state";
+import { matchSettingsPage } from "@/lib/settings-catalog";
+import type { Prisma } from "@/lib/generated/prisma/client";
+
+/** Bump the per-admin visit tally for whichever settings page this path belongs
+ *  to. Fire-and-forget from the client usage recorder. */
+export async function recordSettingsVisitAction(pathname: string) {
+  const page = matchSettingsPage(pathname);
+  if (!page) return;
+  try {
+    const { adminUser } = await getAuthenticatedAdmin();
+    const visits = await getSettingsPageVisits(adminUser.id);
+    visits[page.href] = (visits[page.href] ?? 0) + 1;
+    await prisma.adminUser.update({
+      where: { id: adminUser.id },
+      data: { settingsPageVisits: visits as Prisma.InputJsonValue },
+    });
+  } catch {
+    // best-effort — never block navigation
+  }
+}
 
 export async function updateSettings(formData: FormData) {
   await requireRole("super_admin");
@@ -38,35 +59,38 @@ export async function updateSettings(formData: FormData) {
     }
   }
 
-  // Build data object, converting empty strings to null
+  // Build the update object. Only include fields actually present in this
+  // submission so a per-group form (Branding, Contact, …) updates ONLY its own
+  // fields and never clobbers settings owned by another group.
   const toNullable = (val: FormDataEntryValue | undefined): string | null => {
     if (!val || val === "") return null;
     return val as string;
   };
+  const has = (key: string) => formData.has(key);
 
   const data = {
-    siteName: (raw.siteName as string) || "Life-Therapy",
-    tagline: toNullable(raw.tagline),
-    logoUrl: toNullable(raw.logoUrl),
-    email: toNullable(raw.email),
-    phone: toNullable(raw.phone),
-    whatsappNumber: toNullable(raw.whatsappNumber),
-    businessHours: businessHours ?? undefined,
-    locationText: toNullable(raw.locationText),
-    branchAddresses: branchAddresses ?? undefined,
-    facebookUrl: toNullable(raw.facebookUrl),
-    linkedinUrl: toNullable(raw.linkedinUrl),
-    instagramUrl: toNullable(raw.instagramUrl),
-    tiktokUrl: toNullable(raw.tiktokUrl),
-    youtubeUrl: toNullable(raw.youtubeUrl),
-    metaTitle: toNullable(raw.metaTitle),
-    metaDescription: toNullable(raw.metaDescription),
-    ogImageUrl: toNullable(raw.ogImageUrl),
-    googleAnalyticsId: toNullable(raw.googleAnalyticsId),
-    smtpFromName: toNullable(raw.smtpFromName),
-    smtpFromEmail: toNullable(raw.smtpFromEmail),
-    copyrightText: toNullable(raw.copyrightText),
-    footerTagline: toNullable(raw.footerTagline),
+    ...(has("siteName") ? { siteName: (raw.siteName as string) || "Life-Therapy" } : {}),
+    ...(has("tagline") ? { tagline: toNullable(raw.tagline) } : {}),
+    ...(has("logoUrl") ? { logoUrl: toNullable(raw.logoUrl) } : {}),
+    ...(has("email") ? { email: toNullable(raw.email) } : {}),
+    ...(has("phone") ? { phone: toNullable(raw.phone) } : {}),
+    ...(has("whatsappNumber") ? { whatsappNumber: toNullable(raw.whatsappNumber) } : {}),
+    ...(businessHours !== undefined ? { businessHours } : {}),
+    ...(has("locationText") ? { locationText: toNullable(raw.locationText) } : {}),
+    ...(branchAddresses !== undefined ? { branchAddresses } : {}),
+    ...(has("facebookUrl") ? { facebookUrl: toNullable(raw.facebookUrl) } : {}),
+    ...(has("linkedinUrl") ? { linkedinUrl: toNullable(raw.linkedinUrl) } : {}),
+    ...(has("instagramUrl") ? { instagramUrl: toNullable(raw.instagramUrl) } : {}),
+    ...(has("tiktokUrl") ? { tiktokUrl: toNullable(raw.tiktokUrl) } : {}),
+    ...(has("youtubeUrl") ? { youtubeUrl: toNullable(raw.youtubeUrl) } : {}),
+    ...(has("metaTitle") ? { metaTitle: toNullable(raw.metaTitle) } : {}),
+    ...(has("metaDescription") ? { metaDescription: toNullable(raw.metaDescription) } : {}),
+    ...(has("ogImageUrl") ? { ogImageUrl: toNullable(raw.ogImageUrl) } : {}),
+    ...(has("googleAnalyticsId") ? { googleAnalyticsId: toNullable(raw.googleAnalyticsId) } : {}),
+    ...(has("smtpFromName") ? { smtpFromName: toNullable(raw.smtpFromName) } : {}),
+    ...(has("smtpFromEmail") ? { smtpFromEmail: toNullable(raw.smtpFromEmail) } : {}),
+    ...(has("copyrightText") ? { copyrightText: toNullable(raw.copyrightText) } : {}),
+    ...(has("footerTagline") ? { footerTagline: toNullable(raw.footerTagline) } : {}),
   };
 
   // Upsert: update existing or create new
@@ -80,6 +104,6 @@ export async function updateSettings(formData: FormData) {
     await prisma.siteSetting.create({ data });
   }
 
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/settings", "layout");
   revalidatePath("/");
 }

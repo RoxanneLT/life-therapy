@@ -1,203 +1,80 @@
 export const dynamic = "force-dynamic";
 
-import { getSiteSettings } from "@/lib/settings";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { SettingsForm } from "@/components/admin/settings-form";
-import { FinanceSettingsForm } from "@/components/admin/finance-settings-form";
-import { SettingsTabs } from "./settings-tabs";
-import { UsersPanel } from "./users-panel";
+import { getSettingsPageVisits } from "@/lib/settings-ui-state";
 import {
-  getEffectiveBillingDate,
-  calculateDueDate,
-  getReminderDate,
-  getOverdueDate,
-} from "@/lib/billing";
-import {
-  getActiveDocument,
-  getDocumentHistory,
-  getAcceptanceStats,
-  REQUIRED_DOCUMENTS,
-  type LegalDocumentSlug,
-} from "@/lib/legal-documents";
-import { LegalDocumentsClient } from "../legal-documents/legal-documents-client";
-import { WhatsAppPanel } from "./whatsapp-panel";
-import { CalendarSyncSection } from "./calendar-sync-section";
-import { format } from "date-fns";
+  SETTINGS_CATALOG,
+  SETTINGS_NAV_GROUPS,
+  topVisitedHrefs,
+  type SettingsPage,
+} from "@/lib/settings-catalog";
+import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { Card } from "@/components/ui/card";
 
-const VALID_TABS = ["settings", "users", "finance", "legal", "whatsapp", "calendar-sync"] as const;
-type SettingsTab = (typeof VALID_TABS)[number];
-const ALL_LEGAL_SLUGS: LegalDocumentSlug[] = ["commitment", "terms", "privacy"];
-
-interface Props {
-  readonly searchParams: Promise<{ tab?: string }>;
-}
-
-export default async function AdminSettingsPage({ searchParams }: Props) {
-  const { adminUser } = await requireRole("super_admin");
-  const { tab } = await searchParams;
-  const activeTab: SettingsTab = VALID_TABS.includes(tab as SettingsTab)
-    ? (tab as SettingsTab)
-    : "settings";
-
-  const settings = await getSiteSettings();
-
-  const secretStatus = {
-    msGraphConfigured: !!(process.env.MS_GRAPH_TENANT_ID && process.env.MS_GRAPH_CLIENT_SECRET),
-    smtpConfigured: !!(process.env.SMTP_HOST && process.env.SMTP_USER),
-    paystackConfigured: !!process.env.PAYSTACK_SECRET_KEY,
-    resendConfigured: !!process.env.RESEND_API_KEY,
-  };
-
-  // Only fetch users if on the users tab
-  const users = activeTab === "users"
-    ? await prisma.adminUser.findMany({ orderBy: { createdAt: "asc" } })
-    : [];
-
-  const serializedUsers = users.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    createdAt: u.createdAt.toISOString(),
-  }));
-
-  // Finance tab data
-  let nextDates: { billing: string; due: string; reminder: string; overdue: string } | null = null;
-  if (activeTab === "finance") {
-    const now = new Date();
-    const nextMonth = now.getMonth() + 2;
-    const year = nextMonth > 12 ? now.getFullYear() + 1 : now.getFullYear();
-    const month = nextMonth > 12 ? 1 : nextMonth;
-    const billingDate = getEffectiveBillingDate(year, month);
-    const dueDate = calculateDueDate(
-      billingDate,
-      settings.postpaidDueDays,
-      settings.postpaidDueDaysType as "business" | "calendar",
-    );
-    const reminderDate = getReminderDate(dueDate);
-    const overdueDate = getOverdueDate(dueDate);
-    nextDates = {
-      billing: format(billingDate, "EEE d MMM yyyy"),
-      due: format(dueDate, "EEE d MMM yyyy"),
-      reminder: format(reminderDate, "EEE d MMM yyyy"),
-      overdue: format(overdueDate, "EEE d MMM yyyy"),
-    };
-  }
-
-  // Legal tab data
-  let legalDocuments: Awaited<ReturnType<typeof loadLegalDocuments>> | null = null;
-  if (activeTab === "legal") {
-    legalDocuments = await loadLegalDocuments();
-  }
-
-  // Calendar sync tab data
-  let calendarSync: {
-    recentLogs: {
-      id: string;
-      operation: string;
-      status: string;
-      graphEventId: string | null;
-      errorMessage: string | null;
-      metadata: Record<string, unknown> | null;
-      createdAt: string;
-    }[];
-    lastReconcileResult: Record<string, unknown> | null;
-    lastReconcileAt: string | null;
-  } | null = null;
-  if (activeTab === "calendar-sync") {
-    const [logs, lastReconcile] = await Promise.all([
-      prisma.calendarSyncLog.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      prisma.calendarSyncLog.findFirst({
-        where: { operation: "reconcile" },
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
-    calendarSync = {
-      recentLogs: logs.map((l) => ({
-        id: l.id,
-        operation: l.operation,
-        status: l.status,
-        graphEventId: l.graphEventId,
-        errorMessage: l.errorMessage,
-        metadata: l.metadata as Record<string, unknown> | null,
-        createdAt: l.createdAt.toISOString(),
-      })),
-      lastReconcileResult: (lastReconcile?.metadata as Record<string, unknown> | null) ?? null,
-      lastReconcileAt: lastReconcile?.createdAt.toISOString() ?? null,
-    };
-  }
-
+function SettingCard({ page }: Readonly<{ page: SettingsPage }>) {
+  const Icon = page.icon;
   return (
-    <div className="space-y-6">
-      <SettingsTabs activeTab={activeTab} />
-      {activeTab === "settings" && (
-        <SettingsForm initialSettings={settings} secretStatus={secretStatus} />
-      )}
-      {activeTab === "users" && <UsersPanel users={serializedUsers} />}
-      {activeTab === "finance" && nextDates && (
-        <FinanceSettingsForm initialSettings={settings} nextDates={nextDates} />
-      )}
-      {activeTab === "whatsapp" && (
-        <WhatsAppPanel
-          initialSettings={settings}
-          whatsappTokenSet={!!process.env.WHATSAPP_ACCESS_TOKEN}
-        />
-      )}
-      {activeTab === "legal" && legalDocuments && (
-        <LegalDocumentsClient
-          documents={legalDocuments}
-          adminUserId={adminUser.id}
-        />
-      )}
-      {activeTab === "calendar-sync" && calendarSync && (
-        <CalendarSyncSection
-          recentLogs={calendarSync.recentLogs}
-          lastReconcileResult={calendarSync.lastReconcileResult}
-          lastReconcileAt={calendarSync.lastReconcileAt}
-        />
-      )}
-    </div>
+    <Link href={page.href} className="group block">
+      <Card className="h-full p-4 transition-colors group-hover:border-brand-300 group-hover:bg-muted/40">
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border bg-muted/40 text-muted-foreground">
+            <Icon className="h-[18px] w-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-heading text-sm font-semibold">{page.title}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{page.desc}</p>
+          </div>
+        </div>
+      </Card>
+    </Link>
   );
 }
 
-async function loadLegalDocuments() {
-  return Promise.all(
-    ALL_LEGAL_SLUGS.map(async (slug) => {
-      const active = await getActiveDocument(slug);
-      const history = await getDocumentHistory(slug);
-      const stats = active
-        ? await getAcceptanceStats(slug, active.version)
-        : null;
+export default async function SettingsOverviewPage() {
+  const { adminUser } = await requireRole("super_admin");
+  const visits = await getSettingsPageVisits(adminUser.id);
+  const frequent = topVisitedHrefs(visits, 4)
+    .map((h) => SETTINGS_CATALOG.find((p) => p.href === h))
+    .filter((p): p is SettingsPage => !!p);
 
-      return {
-        slug,
-        active: active
-          ? {
-              id: active.id,
-              title: active.title,
-              content: active.content as { heading: string; content: string }[],
-              version: active.version,
-              publishedAt: active.publishedAt?.toISOString() ?? null,
-              changeSummary: active.changeSummary,
-            }
-          : null,
-        stats,
-        requiresAcceptance: REQUIRED_DOCUMENTS.includes(slug),
-        history: history.map((h) => ({
-          id: h.id,
-          version: h.version,
-          title: h.title,
-          content: h.content as { heading: string; content: string }[],
-          changeSummary: h.changeSummary,
-          publishedAt: h.publishedAt?.toISOString() ?? null,
-          isActive: h.isActive,
-          acceptanceCount: h._count.acceptances,
-        })),
-      };
-    }),
+  return (
+    <>
+      <SettingsPageHeader
+        title="Settings"
+        description="Manage your website, business and integrations — everything that shapes how Life-Therapy runs."
+      />
+      <div className="space-y-8">
+        {frequent.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Most used
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {frequent.map((page) => (
+                <SettingCard key={page.href} page={page} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {SETTINGS_NAV_GROUPS.map((group) => {
+          const items = SETTINGS_CATALOG.filter((p) => p.group === group);
+          if (items.length === 0) return null;
+          return (
+            <section key={group}>
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {group}
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {items.map((page) => (
+                  <SettingCard key={page.href} page={page} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </>
   );
 }

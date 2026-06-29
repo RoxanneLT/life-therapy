@@ -21,10 +21,12 @@ import {
   Timer,
   Receipt,
   Menu,
+  ChevronLeft,
 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
+import { SETTINGS_CATALOG, SETTINGS_NAV_GROUPS } from "@/lib/settings-catalog";
 
 interface NavItem {
   href: string;
@@ -108,6 +110,9 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
     .map((group) => ({ ...group, items: group.items.filter((item) => item.roles.includes(role)) }))
     .filter((group) => group.items.length > 0);
 
+  // Inside Settings, the sidebar becomes the settings nav (with a back-to-dashboard link).
+  const inSettings = pathname.startsWith("/admin/settings");
+
   return (
     <div className="flex h-full flex-col bg-card text-card-foreground">
       {/* Logo / brand */}
@@ -148,38 +153,113 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
         )}
       </div>
 
-      {/* Navigation */}
+      {/* Navigation — main nav, or the settings nav when inside /admin/settings */}
       <nav className="flex-1 overflow-y-auto p-2 py-4">
-        {visibleGroups.map((group, groupIndex) => (
-          <div key={group.label || "overview"} className="mb-4">
-            {!collapsed && group.label && (
-              <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                {group.label}
-              </p>
-            )}
-            {collapsed && groupIndex > 0 && <div className="my-2 border-t border-border/50" />}
+        {inSettings ? (
+          <div className="space-y-4">
+            {/* Back to dashboard — replaces the main nav while in settings */}
+            <Link
+              href="/admin"
+              onClick={onNavClick}
+              title={collapsed ? "Dashboard" : undefined}
+              className={cn(
+                "flex items-center rounded-lg py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                collapsed ? "justify-center px-2" : "gap-2 px-3",
+              )}
+            >
+              <ChevronLeft className="h-4 w-4 shrink-0" />
+              {!collapsed && "Dashboard"}
+            </Link>
+
             <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onNavClick}
-                  title={collapsed ? item.label : undefined}
-                  className={cn(
-                    "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
-                    collapsed ? "justify-center px-2" : "gap-3 px-3",
-                    isActive(item.href)
-                      ? "bg-brand-50 text-brand-700"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && item.label}
-                </Link>
-              ))}
+              <Link
+                href="/admin/settings"
+                onClick={onNavClick}
+                title={collapsed ? "Overview" : undefined}
+                className={cn(
+                  "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
+                  collapsed ? "justify-center px-2" : "gap-3 px-3",
+                  pathname === "/admin/settings"
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                {!collapsed && "Overview"}
+              </Link>
             </div>
+
+            {SETTINGS_NAV_GROUPS.map((group) => {
+              const items = SETTINGS_CATALOG.filter((p) => p.group === group);
+              if (items.length === 0) return null;
+              return (
+                <div key={group}>
+                  {!collapsed && (
+                    <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                      {group}
+                    </p>
+                  )}
+                  <div className="space-y-0.5">
+                    {items.map((item) => {
+                      const Icon = item.icon;
+                      const active =
+                        pathname === item.href || pathname.startsWith(item.href + "/");
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={onNavClick}
+                          title={collapsed ? item.title : undefined}
+                          className={cn(
+                            "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
+                            collapsed ? "justify-center px-2" : "gap-3 px-3",
+                            active
+                              ? "bg-brand-50 text-brand-700"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {!collapsed && item.title}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        ) : (
+          visibleGroups.map((group, groupIndex) => (
+            <div key={group.label || "overview"} className="mb-4">
+              {!collapsed && group.label && (
+                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  {group.label}
+                </p>
+              )}
+              {collapsed && groupIndex > 0 && <div className="my-2 border-t border-border/50" />}
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavClick}
+                    title={collapsed ? item.label : undefined}
+                    className={cn(
+                      "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
+                      collapsed ? "justify-center px-2" : "gap-3 px-3",
+                      isActive(item.href)
+                        ? "bg-brand-50 text-brand-700"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </nav>
     </div>
   );

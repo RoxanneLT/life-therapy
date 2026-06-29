@@ -39,6 +39,7 @@ import {
 } from "./whatsapp-actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 import { cn } from "@/lib/utils";
+import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -62,6 +63,9 @@ interface TemplateEntry {
 interface WhatsAppPanelProps {
   initialSettings: SiteSetting;
   whatsappTokenSet: boolean;
+  embedded?: boolean;
+  headerTitle?: string;
+  headerDescription?: string;
 }
 
 const SECTIONS = [
@@ -78,6 +82,9 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 export function WhatsAppPanel({
   initialSettings,
   whatsappTokenSet,
+  embedded,
+  headerTitle,
+  headerDescription,
 }: WhatsAppPanelProps) {
   const s = initialSettings;
   const [isPending, startTransition] = useTransition();
@@ -202,7 +209,47 @@ export function WhatsAppPanel({
   const showSaveButton = activeSection === "connection" || activeSection === "reminders";
 
   return (
-    <div className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+    <div className={embedded ? undefined : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}>
+      {embedded && (
+        <SettingsPageHeader
+          backHref="/admin/settings"
+          title={headerTitle ?? "WhatsApp"}
+          description={headerDescription}
+          actions={
+            showSaveButton ? (
+              <Button type="button" size="sm" onClick={handleSaveSettings} disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save
+              </Button>
+            ) : undefined
+          }
+          tabs={
+            <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {SECTIONS.map((section) => {
+                const Icon = section.icon;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveSection(section.id)}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                      activeSection === section.id
+                        ? "border-brand-600 text-brand-700"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {section.label}
+                  </button>
+                );
+              })}
+            </div>
+          }
+        />
+      )}
+      {!embedded && (
+        <>
       {/* Mobile nav */}
       <div className="md:hidden space-y-4">
         <div>
@@ -279,9 +326,11 @@ export function WhatsAppPanel({
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Content area */}
-      <div className="min-w-0 flex-1 overflow-y-auto pr-1">
+      <div className={embedded ? "min-w-0" : "min-w-0 flex-1 overflow-y-auto pr-1"}>
         {/* ── Connection ── */}
         {activeSection === "connection" && (
           <div className="space-y-6">

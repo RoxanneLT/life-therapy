@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
 import {
   Card,
   CardContent,
@@ -76,6 +77,9 @@ interface DocumentData {
 interface LegalDocumentsClientProps {
   readonly documents: DocumentData[];
   readonly adminUserId: string;
+  readonly embedded?: boolean;
+  readonly headerTitle?: string;
+  readonly headerDescription?: string;
 }
 
 const SLUG_META: Record<string, { label: string; icon: typeof ScrollText }> = {
@@ -87,6 +91,9 @@ const SLUG_META: Record<string, { label: string; icon: typeof ScrollText }> = {
 export function LegalDocumentsClient({
   documents,
   adminUserId,
+  embedded,
+  headerTitle,
+  headerDescription,
 }: LegalDocumentsClientProps) {
   const [activeSlug, setActiveSlug] = useState(documents[0]?.slug ?? "commitment");
   const [editDoc, setEditDoc] = useState<DocumentData | null>(null);
@@ -97,7 +104,40 @@ export function LegalDocumentsClient({
 
   return (
     <>
-      <div className="flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6">
+      <div className={embedded ? undefined : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}>
+        {embedded && (
+          <SettingsPageHeader
+            backHref="/admin/settings"
+            title={headerTitle ?? "Legal Documents"}
+            description={headerDescription}
+            tabs={
+              <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {documents.map((doc) => {
+                  const meta = SLUG_META[doc.slug];
+                  const Icon = meta?.icon ?? FileText;
+                  return (
+                    <button
+                      key={doc.slug}
+                      type="button"
+                      onClick={() => setActiveSlug(doc.slug)}
+                      className={cn(
+                        "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                        activeSlug === doc.slug
+                          ? "border-brand-600 text-brand-700"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {meta?.label ?? doc.slug}
+                    </button>
+                  );
+                })}
+              </div>
+            }
+          />
+        )}
+        {!embedded && (
+          <>
         {/* Mobile nav */}
         <div className="md:hidden space-y-4">
           <div>
@@ -162,9 +202,11 @@ export function LegalDocumentsClient({
             })}
           </nav>
         </div>
+          </>
+        )}
 
         {/* Content area */}
-        <div className="min-w-0 flex-1 overflow-y-auto pr-1">
+        <div className={embedded ? "min-w-0" : "min-w-0 flex-1 overflow-y-auto pr-1"}>
           {activeDoc && <DocumentDetail doc={activeDoc} onEdit={() => setEditDoc(activeDoc)} onHistory={() => setHistoryDoc(activeDoc)} />}
         </div>
       </div>

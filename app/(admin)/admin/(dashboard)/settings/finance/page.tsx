@@ -38,6 +38,12 @@ export default async function FinanceSettingsPage() {
   };
 
   return (
-    <FinanceSettingsForm initialSettings={settings} nextDates={nextDates} />
+    <FinanceSettingsForm
+      initialSettings={settings}
+      nextDates={nextDates}
+      embedded
+      headerTitle="Finance"
+      headerDescription="Business details, VAT, session rates, billing schedule and banking."
+    />
   );
 }
