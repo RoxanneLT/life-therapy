@@ -217,7 +217,7 @@ export function UpcomingBillingSection({
         else if (discFixed) discountLabel = `${fmt(discFixed, clientCurrency)} discount`;
 
         return (
-          <div key={student.id} className="rounded-md border">
+          <div key={student.id} className="rounded-md border bg-card">
             {/* Group header — click to toggle */}
             <div
               className="flex cursor-pointer select-none items-center justify-between border-b bg-muted/20 px-4 py-2.5"

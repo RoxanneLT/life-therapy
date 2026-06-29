@@ -67,7 +67,7 @@ export default async function CampaignsPage() {
             <p className="text-sm">Create your first campaign to start reaching your contacts.</p>
           </div>
         ) : (
-          <div className="rounded-lg border">
+          <div className="rounded-lg border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>

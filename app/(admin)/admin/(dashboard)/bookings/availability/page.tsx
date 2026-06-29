@@ -59,7 +59,7 @@ export default async function AvailabilityOverridesPage() {
               No overrides set. Your regular business hours apply to all days.
             </p>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -152,7 +152,7 @@ export function SortablePackageList({ packages: initial }: { readonly packages: 
     <div>
       <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
 
-      <div className="rounded-md border">
+      <div className="rounded-md border bg-card">
         <table className="w-full">
           <thead>
             <tr className="border-b bg-muted/50 text-left text-sm">

@@ -123,7 +123,7 @@ export function MonthView({ bookings, date }: MonthViewProps) {
       </div>
 
       {/* Calendar grid */}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-lg border bg-card">
         {/* Day-of-week headers */}
         <div className="grid grid-cols-7 border-b bg-muted/50">
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -131,7 +131,7 @@ export function MonthView({ bookings, date }: MonthViewProps) {
               key={d}
               className={cn(
                 "px-2 py-2 text-center text-xs font-medium text-muted-foreground",
-                d === "Sat" || d === "Sun" ? "bg-gray-50 dark:bg-gray-800/30" : "",
+                d === "Sat" || d === "Sun" ? "bg-gray-100 dark:bg-gray-800/60" : "",
               )}
             >
               {d}
@@ -157,7 +157,7 @@ export function MonthView({ bookings, date }: MonthViewProps) {
                   className={cn(
                     "min-h-24 border-r p-1.5 last:border-r-0",
                     !isCurrentMonth && "bg-gray-50/60 dark:bg-gray-900/40",
-                    isWeekend && isCurrentMonth && "bg-gray-50/30 dark:bg-gray-800/20",
+                    isWeekend && isCurrentMonth && "bg-gray-100 dark:bg-gray-800/40",
                     isToday && "bg-brand-50/40 dark:bg-brand-900/30",
                   )}
                 >

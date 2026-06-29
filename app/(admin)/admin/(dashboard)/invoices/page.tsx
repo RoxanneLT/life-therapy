@@ -330,7 +330,7 @@ export default async function InvoicesPage({
             message="No pending payment requests."
           />
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -417,7 +417,7 @@ export default async function InvoicesPage({
           message={params.q ? "No invoices match your search." : "No invoices found."}
         />
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

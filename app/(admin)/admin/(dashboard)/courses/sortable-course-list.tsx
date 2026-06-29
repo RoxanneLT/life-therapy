@@ -159,7 +159,7 @@ export function SortableCourseList({ courses: initial }: { readonly courses: Cou
           items={courses.map((c) => c.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-card">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-muted/50 text-left text-sm">

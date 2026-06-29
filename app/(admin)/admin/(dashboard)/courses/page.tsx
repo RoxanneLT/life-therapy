@@ -37,9 +37,7 @@ export default async function AdminCoursesPage() {
         }
       />
 
-      <div className="rounded-lg border bg-card p-4">
-        <SortableCourseList courses={courses} />
-      </div>
+      <SortableCourseList courses={courses} />
     </div>
   );
 }

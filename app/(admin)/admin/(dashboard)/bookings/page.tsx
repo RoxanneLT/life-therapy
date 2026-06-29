@@ -356,7 +356,7 @@ export default async function BookingsPage({ searchParams }: Props) {
               </p>
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>

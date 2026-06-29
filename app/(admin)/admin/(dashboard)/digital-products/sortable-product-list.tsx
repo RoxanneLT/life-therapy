@@ -146,7 +146,7 @@ export function SortableProductList({ products: initial }: { readonly products: 
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <div className="rounded-md border">
+        <div className="rounded-md border bg-card">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-muted/50 text-left text-sm">

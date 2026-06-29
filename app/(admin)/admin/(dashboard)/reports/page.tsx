@@ -275,7 +275,7 @@ export default async function ReportsPage({
 
           {/* At-Risk Clients Table */}
           {atRiskClients.length > 0 && (
-            <div className="rounded-lg border">
+            <div className="rounded-lg border bg-card">
               <div className="flex items-center gap-2 border-b px-4 py-3">
                 <AlertTriangle className="h-4 w-4 text-amber-500" />
                 <h3 className="font-medium">At-Risk Clients</h3>
