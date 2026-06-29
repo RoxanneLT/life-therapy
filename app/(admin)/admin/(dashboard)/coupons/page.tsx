@@ -98,7 +98,7 @@ export default async function CouponsGiftsPage({
         (coupons.length === 0 ? (
           <EmptyState icon={Tag} message="No coupons yet." />
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -194,7 +194,7 @@ export default async function CouponsGiftsPage({
         (gifts.length === 0 ? (
           <EmptyState icon={Gift} message="No gifts yet." />
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-md border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
