@@ -226,7 +226,9 @@ export default async function BookingsPage({ searchParams }: Props) {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
+      {/* Fixed controls — stay put while the list scrolls beneath */}
+      <div className="shrink-0 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold">Bookings</h1>
@@ -326,20 +328,24 @@ export default async function BookingsPage({ searchParams }: Props) {
           </Badge>
         </Link>
       </div>
+      </div>
 
-      {/* View content */}
+      {/* Scrollable content — only this region scrolls, not the whole page */}
+      <div className="mt-4 min-h-0 flex-1">
       {seriesFilter && (
-        <SeriesTimeline
-          seriesId={seriesFilter}
-          bookings={serialisedBookings.map((b) => ({
-            id: b.id,
-            date: b.date,
-            startTime: b.startTime,
-            endTime: b.endTime,
-            status: b.status,
-            clientName: b.clientName,
-          }))}
-        />
+        <div className="h-full overflow-y-auto">
+          <SeriesTimeline
+            seriesId={seriesFilter}
+            bookings={serialisedBookings.map((b) => ({
+              id: b.id,
+              date: b.date,
+              startTime: b.startTime,
+              endTime: b.endTime,
+              status: b.status,
+              clientName: b.clientName,
+            }))}
+          />
+        </div>
       )}
 
       {!seriesFilter && view === "list" && (
@@ -356,9 +362,9 @@ export default async function BookingsPage({ searchParams }: Props) {
               </p>
             </div>
           ) : (
-            <div className="rounded-md border bg-card">
-              <Table>
-                <TableHeader>
+            <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+              <Table containerClassName="min-h-0 flex-1">
+                <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Time</TableHead>
@@ -448,18 +454,23 @@ export default async function BookingsPage({ searchParams }: Props) {
       )}
 
       {!seriesFilter && (view === "day" || view === "week") && (
-        <CalendarShell
-          view={view}
-          bookings={serialisedBookings}
-          date={selectedDate}
-          businessHours={businessHours}
-          overrides={serialisedOverrides}
-        />
+        <div className="h-full overflow-y-auto">
+          <CalendarShell
+            view={view}
+            bookings={serialisedBookings}
+            date={selectedDate}
+            businessHours={businessHours}
+            overrides={serialisedOverrides}
+          />
+        </div>
       )}
 
       {!seriesFilter && view === "month" && (
-        <MonthView bookings={serialisedBookings} date={selectedDate} />
+        <div className="h-full overflow-y-auto">
+          <MonthView bookings={serialisedBookings} date={selectedDate} />
+        </div>
       )}
+      </div>
     </div>
   );
 }

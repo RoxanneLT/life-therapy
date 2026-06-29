@@ -59,7 +59,9 @@ export default async function CouponsGiftsPage({
       : `${gifts.length} gift record${gifts.length === 1 ? "" : "s"}`;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
+      {/* Fixed controls — stay put while the list scrolls beneath */}
+      <div className="shrink-0 space-y-4">
       <PageHeader
         title="Coupons & Gifts"
         description={description}
@@ -92,15 +94,18 @@ export default async function CouponsGiftsPage({
           </Link>
         ))}
       </div>
+      </div>
 
+      {/* Scrollable content — only this region scrolls, not the whole page */}
+      <div className="mt-4 min-h-0 flex-1">
       {/* Coupons tab */}
       {active === "coupons" &&
         (coupons.length === 0 ? (
           <EmptyState icon={Tag} message="No coupons yet." />
         ) : (
-          <div className="rounded-md border bg-card">
-            <Table>
-              <TableHeader>
+          <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+            <Table containerClassName="min-h-0 flex-1">
+              <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow>
                   <TableHead>Code</TableHead>
                   <TableHead>Type</TableHead>
@@ -194,9 +199,9 @@ export default async function CouponsGiftsPage({
         (gifts.length === 0 ? (
           <EmptyState icon={Gift} message="No gifts yet." />
         ) : (
-          <div className="rounded-md border bg-card">
-            <Table>
-              <TableHeader>
+          <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+            <Table containerClassName="min-h-0 flex-1">
+              <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow>
                   <TableHead>From</TableHead>
                   <TableHead>To</TableHead>
@@ -253,6 +258,7 @@ export default async function CouponsGiftsPage({
             </Table>
           </div>
         ))}
+      </div>
     </div>
   );
 }

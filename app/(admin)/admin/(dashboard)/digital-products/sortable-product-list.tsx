@@ -138,7 +138,7 @@ export function SortableProductList({ products: initial }: { readonly products: 
   }
 
   return (
-    <div>
+    <div className="flex h-full flex-col">
       <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
 
       <DndContext
@@ -146,9 +146,9 @@ export function SortableProductList({ products: initial }: { readonly products: 
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <div className="rounded-md border bg-card">
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-card">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-card">
               <tr className="border-b bg-muted/50 text-left text-sm">
                 <th className="w-10 p-3" />
                 <th className="p-3 font-medium">Title</th>

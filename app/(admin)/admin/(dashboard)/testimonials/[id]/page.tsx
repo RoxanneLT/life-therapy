@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { TestimonialForm } from "@/components/admin/testimonial-form";
 import { updateTestimonial, deleteTestimonial } from "../actions";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
-import { redirect } from "next/navigation";
+import { shortClientName } from "@/lib/client-display";
 
 export default async function EditTestimonialPage({
   params,
@@ -31,6 +31,16 @@ export default async function EditTestimonialPage({
 
   if (!testimonial) notFound();
 
+  const clients = await prisma.student.findMany({
+    where: { clientStatus: { not: "potential" } },
+    select: { firstName: true, lastName: true },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
+  const clientOptions = clients.map((c) => ({
+    fullName: `${c.firstName} ${c.lastName}`.trim(),
+    fillName: shortClientName(c.firstName, c.lastName),
+  }));
+
   async function handleUpdate(formData: FormData) {
     "use server";
     await updateTestimonial(id, formData);
@@ -43,17 +53,18 @@ export default async function EditTestimonialPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Edit Testimonial</h1>
-          <p className="text-sm text-muted-foreground">
-            {testimonial.name}
-          </p>
-        </div>
+    <TestimonialForm
+      initialData={testimonial}
+      onSubmit={handleUpdate}
+      clients={clientOptions}
+      headerTitle="Edit Testimonial"
+      headerDescription={testimonial.name}
+      backHref="/admin/testimonials"
+      backLabel="Testimonials"
+      headerActions={
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm">
+            <Button type="button" variant="destructive" size="sm">
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
@@ -74,8 +85,7 @@ export default async function EditTestimonialPage({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-      <TestimonialForm initialData={testimonial} onSubmit={handleUpdate} />
-    </div>
+      }
+    />
   );
 }

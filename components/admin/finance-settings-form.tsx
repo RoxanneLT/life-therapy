@@ -245,7 +245,7 @@ export function FinanceSettingsForm({
     <form
       onSubmit={handleSubmit}
       onChange={markDirty}
-      className={embedded ? "flex flex-col" : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}
+      className={embedded ? "flex h-full flex-col" : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}
     >
       {embedded && (
         <SettingsPageHeader
@@ -366,7 +366,7 @@ export function FinanceSettingsForm({
       )}
 
       {/* Content area (flex column so the Banking & VAT tab can order Banking first) */}
-      <div className={embedded ? "flex min-w-0 flex-col gap-6" : "flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1"}>
+      <div className={embedded ? "flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1" : "flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1"}>
         {/* ── Business Details ── */}
         {activeSection === "business" && (
           <Card>

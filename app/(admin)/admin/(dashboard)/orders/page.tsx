@@ -53,7 +53,9 @@ export default async function OrdersPage({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
+      {/* Fixed controls — stay put while the list scrolls beneath */}
+      <div className="shrink-0 space-y-4">
       <PageHeader
         title="Orders"
         description={`Total revenue: ${formatPrice(totalRevenue._sum.totalCents || 0)}`}
@@ -76,16 +78,19 @@ export default async function OrdersPage({
           </Link>
         ))}
       </div>
+      </div>
 
+      {/* Scrollable content — only this region scrolls, not the whole page */}
+      <div className="mt-4 min-h-0 flex-1">
       {orders.length === 0 ? (
         <EmptyState
           icon={ShoppingCart}
           message="No orders yet."
         />
       ) : (
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
+        <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+          <Table containerClassName="min-h-0 flex-1">
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead>Order #</TableHead>
                 <TableHead>Student</TableHead>
@@ -132,6 +137,7 @@ export default async function OrdersPage({
           </Table>
         </div>
       )}
+      </div>
     </div>
   );
 }

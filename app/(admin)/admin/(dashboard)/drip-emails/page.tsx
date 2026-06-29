@@ -2,16 +2,25 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Timer, Pencil, UserPlus, Newspaper, Plus, AlertTriangle, CircleSlash, CircleCheck,
-  Brain, GraduationCap, CalendarOff, MessageSquareOff, Snowflake,
+  CalendarOff, MessageSquareOff,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { DeleteDripEmailButton } from "./delete-button";
-import { PageHeader } from "@/components/admin/page-header";
+import { SmartBehavioursPanel } from "./smart-behaviours-panel";
 import { DRIP_LINK_ISSUES, getWorstStatus, countIssues } from "@/lib/drip-link-audit";
 import type { LinkAuditItem, EmailAudit } from "@/lib/drip-link-audit";
 
@@ -19,12 +28,34 @@ const TYPE_META: Record<
   string,
   { label: string; icon: React.ComponentType<{ className?: string }> }
 > = {
-  onboarding: { label: "Onboarding Sequence", icon: UserPlus },
-  newsletter: { label: "Newsletter Sequence", icon: Newspaper },
+  onboarding: { label: "Onboarding", icon: UserPlus },
+  newsletter: { label: "Newsletter", icon: Newspaper },
 };
 
-export default async function DripEmailsPage() {
+const DRIP_TYPES = ["onboarding", "newsletter"] as const;
+type DripType = (typeof DRIP_TYPES)[number];
+
+// Steps whose consultation CTA is skipped / stripped when a client has consulted.
+const CONSULTATION_SKIP_STEPS: Record<string, number[]> = {
+  onboarding: [11],
+  newsletter: [5, 11, 31, 38],
+};
+const CONSULTATION_STRIP_STEPS: Record<string, number[]> = {
+  onboarding: [7],
+  newsletter: [3],
+};
+
+export default async function DripEmailsPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ tab?: string }>;
+}) {
   await requireRole("super_admin", "marketing");
+
+  const { tab } = await searchParams;
+  const activeType: DripType = DRIP_TYPES.includes(tab as DripType)
+    ? (tab as DripType)
+    : "onboarding";
 
   const dripEmails = await prisma.dripEmail.findMany({
     orderBy: [{ type: "asc" }, { step: "asc" }],
@@ -38,311 +69,207 @@ export default async function DripEmailsPage() {
     prisma.dripProgress.count({ where: { completedAt: { not: null } } }),
   ]);
 
-  const grouped = (["onboarding", "newsletter"] as const).map((type) => ({
-    type,
-    meta: TYPE_META[type],
-    emails: dripEmails.filter((e) => e.type === type),
-  }));
+  const countByType = (type: DripType) => dripEmails.filter((e) => e.type === type).length;
+
+  // Active tab's emails, in day sequence
+  const activeEmails = dripEmails
+    .filter((e) => e.type === activeType)
+    .sort((a, b) => a.dayOffset - b.dayOffset || a.step - b.step);
 
   const totalEmails = dripEmails.length;
 
+  // Link readiness counts (for the header banner)
+  const allAudits: EmailAudit[] = Object.entries(DRIP_LINK_ISSUES).map(([key, issues]) => ({
+    key,
+    subject: "",
+    issues,
+  }));
+  const readiness = countIssues(allAudits);
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Drip Email Sequence"
-        description={`${totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.`}
-      />
-
-      {/* ── Smart Behaviour Panel ── */}
-      <Card className="border-brand-200 bg-linear-to-br from-brand-50/50 to-white">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100">
-              <Brain className="h-4 w-4 text-brand-700" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold">Smart Drip Behaviours</h2>
-              <p className="text-xs text-muted-foreground">Active intelligence layers that adapt the sequence per client</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-
-            {/* 1. Auto-graduate */}
-            <div className="rounded-lg border bg-white p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-emerald-600" />
-                <span className="text-xs font-semibold text-emerald-800">Auto-Graduate</span>
-                <Badge variant="outline" className="ml-auto border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] px-1.5 py-0">
-                  Active
-                </Badge>
-              </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                When a potential client converts to <strong>active</strong> (or inactive), they immediately skip remaining onboarding and jump to newsletter.
-              </p>
-              <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-                Trigger: clientStatus ≠ &quot;potential&quot; while in onboarding phase
-              </p>
-            </div>
-
-            {/* 2. Skip consultation emails */}
-            <div className="rounded-lg border bg-white p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <CalendarOff className="h-4 w-4 text-blue-600" />
-                <span className="text-xs font-semibold text-blue-800">Skip Consultation CTAs</span>
-                <Badge variant="outline" className="ml-auto border-blue-200 bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0">
-                  Active
-                </Badge>
-              </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                If a client already has a free consultation (booked, confirmed, or done), emails whose primary CTA is &quot;Book a Free Consultation&quot; are <strong>skipped entirely</strong>.
-              </p>
-              <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-                Affects: onboarding #12 · newsletter #6, #12, #32, #39
-              </p>
-            </div>
-
-            {/* 3. Strip inline links */}
-            <div className="rounded-lg border bg-white p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <MessageSquareOff className="h-4 w-4 text-violet-600" />
-                <span className="text-xs font-semibold text-violet-800">Strip Inline Links</span>
-                <Badge variant="outline" className="ml-auto border-violet-200 bg-violet-50 text-violet-700 text-[10px] px-1.5 py-0">
-                  Active
-                </Badge>
-              </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Emails that mention free consultation <strong>in passing</strong> but have a different primary CTA — the booking link is replaced with &quot;reach out to me directly&quot;.
-              </p>
-              <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-                Affects: onboarding #8 · newsletter #4
-              </p>
-            </div>
-
-            {/* 4. Cold client auto-pause */}
-            <div className="rounded-lg border bg-white p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <Snowflake className="h-4 w-4 text-cyan-600" />
-                <span className="text-xs font-semibold text-cyan-800">Cold Client Pause</span>
-                <Badge variant="outline" className="ml-auto border-cyan-200 bg-cyan-50 text-cyan-700 text-[10px] px-1.5 py-0">
-                  Active
-                </Badge>
-              </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                If a client has <strong>5 consecutive tracked emails</strong> with zero opens, they are automatically paused from further drip emails.
-              </p>
-              <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-                Resumable from client profile · reason logged as &quot;5_consecutive_unopened&quot;
-              </p>
-            </div>
-
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Link readiness summary */}
-      {(() => {
-        const allAudits: EmailAudit[] = Object.entries(DRIP_LINK_ISSUES).map(([key, issues]) => ({
-          key,
-          subject: "",
-          issues,
-        }));
-        const counts = countIssues(allAudits);
-        const missingCount = counts.missing;
-        const needsContentCount = counts.noContent;
-        if (missingCount === 0 && needsContentCount === 0) return null;
-        return (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800">Drip Sequence Readiness</span>
-            </div>
-            <p className="text-xs text-amber-700">
-              {missingCount > 0 && <><strong className="text-red-700">{missingCount} missing route{missingCount !== 1 ? "s" : ""}</strong> (page doesn&apos;t exist yet) &middot; </>}
-              {needsContentCount > 0 && <><strong>{needsContentCount} need content</strong> (route exists but no product/course in database)</>}
-              {missingCount === 0 && needsContentCount > 0 && <> &mdash; create the products/courses in admin to wire these up</>}
+    <div className="flex h-full flex-col">
+      {/* Fixed header — title, smart-behaviours reference, stats and tabs all stay put */}
+      <div className="shrink-0 -mx-6 -mt-6 bg-background px-6 pt-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="font-heading text-2xl font-bold leading-tight">Drip Email Sequence</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.
             </p>
           </div>
-        );
-      })()}
+          <Button size="sm" asChild>
+            <Link href={`/admin/drip-emails/new?type=${activeType}`}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add Email
+            </Link>
+          </Button>
+        </div>
 
-      {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-4">
-        {[
-          { label: "Total in Drip", value: totalInDrip },
-          { label: "In Onboarding", value: inOnboarding },
-          { label: "In Newsletter", value: inNewsletter },
-          { label: "Completed", value: completed },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="pb-4 pt-4">
-              <p className="text-2xl font-bold">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {/* Smart behaviours — collapsible reference (above the tabs, shown once) */}
+        <div className="mt-3">
+          <SmartBehavioursPanel />
+        </div>
+
+        {/* Compact stats + link readiness */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span><strong className="text-foreground">{totalInDrip}</strong> in drip</span>
+          <span><strong className="text-foreground">{inOnboarding}</strong> onboarding</span>
+          <span><strong className="text-foreground">{inNewsletter}</strong> newsletter</span>
+          <span><strong className="text-foreground">{completed}</strong> completed</span>
+          {(readiness.missing > 0 || readiness.noContent > 0) && (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {readiness.missing > 0 && <><strong>{readiness.missing}</strong> missing route{readiness.missing !== 1 ? "s" : ""}</>}
+              {readiness.missing > 0 && readiness.noContent > 0 && " · "}
+              {readiness.noContent > 0 && <><strong>{readiness.noContent}</strong> need content</>}
+            </span>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-3 flex gap-1 border-b border-border">
+          {DRIP_TYPES.map((type) => {
+            const Icon = TYPE_META[type].icon;
+            return (
+              <Link
+                key={type}
+                href={`/admin/drip-emails?tab=${type}`}
+                className={cn(
+                  "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
+                  activeType === type
+                    ? "border-brand-600 text-brand-700"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {TYPE_META[type].label}
+                <Badge variant="outline" className="ml-1 px-1.5 py-0 text-[10px]">
+                  {countByType(type)}
+                </Badge>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Empty state */}
-      {dripEmails.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <Timer className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="font-heading text-lg font-semibold">No drip emails found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Run the migration SQL to seed the drip emails, or add new ones below.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <Button size="sm" asChild>
-                <Link href="/admin/drip-emails/new?type=onboarding">
+      {/* Scrollable content — only the table scrolls */}
+      <div className="mt-4 min-h-0 flex-1">
+        {activeEmails.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center py-12 text-center">
+              <Timer className="mb-4 h-12 w-12 text-muted-foreground" />
+              <h3 className="font-heading text-lg font-semibold">
+                No {TYPE_META[activeType].label.toLowerCase()} emails yet
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add the first email in this sequence.
+              </p>
+              <Button size="sm" className="mt-4" asChild>
+                <Link href={`/admin/drip-emails/new?type=${activeType}`}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Onboarding Email
+                  Add {TYPE_META[activeType].label} Email
                 </Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/admin/drip-emails/new?type=newsletter">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Newsletter Email
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-8">
-          {grouped.map((group) => {
-            const Icon = group.meta.icon;
-            return (
-              <div key={group.type}>
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-5 w-5 text-brand-500" />
-                    <h2 className="font-heading text-lg font-semibold">
-                      {group.meta.label}
-                    </h2>
-                    <Badge variant="outline" className="ml-1">
-                      {group.emails.length} emails
-                    </Badge>
-                  </div>
-                  <Button size="sm" variant="outline" className="gap-2" asChild>
-                    <Link href={`/admin/drip-emails/new?type=${group.type}`}>
-                      <Plus className="h-4 w-4" />
-                      Add Email
-                    </Link>
-                  </Button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.emails.map((email) => {
-                    const auditKey = `${group.type}_${email.step}`;
-                    const issues = DRIP_LINK_ISSUES[auditKey];
-                    const worstStatus = getWorstStatus(auditKey);
-                    const nonReadyIssues = issues?.filter((i: LinkAuditItem) => i.status !== "ready" && i.status !== "dynamic") || [];
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+            <Table containerClassName="min-h-0 flex-1">
+              <TableHeader className="sticky top-0 z-10 bg-card">
+                <TableRow>
+                  <TableHead className="w-16">Step</TableHead>
+                  <TableHead className="w-20">Day</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead className="w-24">Status</TableHead>
+                  <TableHead>Links</TableHead>
+                  <TableHead className="w-24 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activeEmails.map((email) => {
+                  const auditKey = `${activeType}_${email.step}`;
+                  const issues = DRIP_LINK_ISSUES[auditKey];
+                  const worstStatus = getWorstStatus(auditKey);
+                  const nonReadyIssues = issues?.filter((i: LinkAuditItem) => i.status !== "ready" && i.status !== "dynamic") || [];
+                  const isConsultationSkip = (CONSULTATION_SKIP_STEPS[activeType] || []).includes(email.step);
+                  const isConsultationStrip = (CONSULTATION_STRIP_STEPS[activeType] || []).includes(email.step);
 
-                    // Smart behaviour flags for this specific email
-                    const consultationSkipSteps: Record<string, number[]> = {
-                      onboarding: [11],
-                      newsletter: [5, 11, 31, 38],
-                    };
-                    const consultationStripSteps: Record<string, number[]> = {
-                      onboarding: [7],
-                      newsletter: [3],
-                    };
-                    const isConsultationSkip = (consultationSkipSteps[group.type] || []).includes(email.step);
-                    const isConsultationStrip = (consultationStripSteps[group.type] || []).includes(email.step);
-
-                    return (
-                    <Card key={email.id} className="transition-shadow hover:shadow-md">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="shrink-0 text-xs">
-                              #{email.step + 1}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              Day {email.dayOffset}
-                            </span>
-                          </div>
-                          <Badge
-                            variant={email.isActive ? "default" : "secondary"}
-                            className="shrink-0"
-                          >
-                            {email.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="mb-2 text-sm font-medium line-clamp-2">
-                          {email.subject}
-                        </p>
-
-                        {/* Readiness badge */}
-                        {worstStatus === "missing" && (
-                          <div className="mb-3 flex items-start gap-1.5 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
-                            <CircleSlash className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <div>
-                              <span className="font-semibold">Route missing</span>
-                              {nonReadyIssues.map((issue: LinkAuditItem, i: number) => (
-                                <p key={i} className="text-red-600">{issue.note}</p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {worstStatus === "no_content" && (
-                          <div className="mb-3 flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
-                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <div>
-                              <span className="font-semibold">Needs content</span>
-                              {nonReadyIssues.map((issue: LinkAuditItem, i: number) => (
-                                <p key={i} className="text-amber-600">{issue.note}</p>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {worstStatus === "ready" && issues && issues.length > 0 && (
-                          <div className="mb-3 flex items-center gap-1.5 text-xs text-green-600">
-                            <CircleCheck className="h-3.5 w-3.5" />
-                            <span>All links verified</span>
-                          </div>
-                        )}
-
-                        {/* Smart behaviour indicators */}
+                  return (
+                    <TableRow key={email.id}>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">#{email.step + 1}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        Day {email.dayOffset}
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium">{email.subject}</p>
                         {(isConsultationSkip || isConsultationStrip) && (
-                          <div className="mb-3 flex flex-wrap gap-1.5">
+                          <div className="mt-1 flex flex-wrap gap-1.5">
                             {isConsultationSkip && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900">
                                 <CalendarOff className="h-2.5 w-2.5" />
                                 Skipped if consulted
                               </span>
                             )}
                             {isConsultationStrip && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 ring-1 ring-inset ring-violet-200">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900">
                                 <MessageSquareOff className="h-2.5 w-2.5" />
                                 Link stripped if consulted
                               </span>
                             )}
                           </div>
                         )}
-
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" className="gap-2" asChild>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={email.isActive ? "default" : "secondary"}>
+                          {email.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {worstStatus === "missing" ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-xs font-medium text-red-700"
+                            title={nonReadyIssues.map((i: LinkAuditItem) => i.note).join(" · ")}
+                          >
+                            <CircleSlash className="h-3.5 w-3.5" />
+                            Route missing
+                          </span>
+                        ) : worstStatus === "no_content" ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-xs font-medium text-amber-700"
+                            title={nonReadyIssues.map((i: LinkAuditItem) => i.note).join(" · ")}
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Needs content
+                          </span>
+                        ) : worstStatus === "ready" && issues && issues.length > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
+                            <CircleCheck className="h-3.5 w-3.5" />
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" asChild aria-label="Edit email">
                             <Link href={`/admin/drip-emails/${email.id}`}>
-                              <Pencil className="h-3.5 w-3.5" />
-                              Edit
+                              <Pencil className="h-4 w-4" />
                             </Link>
                           </Button>
                           <DeleteDripEmailButton id={email.id} step={email.step + 1} />
                         </div>
-                      </CardContent>
-                    </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

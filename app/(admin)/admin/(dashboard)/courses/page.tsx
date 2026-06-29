@@ -23,21 +23,25 @@ export default async function AdminCoursesPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Courses"
-        description="Manage your course catalog."
-        action={
-          <Button asChild>
-            <Link href="/admin/courses/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Course
-            </Link>
-          </Button>
-        }
-      />
+    <div className="flex h-full flex-col">
+      <div className="shrink-0">
+        <PageHeader
+          title="Courses"
+          description="Manage your course catalog."
+          action={
+            <Button asChild>
+              <Link href="/admin/courses/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Course
+              </Link>
+            </Button>
+          }
+        />
+      </div>
 
-      <SortableCourseList courses={courses} />
+      <div className="mt-6 min-h-0 flex-1">
+        <SortableCourseList courses={courses} />
+      </div>
     </div>
   );
 }

@@ -286,7 +286,9 @@ export default async function InvoicesPage({
     : "—";
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
+      {/* Fixed controls — stay put while the list scrolls beneath */}
+      <div className="shrink-0 space-y-6">
       {/* Header */}
       <PageHeader
         title="Finance"
@@ -315,14 +317,19 @@ export default async function InvoicesPage({
         activeMonth={activeMonth}
         counts={countMap}
       />
+      </div>
 
+      {/* Scrollable content — only this region scrolls, not the whole page */}
+      <div className="mt-6 min-h-0 flex-1">
       {/* Table — Upcoming / Payment Requests / Invoices depending on tab */}
       {showUpcoming ? (
-        <UpcomingBillingSection
-          bookings={upcomingBookings}
-          periodStart={displayPeriodStart.toISOString()}
-          periodEnd={billingPeriodEnd.toISOString()}
-        />
+        <div className="h-full overflow-y-auto">
+          <UpcomingBillingSection
+            bookings={upcomingBookings}
+            periodStart={displayPeriodStart.toISOString()}
+            periodEnd={billingPeriodEnd.toISOString()}
+          />
+        </div>
       ) : showPaymentRequests ? (
         pendingRequests.length === 0 ? (
           <EmptyState
@@ -330,9 +337,9 @@ export default async function InvoicesPage({
             message="No pending payment requests."
           />
         ) : (
-          <div className="rounded-md border bg-card">
-            <Table>
-              <TableHeader>
+          <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+            <Table containerClassName="min-h-0 flex-1">
+              <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow>
                   <TableHead>Month</TableHead>
                   <TableHead>Date Sent</TableHead>
@@ -417,9 +424,9 @@ export default async function InvoicesPage({
           message={params.q ? "No invoices match your search." : "No invoices found."}
         />
       ) : (
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
+        <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+          <Table containerClassName="min-h-0 flex-1">
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead>
                   <SortableHeader field="invoiceNumber" label="Invoice #" currentSort={sortField} currentDir={sortDir} />
@@ -496,6 +503,7 @@ export default async function InvoicesPage({
           </Table>
         </div>
       )}
+      </div>
     </div>
   );
 }

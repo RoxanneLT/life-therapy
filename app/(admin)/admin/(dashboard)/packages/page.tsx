@@ -38,7 +38,8 @@ export default async function AdminPackagesPage() {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-6">
       <PageHeader
         title="Packages"
         description="Pick-your-own bundles with courses, digital products & session credits."
@@ -53,7 +54,9 @@ export default async function AdminPackagesPage() {
       />
 
       <PackageCategoryManager categories={categories} />
+      </div>
 
+      <div className="mt-6 min-h-0 flex-1">
       {packages.length > 0 ? (
         <SortablePackageList packages={packages} />
       ) : (
@@ -67,6 +70,7 @@ export default async function AdminPackagesPage() {
           }
         />
       )}
+      </div>
     </div>
   );
 }

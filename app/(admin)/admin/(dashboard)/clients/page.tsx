@@ -194,7 +194,9 @@ export default async function ClientsPage({
   countMap.at_risk = atRiskCount;
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full flex-col">
+      {/* Fixed controls — stay put while the list scrolls beneath */}
+      <div className="shrink-0 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold">Clients</h1>
@@ -218,7 +220,10 @@ export default async function ClientsPage({
         search={q || ""}
         counts={{ all: totalCount, ...countMap }}
       />
+      </div>
 
+      {/* Scrollable content — only this region scrolls, not the whole page */}
+      <div className="mt-4 min-h-0 flex-1">
       {clients.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center">
           <Users className="mb-4 h-12 w-12 text-muted-foreground" />
@@ -227,9 +232,9 @@ export default async function ClientsPage({
           </p>
         </div>
       ) : (
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
+        <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
+          <Table containerClassName="min-h-0 flex-1">
+            <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead>
                   <SortableHeader field="name" label="Name" currentSort={sortField} currentDir={sortDir} />
@@ -309,6 +314,7 @@ export default async function ClientsPage({
           />
         </div>
       )}
+      </div>
     </div>
   );
 }

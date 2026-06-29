@@ -149,27 +149,27 @@ export function SortablePackageList({ packages: initial }: { readonly packages: 
   }
 
   return (
-    <div>
-      <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex h-full flex-col">
+        <SortableOrderBar dirty={dirty} saving={saving} saved={saved} onSave={handleSave} />
 
-      <div className="rounded-md border bg-card">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b bg-muted/50 text-left text-sm">
-              <th className="w-10 p-3" />
-              <th className="p-3 font-medium">Title</th>
-              <th className="p-3 font-medium">Contents</th>
-              <th className="p-3 font-medium">Category</th>
-              <th className="p-3 font-medium text-right">Price</th>
-              <th className="p-3 font-medium">Status</th>
-              <th className="p-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-card">
+          <table className="w-full">
+            <thead className="sticky top-0 z-10 bg-card">
+              <tr className="border-b bg-muted/50 text-left text-sm">
+                <th className="w-10 p-3" />
+                <th className="p-3 font-medium">Title</th>
+                <th className="p-3 font-medium">Contents</th>
+                <th className="p-3 font-medium">Category</th>
+                <th className="p-3 font-medium text-right">Price</th>
+                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 font-medium">Actions</th>
+              </tr>
+            </thead>
             <SortableContext
               items={packages.map((p) => p.id)}
               strategy={verticalListSortingStrategy}
@@ -187,9 +187,9 @@ export function SortablePackageList({ packages: initial }: { readonly packages: 
                 )}
               </tbody>
             </SortableContext>
-          </DndContext>
-        </table>
+          </table>
+        </div>
       </div>
-    </div>
+    </DndContext>
   );
 }
