@@ -38,6 +38,15 @@ const SOCIAL_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   instagram: InstagramIcon,
 };
 
+interface BranchAddress {
+  buildingName: string;
+  streetAddress: string;
+  suburb: string;
+  town: string;
+  postcode: string;
+  province: string;
+}
+
 interface PublicFooterProps {
   readonly tagline: string;
   readonly logoUrl?: string | null;
@@ -46,6 +55,7 @@ interface PublicFooterProps {
   readonly whatsappNumber: string;
   readonly businessHours: string;
   readonly locationText: string;
+  readonly branches?: BranchAddress[];
   readonly socialLinks: { platform: string; url: string }[];
   readonly copyrightText: string;
 }
@@ -58,6 +68,7 @@ export function PublicFooter({
   whatsappNumber,
   businessHours,
   locationText,
+  branches = [],
   socialLinks,
   copyrightText,
 }: PublicFooterProps) {
@@ -165,7 +176,11 @@ export function PublicFooter({
       {/* Main footer */}
       <div className="border-t bg-card">
         <div className="mx-auto max-w-6xl px-4 py-12">
-          <div className="grid gap-8 md:grid-cols-3">
+          <div
+            className={`grid gap-8 ${
+              branches.length > 0 ? "sm:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-3"
+            }`}
+          >
             {/* Brand */}
             <div>
               <Link href="/" className="flex items-center">
@@ -246,6 +261,29 @@ export function PublicFooter({
                 {locationText && <li>{locationText}</li>}
               </ul>
             </div>
+
+            {/* Office locations */}
+            {branches.length > 0 && (
+              <div>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider">Our Offices</h3>
+                <ul className="space-y-4 text-sm text-muted-foreground">
+                  {branches.map((branch, i) => (
+                    <li key={`${branch.buildingName}-${branch.town}-${i}`} className="not-italic">
+                      {branch.buildingName && (
+                        <p className="font-medium text-foreground">{branch.buildingName}</p>
+                      )}
+                      {branch.streetAddress && <p>{branch.streetAddress}</p>}
+                      {(branch.suburb || branch.town) && (
+                        <p>{[branch.suburb, branch.town].filter(Boolean).join(", ")}</p>
+                      )}
+                      {(branch.postcode || branch.province) && (
+                        <p>{[branch.postcode, branch.province].filter(Boolean).join(", ")}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="mt-8 border-t pt-8 text-center text-xs text-muted-foreground">

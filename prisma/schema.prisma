@@ -146,6 +146,7 @@ model SiteSetting {
   whatsappNumber      String?
   businessHours       Json?
   locationText        String?
+  branchAddresses     Json? // array of office branches shown in the footer
   // Social Links
   facebookUrl         String?
   linkedinUrl         String?

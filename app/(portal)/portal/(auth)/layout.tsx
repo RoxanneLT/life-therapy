@@ -1,4 +1,5 @@
 import { getPublicLayoutData } from "@/lib/public-layout-data";
+import { getBranchAddresses } from "@/lib/settings";
 import { PublicHeader } from "@/components/public/header";
 import { PublicFooter } from "@/components/public/footer";
 
@@ -28,6 +29,7 @@ export default async function PortalAuthLayout({
         whatsappNumber={settings.whatsappNumber || ""}
         businessHours={formattedHours}
         locationText={settings.locationText || ""}
+        branches={getBranchAddresses(settings)}
         socialLinks={socialLinks}
         copyrightText={settings.copyrightText || ""}
       />

@@ -11,6 +11,28 @@ export interface BusinessHoursDay {
 
 export type BusinessHours = Record<string, BusinessHoursDay>;
 
+export interface BranchAddress {
+  buildingName: string;
+  streetAddress: string;
+  suburb: string;
+  town: string;
+  postcode: string;
+  province: string;
+}
+
+/** Read the footer office branches, ignoring any blank entries. */
+export function getBranchAddresses(settings: SiteSetting): BranchAddress[] {
+  const raw = settings.branchAddresses;
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown as BranchAddress[]).filter(
+    (b) =>
+      b &&
+      [b.buildingName, b.streetAddress, b.suburb, b.town, b.postcode, b.province].some(
+        (v) => typeof v === "string" && v.trim() !== "",
+      ),
+  );
+}
+
 const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   monday: { open: "09:00", close: "17:00", closed: false },
   tuesday: { open: "09:00", close: "17:00", closed: false },
@@ -43,6 +65,7 @@ export async function getSiteSettings() {
       id: "",
       ...DEFAULTS,
       logoUrl: null,
+      branchAddresses: null,
       instagramUrl: null,
       tiktokUrl: null,
       youtubeUrl: null,

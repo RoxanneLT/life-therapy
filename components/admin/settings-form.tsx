@@ -21,12 +21,23 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { updateSettings } from "@/app/(admin)/admin/(dashboard)/settings/actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
-import type { BusinessHours } from "@/lib/settings";
+import type { BusinessHours, BranchAddress } from "@/lib/settings";
+
+const EMPTY_BRANCH: BranchAddress = {
+  buildingName: "",
+  streetAddress: "",
+  suburb: "",
+  town: "",
+  postcode: "",
+  province: "",
+};
 
 const DAYS = [
   { key: "monday", label: "Monday" },
@@ -100,6 +111,11 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
   const [locationText, setLocationText] = useState(initialSettings.locationText || "");
 
   // Business Hours
+  const [branches, setBranches] = useState<BranchAddress[]>(
+    Array.isArray(initialSettings.branchAddresses)
+      ? (initialSettings.branchAddresses as unknown as BranchAddress[])
+      : [],
+  );
   const [businessHours, setBusinessHours] = useState<BusinessHours>(
     (initialSettings.businessHours as unknown as BusinessHours) || DEFAULT_HOURS
   );
@@ -128,6 +144,20 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
     }));
   }
 
+  function addBranch() {
+    setBranches((prev) => [...prev, { ...EMPTY_BRANCH }]);
+  }
+
+  function removeBranch(index: number) {
+    setBranches((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateBranch(index: number, field: keyof BranchAddress, value: string) {
+    setBranches((prev) =>
+      prev.map((b, i) => (i === index ? { ...b, [field]: value } : b)),
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -141,6 +171,7 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
       formData.set("whatsappNumber", whatsappNumber);
       formData.set("locationText", locationText);
       formData.set("businessHours", JSON.stringify(businessHours));
+      formData.set("branchAddresses", JSON.stringify(branches));
       formData.set("facebookUrl", facebookUrl);
       formData.set("linkedinUrl", linkedinUrl);
       formData.set("instagramUrl", instagramUrl);
@@ -321,6 +352,91 @@ export function SettingsForm({ initialSettings, secretStatus }: SettingsFormProp
                     <Label htmlFor="locationText">Location / Availability</Label>
                     <Input id="locationText" value={locationText} onChange={(e) => setLocationText(e.target.value)} placeholder="100% Online — South Africa based" />
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Office Locations</CardTitle>
+                  <CardDescription>
+                    Branch addresses shown in the website footer. Add one per office — remove any you no longer use and it won&apos;t appear.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {branches.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No offices added yet.</p>
+                  )}
+                  {branches.map((branch, index) => (
+                    <div key={index} className="space-y-3 rounded-lg border p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Office {index + 1}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-red-600 hover:text-red-700"
+                          onClick={() => removeBranch(index)}
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Building name</Label>
+                          <Input
+                            value={branch.buildingName}
+                            onChange={(e) => updateBranch(index, "buildingName", e.target.value)}
+                            placeholder="Regus, Tyger Valley"
+                          />
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Street address</Label>
+                          <Input
+                            value={branch.streetAddress}
+                            onChange={(e) => updateBranch(index, "streetAddress", e.target.value)}
+                            placeholder="39 Carl Cronje Drive"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Suburb</Label>
+                          <Input
+                            value={branch.suburb}
+                            onChange={(e) => updateBranch(index, "suburb", e.target.value)}
+                            placeholder="Bellville"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Town / City</Label>
+                          <Input
+                            value={branch.town}
+                            onChange={(e) => updateBranch(index, "town", e.target.value)}
+                            placeholder="Cape Town"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Postcode</Label>
+                          <Input
+                            value={branch.postcode}
+                            onChange={(e) => updateBranch(index, "postcode", e.target.value)}
+                            placeholder="7530"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Province</Label>
+                          <Input
+                            value={branch.province}
+                            onChange={(e) => updateBranch(index, "province", e.target.value)}
+                            placeholder="Western Cape"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={addBranch}>
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add office
+                  </Button>
                 </CardContent>
               </Card>
 

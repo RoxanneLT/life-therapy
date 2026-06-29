@@ -19,6 +19,25 @@ export async function updateSettings(formData: FormData) {
     }
   }
 
+  // Parse footer office branches from JSON string. Drop fully-blank rows so a
+  // removed/empty office never renders an empty gap in the footer.
+  let branchAddresses = undefined;
+  if (raw.branchAddresses) {
+    try {
+      const parsed = JSON.parse(raw.branchAddresses as string);
+      branchAddresses = Array.isArray(parsed)
+        ? parsed.filter((b) =>
+            b &&
+            ["buildingName", "streetAddress", "suburb", "town", "postcode", "province"].some(
+              (k) => typeof b[k] === "string" && b[k].trim() !== "",
+            ),
+          )
+        : [];
+    } catch {
+      // Keep existing if parse fails
+    }
+  }
+
   // Build data object, converting empty strings to null
   const toNullable = (val: FormDataEntryValue | undefined): string | null => {
     if (!val || val === "") return null;
@@ -34,6 +53,7 @@ export async function updateSettings(formData: FormData) {
     whatsappNumber: toNullable(raw.whatsappNumber),
     businessHours: businessHours ?? undefined,
     locationText: toNullable(raw.locationText),
+    branchAddresses: branchAddresses ?? undefined,
     facebookUrl: toNullable(raw.facebookUrl),
     linkedinUrl: toNullable(raw.linkedinUrl),
     instagramUrl: toNullable(raw.instagramUrl),
