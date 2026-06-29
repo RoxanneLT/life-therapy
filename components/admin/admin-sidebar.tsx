@@ -12,7 +12,6 @@ import {
   Settings,
   Users,
   ShoppingCart,
-  Gift,
   Tag,
   Package,
   FileDown,
@@ -67,8 +66,7 @@ const navGroups: NavGroup[] = [
     label: "E-Commerce",
     items: [
       { href: "/admin/orders", label: "Orders", icon: ShoppingCart, roles: ["super_admin"] },
-      { href: "/admin/gifts", label: "Gifts", icon: Gift, roles: ["super_admin"] },
-      { href: "/admin/coupons", label: "Coupons", icon: Tag, roles: ["super_admin"] },
+      { href: "/admin/coupons", label: "Coupons & Gifts", icon: Tag, roles: ["super_admin"] },
       { href: "/admin/packages", label: "Packages", icon: Package, roles: ["super_admin"] },
       { href: "/admin/digital-products", label: "Digital Products", icon: FileDown, roles: ["super_admin"] },
     ],
