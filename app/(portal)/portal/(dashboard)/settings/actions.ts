@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
+import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
 
 // ────────────────────────────────────────────────────────────
@@ -19,7 +20,10 @@ export async function updateProfileAction(formData: FormData) {
   const lastName = (formData.get("lastName") as string)?.trim();
   if (!firstName || !lastName) return { error: "First and last name are required" };
 
-  const phone = (formData.get("phone") as string)?.trim() || null;
+  const phoneRaw = (formData.get("phone") as string)?.trim() || null;
+  const phoneErr = phoneError(phoneRaw, false);
+  if (phoneErr) return { error: phoneErr };
+  const phone = normalizePhoneForStorage(phoneRaw);
   const gender = (formData.get("gender") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
   const relationshipStatus = (formData.get("relationshipStatus") as string)?.trim() || null;

@@ -9,6 +9,7 @@ import { createOrderNumber } from "@/lib/order";
 import { addCredits } from "@/lib/credits";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
+import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 
 // ────────────────────────────────────────────────────────────
 // Create new client
@@ -48,6 +49,11 @@ export async function createClientAction(data: CreateClientData) {
     throw new Error("Email is required for non-minor clients.");
   }
 
+  // Validate + canonicalise phone (E.164) when provided
+  const phoneErr = phoneError(data.phone, false);
+  if (phoneErr) throw new Error(phoneErr);
+  const phone = normalizePhoneForStorage(data.phone);
+
   // Check for existing email (skip placeholder emails)
   if (!email.endsWith("@noemail.internal")) {
     const existing = await prisma.student.findUnique({
@@ -64,7 +70,7 @@ export async function createClientAction(data: CreateClientData) {
       firstName: data.firstName,
       lastName: data.lastName,
       email,
-      phone: data.phone || null,
+      phone,
       clientStatus: data.clientStatus,
       billingType: data.billingType,
       dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
@@ -119,7 +125,10 @@ export async function updateClientProfileAction(clientId: string, formData: Form
   const lastName = (formData.get("lastName") as string)?.trim();
   if (!firstName || !lastName) throw new Error("First name and last name are required");
 
-  const phone = (formData.get("phone") as string)?.trim() || null;
+  const phoneRaw = (formData.get("phone") as string)?.trim() || null;
+  const phoneErr = phoneError(phoneRaw, false);
+  if (phoneErr) throw new Error(phoneErr);
+  const phone = normalizePhoneForStorage(phoneRaw);
   const gender = (formData.get("gender") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
   const relationshipStatus = (formData.get("relationshipStatus") as string)?.trim() || null;

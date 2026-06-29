@@ -32,6 +32,7 @@ import type { SessionTypeConfig } from "@/lib/booking-config";
 import type { TimeSlot } from "@/lib/availability";
 import type { Currency } from "@/lib/region";
 import { createPortalBooking } from "./actions";
+import { phoneError } from "@/lib/phone";
 
 const STEPS = ["Choose Session", "Date & Time", "Confirm"] as const;
 
@@ -72,6 +73,7 @@ export function PortalBookingWidget({
   const [partnerName, setPartnerName] = useState("");
   const [partnerEmail, setPartnerEmail] = useState("");
   const [partnerPhone, setPartnerPhone] = useState("");
+  const [partnerPhoneErr, setPartnerPhoneErr] = useState<string | null>(null);
 
   const isCouples = sessionType?.type === "couples";
   const hasPartner = partner !== null;
@@ -88,6 +90,14 @@ export function PortalBookingWidget({
   }
 
   async function handleConfirm() {
+    if (isCouples && !hasPartner && partnerPhone) {
+      const pe = phoneError(partnerPhone, false);
+      if (pe) {
+        setPartnerPhoneErr(pe);
+        toast.error(`Partner's phone: ${pe}`);
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -254,10 +264,18 @@ export function PortalBookingWidget({
                                 id="partnerPhone"
                                 type="tel"
                                 value={partnerPhone}
-                                onChange={(e) => setPartnerPhone(e.target.value)}
+                                onChange={(e) => {
+                                  setPartnerPhone(e.target.value);
+                                  if (partnerPhoneErr) setPartnerPhoneErr(null);
+                                }}
+                                onBlur={() => setPartnerPhoneErr(phoneError(partnerPhone, false))}
                                 placeholder="Optional"
+                                aria-invalid={!!partnerPhoneErr}
                                 className="mt-1 bg-white dark:bg-background"
                               />
+                              {partnerPhoneErr && (
+                                <p className="mt-1 text-xs text-destructive">{partnerPhoneErr}</p>
+                              )}
                             </div>
                           </div>
                         </div>

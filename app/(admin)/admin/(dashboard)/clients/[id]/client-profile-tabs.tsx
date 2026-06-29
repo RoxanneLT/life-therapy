@@ -72,10 +72,10 @@ export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileT
   }
 
   return (
-    <div>
-      {/* Tab navigation */}
-      <div className="border-b">
-        <div className="-mb-px flex gap-0">
+    <div className="flex h-full flex-col">
+      {/* Tab navigation — pinned */}
+      <div className="shrink-0 border-b">
+        <div className="-mb-px flex gap-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -93,8 +93,8 @@ export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileT
         </div>
       </div>
 
-      {/* Tab content */}
-      <div className="pt-6">
+      {/* Tab content — scrolls */}
+      <div className="min-h-0 flex-1 overflow-y-auto pt-6">
         {currentTab === "overview" && (
           <OverviewTab client={client} />
         )}

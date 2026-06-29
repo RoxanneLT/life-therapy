@@ -10,6 +10,7 @@ import { processMonthlyBilling } from "@/lib/cron/monthly-billing";
 import { processWhatsAppReminders } from "@/lib/cron/whatsapp-reminders";
 import { processBirthdayEmails } from "@/lib/birthday-process";
 import { checkBunnyBalance } from "@/lib/cron/bunny-balance-check";
+import { processPhoneNormalization } from "@/lib/cron/normalize-phones";
 import { sendCronDigest, type CronJobDetail } from "@/lib/cron/cron-digest";
 import { collectCronRunFailures } from "@/lib/cron/with-cron-run";
 
@@ -86,6 +87,8 @@ export async function GET(request: NextRequest) {
   await runTask("whatsappReminders", () => processWhatsAppReminders(), detail);
   await runTask("birthdayEmails", () => processBirthdayEmails(), detail);
   await runTask("bunnyBalance", () => checkBunnyBalance(), detail);
+  // Safety net — canonicalise any stored phone numbers not already in E.164
+  await runTask("phoneNormalization", () => processPhoneNormalization(), detail);
 
   // Dormant follow-up (dynamic import)
   await runTask(

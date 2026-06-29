@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { AudienceFilters } from "@/lib/audience-filters";
+import { normalizePhoneForStorage } from "@/lib/phone";
 
 interface UpsertContactData {
   email: string;
@@ -24,6 +25,7 @@ interface UpsertContactData {
  */
 export async function upsertContact(data: UpsertContactData) {
   const normalizedEmail = data.email.toLowerCase().trim();
+  const normalizedPhone = normalizePhoneForStorage(data.phone);
 
   return prisma.student.upsert({
     where: { email: normalizedEmail },
@@ -31,7 +33,7 @@ export async function upsertContact(data: UpsertContactData) {
       email: normalizedEmail,
       firstName: data.firstName || "Friend",
       lastName: data.lastName || "",
-      phone: data.phone || null,
+      phone: normalizedPhone,
       gender: data.gender || null,
       source: data.source,
       clientStatus: "potential",
@@ -43,7 +45,7 @@ export async function upsertContact(data: UpsertContactData) {
       // Only fill in blank fields — don't overwrite existing data
       ...(data.firstName ? { firstName: data.firstName } : {}),
       ...(data.lastName ? { lastName: data.lastName } : {}),
-      ...(data.phone ? { phone: data.phone } : {}),
+      ...(normalizedPhone ? { phone: normalizedPhone } : {}),
       ...(data.gender ? { gender: data.gender } : {}),
       // Never downgrade consent — only upgrade from false to true
       ...(data.consentGiven

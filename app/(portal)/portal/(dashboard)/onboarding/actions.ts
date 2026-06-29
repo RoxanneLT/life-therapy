@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { acceptDocument, ONBOARDING_DOCUMENTS } from "@/lib/legal-documents";
+import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 
 export async function savePersonalDetailsAction(formData: FormData) {
   const { student } = await getAuthenticatedStudent();
@@ -14,7 +15,10 @@ export async function savePersonalDetailsAction(formData: FormData) {
   const lastName = (formData.get("lastName") as string)?.trim();
   if (!firstName || !lastName) return { error: "First and last name are required" };
 
-  const phone = (formData.get("phone") as string)?.trim() || null;
+  const phoneRaw = (formData.get("phone") as string)?.trim() || null;
+  const phoneErr = phoneError(phoneRaw, false);
+  if (phoneErr) return { error: phoneErr };
+  const phone = normalizePhoneForStorage(phoneRaw);
   const gender = (formData.get("gender") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
   const relationshipStatus = (formData.get("relationshipStatus") as string)?.trim() || null;

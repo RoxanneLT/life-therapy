@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { phoneError } from "@/lib/phone";
 import type { BookingData } from "./booking-widget";
 
 interface BookingFormStepProps {
@@ -28,6 +29,7 @@ export function BookingFormStep({
   const [name, setName] = useState(initialData.clientName);
   const [email, setEmail] = useState(initialData.clientEmail);
   const [phone, setPhone] = useState(initialData.clientPhone);
+  const [phoneErr, setPhoneErr] = useState<string | null>(null);
   const [notes, setNotes] = useState(initialData.clientNotes);
 
   function handleSubmit(e: React.FormEvent) {
@@ -39,6 +41,12 @@ export function BookingFormStep({
     }
     if (!email.includes("@")) {
       toast.error("Please enter a valid email address");
+      return;
+    }
+    const pe = phoneError(phone, false);
+    if (pe) {
+      setPhoneErr(pe);
+      toast.error(`Phone number: ${pe}`);
       return;
     }
 
@@ -94,9 +102,15 @@ export function BookingFormStep({
             id="clientPhone"
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              if (phoneErr) setPhoneErr(null);
+            }}
+            onBlur={() => setPhoneErr(phoneError(phone, false))}
             placeholder="+27..."
+            aria-invalid={!!phoneErr}
           />
+          {phoneErr && <p className="text-xs text-destructive">{phoneErr}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="clientNotes">

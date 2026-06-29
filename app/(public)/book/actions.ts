@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import type { Currency } from "@/lib/region";
 import { getSiteSettings } from "@/lib/settings";
 import { getCurrency, getBaseUrl } from "@/lib/get-region";
+import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 import { getSessionPrice } from "@/lib/pricing";
 import { rateLimitBooking } from "@/lib/rate-limit";
 import { getOptionalStudent } from "@/lib/student-auth";
@@ -258,6 +259,11 @@ export async function createBooking(formData: FormData) {
     clientNotes: raw.clientNotes || undefined,
   });
 
+  // Validate + canonicalise the phone (E.164) once, reused for the booking + student
+  const phoneErr = phoneError(parsed.clientPhone, false);
+  if (phoneErr) throw new Error(`Phone number: ${phoneErr}`);
+  const clientPhone = normalizePhoneForStorage(parsed.clientPhone);
+
   const sessionConfig = getSessionTypeConfig(parsed.sessionType as SessionType);
 
   // Compute session price in the user's currency
@@ -306,7 +312,7 @@ export async function createBooking(formData: FormData) {
       priceCurrency: currency,
       clientName: parsed.clientName,
       clientEmail: parsed.clientEmail,
-      clientPhone: parsed.clientPhone || null,
+      clientPhone,
       clientNotes: parsed.clientNotes || null,
       status: "confirmed",
       graphEventId: graphResult?.eventId || null,
@@ -326,7 +332,7 @@ export async function createBooking(formData: FormData) {
     email: parsed.clientEmail,
     firstName: nameParts[0],
     lastName: nameParts.slice(1).join(" ") || "",
-    phone: parsed.clientPhone || null,
+    phone: clientPhone,
   };
 
   if (sessionConfig.isFree) {

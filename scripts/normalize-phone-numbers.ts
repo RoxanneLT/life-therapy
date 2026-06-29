@@ -1,9 +1,16 @@
 /**
- * Normalize phone numbers: convert local SA numbers (0xx...) to +27 format.
+ * Backfill stored phone numbers to canonical E.164.
  *
- * Run with: npx tsx scripts/normalize-phone-numbers.ts
+ * Handles encrypted phone fields — decrypts, normalises, re-encrypts. Idempotent:
+ * a number already in E.164 is left untouched; invalid/unparseable numbers are left
+ * as-is (counted as "unchanged").
  *
- * Handles encrypted phone fields — decrypts, normalizes, re-encrypts.
+ * SiteSetting.phone is intentionally NOT touched — it's the public contact number
+ * shown (formatted) in the footer / JSON-LD and is managed by the admin directly.
+ *
+ * Dry-run by default (no writes). Add --apply to persist:
+ *   npx tsx scripts/normalize-phone-numbers.ts            # preview
+ *   npx tsx scripts/normalize-phone-numbers.ts --apply    # write
  */
 
 import { config } from "dotenv";
@@ -16,103 +23,89 @@ import { decrypt, encrypt } from "../lib/encryption";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
-/** Normalize a SA phone number: 0xx... → +27xx... */
-function normalizePhone(phone: string): string | null {
-  const stripped = phone.replace(/[\s\-()]/g, "");
-  if (stripped.startsWith("0") && stripped.length >= 10 && !stripped.startsWith("+")) {
-    return "+27" + stripped.slice(1);
+const APPLY = process.argv.includes("--apply");
+
+/**
+ * Pure (no libphonenumber) E.164 normaliser for the backfill. Mirrors lib/phone's
+ * SA-strict rule; light-touch for foreign (+ / 00 prefixes). The tsx loader can't
+ * load libphonenumber's metadata, so the app uses lib/phone and this script uses
+ * this equivalent regex form. Returns the input unchanged when it can't normalise.
+ */
+function normalizeForStorage(raw: string): string {
+  const v = raw.trim();
+  if (!v) return v;
+  const compact = v.replace(/[\s()\-.]/g, "");
+  if (/^0\d{9}$/.test(compact)) return `+27${compact.slice(1)}`;        // 082… → +2782…
+  if (/^0027\d{9}$/.test(compact)) return `+27${compact.slice(4)}`;     // 0027… → +27…
+  if (/^27\d{9}$/.test(compact)) return `+${compact}`;                  // 2782… → +2782…
+  if (/^\+\d{7,15}$/.test(compact)) return compact;                     // already + (strip spaces)
+  if (/^00\d{6,14}$/.test(compact)) return `+${compact.slice(2)}`;      // 00<intl> → +<intl>
+  return v;                                                            // unknown — leave as-is
+}
+
+interface Row {
+  id: string;
+  phone: string | null;
+  label: string;
+}
+
+/** Decrypt → normalise → (encrypt + write when --apply). Logs a per-row summary. */
+async function processBatch(
+  title: string,
+  rows: Row[],
+  write: (id: string, encrypted: string) => Promise<unknown>,
+): Promise<void> {
+  let changed = 0;
+  let unchanged = 0;
+  for (const row of rows) {
+    if (!row.phone) continue;
+    const decrypted = decrypt(row.phone);
+    const normalized = normalizeForStorage(decrypted);
+    if (normalized === decrypted) {
+      unchanged++;
+      continue;
+    }
+    console.log(`  ${row.label} — ${decrypted} → ${normalized}`);
+    if (APPLY) await write(row.id, encrypt(normalized));
+    changed++;
   }
-  return null; // No change needed
+  console.log(`\n${title}: ${changed} changed, ${unchanged} unchanged of ${rows.length}\n`);
 }
 
 async function main() {
-  console.log("=== Phone Number Normalization ===\n");
+  console.log(`=== Phone Number Normalisation (${APPLY ? "APPLY" : "DRY RUN"}) ===\n`);
 
-  // 1. Students
   const students = await prisma.student.findMany({
     where: { phone: { not: null } },
     select: { id: true, firstName: true, lastName: true, phone: true },
   });
+  await processBatch(
+    "Students",
+    students.map((s) => ({ id: s.id, phone: s.phone, label: `Student: ${s.firstName} ${s.lastName}` })),
+    (id, encrypted) => prisma.student.update({ where: { id }, data: { phone: encrypted } }),
+  );
 
-  let studentCount = 0;
-  for (const s of students) {
-    if (!s.phone) continue;
-    const decrypted = decrypt(s.phone);
-    const normalized = normalizePhone(decrypted);
-    if (normalized) {
-      const encrypted = encrypt(normalized);
-      await prisma.student.update({
-        where: { id: s.id },
-        data: { phone: encrypted },
-      });
-      console.log(`  Student: ${s.firstName} ${s.lastName} — ${decrypted} → ${normalized}`);
-      studentCount++;
-    }
-  }
-  console.log(`\nStudents updated: ${studentCount}/${students.length}\n`);
-
-  // 2. Bookings (clientPhone)
   const bookings = await prisma.booking.findMany({
     where: { clientPhone: { not: null } },
     select: { id: true, clientName: true, clientPhone: true },
   });
+  await processBatch(
+    "Bookings",
+    bookings.map((b) => ({ id: b.id, phone: b.clientPhone, label: `Booking: ${b.clientName}` })),
+    (id, encrypted) => prisma.booking.update({ where: { id }, data: { clientPhone: encrypted } }),
+  );
 
-  let bookingCount = 0;
-  for (const b of bookings) {
-    if (!b.clientPhone) continue;
-    const decrypted = decrypt(b.clientPhone);
-    const normalized = normalizePhone(decrypted);
-    if (normalized) {
-      const encrypted = encrypt(normalized);
-      await prisma.booking.update({
-        where: { id: b.id },
-        data: { clientPhone: encrypted },
-      });
-      console.log(`  Booking: ${b.clientName} — ${decrypted} → ${normalized}`);
-      bookingCount++;
-    }
-  }
-  console.log(`\nBookings updated: ${bookingCount}/${bookings.length}\n`);
-
-  // 3. Billing entities
   const entities = await prisma.billingEntity.findMany({
     where: { phone: { not: null } },
     select: { id: true, name: true, phone: true },
   });
+  await processBatch(
+    "Billing entities",
+    entities.map((e) => ({ id: e.id, phone: e.phone, label: `Entity: ${e.name}` })),
+    (id, encrypted) => prisma.billingEntity.update({ where: { id }, data: { phone: encrypted } }),
+  );
 
-  let entityCount = 0;
-  for (const e of entities) {
-    if (!e.phone) continue;
-    const decrypted = decrypt(e.phone);
-    const normalized = normalizePhone(decrypted);
-    if (normalized) {
-      const encrypted = encrypt(normalized);
-      await prisma.billingEntity.update({
-        where: { id: e.id },
-        data: { phone: encrypted },
-      });
-      console.log(`  Entity: ${e.name} — ${decrypted} → ${normalized}`);
-      entityCount++;
-    }
-  }
-  console.log(`\nBilling entities updated: ${entityCount}/${entities.length}\n`);
-
-  // 4. Site settings
-  const settings = await prisma.siteSetting.findFirst({
-    select: { id: true, phone: true },
-  });
-  if (settings?.phone) {
-    const normalized = normalizePhone(settings.phone);
-    if (normalized) {
-      await prisma.siteSetting.update({
-        where: { id: settings.id },
-        data: { phone: normalized },
-      });
-      console.log(`Site settings phone: ${settings.phone} → ${normalized}`);
-    }
-  }
-
-  console.log("\n=== Done ===");
+  console.log(`=== ${APPLY ? "Done — changes written." : "Dry run complete — re-run with --apply to write."} ===`);
 }
 
 main()

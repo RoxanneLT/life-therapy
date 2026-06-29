@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { UserPlus, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClientAction } from "./actions";
+import { phoneError } from "@/lib/phone";
 import { useRouter } from "next/navigation";
 
 type Step = 1 | 2 | 3;
@@ -98,6 +99,8 @@ export function CreateClientDialog() {
       if (!email.trim()) { setError("Email is required"); return false; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Invalid email address"); return false; }
     }
+    const phoneErr = phoneError(phone, false);
+    if (phoneErr) { setError(`Phone: ${phoneErr}`); return false; }
     setError("");
     return true;
   }

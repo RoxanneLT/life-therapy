@@ -36,8 +36,8 @@ export default async function ClientDetailPage({
   const coreClient = JSON.parse(JSON.stringify(client)) as Record<string, unknown>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center gap-4">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/admin/clients">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -68,7 +68,9 @@ export default async function ClientDetailPage({
         </div>
       </div>
 
-      <ClientProfileTabs client={coreClient} activeTab={activeTab} />
+      <div className="mt-4 min-h-0 flex-1">
+        <ClientProfileTabs client={coreClient} activeTab={activeTab} />
+      </div>
     </div>
   );
 }

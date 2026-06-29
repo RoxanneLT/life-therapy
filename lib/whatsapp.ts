@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
+import { normalizePhone, isValidPhone as isValidPhoneStrict } from "@/lib/phone";
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v21.0";
 
@@ -39,29 +40,22 @@ export interface SendResult {
 // ─── Phone number helpers ────────────────────────────────────
 
 /**
- * Normalize phone numbers to E.164 format.
- * Numbers with a leading 0 are assumed to be SA and get the +27 prefix.
- * Numbers already carrying a + country code are passed through as-is.
- * "082 123 4567" → "+27821234567"
- * "0821234567"   → "+27821234567"
- * "+27821234567" → "+27821234567"
- * "+447911123456"→ "+447911123456"
+ * Normalize phone numbers to E.164 format for the WhatsApp API.
+ * Backed by the shared, numbering-plan-aware normaliser (lib/phone). For an
+ * invalid number it falls back to a compacted best-effort so this never returns
+ * an empty string — callers should gate on isValidPhone() before sending.
+ * "082 123 4567" → "+27821234567" · "+447911123456" → "+447911123456"
  */
 export function normalizePhoneNumber(phone: string): string {
-  const digits = phone.replace(/[\s\-()]/g, "");
-  if (digits.startsWith("+")) return digits;
-  if (digits.startsWith("0")) return `+27${digits.slice(1)}`;
-  if (digits.startsWith("27")) return `+${digits}`;
-  return `+${digits}`;
+  return normalizePhone(phone) ?? phone.replace(/[\s\-()]/g, "");
 }
 
 /**
- * Validate that a phone number resolves to a plausible E.164 number:
- * a + followed by 7–15 digits. Accepts any country code.
+ * Validate a phone number against the real numbering plan (SA: strict 10 digits;
+ * international: that country's plan via libphonenumber).
  */
 export function isValidPhone(phone: string): boolean {
-  const normalized = normalizePhoneNumber(phone);
-  return /^\+\d{7,15}$/.test(normalized);
+  return isValidPhoneStrict(phone);
 }
 
 // ─── Core send function ──────────────────────────────────────
