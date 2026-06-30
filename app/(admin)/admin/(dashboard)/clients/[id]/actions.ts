@@ -1046,6 +1046,31 @@ export async function regeneratePaymentLinkAction(
 // Billing — Ad-hoc payment request helper
 // ────────────────────────────────────────────────────────────
 
+/**
+ * The (studentId, billingMonth) unique constraint means each ad-hoc / manual
+ * invoice in a month needs its own key. Append -1, -2, … to `base` (e.g.
+ * "2026-06-adhoc" or "2026-06-manual") until a free slot is found.
+ */
+async function uniqueBillingMonthKey(
+  studentId: string | null | undefined,
+  base: string,
+): Promise<string> {
+  let n = 1;
+  let key = `${base}-${n}`;
+  if (studentId) {
+    while (
+      await prisma.paymentRequest.findFirst({
+        where: { studentId, billingMonth: key },
+        select: { id: true },
+      })
+    ) {
+      n += 1;
+      key = `${base}-${n}`;
+    }
+  }
+  return key;
+}
+
 async function createAdhocPaymentRequest(opts: {
   contact: BillingContact;
   bookings: Booking[];
@@ -1055,9 +1080,8 @@ async function createAdhocPaymentRequest(opts: {
   periodStart: Date;
   periodEnd: Date;
   dueDate: Date;
-  suffix: string;
 }) {
-  const { contact, bookings, student, settings, billingMonth, periodStart, periodEnd, dueDate, suffix } = opts;
+  const { contact, bookings, student, settings, billingMonth, periodStart, periodEnd, dueDate } = opts;
   const lineItems: InvoiceLineItem[] = [];
   for (const booking of bookings) {
     const rate = await getSessionRate(
@@ -1101,25 +1125,11 @@ async function createAdhocPaymentRequest(opts: {
   }));
   const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
 
-  // The unique constraint is (studentId, billingMonth). Bill-to-date / ad-hoc
-  // invoices can legitimately run more than once a month as new sessions accrue,
-  // so make the billingMonth key unique — otherwise the second run collides with
-  // the first and throws a P2002 (was surfacing as a 500 on the client page).
+  // Bill-to-date / ad-hoc invoices can legitimately run more than once a month as
+  // new sessions accrue, so each gets its own "YYYY-MM-adhoc-N" key (the
+  // (studentId, billingMonth) constraint would otherwise throw P2002 → 500).
   const sid = contact.type === "corporate" ? undefined : contact.studentId;
-  const baseKey = `${billingMonth}-${suffix}`;
-  let billingKey = baseKey;
-  if (sid) {
-    let n = 2;
-    while (
-      await prisma.paymentRequest.findFirst({
-        where: { studentId: sid, billingMonth: billingKey },
-        select: { id: true },
-      })
-    ) {
-      billingKey = `${baseKey}-${n}`;
-      n += 1;
-    }
-  }
+  const billingKey = await uniqueBillingMonthKey(sid, `${billingMonth}-adhoc`);
 
   const pr = await prisma.paymentRequest.create({
     data: {
@@ -1201,15 +1211,15 @@ export async function billToDateAction(studentId: string) {
   const base = { student, settings, billingMonth, periodStart, periodEnd: now, dueDate };
 
   if (sameContact && indivContact) {
-    const pr = await createAdhocPaymentRequest({ ...base, contact: indivContact, bookings, suffix: "adhoc" });
+    const pr = await createAdhocPaymentRequest({ ...base, contact: indivContact, bookings });
     created.push(pr);
   } else {
     if (indivContact && indivBookings.length > 0) {
-      const pr = await createAdhocPaymentRequest({ ...base, contact: indivContact, bookings: indivBookings, suffix: "adhoc-individual" });
+      const pr = await createAdhocPaymentRequest({ ...base, contact: indivContact, bookings: indivBookings });
       created.push(pr);
     }
     if (couplesContact && couplesBookings.length > 0) {
-      const pr = await createAdhocPaymentRequest({ ...base, contact: couplesContact, bookings: couplesBookings, suffix: "adhoc-couples" });
+      const pr = await createAdhocPaymentRequest({ ...base, contact: couplesContact, bookings: couplesBookings });
       created.push(pr);
     }
   }
@@ -1458,12 +1468,16 @@ export async function createManualPaymentRequestAction(data: {
     );
 
     const now = new Date();
-    const billingMonth = data.billingMonth?.trim()
+    const baseMonth = data.billingMonth?.trim()
       || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const [ymYear, ymMonth] = billingMonth.split("-").map(Number);
+    const [ymYear, ymMonth] = baseMonth.split("-").map(Number);
     const periodStart = new Date(ymYear, ymMonth - 1, 1);
     const periodEnd = new Date(ymYear, ymMonth, 0); // last day of month
+
+    // Manual invoices get their own "YYYY-MM-manual-N" key so they never collide
+    // with the monthly auto-run (bare "YYYY-MM") or with each other.
+    const billingMonth = await uniqueBillingMonthKey(data.studentId, `${baseMonth}-manual`);
 
     const lineItemsJson: InvoiceLineItem[] = data.lineItems.map((li) => ({
       description: li.description,

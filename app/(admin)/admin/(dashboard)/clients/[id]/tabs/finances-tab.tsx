@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useClientFinances } from "../use-client-data";
 import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
+import { formatBillingMonth } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -941,10 +942,18 @@ function PaymentRequestsSection({
                 </thead>
                 <tbody>
                   {paymentRequests.map((pr) => {
+                    const bm = formatBillingMonth(pr.billingMonth);
                     return (
                       <tr key={pr.id} className="border-b last:border-0">
                         <td className="whitespace-nowrap px-4 py-2.5 font-medium">
-                          {pr.billingMonth}
+                          <span className="flex items-center gap-1.5">
+                            {bm.label}
+                            {bm.badge && (
+                              <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal text-muted-foreground">
+                                {bm.badge}
+                              </Badge>
+                            )}
+                          </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
                           {formatCurrency(pr.totalCents, pr.currency)}

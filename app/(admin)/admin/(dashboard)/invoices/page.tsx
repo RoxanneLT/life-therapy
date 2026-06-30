@@ -21,6 +21,7 @@ import { PaymentRequestActions } from "./payment-request-actions";
 import { ExportDialog } from "./export-dialog";
 import { NewPaymentRequestDialog } from "./new-pr-dialog";
 import { SortableHeader } from "@/components/admin/sortable-header";
+import { formatBillingMonth } from "@/lib/utils";
 import Link from "next/link";
 
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
@@ -366,10 +367,18 @@ export default async function InvoicesPage({
                   const lineItems = pr.lineItems as unknown as { description: string }[];
                   const sessionCount = lineItems?.length ?? 0;
                   const isDue = pr.dueDate && new Date(pr.dueDate) <= now;
+                  const bm = formatBillingMonth(pr.billingMonth);
                   return (
                     <TableRow key={pr.id}>
                       <TableCell className="text-sm font-medium">
-                        {pr.billingMonth}
+                        <span className="flex items-center gap-1.5">
+                          {bm.label}
+                          {bm.badge && (
+                            <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal text-muted-foreground">
+                              {bm.badge}
+                            </Badge>
+                          )}
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(pr.createdAt)}
