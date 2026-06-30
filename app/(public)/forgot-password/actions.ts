@@ -1,10 +1,17 @@
 "use server";
 
+import { headers } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { prisma } from "@/lib/prisma";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
+import { recordAuthEvent } from "@/lib/audit";
+import { clearRateLimit } from "@/lib/rate-limit";
+
+function clientIp(h: Headers): string | undefined {
+  return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
+}
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
@@ -25,23 +32,32 @@ export async function requestPasswordResetAction(
   }
 
   try {
-    // Step 1: Check if user exists in our students table
+    // Find the account — clients live in `students`, staff in `admin_users`.
+    // Both are Supabase auth users, so a recovery link works for either.
     const student = await prisma.student.findUnique({
       where: { email },
-      select: { id: true, supabaseUserId: true, firstName: true },
+      select: { id: true, supabaseUserId: true },
     });
 
+    let authUserId = student?.supabaseUserId ?? null;
+    const resolvedFor: "student" | "admin" = student ? "student" : "admin";
+
     if (!student) {
-      console.warn(`[password-reset] No student found for ${email}`);
-      // Don't reveal whether account exists
-      return { success: true };
+      const admin = await prisma.adminUser.findUnique({
+        where: { email },
+        select: { supabaseUserId: true },
+      });
+      if (!admin) {
+        console.warn(`[password-reset] No account found for ${email}`);
+        // Don't reveal whether an account exists.
+        return { success: true };
+      }
+      authUserId = admin.supabaseUserId;
     }
 
-    // Step 2: Ensure student is linked to a Supabase auth user
-    let authUserId = student.supabaseUserId;
-
+    // Ensure the account is linked to a Supabase auth user.
     if (!authUserId) {
-      console.warn(`[password-reset] Student ${email} has no supabaseUserId, searching auth...`);
+      console.warn(`[password-reset] ${resolvedFor} ${email} has no supabaseUserId, searching auth...`);
       const { data: userList, error: listError } = await supabaseAdmin.auth.admin.listUsers({
         perPage: 1000,
       });
@@ -56,14 +72,16 @@ export async function requestPasswordResetAction(
       );
 
       if (authMatch) {
-        await prisma.student.update({
-          where: { id: student.id },
-          data: { supabaseUserId: authMatch.id },
-        });
         authUserId = authMatch.id;
-        console.log(`[password-reset] Linked student to auth user ${authMatch.id}`);
-      } else {
-        // Auto-provision a Supabase auth account for imported clients
+        if (resolvedFor === "student" && student) {
+          await prisma.student.update({ where: { id: student.id }, data: { supabaseUserId: authMatch.id } });
+        } else {
+          await prisma.adminUser.update({ where: { email }, data: { supabaseUserId: authMatch.id } });
+        }
+        console.log(`[password-reset] Linked ${resolvedFor} to auth user ${authMatch.id}`);
+      } else if (resolvedFor === "student" && student) {
+        // Auto-provision a Supabase auth account for imported clients (students only —
+        // never auto-create an admin auth user).
         console.log(`[password-reset] No auth user found — creating one for ${email}`);
         const tempPassword = `LT-${crypto.randomUUID().slice(0, 8)}!`;
         const { data: newUser, error: createError } =
@@ -84,6 +102,9 @@ export async function requestPasswordResetAction(
         });
         authUserId = newUser.user.id;
         console.log(`[password-reset] Created & linked auth user ${authUserId} for ${email}`);
+      } else {
+        console.error(`[password-reset] Admin ${email} has no linked auth user`);
+        return { error: "Something went wrong. Please try again later." };
       }
     }
 
@@ -126,7 +147,7 @@ export async function requestPasswordResetAction(
       subject,
       html,
       templateKey: "password_reset",
-      studentId: student.id,
+      studentId: student?.id,
       skipTracking: true,
     });
 
@@ -136,6 +157,13 @@ export async function requestPasswordResetAction(
     }
 
     console.log(`[password-reset] Reset email sent successfully to ${email}`);
+
+    await recordAuthEvent({
+      action: "password_reset_requested",
+      email,
+      ip: clientIp(await headers()),
+      userId: authUserId,
+    });
   } catch (err) {
     console.error(`[password-reset] Unexpected error:`, err);
     return { error: "Something went wrong. Please try again later." };
@@ -155,8 +183,8 @@ export async function updatePasswordAction(
     return { error: "Please enter a new password." };
   }
 
-  if (newPassword.length < 6) {
-    return { error: "Password must be at least 6 characters." };
+  if (newPassword.length < 8) {
+    return { error: "Password must be at least 8 characters." };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -184,6 +212,19 @@ export async function updatePasswordAction(
   if (error) {
     return { error: error.message };
   }
+
+  const h = await headers();
+  const ip = clientIp(h);
+  const { data: { user } } = await supabase.auth.getUser();
+  await recordAuthEvent({
+    action: "password_changed",
+    email: user?.email ?? "unknown",
+    ip,
+    userId: user?.id ?? null,
+  });
+  // They proved account control via the email link — clear any login lockout on
+  // this IP so they can sign in immediately with the new password.
+  if (ip) clearRateLimit(`login:${ip}`);
 
   return { success: true };
 }

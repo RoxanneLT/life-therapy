@@ -44,6 +44,12 @@ export function UserForm({ initialData, onSubmit }: UserFormProps) {
       await onSubmit(formData);
       toast.success(isEditing ? "User updated" : "User invited successfully");
     } catch (err) {
+      // The save action calls redirect(), which throws a NEXT_REDIRECT error that
+      // MUST propagate for navigation — don't swallow it into an error toast.
+      const digest = (err as { digest?: unknown })?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) {
+        throw err;
+      }
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSaving(false);

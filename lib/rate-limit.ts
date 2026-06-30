@@ -40,6 +40,33 @@ export function rateLimit(
   return { success: true, remaining: limit - entry.count };
 }
 
+/**
+ * Read-only check — is this key currently at/over the limit? Does NOT increment.
+ * Pair with recordHit() to count only the events you care about (e.g. failed
+ * logins, so successful sign-ins don't burn the allowance).
+ */
+export function isRateLimited(key: string, limit: number): boolean {
+  const entry = store.get(key);
+  if (!entry || Date.now() > entry.resetAt) return false;
+  return entry.count >= limit;
+}
+
+/** Count one hit against the key, opening or extending its window. */
+export function recordHit(key: string, windowMs: number): void {
+  const now = Date.now();
+  const entry = store.get(key);
+  if (!entry || now > entry.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowMs });
+  } else {
+    entry.count++;
+  }
+}
+
+/** Clear a key's counter (e.g. on a successful login). */
+export function clearRateLimit(key: string): void {
+  store.delete(key);
+}
+
 // Pre-configured limiters
 export function rateLimitLogin(ip: string) {
   return rateLimit(`login:${ip}`, 5, 15 * 60 * 1000); // 5 attempts per 15 min

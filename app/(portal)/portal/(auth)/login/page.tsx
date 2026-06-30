@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@/lib/supabase";
+import { passwordSignInAction } from "@/app/(public)/login/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,14 +30,10 @@ export default function PortalLoginPage() {
     setLoading(true);
 
     try {
-      const supabase = createBrowserClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const result = await passwordSignInAction(email, password);
 
-      if (authError) {
-        setError(authError.message);
+      if (result.error) {
+        setError(result.error);
         setLoading(false);
         return;
       }

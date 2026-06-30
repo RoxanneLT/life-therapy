@@ -58,6 +58,40 @@ function scrub(
  *     after: { billingType: "postpaid" },
  *   });
  */
+export type AuthEventAction =
+  | "login_success"
+  | "login_failure"
+  | "password_reset_requested"
+  | "password_changed";
+
+/**
+ * Record an authentication event (login, reset request, password change) to the
+ * same audit trail. entityType is "auth"; the IP / user-agent / reason go in
+ * metadata. Best-effort like recordAudit — never throws.
+ */
+export async function recordAuthEvent(input: {
+  action: AuthEventAction;
+  email: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  userId?: string | null;
+  reason?: string;
+}): Promise<void> {
+  const email = input.email?.trim().toLowerCase() || "unknown";
+  await recordAudit({
+    action: input.action,
+    entityType: "auth",
+    entityId: input.userId || email,
+    actorEmail: email,
+    metadata: {
+      ...(input.ip ? { ip: input.ip } : {}),
+      ...(input.userAgent ? { userAgent: input.userAgent } : {}),
+      ...(input.userId ? { userId: input.userId } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+  });
+}
+
 export async function recordAudit(input: AuditInput): Promise<void> {
   try {
     await prisma.auditLog.create({

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createBrowserClient } from "@/lib/supabase";
+import { passwordSignInAction } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,14 +69,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const supabase = createBrowserClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const result = await passwordSignInAction(email, password);
 
-      if (authError) {
-        setError(authError.message);
+      if (result.error) {
+        setError(result.error);
         setLoading(false);
         return;
       }
