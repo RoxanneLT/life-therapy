@@ -14,6 +14,8 @@ const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 export interface LoginResult {
   ok?: true;
   error?: string;
+  /** Account has a verified 2FA factor — session is AAL1 and must step up. */
+  mfaRequired?: boolean;
 }
 
 /**
@@ -64,5 +66,15 @@ export async function passwordSignInAction(
   await clearRateLimitDb(ipKey);
   await clearRateLimitDb(emailKey);
   await recordAuthEvent({ action: "login_success", email: cleanEmail, ip, userAgent, userId: data.user?.id ?? null });
-  return { ok: true };
+
+  // If the account has a verified 2FA factor, the session is only AAL1 and must
+  // step up. Fail open (no MFA) on any error — never block a legitimate login.
+  let mfaRequired = false;
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    mfaRequired = aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2";
+  } catch {
+    mfaRequired = false;
+  }
+  return { ok: true, mfaRequired };
 }

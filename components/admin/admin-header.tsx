@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, ExternalLink, UserCog } from "lucide-react";
+import { Menu, LogOut, ExternalLink, UserCog, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { AdminSidebarContent } from "./admin-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -114,6 +114,12 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
               <Link href="/admin/settings" className="flex items-center">
                 <UserCog className="mr-2 h-4 w-4" />
                 My Account
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/account/security" className="flex items-center">
+                <ShieldCheck className="mr-2 h-4 w-4" />
+                Security &amp; 2FA
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />

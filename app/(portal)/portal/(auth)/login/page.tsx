@@ -39,6 +39,13 @@ export default function PortalLoginPage() {
       }
 
       const redirectTo = new URLSearchParams(globalThis.location.search).get("redirect") || "/portal";
+
+      // 2FA step-up required — finish the sign-in on the code page.
+      if (result.mfaRequired) {
+        router.push(`/login/mfa?redirect=${encodeURIComponent(redirectTo)}`);
+        return;
+      }
+
       router.push(redirectTo);
       router.refresh();
     } catch (err) {

@@ -95,8 +95,8 @@ export async function changePassword(formData: FormData) {
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
-  if (!newPassword || newPassword.length < 6) {
-    throw new Error("Password must be at least 6 characters");
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters");
   }
 
   if (newPassword !== confirmPassword) {
@@ -112,4 +112,36 @@ export async function changePassword(formData: FormData) {
   }
 
   revalidatePath("/admin/users");
+}
+
+/**
+ * Remove all 2FA factors for an admin — the lockout-recovery path (a super_admin
+ * helps a colleague who lost their authenticator). The colleague then signs in
+ * with their password alone and can re-enrol.
+ */
+export async function removeUserMfaAction(
+  adminUserId: string,
+): Promise<{ success?: true; error?: string }> {
+  await requireRole("super_admin");
+
+  const target = await prisma.adminUser.findUnique({
+    where: { id: adminUserId },
+    select: { supabaseUserId: true },
+  });
+  if (!target?.supabaseUserId) return { error: "User not found." };
+
+  const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({
+    userId: target.supabaseUserId,
+  });
+  if (error) return { error: error.message };
+
+  for (const factor of data?.factors ?? []) {
+    await supabaseAdmin.auth.admin.mfa.deleteFactor({
+      id: factor.id,
+      userId: target.supabaseUserId,
+    });
+  }
+
+  revalidatePath(`/admin/users/${adminUserId}`);
+  return { success: true };
 }

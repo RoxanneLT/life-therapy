@@ -21,6 +21,21 @@ export async function getAuthenticatedAdmin() {
     redirect("/login");
   }
 
+  // 2FA gate: if the admin has a verified factor but the session is only AAL1,
+  // force the step-up. Compute in a try/catch (fail open — opt-in MFA must never
+  // lock an admin out over a transient glitch); the redirect is thrown outside it
+  // so its NEXT_REDIRECT propagates normally.
+  let needsStepUp = false;
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    needsStepUp = aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2";
+  } catch {
+    needsStepUp = false;
+  }
+  if (needsStepUp) {
+    redirect("/login/mfa");
+  }
+
   return { user, adminUser };
 }
 

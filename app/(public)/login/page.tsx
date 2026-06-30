@@ -77,8 +77,15 @@ export default function LoginPage() {
         return;
       }
 
-      // Determine role via server-side lookup and redirect
       const redirectTo = new URLSearchParams(globalThis.location.search).get("redirect") ?? undefined;
+
+      // 2FA step-up required — finish the sign-in on the code page.
+      if (result.mfaRequired) {
+        router.replace(`/login/mfa${redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`);
+        return;
+      }
+
+      // Determine role via server-side lookup and redirect
       const redirected = await redirectByRole(router, redirectTo);
       if (!redirected) {
         setError("Your account is not linked to any portal. Please contact support.");

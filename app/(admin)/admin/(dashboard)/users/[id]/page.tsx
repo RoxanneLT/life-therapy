@@ -18,6 +18,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
+import { ResetMfaButton } from "./reset-mfa-button";
 
 interface Props {
   readonly params: Promise<{ readonly id: string }>;
@@ -57,6 +58,8 @@ export default async function EditUserPage({ params }: Props) {
           </p>
         </div>
         {!isSelf && (
+          <div className="flex gap-2">
+            <ResetMfaButton adminUserId={user.id} />
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm">
@@ -82,6 +85,7 @@ export default async function EditUserPage({ params }: Props) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          </div>
         )}
       </div>
       <UserForm
