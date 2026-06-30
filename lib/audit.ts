@@ -8,8 +8,19 @@
  *         CLAUDE_PLATFORM_HARDENING.md Task 2 for the schema).
  */
 
+import { createHmac } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma/client";
+
+/**
+ * Hash an IP for the audit trail. Keyed HMAC (not a bare hash) so the small IPv4
+ * space can't be reversed by rainbow table, while the same IP still maps to the
+ * same value — enough to correlate repeat offenders without storing raw PII.
+ */
+function hashIp(ip: string): string {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "lt-auth-ip-fallback-key";
+  return createHmac("sha256", key).update(ip.trim()).digest("hex").slice(0, 16);
+}
 
 export interface AuditInput {
   action: string;
@@ -84,7 +95,7 @@ export async function recordAuthEvent(input: {
     entityId: input.userId || email,
     actorEmail: email,
     metadata: {
-      ...(input.ip ? { ip: input.ip } : {}),
+      ...(input.ip ? { ipHash: hashIp(input.ip) } : {}),
       ...(input.userAgent ? { userAgent: input.userAgent } : {}),
       ...(input.userId ? { userId: input.userId } : {}),
       ...(input.reason ? { reason: input.reason } : {}),

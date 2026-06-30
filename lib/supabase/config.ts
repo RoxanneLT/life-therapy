@@ -5,12 +5,13 @@
  * an **inactivity timeout** — if the user doesn't visit for this long,
  * they're logged out and must sign in again.
  *
- * Clients: 30 days inactivity (generous — they visit infrequently).
- * Admins:  8 hours inactivity on /admin routes (separate cookie below).
+ * Clients: 14 days inactivity (was 30 — shorter session, still fine for
+ *          infrequent visitors; sensitive portal data shouldn't linger a month).
+ * Admins:  capped tighter by ADMIN_INACTIVITY_SECONDS below.
  */
 
-/** Client inactivity timeout: 30 days */
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+/** Client inactivity timeout: 14 days */
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
 
 /**
  * Admin-specific inactivity timeout (7 days).
