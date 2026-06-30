@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { slugify } from "@/lib/utils";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 
 export type SiteSettings = SiteSetting;
@@ -18,19 +19,33 @@ export interface BranchAddress {
   town: string;
   postcode: string;
   province: string;
+  /** Google Business Page "write a review" link for this office. */
+  reviewUrl?: string;
 }
 
-/** Read the footer office branches, ignoring any blank entries. */
-export function getBranchAddresses(settings: SiteSetting): BranchAddress[] {
+export interface BranchAddressWithSlug extends BranchAddress {
+  /** Stable id for a branch — links clients to it + routes review requests. */
+  slug: string;
+}
+
+/** Branch slug derived from the town (e.g. "Cape Town" → "cape-town"). */
+export function branchSlug(town: string): string {
+  return slugify(town || "");
+}
+
+/** Read the footer office branches (with a derived slug), ignoring blank entries. */
+export function getBranchAddresses(settings: SiteSetting): BranchAddressWithSlug[] {
   const raw = settings.branchAddresses;
   if (!Array.isArray(raw)) return [];
-  return (raw as unknown as BranchAddress[]).filter(
-    (b) =>
-      b &&
-      [b.buildingName, b.streetAddress, b.suburb, b.town, b.postcode, b.province].some(
-        (v) => typeof v === "string" && v.trim() !== "",
-      ),
-  );
+  return (raw as unknown as BranchAddress[])
+    .filter(
+      (b) =>
+        b &&
+        [b.buildingName, b.streetAddress, b.suburb, b.town, b.postcode, b.province].some(
+          (v) => typeof v === "string" && v.trim() !== "",
+        ),
+    )
+    .map((b) => ({ ...b, slug: branchSlug(b.town) }));
 }
 
 const DEFAULT_BUSINESS_HOURS: BusinessHours = {

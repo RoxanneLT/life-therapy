@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Pencil, Save, X } from "lucide-react";
 import { updateClientProfileAction } from "../../actions";
 import { updateClientEmailAction } from "../actions";
+import { ClientBranchSelect } from "./client-branch-select";
 import { format } from "date-fns";
 
 interface PersonalTabProps {
@@ -230,6 +231,12 @@ export function PersonalTab({ client }: PersonalTabProps) {
           <DisplayField label="Address" value={client.address as string} />
           <DisplayField label="Source" value={client.source as string} />
         </dl>
+        <div className="max-w-xs border-t pt-4">
+          <ClientBranchSelect
+            studentId={client.id as string}
+            current={(client.branch as string | null) ?? null}
+          />
+        </div>
       </CardContent>
     </Card>
   );

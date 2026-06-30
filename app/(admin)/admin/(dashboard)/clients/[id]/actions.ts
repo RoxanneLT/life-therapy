@@ -7,8 +7,10 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
+import { sendEmail } from "@/lib/email";
+import { renderEmail } from "@/lib/email-render";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
-import { getSiteSettings } from "@/lib/settings";
+import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
 import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, type BillingContact } from "@/lib/billing";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
@@ -359,6 +361,95 @@ export async function updateTagsAction(studentId: string, tags: string[]) {
     data: { tags },
   });
   revalidatePath(`/admin/clients/${studentId}`);
+}
+
+// ────────────────────────────────────────────────────────────
+// Office branch — links a client to a location (routes Google review requests)
+// ────────────────────────────────────────────────────────────
+
+export async function getBranchOptionsAction(): Promise<
+  { slug: string; label: string; hasReview: boolean }[]
+> {
+  await requireRole("super_admin", "editor");
+  const settings = await getSiteSettings();
+  return getBranchAddresses(settings).map((b) => ({
+    slug: b.slug,
+    label: b.town || b.buildingName || b.slug,
+    hasReview: !!b.reviewUrl?.trim(),
+  }));
+}
+
+export async function updateClientBranchAction(
+  studentId: string,
+  branch: string | null,
+): Promise<{ success: boolean }> {
+  await requireRole("super_admin", "editor");
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { branch: branch || null },
+  });
+  revalidatePath(`/admin/clients/${studentId}`);
+  return { success: true };
+}
+
+/**
+ * Email the client a Google review request pointing at THEIR branch's profile.
+ * Manual (admin-clicked) so Roxanne can space them out — Google flags review
+ * spikes. Requires the client to have a branch with a review link set.
+ */
+export async function sendReviewRequestAction(
+  studentId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { adminUser } = await requireRole("super_admin", "editor");
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { email: true, firstName: true, branch: true, emailOptOut: true, emailPaused: true },
+  });
+  if (!student) return { success: false, error: "Client not found." };
+  if (!student.branch) {
+    return { success: false, error: "Assign this client to an office branch first." };
+  }
+  if (student.emailOptOut || student.emailPaused) {
+    return { success: false, error: "This client has opted out of (or paused) emails." };
+  }
+
+  const settings = await getSiteSettings();
+  const branch = getBranchAddresses(settings).find((b) => b.slug === student.branch);
+  const reviewUrl = branch?.reviewUrl?.trim();
+  if (!reviewUrl) {
+    return {
+      success: false,
+      error: "That branch has no Google review link yet — add it in Settings → Contact & Locations.",
+    };
+  }
+
+  const { subject, html } = await renderEmail("review_request", {
+    clientName: student.firstName || "there",
+    reviewUrl,
+  });
+
+  const result = await sendEmail({
+    to: student.email,
+    subject,
+    html,
+    templateKey: "review_request",
+    studentId,
+  });
+  if (!result.success) {
+    return { success: false, error: "Failed to send the review request email." };
+  }
+
+  await recordAudit({
+    action: "review_request_sent",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { branch: student.branch },
+  });
+
+  revalidatePath(`/admin/clients/${studentId}`);
+  return { success: true };
 }
 
 // ────────────────────────────────────────────────────────────

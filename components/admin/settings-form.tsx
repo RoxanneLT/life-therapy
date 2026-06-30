@@ -510,6 +510,17 @@ export function SettingsForm({
                             placeholder="Western Cape"
                           />
                         </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Google review link</Label>
+                          <Input
+                            value={branch.reviewUrl || ""}
+                            onChange={(e) => updateBranch(index, "reviewUrl", e.target.value)}
+                            placeholder="https://g.page/r/…/review"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            The Google Business Page &ldquo;write a review&rdquo; link for this office — routes review requests to local clients.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))}

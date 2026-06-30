@@ -683,6 +683,20 @@ function renderFallback(
           <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
       };
+    case "review_request":
+      return {
+        subject: "Would you share your experience with a quick Google review?",
+        html: bt(
+          "We'd love your feedback",
+          `<p>Hi ${variables.clientName || "there"},</p>
+          <p>Thank you for trusting Life-Therapy. If you have a moment, we'd be so grateful if you'd share your experience with a short Google review — it genuinely helps others find the support they need.</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${variables.reviewUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Leave a Google Review</a>
+          </div>
+          <p style="font-size: 13px; color: #666;">It only takes a minute, and it means a great deal to us. Thank you.</p>
+          <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
     default:
       return {
         subject: `Email: ${key}`,
