@@ -1552,3 +1552,18 @@ model WhatsAppTemplate {
 
   @@map("whatsapp_templates")
 }
+
+// ============================================================
+// Durable rate limiting (login + password-reset brute-force)
+// Fixed-window counter keyed by e.g. "login:ip:1.2.3.4" or
+// "login:email:<sha256>". windowEnd doubles as the lockout expiry.
+// ============================================================
+model RateLimit {
+  key       String   @id
+  count     Int      @default(1)
+  windowEnd DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([windowEnd])
+  @@map("rate_limits")
+}

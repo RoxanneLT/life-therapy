@@ -7,7 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { recordAuthEvent } from "@/lib/audit";
-import { clearRateLimit } from "@/lib/rate-limit";
+import { isRateLimitedDb, recordHitDb, clearRateLimitDb, hashIdentifier } from "@/lib/rate-limit-db";
+
+const RESET_WINDOW_MS = 15 * 60 * 1000;
 
 function clientIp(h: Headers): string | undefined {
   return h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
@@ -30,6 +32,17 @@ export async function requestPasswordResetAction(
   if (!email) {
     return { error: "Please enter your email address." };
   }
+
+  // Throttle reset requests (anti reset-bombing): 5 per IP and 3 per target email
+  // per 15 min. Counted before any account lookup, so it can't be used to enumerate.
+  const reqIp = clientIp(await headers()) ?? "unknown";
+  const ipKey = `pwreset:ip:${reqIp}`;
+  const emailKey = `pwreset:email:${hashIdentifier(email)}`;
+  if ((await isRateLimitedDb(ipKey, 5)) || (await isRateLimitedDb(emailKey, 3))) {
+    return { error: "Too many reset requests. Please wait a few minutes and try again." };
+  }
+  await recordHitDb(ipKey, RESET_WINDOW_MS);
+  await recordHitDb(emailKey, RESET_WINDOW_MS);
 
   try {
     // Find the account — clients live in `students`, staff in `admin_users`.
@@ -222,9 +235,10 @@ export async function updatePasswordAction(
     ip,
     userId: user?.id ?? null,
   });
-  // They proved account control via the email link — clear any login lockout on
-  // this IP so they can sign in immediately with the new password.
-  if (ip) clearRateLimit(`login:${ip}`);
+  // They proved account control via the email link — clear any login lockout
+  // (both the IP and this account's email bucket) so they can sign in immediately.
+  if (ip) await clearRateLimitDb(`login:ip:${ip}`);
+  if (user?.email) await clearRateLimitDb(`login:email:${hashIdentifier(user.email)}`);
 
   return { success: true };
 }
