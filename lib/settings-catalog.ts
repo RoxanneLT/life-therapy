@@ -14,6 +14,7 @@ import {
   FileText,
   MessageCircle,
   CalendarCheck,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,11 +31,12 @@ export interface SettingsPage {
 const BASE = "/admin/settings";
 
 export const SETTINGS_CATALOG: SettingsPage[] = [
+  { href: "/admin/account", title: "My Profile", desc: "Your profile, password & two-factor sign-in", icon: UserCog, group: "Account" },
   { href: `${BASE}/brand`, title: "Brand", desc: "Site identity, logo & footer", icon: Palette, group: "Website" },
   { href: `${BASE}/contact`, title: "Contact & Locations", desc: "Contact details, offices & hours", icon: Phone, group: "Website" },
   { href: `${BASE}/marketing`, title: "Marketing", desc: "Social links, SEO & newsletter", icon: Megaphone, group: "Website" },
   { href: `${BASE}/finance`, title: "Finance", desc: "Billing rates, VAT & payment terms", icon: Banknote, group: "Business" },
-  { href: `${BASE}/team`, title: "Team", desc: "Admin users & roles", icon: Users, group: "Business" },
+  { href: `${BASE}/team`, title: "Team", desc: "Admin users & roles", icon: Users, group: "Business", prefixes: ["/admin/users"] },
   { href: `${BASE}/legal`, title: "Legal Documents", desc: "Terms, privacy & commitment", icon: FileText, group: "Business" },
   { href: `${BASE}/integrations`, title: "Integrations", desc: "Email, payments & calendar connections", icon: Plug, group: "System" },
   { href: `${BASE}/whatsapp`, title: "WhatsApp", desc: "WhatsApp Business messaging", icon: MessageCircle, group: "System" },
@@ -42,7 +44,7 @@ export const SETTINGS_CATALOG: SettingsPage[] = [
 ];
 
 /** Order of groups in the settings nav. */
-export const SETTINGS_NAV_GROUPS = ["Website", "Business", "System"];
+export const SETTINGS_NAV_GROUPS = ["Account", "Website", "Business", "System"];
 
 /** Top-N most-visited catalog hrefs (count > 0), most-visited first. */
 export function topVisitedHrefs(pageVisits: Record<string, number>, n: number): string[] {

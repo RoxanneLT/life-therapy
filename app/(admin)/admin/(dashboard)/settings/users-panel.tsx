@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil, Plus, Key, Users, Shield } from "lucide-react";
+import { Pencil, Plus, Users, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
@@ -73,20 +73,12 @@ export function UsersPanel({ users, embedded, headerTitle, headerDescription }: 
           title={headerTitle ?? "Team"}
           description={headerDescription ?? `${users.length} admin user${users.length === 1 ? "" : "s"}`}
           actions={
-            <>
-              <Button size="sm" variant="outline" asChild>
-                <Link href="/admin/users/change-password">
-                  <Key className="mr-1.5 h-3.5 w-3.5" />
-                  Password
-                </Link>
-              </Button>
-              <Button size="sm" asChild>
-                <Link href="/admin/users/new">
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Invite
-                </Link>
-              </Button>
-            </>
+            <Button size="sm" asChild>
+              <Link href="/admin/users/new">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Invite
+              </Link>
+            </Button>
           }
           tabs={
             <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border -mb-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -124,20 +116,12 @@ export function UsersPanel({ users, embedded, headerTitle, headerDescription }: 
               {users.length} admin user{users.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" asChild>
-              <Link href="/admin/users/new">
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Invite
-              </Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link href="/admin/users/change-password">
-                <Key className="mr-1.5 h-3.5 w-3.5" />
-                Password
-              </Link>
-            </Button>
-          </div>
+          <Button size="sm" asChild>
+            <Link href="/admin/users/new">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Invite
+            </Link>
+          </Button>
         </div>
         <div className="flex gap-1 overflow-x-auto border-b pb-px scrollbar-none">
           {SECTIONS.map((section) => {
@@ -193,17 +177,11 @@ export function UsersPanel({ users, embedded, headerTitle, headerDescription }: 
           })}
         </nav>
 
-        <div className="space-y-2 border-t pt-4">
+        <div className="border-t pt-4">
           <Button asChild className="w-full">
             <Link href="/admin/users/new">
               <Plus className="mr-2 h-4 w-4" />
               Invite User
-            </Link>
-          </Button>
-          <Button variant="outline" asChild className="w-full">
-            <Link href="/admin/users/change-password">
-              <Key className="mr-2 h-4 w-4" />
-              Change Password
             </Link>
           </Button>
         </div>

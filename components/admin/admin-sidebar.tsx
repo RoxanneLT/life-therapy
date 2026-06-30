@@ -108,8 +108,13 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
     .map((group) => ({ ...group, items: group.items.filter((item) => item.roles.includes(role)) }))
     .filter((group) => group.items.length > 0);
 
-  // Inside Settings, the sidebar becomes the settings nav (with a back-to-dashboard link).
-  const inSettings = pathname.startsWith("/admin/settings");
+  // Inside Settings, the sidebar becomes the settings nav (with a back-to-dashboard
+  // link). My Profile (/admin/account) and the Team user pages (/admin/users/*) are
+  // part of the settings area, so they show the settings nav too.
+  const inSettings =
+    pathname.startsWith("/admin/settings") ||
+    pathname.startsWith("/admin/account") ||
+    pathname.startsWith("/admin/users");
 
   return (
     <div className="flex h-full flex-col bg-card text-card-foreground">
@@ -207,7 +212,11 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
                     {items.map((item) => {
                       const Icon = item.icon;
                       const active =
-                        pathname === item.href || pathname.startsWith(item.href + "/");
+                        pathname === item.href ||
+                        pathname.startsWith(item.href + "/") ||
+                        (item.prefixes ?? []).some(
+                          (p) => pathname === p || pathname.startsWith(p + "/"),
+                        );
                       return (
                         <Link
                           key={item.href}

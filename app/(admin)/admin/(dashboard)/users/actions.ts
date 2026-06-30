@@ -5,8 +5,13 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { renderEmail } from "@/lib/email-render";
+import { sendEmail } from "@/lib/email";
+import { recordAuthEvent } from "@/lib/audit";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import crypto from "crypto";
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
 
 export async function inviteUser(formData: FormData) {
   await requireRole("super_admin");
@@ -47,15 +52,21 @@ export async function inviteUser(formData: FormData) {
     email,
   });
 
-  revalidatePath("/admin/users");
-  redirect("/admin/users");
+  revalidatePath("/admin/settings/team");
+  redirect("/admin/settings/team");
 }
 
 export async function updateUser(id: string, formData: FormData) {
-  await requireRole("super_admin");
+  const { adminUser: currentAdmin } = await requireRole("super_admin");
 
   const name = formData.get("name") as string;
   const role = formData.get("role") as AdminRole;
+
+  // Don't let a super admin demote themselves out of access — another super
+  // admin must do it.
+  if (currentAdmin.id === id && role !== "super_admin") {
+    throw new Error("You can't change your own role. Ask another super admin to do it.");
+  }
 
   await prisma.adminUser.update({
     where: { id },
@@ -65,8 +76,8 @@ export async function updateUser(id: string, formData: FormData) {
     },
   });
 
-  revalidatePath("/admin/users");
-  redirect("/admin/users");
+  revalidatePath("/admin/settings/team");
+  redirect("/admin/settings/team");
 }
 
 export async function deleteUser(id: string) {
@@ -144,4 +155,61 @@ export async function removeUserMfaAction(
 
   revalidatePath(`/admin/users/${adminUserId}`);
   return { success: true };
+}
+
+/**
+ * Email another admin a password-reset link (super_admin-initiated). Mirrors the
+ * public forgot-password flow: a recovery link that points straight at
+ * /reset-password (the token is only consumed on submit, so link scanners can't
+ * burn it). The admin sets their own new password — we never set it for them.
+ */
+export async function sendUserPasswordResetAction(
+  adminUserId: string,
+): Promise<{ success?: true; error?: string }> {
+  const { adminUser: actor } = await requireRole("super_admin");
+
+  const target = await prisma.adminUser.findUnique({
+    where: { id: adminUserId },
+    select: { email: true, supabaseUserId: true },
+  });
+  if (!target) return { error: "User not found." };
+
+  try {
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email: target.email,
+      options: { redirectTo: `${BASE_URL}/auth/callback?next=/reset-password` },
+    });
+    if (linkError || !linkData?.properties?.hashed_token) {
+      return { error: "Could not generate a reset link. Please try again." };
+    }
+
+    const actionLink = `${BASE_URL}/reset-password?token_hash=${encodeURIComponent(
+      linkData.properties.hashed_token,
+    )}&type=recovery`;
+
+    const { subject, html } = await renderEmail("password_reset", { resetUrl: actionLink });
+    const result = await sendEmail({
+      to: target.email,
+      subject,
+      html,
+      templateKey: "password_reset",
+      skipTracking: true,
+    });
+    if (!result.success) {
+      return { error: "Failed to send the reset email. Please try again." };
+    }
+
+    await recordAuthEvent({
+      action: "password_reset_requested",
+      email: target.email,
+      userId: target.supabaseUserId,
+      reason: `admin-initiated by ${actor.email}`,
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error("[admin-password-reset] error:", err);
+    return { error: "Something went wrong. Please try again." };
+  }
 }

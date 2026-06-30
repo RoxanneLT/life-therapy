@@ -23,9 +23,11 @@ interface UserFormProps {
     role: AdminRole;
   };
   readonly onSubmit: (formData: FormData) => Promise<void>;
+  /** Lock the role selector — used when editing your own account (no self-demotion). */
+  readonly lockRole?: boolean;
 }
 
-export function UserForm({ initialData, onSubmit }: UserFormProps) {
+export function UserForm({ initialData, onSubmit, lockRole }: UserFormProps) {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState(initialData?.name || "");
   const [email, setEmail] = useState(initialData?.email || "");
@@ -86,7 +88,7 @@ export function UserForm({ initialData, onSubmit }: UserFormProps) {
 
       <div className="space-y-2">
         <Label htmlFor="role">Role</Label>
-        <Select value={role} onValueChange={(v) => setRole(v as AdminRole)}>
+        <Select value={role} onValueChange={(v) => setRole(v as AdminRole)} disabled={lockRole}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -96,6 +98,11 @@ export function UserForm({ initialData, onSubmit }: UserFormProps) {
             <SelectItem value="marketing">Marketing — Testimonials, Newsletter</SelectItem>
           </SelectContent>
         </Select>
+        {lockRole && (
+          <p className="text-xs text-muted-foreground">
+            You can&apos;t change your own role — ask another super admin.
+          </p>
+        )}
       </div>
 
       <Button type="submit" disabled={saving}>
