@@ -142,13 +142,21 @@ export default async function InvoicesPage({
   const showPaymentRequests = activeStatus === "payment_requested";
   const showUpcoming = activeStatus === "upcoming";
 
-  // Find the most recent billing month across invoices
-  const lastCycleInvoice = await prisma.invoice.findFirst({
+  // Find the most recent MONTHLY billing cycle. Monthly runs use a clean "YYYY-MM"
+  // billingMonth; ad-hoc / multi-currency invoices use suffixed values like
+  // "2026-06-adhoc-individual" which aren't a cycle — picking one produced an
+  // "Invalid Date" label and computed the cycle totals against the wrong month.
+  const recentBillingMonths = await prisma.invoice.findMany({
     where: { billingMonth: { not: null } },
-    orderBy: { billingMonth: "desc" },
     select: { billingMonth: true },
+    distinct: ["billingMonth"],
+    orderBy: { billingMonth: "desc" },
+    take: 60,
   });
-  const lastCycleBillingMonth = lastCycleInvoice?.billingMonth ?? null;
+  const lastCycleBillingMonth =
+    recentBillingMonths
+      .map((r) => r.billingMonth as string)
+      .find((m) => /^\d{4}-\d{2}$/.test(m)) ?? null;
 
   const [invoices, statusCounts, lastCycleStats, overdueResult, pendingRequests, pendingRequestCount, upcomingCount] = await Promise.all([
     (showPaymentRequests || showUpcoming)
