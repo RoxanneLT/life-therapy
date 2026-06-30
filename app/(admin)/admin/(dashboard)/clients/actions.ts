@@ -27,6 +27,7 @@ interface CreateClientData {
   gender?: string;
   relationshipStatus?: string;
   address?: string;
+  branch?: string;
   emergencyContact?: string;
   referralSource?: string;
   referralDetail?: string;
@@ -77,6 +78,7 @@ export async function createClientAction(data: CreateClientData) {
       gender: data.gender || null,
       relationshipStatus: data.relationshipStatus || null,
       address: data.address || null,
+      branch: data.branch || null,
       emergencyContact: data.emergencyContact || null,
       referralSource: data.referralSource || null,
       referralDetail: data.referralDetail || null,
@@ -97,6 +99,40 @@ export async function createClientAction(data: CreateClientData) {
 
   revalidatePath("/admin/clients");
   return { clientId: client.id };
+}
+
+// ────────────────────────────────────────────────────────────
+// Bulk assign an office branch to many clients at once
+// ────────────────────────────────────────────────────────────
+
+export async function getClientsForBulkAction(): Promise<
+  { id: string; name: string; email: string; branch: string | null }[]
+> {
+  await requireRole("super_admin", "editor");
+  const clients = await prisma.student.findMany({
+    select: { id: true, firstName: true, lastName: true, email: true, branch: true },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
+  return clients.map((c) => ({
+    id: c.id,
+    name: `${c.firstName} ${c.lastName}`.trim(),
+    email: c.email,
+    branch: c.branch,
+  }));
+}
+
+export async function bulkAssignBranchAction(
+  studentIds: string[],
+  branch: string | null,
+): Promise<{ success: boolean; count: number }> {
+  await requireRole("super_admin", "editor");
+  if (studentIds.length === 0) return { success: true, count: 0 };
+  const res = await prisma.student.updateMany({
+    where: { id: { in: studentIds } },
+    data: { branch: branch || null },
+  });
+  revalidatePath("/admin/clients");
+  return { success: true, count: res.count };
 }
 
 // ────────────────────────────────────────────────────────────

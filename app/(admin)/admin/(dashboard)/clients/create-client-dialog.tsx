@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { UserPlus, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClientAction } from "./actions";
+import { getBranchOptionsAction } from "./[id]/actions";
 import { phoneError } from "@/lib/phone";
 import { useRouter } from "next/navigation";
 
@@ -52,6 +53,8 @@ export function CreateClientDialog() {
   const [gender, setGender] = useState("");
   const [relationshipStatus, setRelationshipStatus] = useState("");
   const [address, setAddress] = useState("");
+  const [branch, setBranch] = useState("");
+  const [branchOptions, setBranchOptions] = useState<{ slug: string; label: string }[]>([]);
   const [emergencyContact, setEmergencyContact] = useState("");
   const [referralSource, setReferralSource] = useState("");
   const [referralDetail, setReferralDetail] = useState("");
@@ -62,6 +65,12 @@ export function CreateClientDialog() {
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [sessionReminders, setSessionReminders] = useState(true);
   const [adminNotes, setAdminNotes] = useState("");
+
+  useEffect(() => {
+    getBranchOptionsAction()
+      .then((opts) => setBranchOptions(opts.map((o) => ({ slug: o.slug, label: o.label }))))
+      .catch(() => {});
+  }, []);
 
   function resetForm() {
     setStep(1);
@@ -77,6 +86,7 @@ export function CreateClientDialog() {
     setGender("");
     setRelationshipStatus("");
     setAddress("");
+    setBranch("");
     setEmergencyContact("");
     setReferralSource("");
     setReferralDetail("");
@@ -132,6 +142,7 @@ export function CreateClientDialog() {
           gender: gender.trim() || undefined,
           relationshipStatus: relationshipStatus.trim() || undefined,
           address: address.trim() || undefined,
+          branch: branch || undefined,
           emergencyContact: emergencyContact.trim() || undefined,
           referralSource: referralSource.trim() || undefined,
           referralDetail: referralDetail.trim() || undefined,
@@ -337,6 +348,23 @@ export function CreateClientDialog() {
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                 placeholder="Full address..."
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="branch">Office branch</Label>
+              <Select value={branch || "__none__"} onValueChange={(v) => setBranch(v === "__none__" ? "" : v)}>
+                <SelectTrigger id="branch">
+                  <SelectValue placeholder="Not assigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not assigned</SelectItem>
+                  {branchOptions.map((o) => (
+                    <SelectItem key={o.slug} value={o.slug}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Routes their Google review request to the right location.</p>
             </div>
           </div>
         )}

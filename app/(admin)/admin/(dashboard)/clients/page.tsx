@@ -17,6 +17,7 @@ import { Users, Upload } from "lucide-react";
 import { ClientListFilters } from "./client-list-filters";
 import { SortableHeader } from "@/components/admin/sortable-header";
 import { CreateClientDialog } from "./create-client-dialog";
+import { BulkAssignBranchDialog } from "./bulk-assign-branch-dialog";
 
 import { CLIENT_STATUS_BADGE } from "@/lib/status-styles";
 import { PaginationControls } from "@/components/admin/pagination-controls";
@@ -206,6 +207,7 @@ export default async function ClientsPage({
           </p>
         </div>
         <div className="flex gap-2">
+          <BulkAssignBranchDialog />
           <CreateClientDialog />
           <Link href="/admin/clients/import">
             <Button variant="outline" size="sm">
