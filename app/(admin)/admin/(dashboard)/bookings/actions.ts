@@ -1310,6 +1310,74 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
 }
 
 // ────────────────────────────────────────────────────────────
+// Reinstate a cancelled (future) booking
+// ────────────────────────────────────────────────────────────
+
+export async function reinstateBookingAction(id: string) {
+  const { adminUser } = await requireRole("super_admin", "editor");
+
+  const booking = await prisma.booking.findUnique({ where: { id } });
+  if (!booking) throw new Error("Booking not found");
+  if (booking.status !== "cancelled") {
+    throw new Error("Only cancelled bookings can be reinstated.");
+  }
+
+  // Only future sessions can be reinstated.
+  const dateStr = toSastDateStr(booking.date);
+  const startAt = fromZonedTime(`${dateStr}T${booking.startTime}:00`, TIMEZONE);
+  if (startAt.getTime() <= Date.now()) {
+    throw new Error("This session is in the past and can't be reinstated.");
+  }
+
+  // Create a fresh standalone Outlook/Teams event — the cancellation deleted the
+  // original (a series occurrence can't be cleanly un-deleted). Including the
+  // client as an attendee makes Outlook re-send the invite + new join link.
+  const config = getSessionTypeConfig(booking.sessionType);
+  const cal = await createCalendarEvent({
+    subject: `${config.label} — ${booking.clientName}`,
+    startDateTime: `${dateStr}T${booking.startTime}:00`,
+    endDateTime: `${dateStr}T${booking.endTime}:00`,
+    clientName: booking.clientName,
+    clientEmail: booking.clientEmail,
+    bookingId: booking.id,
+  });
+
+  const calendarWarning = cal?.eventId
+    ? undefined
+    : "Session reinstated, but the Outlook/Teams event couldn't be created — please add it manually.";
+
+  // Un-cancel + clear the late-cancellation billing flag so the session is billed
+  // once, as a normal session (no double charge).
+  await prisma.booking.update({
+    where: { id },
+    data: {
+      status: "confirmed",
+      cancelledAt: null,
+      cancelledBy: null,
+      cancellationReason: null,
+      isLateCancel: false,
+      billingNote: null,
+      ...(cal?.eventId
+        ? { graphEventId: cal.eventId, teamsMeetingUrl: cal.teamsMeetingUrl || null }
+        : {}),
+    },
+  });
+
+  await recordAudit({
+    action: "booking_reinstated",
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    before: { status: "cancelled" },
+    after: { status: "confirmed" },
+  });
+
+  revalidatePath("/admin/bookings");
+  revalidatePath(`/admin/bookings/${id}`);
+  return { success: true as const, calendarWarning };
+}
+
+// ────────────────────────────────────────────────────────────
 // Check billing cycle status for a historical booking
 // ────────────────────────────────────────────────────────────
 

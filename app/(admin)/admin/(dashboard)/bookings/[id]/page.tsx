@@ -48,6 +48,7 @@ import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { RescheduleSeriesDialog } from "./reschedule-series-dialog";
 import { CancelBookingButton } from "./cancel-booking-button";
+import { ReinstateButton } from "../reinstate-button";
 import { CalendarWarningToast } from "./calendar-warning-toast";
 
 const PATTERN_LABELS: Record<string, string> = {
@@ -71,6 +72,14 @@ export default async function BookingDetailPage({ params }: Props) {
   if (!booking) notFound();
 
   const config = getSessionTypeConfig(booking.sessionType);
+
+  // Reinstate is offered only for a cancelled session that is still in the future.
+  // SAST is a fixed UTC+2 (no DST); booking.date is midnight UTC of the SAST date.
+  const bookingStartsAt = new Date(
+    `${new Date(booking.date).toISOString().slice(0, 10)}T${booking.startTime}:00+02:00`,
+  );
+  const canReinstate =
+    booking.status === "cancelled" && bookingStartsAt.getTime() > new Date().getTime();
 
   // Count future bookings in this series (for edit series button)
   const futureSeriesCount = booking.recurringSeriesId
@@ -211,12 +220,17 @@ export default async function BookingDetailPage({ params }: Props) {
             <Separator />
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Status</span>
-              <Badge
-                variant="secondary"
-                className={BOOKING_STATUS_BADGE[booking.status]}
-              >
-                {booking.status.replace("_", " ")}
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge
+                  variant="secondary"
+                  className={BOOKING_STATUS_BADGE[booking.status]}
+                >
+                  {booking.status.replace("_", " ")}
+                </Badge>
+                {canReinstate && (
+                  <ReinstateButton bookingId={booking.id} clientName={booking.clientName} />
+                )}
+              </div>
             </div>
             <Separator />
             <div className="flex justify-between items-center">

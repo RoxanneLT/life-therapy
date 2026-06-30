@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { CalendarDays, Settings, ShieldOff, Repeat, X, AlertTriangle } from "lucide-react";
 import { StaleQuickActions } from "./stale-quick-actions";
+import { ReinstateButton } from "./reinstate-button";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { ViewSwitcher } from "./view-switcher";
@@ -377,6 +378,14 @@ export default async function BookingsPage({ searchParams }: Props) {
                 <TableBody>
                   {bookings.map((booking) => {
                     const config = getSessionTypeConfig(booking.sessionType);
+                    // SAST is a fixed UTC+2 (no DST); booking.date is midnight UTC of
+                    // the SAST date, so this is the real session start instant.
+                    const startsAt = new Date(
+                      `${new Date(booking.date).toISOString().slice(0, 10)}T${booking.startTime}:00+02:00`,
+                    );
+                    const canReinstate =
+                      booking.status === "cancelled" &&
+                      startsAt.getTime() > new Date().getTime();
                     return (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">
@@ -411,12 +420,20 @@ export default async function BookingsPage({ searchParams }: Props) {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={BOOKING_STATUS_BADGE[booking.status]}
-                          >
-                            {booking.status.replace("_", " ")}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="secondary"
+                              className={BOOKING_STATUS_BADGE[booking.status]}
+                            >
+                              {booking.status.replace("_", " ")}
+                            </Badge>
+                            {canReinstate && (
+                              <ReinstateButton
+                                bookingId={booking.id}
+                                clientName={booking.clientName}
+                              />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           {isStale ? (
