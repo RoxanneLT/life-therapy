@@ -1101,11 +1101,31 @@ async function createAdhocPaymentRequest(opts: {
   }));
   const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
 
+  // The unique constraint is (studentId, billingMonth). Bill-to-date / ad-hoc
+  // invoices can legitimately run more than once a month as new sessions accrue,
+  // so make the billingMonth key unique — otherwise the second run collides with
+  // the first and throws a P2002 (was surfacing as a 500 on the client page).
+  const sid = contact.type === "corporate" ? undefined : contact.studentId;
+  const baseKey = `${billingMonth}-${suffix}`;
+  let billingKey = baseKey;
+  if (sid) {
+    let n = 2;
+    while (
+      await prisma.paymentRequest.findFirst({
+        where: { studentId: sid, billingMonth: billingKey },
+        select: { id: true },
+      })
+    ) {
+      billingKey = `${baseKey}-${n}`;
+      n += 1;
+    }
+  }
+
   const pr = await prisma.paymentRequest.create({
     data: {
-      studentId: contact.type === "corporate" ? undefined : contact.studentId,
+      studentId: sid,
       billingEntityId: contact.billingEntityId,
-      billingMonth: `${billingMonth}-${suffix}`,
+      billingMonth: billingKey,
       periodStart,
       periodEnd,
       currency: "ZAR",
@@ -1509,7 +1529,14 @@ export async function createManualPaymentRequestAction(data: {
     return { success: true, paymentRequestId: pr.id };
   } catch (err) {
     console.error("createManualPaymentRequestAction error:", err);
-    return { success: false, error: err instanceof Error ? err.message : "Failed to create payment request" };
+    const code = (err as { code?: string })?.code;
+    const message =
+      code === "P2002"
+        ? "An invoice already exists for this client and billing month. Change the billing month, or void the existing one first."
+        : err instanceof Error
+          ? err.message
+          : "Failed to create payment request";
+    return { success: false, error: message };
   }
 }
 
