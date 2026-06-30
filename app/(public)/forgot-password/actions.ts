@@ -109,8 +109,10 @@ export async function requestPasswordResetAction(
       return { error: "Something went wrong. Please try again later." };
     }
 
-    // Build URL pointing directly to our /auth/callback (bypasses Supabase redirect)
-    const actionLink = `${BASE_URL}/auth/callback?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery&next=/reset-password`;
+    // Point straight at the reset page (NOT /auth/callback). The token is only
+    // verified when the user submits their new password, so email-link scanners
+    // (e.g. Microsoft Safe Links) that pre-fetch the URL can't consume it first.
+    const actionLink = `${BASE_URL}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
 
     // Step 4: Render and send email via Resend
     console.log(`[password-reset] Sending reset email to ${email}`);
@@ -147,6 +149,7 @@ export async function updatePasswordAction(
   formData: FormData,
 ): Promise<ResetState> {
   const newPassword = formData.get("new_password") as string;
+  const tokenHash = (formData.get("token_hash") as string) || "";
 
   if (!newPassword) {
     return { error: "Please enter a new password." };
@@ -157,6 +160,22 @@ export async function updatePasswordAction(
   }
 
   const supabase = await createSupabaseServerClient();
+
+  // Verify the recovery token NOW — on the user's submit, not on a GET — so an
+  // email-link scanner that pre-fetched the link couldn't have consumed it first.
+  // (Logged-in self-service password changes carry no token and use the session.)
+  if (tokenHash) {
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: "recovery",
+    });
+    if (verifyError) {
+      console.error("[password-reset] verifyOtp failed:", verifyError.message);
+      return {
+        error: "This reset link has expired or already been used. Please request a new one.",
+      };
+    }
+  }
 
   const { error } = await supabase.auth.updateUser({
     password: newPassword,

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useActionState } from "react";
+import { useState, useEffect, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -28,6 +27,13 @@ export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmError, setConfirmError] = useState("");
+  const [tokenHash, setTokenHash] = useState("");
+
+  // Read the recovery token from the URL on the client; it's verified server-side
+  // only when the form is submitted (so email-link scanners can't consume it).
+  useEffect(() => {
+    setTokenHash(new URLSearchParams(globalThis.location.search).get("token_hash") ?? "");
+  }, []);
 
   const [state, formAction, isPending] = useActionState(
     updatePasswordAction,
@@ -85,6 +91,7 @@ export default function ResetPasswordPage() {
                 </div>
               )}
               <form action={handleSubmit} className="space-y-4">
+                <input type="hidden" name="token_hash" value={tokenHash} />
                 <div className="space-y-2">
                   <Label htmlFor="new_password">New Password</Label>
                   <div className="relative">
