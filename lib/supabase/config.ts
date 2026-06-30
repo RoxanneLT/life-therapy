@@ -13,12 +13,15 @@
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 /**
- * Admin-specific inactivity timeout (8 hours).
+ * Admin-specific inactivity timeout (7 days).
  * Tracked via a separate cookie (`lt-admin-active`) that is ONLY refreshed
  * when the request is to an /admin route. Browsing public pages does NOT
  * reset this timer, so admins are genuinely logged out after idle time.
+ *
+ * Set to a week so a 2FA-enabled admin re-enters their authenticator code about
+ * weekly rather than daily — the session stays AAL2 (MFA-verified) for its life.
  */
-export const ADMIN_INACTIVITY_SECONDS = 60 * 60 * 8;
+export const ADMIN_INACTIVITY_SECONDS = 60 * 60 * 24 * 7;
 export const ADMIN_ACTIVITY_COOKIE = "lt-admin-active";
 
 /** Dev inactivity timeout (5 min). Proxy refreshes on every request,
