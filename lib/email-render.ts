@@ -683,6 +683,21 @@ function renderFallback(
           <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
       };
+    case "teams_link_update":
+      return {
+        subject: "Your Life-Therapy Teams link has been updated",
+        html: bt(
+          "Your Teams link has been updated",
+          `<p>Hi ${variables.clientName || "there"},</p>
+          <p>Just a quick heads-up — we've refreshed the Microsoft Teams links for your upcoming sessions.</p>
+          <p>Your next session is <strong>${variables.sessionDate || ""}${variables.sessionTime ? ` at ${variables.sessionTime}` : ""}</strong>:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.joinUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Join your session</a>
+          </div>
+          <p style="font-size: 13px; color: #666;">For your later sessions, the correct link will be in your reminder email beforehand — no action needed. Please join from your reminder (or this button) rather than any older calendar invite.</p>
+          <p style="margin-top: 24px;">See you soon,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
     case "review_request":
       return {
         subject: "Would you share your experience with a quick Google review?",
