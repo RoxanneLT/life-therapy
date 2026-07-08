@@ -546,6 +546,36 @@ export async function cancelCalendarEvent(eventId: string): Promise<void> {
   }
 }
 
+/**
+ * Fetch the live Teams join URL for a calendar event — the meeting the COACH is
+ * actually in. Used to detect/repair bookings whose stored teamsMeetingUrl (what
+ * the client sees) has drifted from the real event. Returns null if the event is
+ * gone (404) or Graph is unavailable.
+ */
+export async function getEventOnlineMeeting(
+  eventId: string,
+): Promise<{ joinUrl: string } | null> {
+  const config = getGraphConfig();
+  if (!config) return null;
+  try {
+    const client = createGraphClient(config);
+    const ev = await withRetry(
+      () =>
+        client
+          .api(`/users/${config.userEmail}/events/${eventId}`)
+          .select("onlineMeeting")
+          .get(),
+      "getEventOnlineMeeting",
+    );
+    return { joinUrl: ev?.onlineMeeting?.joinUrl ?? "" };
+  } catch (error) {
+    const status = (error as { statusCode?: number }).statusCode;
+    if (status === 404) return null;
+    console.error("[Graph] getEventOnlineMeeting error:", error);
+    return null;
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // Test connection
 // ────────────────────────────────────────────────────────────

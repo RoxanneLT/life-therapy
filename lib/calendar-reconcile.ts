@@ -328,7 +328,14 @@ async function tryCreateMissingEvent(
     if (calResult) {
       await prisma.booking.update({
         where: { id: booking.id },
-        data: { graphEventId: calResult.eventId },
+        data: {
+          graphEventId: calResult.eventId,
+          // Persist the NEW meeting link too — otherwise the client's portal keeps
+          // the old link while the coach's calendar has a different one.
+          ...(calResult.teamsMeetingUrl
+            ? { teamsMeetingUrl: calResult.teamsMeetingUrl }
+            : {}),
+        },
       });
       detail.autoFixed = true;
       result.fixed++;
