@@ -189,7 +189,11 @@ export async function reconcileCalendar(options?: {
       autoFixed: false,
     };
     result.missing.push(detail);
-    if (autoFix && writeBudgetLeft(result) > 0) {
+    // Only auto-create for NON-recurring bookings. Recreating a recurring
+    // occurrence as a standalone event fragments the series and gives the client
+    // a different meeting than the coach (the source of the Teams-link drift).
+    // Recurring gaps are reported for manual review instead of silently forked.
+    if (autoFix && !booking.recurringSeriesId && writeBudgetLeft(result) > 0) {
       await tryCreateMissingEvent(booking, expectedDate, expectedStart, expectedEnd, detail, result);
     }
   }
@@ -299,8 +303,8 @@ async function fetchCalendarEvents(
   return events;
 }
 
-/** Auto-fix a booking whose Outlook event is missing by creating a new one.
- *  Uses suppressAttendees so the client is not emailed a duplicate invite. */
+/** Auto-fix a NON-recurring booking whose Outlook event is missing by creating a
+ *  new one and re-inviting the client (the new event has a new Teams meeting). */
 async function tryCreateMissingEvent(
   booking: {
     id: string;
@@ -322,7 +326,10 @@ async function tryCreateMissingEvent(
       endDateTime: `${expectedDate}T${expectedEnd}:00`,
       clientName: booking.clientName,
       clientEmail: booking.clientEmail,
-      suppressAttendees: true,
+      // Re-invite the client. The recreated event has a NEW Teams meeting, so the
+      // client's old invite is stale — suppressing it would leave them on a
+      // different meeting than the coach. Sending the invite keeps them aligned.
+      suppressAttendees: false,
       bookingId: booking.id,
     });
     if (calResult) {
