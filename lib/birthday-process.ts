@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
+import { saToday } from "@/lib/dates";
 
 const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
 
@@ -56,10 +57,11 @@ export async function processBirthdayEmails(): Promise<{
     return result;
   }
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const todayMonth = now.getMonth() + 1;
-  const todayDay = now.getDate();
+  // Today in SAST. The daily cron fires at 06:00 UTC, four hours clear of the
+  // 22:00 UTC day-flip, so the old local getters happened to agree — but only by
+  // luck of the schedule. `templateKey` below dedupes on currentYear, so this
+  // must not drift on 31 December.
+  const [currentYear, todayMonth, todayDay] = saToday().split("-").map(Number);
 
   // Find all students whose birthday is today
   const allStudents = await prisma.student.findMany({
@@ -81,8 +83,10 @@ export async function processBirthdayEmails(): Promise<{
 
   const birthdayStudents = allStudents.filter((s) => {
     if (!s.dateOfBirth) return false;
+    // dateOfBirth is a `@db.Date` held at UTC midnight, so read it with the UTC
+    // getters. The local ones would shift it a day on any server west of GMT.
     const dob = new Date(s.dateOfBirth);
-    return dob.getMonth() + 1 === todayMonth && dob.getDate() === todayDay;
+    return dob.getUTCMonth() + 1 === todayMonth && dob.getUTCDate() === todayDay;
   });
 
   if (birthdayStudents.length === 0) return result;

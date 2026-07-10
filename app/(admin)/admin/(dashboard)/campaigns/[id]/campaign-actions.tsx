@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { saToday } from "@/lib/dates";
 import {
   sendTestCampaignAction,
   sendCampaignAction,
@@ -230,7 +231,7 @@ export function CampaignActions({
                   type="date"
                   value={scheduleDate}
                   onChange={(e) => setScheduleDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={saToday()}
                   className="max-w-[200px]"
                 />
                 <Button onClick={handleSchedule} disabled={scheduling}>

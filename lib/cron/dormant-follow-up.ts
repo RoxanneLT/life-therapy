@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
+import { saToday, diffSaDays } from "@/lib/dates";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
@@ -26,8 +27,13 @@ export async function processDormantFollowUp(): Promise<{
   const result = { atRisk30: 0, emailed60: 0, emailed90: 0 };
   const now = new Date();
 
-  const day30 = new Date(now);
-  day30.setDate(day30.getDate() - 30);
+  // Dedupe suffix for the 60/90-day emails: one send per client per calendar
+  // month. Derived from the SAST month, but keeping the historical
+  // "{year}_{zero-indexed month}" shape EXACTLY — a different string would match
+  // none of the emailLog rows already written, and re-send to every dormant
+  // client on the next run.
+  const [saYear, saMonth] = saToday().split("-").map(Number);
+  const monthKey = `${saYear}_${saMonth - 1}`;
 
   // Get active clients who have had at least 1 completed session
   const activeClients = await prisma.student.findMany({
@@ -63,14 +69,14 @@ export async function processDormantFollowUp(): Promise<{
       continue;
     }
 
-    const lastDate = new Date(lastSession.date);
-    const daysSince = Math.floor(
-      (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    // `lastSession.date` is a @db.Date (a day); `now` is a moment. Dividing one
+    // by the other yields the *UTC*-day difference, which is a day short from
+    // 22:00 UTC onward. Identical at the 06:00 UTC cron — but say what we mean.
+    const daysSince = diffSaDays(lastSession.date, now);
 
     if (daysSince >= 90) {
       // 90-day re-engagement — dedup per client per calendar month
-      const templateKey = `dormant_90d_${client.id}_${now.getFullYear()}_${now.getMonth()}`;
+      const templateKey = `dormant_90d_${client.id}_${monthKey}`;
       const alreadySent = await prisma.emailLog.findFirst({
         where: { templateKey },
       });
@@ -104,7 +110,7 @@ export async function processDormantFollowUp(): Promise<{
       }
     } else if (daysSince >= 60) {
       // 60-day check-in — dedup per client per calendar month
-      const templateKey = `dormant_60d_${client.id}_${now.getFullYear()}_${now.getMonth()}`;
+      const templateKey = `dormant_60d_${client.id}_${monthKey}`;
       const alreadySent = await prisma.emailLog.findFirst({
         where: { templateKey },
       });

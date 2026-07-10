@@ -9,6 +9,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { saToday, calendarDate } from "@/lib/dates";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -84,10 +85,12 @@ type BillingCycleStatus =
   | { status: "pending"; billingMonth: string; existingRequestId: string }
   | { status: "closed"; billingMonth: string };
 
-/** Default "repeat until" date: 3 months from today */
+/** Default "repeat until" date: 3 months from today (SAST) */
 function defaultEndDate(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + 3);
+  // Anchor on the SAST day, then do the month arithmetic in UTC so the result
+  // can't depend on the browser's timezone.
+  const d = calendarDate(saToday());
+  d.setUTCMonth(d.getUTCMonth() + 3);
   return d.toISOString().slice(0, 10);
 }
 
@@ -844,7 +847,7 @@ export function CreateBookingDialog({
                     <input
                       type="date"
                       value={recurringEndDate}
-                      min={new Date().toISOString().slice(0, 10)}
+                      min={saToday()}
                       onChange={(e) => setRecurringEndDate(e.target.value)}
                       className="h-9 w-full rounded-md border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                     />

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { saToday } from "@/lib/dates";
 
 function formatDate(date: Date): string {
   return new Date(date).toLocaleDateString("en-ZA", {
@@ -217,7 +218,7 @@ export async function exportClientList(): Promise<
   );
 
   const csv = [header.join(","), ...rows].join("\n");
-  const filename = `client-list_${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `client-list_${saToday()}.csv`;
 
   return { csv, filename };
 }

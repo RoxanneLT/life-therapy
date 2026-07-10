@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Circle, XCircle, Ban, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { saToday } from "@/lib/dates";
 import { cancelSeriesAction } from "./actions";
 
 interface SeriesBooking {
@@ -72,10 +73,13 @@ export function SeriesTimeline({ seriesId, bookings }: SeriesTimelineProps) {
   const [isPending, startTransition] = useTransition();
   const [cancelled, setCancelled] = useState(false);
 
-  const futureActive = bookings.filter((b) => {
-    const today = new Date().toISOString().slice(0, 10);
-    return b.date >= today && (b.status === "confirmed" || b.status === "pending");
-  });
+  // b.date is a SAST calendar date, so "today" must be one too. Slicing the ISO
+  // string gives the browser's UTC day, which lags SAST from midnight to 02:00 —
+  // long enough for a session earlier today to still count as upcoming.
+  const today = saToday();
+  const futureActive = bookings.filter(
+    (b) => b.date >= today && (b.status === "confirmed" || b.status === "pending"),
+  );
 
   function handleCancelAll() {
     if (!confirm(`Cancel all ${futureActive.length} future session(s) in this series?`)) return;

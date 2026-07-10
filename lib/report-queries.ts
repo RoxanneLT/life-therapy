@@ -162,10 +162,10 @@ export async function getOutstandingAging() {
   ];
 
   for (const req of pending) {
-    const daysPast = Math.max(
-      0,
-      Math.floor((now.getTime() - req.dueDate.getTime()) / (1000 * 60 * 60 * 24))
-    );
+    // dueDate is effectively a day, `now` is a moment: the ms-division answered
+    // in UTC days, so an admin opening Reports between midnight and 02:00 SAST
+    // saw every invoice a day younger — enough to shift a bucket boundary.
+    const daysPast = Math.max(0, diffSaDays(req.dueDate, now));
     let idx: number;
     if (daysPast < 30) idx = 0;
     else if (daysPast < 60) idx = 1;
