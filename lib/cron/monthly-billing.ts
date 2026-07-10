@@ -21,8 +21,8 @@ import {
   sendOverdueNotice,
 } from "@/lib/send-invoice";
 import { formatInTimeZone } from "date-fns-tz";
-
-const TIMEZONE = "Africa/Johannesburg";
+// Single source of truth for the business timezone — don't redeclare it locally.
+import { TIMEZONE } from "@/lib/booking-config";
 
 function isSameDay(a: Date, b: Date): boolean {
   return (

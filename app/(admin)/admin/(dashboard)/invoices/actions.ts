@@ -6,6 +6,8 @@ import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
+import { formatInTimeZone } from "date-fns-tz";
+import { TIMEZONE } from "@/lib/booking-config";
 
 // ────────────────────────────────────────────────────────────
 // Mark invoice as paid (from invoice list page)
@@ -321,7 +323,11 @@ export async function exportInvoicesCsvAction(
       : inv.billingEntity?.name ?? "";
     return [
       inv.invoiceNumber,
-      inv.createdAt.toISOString().split("T")[0],
+      // Resolve the SAST calendar day, not the UTC one. createdAt/paidAt are real
+      // instants — paidAt comes from Paystack webhooks and can fire at any hour, so
+      // a payment at 00:30 SAST would otherwise export as the previous day (and
+      // reconcile into the wrong month).
+      formatInTimeZone(inv.createdAt, TIMEZONE, "yyyy-MM-dd"),
       clientName,
       inv.billingName,
       inv.billingEmail,
@@ -333,7 +339,7 @@ export async function exportInvoicesCsvAction(
       (inv.totalCents / 100).toFixed(2),
       inv.status,
       inv.paymentMethod ?? "",
-      inv.paidAt ? inv.paidAt.toISOString().split("T")[0] : "",
+      inv.paidAt ? formatInTimeZone(inv.paidAt, TIMEZONE, "yyyy-MM-dd") : "",
       inv.eftReference ?? inv.paystackReference ?? "",
     ];
   });
