@@ -8,14 +8,18 @@ import { MarkAllCompletedButton } from "./mark-all-completed-button";
 import { formatPrice, cn } from "@/lib/utils";
 import Link from "next/link";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
+import { saToday, saDateStr, saDayStart, saMonthStart, saFormat, bookingStartsAt } from "@/lib/dates";
 import { BookingsChart } from "@/components/admin/bookings-chart";
 import { RevenueChart } from "@/components/admin/revenue-chart";
 import { YearSelector } from "@/components/admin/year-selector";
 import { Button } from "@/components/ui/button";
 
 function getBirthdayThisYear(dob: Date, referenceYear: number): Date {
-  const bday = new Date(referenceYear, dob.getUTCMonth(), dob.getUTCDate());
-  return bday;
+  // dob is a `@db.Date`, so its UTC month/day are the real ones. Anchor the
+  // birthday to the start of that SAST day, not the server's local midnight.
+  const mm = String(dob.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dob.getUTCDate()).padStart(2, "0");
+  return saDayStart(`${referenceYear}-${mm}-${dd}`);
 }
 
 function getUpcomingBirthdays(
@@ -23,14 +27,15 @@ function getUpcomingBirthdays(
   now: Date,
   until: Date,
 ) {
+  const thisYear = Number(saDateStr(now).slice(0, 4));
   return students
     .filter((s): s is typeof s & { dateOfBirth: Date } => s.dateOfBirth !== null)
     .map((s) => {
-      let bday = getBirthdayThisYear(s.dateOfBirth, now.getFullYear());
-      if (bday < now) bday = getBirthdayThisYear(s.dateOfBirth, now.getFullYear() + 1);
+      let bday = getBirthdayThisYear(s.dateOfBirth, thisYear);
+      if (bday < now) bday = getBirthdayThisYear(s.dateOfBirth, thisYear + 1);
       return {
         name: `${s.firstName} ${s.lastName}`,
-        date: bday.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }),
+        date: saFormat(bday, "d MMM"),
         sortDate: bday,
       };
     })
@@ -42,10 +47,9 @@ function isWithinTwoHours(
   session: { date: Date; startTime: string | null },
   deadline: Date,
 ): boolean {
-  const sessionDate = new Date(session.date);
-  const [h, m] = (session.startTime ?? "00:00").split(":").map(Number);
-  sessionDate.setHours(h, m, 0, 0);
-  return sessionDate <= deadline;
+  // `setHours` would apply the *server's* timezone to a SAST wall-clock time,
+  // making a 09:00 SAST session look like it starts at 09:00 UTC — two hours late.
+  return bookingStartsAt({ date: session.date, startTime: session.startTime ?? "00:00" }) <= deadline;
 }
 
 export default async function AdminDashboard({
@@ -55,15 +59,17 @@ export default async function AdminDashboard({
 }) {
   const { adminUser } = await getAuthenticatedAdmin();
   const params = await searchParams;
-  const currentYear = new Date().getFullYear();
+  const today = saToday();
+  const [saYear, saMonth] = today.split("-").map(Number);
+  const currentYear = saYear;
   const year = params.year ? Number.parseInt(params.year, 10) : currentYear;
   const validYear = year >= currentYear - 2 && year <= currentYear + 2 ? year : currentYear;
 
   const now = new Date();
   const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthStart = saMonthStart(saYear, saMonth);
+  const monthEnd = saMonthStart(saYear, saMonth + 1);
 
   const [
     studentCount,
@@ -101,7 +107,7 @@ export default async function AdminDashboard({
     prisma.booking.count({
       where: {
         status: { in: ["confirmed", "pending"] },
-        date: { gte: monthEnd, lt: new Date(now.getFullYear(), now.getMonth() + 2, 1) },
+        date: { gte: monthEnd, lt: saMonthStart(saYear, saMonth + 2) },
       },
     }),
     prisma.booking.findFirst({
@@ -129,9 +135,12 @@ export default async function AdminDashboard({
     }),
   ]);
 
-  // Show next 3 birthdays regardless of timeframe
-  const farFuture = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-  const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, now, farFuture).slice(0, 3);
+  // Show next 3 birthdays regardless of timeframe. Anchor the window to the
+  // start of today in SAST so a birthday *today* stays listed all day, rather
+  // than dropping off once the clock passes the server's midnight.
+  const todayStart = saDayStart(today);
+  const farFuture = saDayStart(`${saYear + 1}${today.slice(4)}`);
+  const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, todayStart, farFuture).slice(0, 3);
   const isSessionSoon = nextSession ? isWithinTwoHours(nextSession, twoHoursFromNow) : false;
 
   const pendingCount = pendingPayments._count ?? 0;
@@ -157,7 +166,7 @@ export default async function AdminDashboard({
       href: "/admin/bookings",
     },
     {
-      label: `Sessions (${new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString("en-ZA", { month: "short" })})`,
+      label: `Sessions (${saFormat(saMonthStart(saYear, saMonth + 1), "MMM")})`,
       value: nextMonthSessions,
       icon: CalendarDays,
       href: "/admin/bookings",

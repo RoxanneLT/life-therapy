@@ -14,6 +14,7 @@ import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
 import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, type BillingContact } from "@/lib/billing";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
+import { saToday, calendarDate } from "@/lib/dates";
 import { initializeTransaction } from "@/lib/paystack";
 import type { Booking, Student } from "@/lib/generated/prisma/client";
 
@@ -1558,13 +1559,14 @@ export async function createManualPaymentRequestAction(data: {
       settings.vatPercent ?? 15,
     );
 
-    const now = new Date();
-    const baseMonth = data.billingMonth?.trim()
-      || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    // Default to the current SAST month, not the server's local month.
+    const baseMonth = data.billingMonth?.trim() || saToday().slice(0, 7);
 
     const [ymYear, ymMonth] = baseMonth.split("-").map(Number);
-    const periodStart = new Date(ymYear, ymMonth - 1, 1);
-    const periodEnd = new Date(ymYear, ymMonth, 0); // last day of month
+    // Period markers are calendar dates — pin them to UTC midnight so they don't
+    // shift with the server's timezone. Day 0 of the next month = last day of this.
+    const periodStart = calendarDate(`${baseMonth}-01`);
+    const periodEnd = new Date(Date.UTC(ymYear, ymMonth, 0)); // last day of month
 
     // Manual invoices get their own "YYYY-MM-manual-N" key so they never collide
     // with the monthly auto-run (bare "YYYY-MM") or with each other.

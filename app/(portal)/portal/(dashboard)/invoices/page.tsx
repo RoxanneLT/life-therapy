@@ -8,6 +8,7 @@ import { Receipt, FileDown, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { format } from "date-fns";
+import { saMonthStart } from "@/lib/dates";
 import { PayButton } from "./pay-button";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 
@@ -69,9 +70,11 @@ export default async function PortalInvoicesPage({
 
   if (params.year) {
     const y = parseInt(params.year, 10);
+    // createdAt is a real instant — bound it by SAST year boundaries, or an
+    // invoice raised at 00:30 SAST on 1 Jan falls into the previous year.
     invoiceWhere.createdAt = {
-      gte: new Date(y, 0, 1),
-      lt: new Date(y + 1, 0, 1),
+      gte: saMonthStart(y, 1),
+      lt: saMonthStart(y + 1, 1),
     };
   }
 

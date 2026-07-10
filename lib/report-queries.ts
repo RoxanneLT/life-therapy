@@ -1,15 +1,31 @@
 import { prisma } from "@/lib/prisma";
-import { format } from "date-fns";
+import { saToday, saMonthStart, saFormat, saDateStr, diffSaDays } from "@/lib/dates";
 
 // ---------------------------------------------------------------------------
 // Helpers
+//
+// Every boundary below is a SAST month boundary (22:00 UTC on the last day of
+// the previous month), because these ranges filter `paidAt` — a real instant,
+// recorded at any hour. Built from local midnight they put a payment taken at
+// 00:30 SAST into the previous month, and at the 1 March cutover into the
+// previous financial year.
+//
+// Booking `date` is a `@db.Date` (UTC midnight) and is also correct under these
+// bounds: UTC midnight of day D always falls inside
+// [saDayStart(D), saDayStart(D+1)).
 // ---------------------------------------------------------------------------
+
+/** The SAST calendar month (1-based) that today falls in. */
+function saCurrentYearMonth(): { year: number; month: number } {
+  const [year, month] = saToday().split("-").map(Number);
+  return { year, month };
+}
 
 /** SA financial year: FY2026 = 1 Mar 2025 – 28 Feb 2026 (end exclusive) */
 function getFYRange(fyYear: number): { start: Date; end: Date } {
   return {
-    start: new Date(fyYear - 1, 2, 1), // 1 March previous year
-    end: new Date(fyYear, 2, 1), // 1 March FY year (exclusive)
+    start: saMonthStart(fyYear - 1, 3), // 1 March previous year
+    end: saMonthStart(fyYear, 3), // 1 March FY year (exclusive)
   };
 }
 
@@ -18,20 +34,20 @@ function getFYMonths(fyYear: number): { label: string; start: Date; end: Date }[
   const months: { label: string; start: Date; end: Date }[] = [];
   for (let i = 0; i < 12; i++) {
     // Month 0 = March of (fyYear-1), month 11 = February of fyYear
-    const year = fyYear - 1 + Math.floor((2 + i) / 12);
-    const month = (2 + i) % 12; // 0-indexed JS month: 2=Mar, 3=Apr, … 1=Feb
-    const start = new Date(year, month, 1);
-    const end = new Date(year, month + 1, 1);
-    months.push({ label: format(start, "MMM"), start, end });
+    const start = saMonthStart(fyYear - 1, 3 + i);
+    const end = saMonthStart(fyYear - 1, 4 + i);
+    // Label in SAST: `start` is 22:00 UTC the day before, so formatting it in
+    // the server's timezone would name the *previous* month.
+    months.push({ label: saFormat(start, "MMM"), start, end });
   }
   return months;
 }
 
 function currentMonthRange(): { start: Date; end: Date } {
-  const now = new Date();
+  const { year, month } = saCurrentYearMonth();
   return {
-    start: new Date(now.getFullYear(), now.getMonth(), 1),
-    end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+    start: saMonthStart(year, month),
+    end: saMonthStart(year, month + 1),
   };
 }
 
@@ -112,7 +128,7 @@ export async function getPaymentStatusByMonth(fyYear: number) {
   ]);
 
   return months.map(({ label, start, end }) => {
-    const monthStr = format(start, "yyyy-MM");
+    const monthStr = saFormat(start, "yyyy-MM");
 
     const paid = invoices
       .filter((i) => i.paidAt && i.paidAt >= start && i.paidAt < end)
@@ -325,8 +341,7 @@ export async function getClientStatusDistribution() {
 }
 
 export async function getAtRiskClients() {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // (The 30-day cutoff is applied below via `daysSince`, not as a query bound.)
 
   // Active clients
   const activeClients = await prisma.student.findMany({
@@ -359,13 +374,15 @@ export async function getAtRiskClients() {
     .map((c) => {
       const lastDate = lastSessionMap.get(c.id);
       if (!lastDate) return null; // never had a session — skip
-      const daysSince = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Calendar days, not 24-hour spans: a session late on day 0 and a check
+      // early on day 30 is 30 days by the calendar but 29.x by ms-division.
+      const daysSince = diffSaDays(lastDate, now);
       if (daysSince < 30) return null;
       return {
         id: c.id,
         name: `${c.firstName} ${c.lastName}`,
         email: c.email,
-        lastSessionDate: format(lastDate, "yyyy-MM-dd"),
+        lastSessionDate: saDateStr(lastDate),
         daysSince,
       };
     })
@@ -377,15 +394,15 @@ export async function getAtRiskClients() {
 }
 
 export async function getRetentionRate() {
-  const now = new Date();
+  const { year, month } = saCurrentYearMonth();
 
   // Month M-1
-  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = saMonthStart(year, month - 1);
+  const prevMonthEnd = saMonthStart(year, month);
 
   // Month M and M+1 combined
-  const currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+  const currentStart = saMonthStart(year, month);
+  const nextMonthEnd = saMonthStart(year, month + 2);
 
   const [lastMonthClients, thisAndNextClients] = await Promise.all([
     prisma.booking.findMany({
