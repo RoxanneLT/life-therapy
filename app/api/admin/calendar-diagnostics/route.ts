@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCalendarDiagnostics } from "@/lib/graph";
-import { formatInTimeZone } from "date-fns-tz";
-import { saDateStr, saToday, saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
+import { saDateStr, saToday, saDayStart, saDayEnd, calendarDate, addSaDays, isSaDateStr } from "@/lib/dates";
 
 export async function GET(request: Request) {
   try {
@@ -14,11 +13,23 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const todaySast = saToday();
-  const startStr = url.searchParams.get("start") || todaySast;
-  // Default end = start + 7 days if not provided
-  const endStr =
-    url.searchParams.get("end") ||
-    formatInTimeZone(calendarDate(startStr).getTime() + 7 * 86_400_000, "UTC", "yyyy-MM-dd");
+
+  // `start`/`end` are untrusted. Reject a malformed value outright rather than
+  // letting it reach calendarDate() as an exception, or (worse, before the
+  // guards existed) an Invalid Date that matched nothing.
+  const startParam = url.searchParams.get("start");
+  const endParam = url.searchParams.get("end");
+  for (const [name, value] of [["start", startParam], ["end", endParam]] as const) {
+    if (value !== null && !isSaDateStr(value)) {
+      return NextResponse.json(
+        { error: `Invalid "${name}" — expected a YYYY-MM-DD date.` },
+        { status: 400 },
+      );
+    }
+  }
+
+  const startStr = startParam ?? todaySast;
+  const endStr = endParam ?? addSaDays(startStr, 7); // default window: 7 days
 
   // SAST day boundaries → UTC instants for the Graph calendarView query
   const startUtc = saDayStart(startStr);

@@ -6,7 +6,7 @@ import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getSiteSettings, getBusinessHours } from "@/lib/settings";
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
-import { saDateStr, saToday, calendarDate, bookingStartsAt } from "@/lib/dates";
+import { saDateStr, saToday, calendarDate, bookingStartsAt, isSaDateStr } from "@/lib/dates";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,11 +79,13 @@ export default async function BookingsPage({ searchParams }: Props) {
     ? (sp.view as ViewMode)
     : "list";
 
-  const selectedDate = sp.date || (
-    (view === "day" || view === "week")
+  // `?date=` is untrusted. Validate it here so a malformed value falls back to a
+  // sensible default rather than throwing out of calendarDate() further down.
+  const selectedDate = isSaDateStr(sp.date)
+    ? sp.date
+    : (view === "day" || view === "week")
       ? await getNextBusinessDate()
-      : format(new Date(), "yyyy-MM-dd")
-  );
+      : saToday();
 
   // Build status filter
   // Calendar views default to excluding cancelled/no_show; list shows everything
