@@ -44,7 +44,9 @@ export function getSessionTypeConfig(
   return config;
 }
 
-export const TIMEZONE = "Africa/Johannesburg";
+// The business timezone is declared once, in lib/dates.ts. Re-exported here so
+// the many existing `from "@/lib/booking-config"` imports keep working.
+export { TIMEZONE } from "@/lib/dates";
 
 /**
  * The fixed booking slot start times (HH:mm).

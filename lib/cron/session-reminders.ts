@@ -18,9 +18,9 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getSiteSettings } from "@/lib/settings";
 import { sendAndLogTemplate } from "@/lib/whatsapp";
-import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
+import { getSessionTypeConfig } from "@/lib/booking-config";
 import { addDays, format } from "date-fns";
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
 
 // Hours-before-start window boundaries
 const DAY_BEFORE_MAX = 24; // start sending the day-before reminder once within 24h
@@ -37,8 +37,8 @@ export async function processSessionReminders(): Promise<{
   const waSessionOn = !!settings.whatsappEnabled && !!settings.whatsappSessionReminders;
 
   const now = new Date();
-  const todayStr = formatInTimeZone(now, TIMEZONE, "yyyy-MM-dd");
-  const windowStart = new Date(`${todayStr}T00:00:00Z`);
+  const todayStr = saDateStr(now);
+  const windowStart = calendarDate(todayStr);
   const windowEnd = addDays(windowStart, 2);
 
   const bookings = await prisma.booking.findMany({
@@ -61,7 +61,7 @@ export async function processSessionReminders(): Promise<{
 
   for (const booking of bookings) {
     const dateStr = booking.date.toISOString().slice(0, 10);
-    const startInstant = fromZonedTime(`${dateStr}T${booking.startTime}:00`, TIMEZONE);
+    const startInstant = saInstant(dateStr, booking.startTime);
     const hoursUntil = (startInstant.getTime() - now.getTime()) / 3_600_000;
 
     const isDayBefore = hoursUntil <= DAY_BEFORE_MAX && hoursUntil > IMMINENT_MAX;

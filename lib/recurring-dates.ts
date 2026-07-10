@@ -1,5 +1,6 @@
 import { addWeeks, addMonths } from "date-fns";
 import { isSAPublicHoliday } from "@/lib/sa-public-holidays";
+import { calendarDate } from "@/lib/dates";
 
 export type RecurringPattern = "weekly" | "bimonthly" | "monthly";
 
@@ -71,7 +72,7 @@ export function generateRecurringDates(
   months: number = 6,
 ): string[] {
   const dates: string[] = [];
-  const start = new Date(startDate + "T00:00:00Z");
+  const start = calendarDate(startDate);
   const endLimit = addMonths(start, months);
   let current = start;
 
@@ -104,8 +105,8 @@ export function generateRecurringDatesUntil(
   endDate: string,
 ): string[] {
   const dates: string[] = [];
-  const start = new Date(startDate + "T00:00:00Z");
-  const end = new Date(endDate + "T00:00:00Z");
+  const start = calendarDate(startDate);
+  const end = calendarDate(endDate);
   let current = start;
 
   while (current <= end) {

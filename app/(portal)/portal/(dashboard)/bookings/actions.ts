@@ -11,6 +11,7 @@ import { getAvailableSlots } from "@/lib/availability";
 import { evaluateCancel, evaluateReschedule } from "@/lib/booking-policy";
 import { refundCredit, forfeitCredit } from "@/lib/credits";
 import { format } from "date-fns";
+import { calendarDate } from "@/lib/dates";
 
 export async function portalCancelBookingAction(
   bookingId: string,
@@ -119,7 +120,7 @@ export async function portalRescheduleBookingAction(
   }
 
   // Create new calendar event
-  const dateObj = new Date(newDate + "T00:00:00Z");
+  const dateObj = calendarDate(newDate);
   const calResult = await createCalendarEvent({
     subject: `${config.label} — ${booking.clientName}`,
     startDateTime: `${newDate}T${newStartTime}:00`,

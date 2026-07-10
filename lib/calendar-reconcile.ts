@@ -6,7 +6,7 @@ import {
   cancelCalendarEvent,
 } from "@/lib/graph";
 import { TIMEZONE, getSessionTypeConfig } from "@/lib/booking-config";
-import { formatInTimeZone } from "date-fns-tz";
+import { saDateStr } from "@/lib/dates";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 import type { SessionType } from "@/lib/generated/prisma/client";
 
@@ -154,7 +154,7 @@ export async function reconcileCalendar(options?: {
   const consumedKeys = new Set<string>();
   for (const booking of bookings) {
     result.checked++;
-    const expectedDate = formatInTimeZone(new Date(booking.date), TIMEZONE, "yyyy-MM-dd");
+    const expectedDate = saDateStr(booking.date);
     const expectedStart = booking.startTime;
     const expectedEnd = booking.endTime;
     const key = reconcileKey(expectedDate, expectedStart, booking.clientName);
@@ -231,7 +231,7 @@ export async function reconcileCalendar(options?: {
   try {
     const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
     for (const booking of bookings) {
-      const dateStr = formatInTimeZone(new Date(booking.date), TIMEZONE, "yyyy-MM-dd");
+      const dateStr = saDateStr(booking.date);
       if (isSAPublicHoliday(new Date(`${dateStr}T12:00:00Z`))) {
         result.onHoliday.push({
           bookingId: booking.id,

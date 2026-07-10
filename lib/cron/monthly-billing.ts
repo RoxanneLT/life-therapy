@@ -20,21 +20,11 @@ import {
   sendDueTodayNotice,
   sendOverdueNotice,
 } from "@/lib/send-invoice";
-import { formatInTimeZone } from "date-fns-tz";
-// Single source of truth for the business timezone — don't redeclare it locally.
-import { TIMEZONE } from "@/lib/booking-config";
+import { saToday, calendarDate, isSameSaDay } from "@/lib/dates";
 
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
+/** Start of today's SAST calendar day, as a deterministic UTC-midnight Date. */
 function getSASTToday(): Date {
-  const nowStr = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
-  return new Date(`${nowStr}T00:00:00`);
+  return calendarDate(saToday());
 }
 
 export async function processMonthlyBilling(): Promise<{
@@ -56,7 +46,7 @@ export async function processMonthlyBilling(): Promise<{
 
   // 1. Is today the effective billing date?
   const billingDate = getEffectiveBillingDate(year, month);
-  if (isSameDay(today, billingDate)) {
+  if (isSameSaDay(today, billingDate)) {
     try {
       const requests = await generateMonthlyPaymentRequests(billingDate);
 
@@ -86,7 +76,7 @@ export async function processMonthlyBilling(): Promise<{
   let remindersSent = 0;
   for (const req of unpaidRequests) {
     const reminderDate = getReminderDate(req.dueDate);
-    if (isSameDay(today, reminderDate)) {
+    if (isSameSaDay(today, reminderDate)) {
       try {
         await sendPaymentReminder(req.id);
         remindersSent++;
@@ -109,7 +99,7 @@ export async function processMonthlyBilling(): Promise<{
 
   let dueTodaySent = 0;
   for (const req of dueTodayRequests) {
-    if (isSameDay(today, req.dueDate)) {
+    if (isSameSaDay(today, req.dueDate)) {
       try {
         await sendDueTodayNotice(req.id);
         dueTodaySent++;
@@ -133,7 +123,7 @@ export async function processMonthlyBilling(): Promise<{
   let overdueSent = 0;
   for (const req of stillUnpaid) {
     const overdueDate = getOverdueDate(req.dueDate);
-    if (isSameDay(today, overdueDate)) {
+    if (isSameSaDay(today, overdueDate)) {
       try {
         await sendOverdueNotice(req.id);
         overdueSent++;

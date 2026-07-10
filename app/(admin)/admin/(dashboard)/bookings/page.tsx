@@ -6,6 +6,7 @@ import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getSiteSettings, getBusinessHours } from "@/lib/settings";
 import { format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import { saDateStr, saToday, calendarDate, bookingStartsAt } from "@/lib/dates";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "frid
 /** Return the next open business day (SAST). Skips closed days and past-close today. */
 async function getNextBusinessDate(): Promise<string> {
   const now = new Date();
-  const nowSast = formatInTimeZone(now, TIMEZONE, "yyyy-MM-dd");
+  const nowSast = saDateStr(now);
   const nowTimeSast = formatInTimeZone(now, TIMEZONE, "HH:mm");
   const settings = await getSiteSettings();
   const bh = getBusinessHours(settings);
@@ -108,19 +109,19 @@ export default async function BookingsPage({ searchParams }: Props) {
   let weekSaturday: Date | null = null;
 
   if (view === "day") {
-    const dayStart = new Date(selectedDate + "T00:00:00Z");
+    const dayStart = calendarDate(selectedDate);
     const dayEnd = new Date(dayStart);
     dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
     dateWhere = { date: { gte: dayStart, lt: dayEnd } };
   } else if (view === "week") {
-    const anchor = new Date(selectedDate + "T00:00:00Z");
+    const anchor = calendarDate(selectedDate);
     const dow = anchor.getUTCDay(); // 0=Sun
     const mondayOffset = dow === 0 ? -6 : 1 - dow;
     weekMonday = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate() + mondayOffset));
     weekSaturday = new Date(Date.UTC(weekMonday.getUTCFullYear(), weekMonday.getUTCMonth(), weekMonday.getUTCDate() + 5));
     dateWhere = { date: { gte: weekMonday, lt: weekSaturday } };
   } else if (view === "month") {
-    const anchor = new Date(selectedDate + "T00:00:00Z");
+    const anchor = calendarDate(selectedDate);
     const mStart = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
     const mEnd = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, 0)); // last day
     dateWhere = { date: { gte: mStart, lte: mEnd } };
@@ -129,11 +130,11 @@ export default async function BookingsPage({ searchParams }: Props) {
   // List view defaults to upcoming bookings only (today forward, nearest first)
   // Exception: series filter shows ALL bookings (past + future) for the full timeline
   // Exception: stale filter shows only past bookings
-  const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const todaySast = saToday();
   if (view === "list" && !dateWhere.date && !seriesFilter) {
     dateWhere = isStale
-      ? { date: { lt: new Date(todaySast + "T00:00:00Z") } }
-      : { date: { gte: new Date(todaySast + "T00:00:00Z") } };
+      ? { date: { lt: calendarDate(todaySast) } }
+      : { date: { gte: calendarDate(todaySast) } };
   }
 
   const where = { ...statusWhere, ...dateWhere, ...seriesWhere };
@@ -156,10 +157,10 @@ export default async function BookingsPage({ searchParams }: Props) {
     prisma.booking.groupBy({
       by: ["status"],
       _count: true,
-      where: view === "list" ? { date: { gte: new Date(todaySast + "T00:00:00Z") } } : undefined,
+      where: view === "list" ? { date: { gte: calendarDate(todaySast) } } : undefined,
     }),
     prisma.booking.count({
-      where: { status: "confirmed", date: { lt: new Date(todaySast + "T00:00:00Z") } },
+      where: { status: "confirmed", date: { lt: calendarDate(todaySast) } },
     }),
   ]);
 
@@ -186,7 +187,7 @@ export default async function BookingsPage({ searchParams }: Props) {
 
     if (view === "day") {
       const ov = await prisma.availabilityOverride.findUnique({
-        where: { date: new Date(selectedDate + "T00:00:00Z") },
+        where: { date: calendarDate(selectedDate) },
         select: { date: true, isBlocked: true, reason: true },
       });
       overrides = ov ? [ov] : [];
@@ -378,14 +379,9 @@ export default async function BookingsPage({ searchParams }: Props) {
                 <TableBody>
                   {bookings.map((booking) => {
                     const config = getSessionTypeConfig(booking.sessionType);
-                    // SAST is a fixed UTC+2 (no DST); booking.date is midnight UTC of
-                    // the SAST date, so this is the real session start instant.
-                    const startsAt = new Date(
-                      `${new Date(booking.date).toISOString().slice(0, 10)}T${booking.startTime}:00+02:00`,
-                    );
                     const canReinstate =
                       booking.status === "cancelled" &&
-                      startsAt.getTime() > new Date().getTime();
+                      bookingStartsAt(booking).getTime() > new Date().getTime();
                     return (
                       <TableRow key={booking.id}>
                         <TableCell className="font-medium">

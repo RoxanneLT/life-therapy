@@ -14,28 +14,19 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
 import { sendAndLogTemplate } from "@/lib/whatsapp";
-import { TIMEZONE } from "@/lib/booking-config";
 import {
   getEffectiveBillingDate,
   getReminderDate,
   getOverdueDate,
 } from "@/lib/billing";
-import { formatInTimeZone } from "date-fns-tz";
+import { saToday, calendarDate, isSameSaDay } from "@/lib/dates";
 import { addDays, format } from "date-fns";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
+/** Start of today's SAST calendar day, as a deterministic UTC-midnight Date. */
 function getSASTToday(): Date {
-  const nowStr = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
-  return new Date(`${nowStr}T00:00:00`);
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return calendarDate(saToday());
 }
 
 function formatCents(cents: number, currency: string): string {
@@ -79,7 +70,7 @@ async function processBillingReminders(
 
   const billingDate = getEffectiveBillingDate(today.getFullYear(), today.getMonth() + 1);
 
-  if (isSameDay(today, billingDate)) {
+  if (isSameSaDay(today, billingDate)) {
     for (const pr of pendingNew) {
       const contact = await resolveStudentPhone(pr.studentId);
       if (!contact) continue;
@@ -125,7 +116,7 @@ async function processBillingReminders(
 
   for (const pr of unpaid) {
     const reminderDate = getReminderDate(pr.dueDate);
-    if (!isSameDay(today, reminderDate)) continue;
+    if (!isSameSaDay(today, reminderDate)) continue;
 
     const contact = await resolveStudentPhone(pr.studentId);
     if (!contact) continue;
@@ -167,7 +158,7 @@ async function processBillingReminders(
   });
 
   for (const pr of dueTodayPending) {
-    if (!isSameDay(today, pr.dueDate)) continue;
+    if (!isSameSaDay(today, pr.dueDate)) continue;
 
     const contact = await resolveStudentPhone(pr.studentId);
     if (!contact) continue;
@@ -209,7 +200,7 @@ async function processBillingReminders(
 
   for (const pr of stillUnpaid) {
     const overdueDate = getOverdueDate(pr.dueDate);
-    if (!isSameDay(today, overdueDate)) continue;
+    if (!isSameSaDay(today, overdueDate)) continue;
 
     const contact = await resolveStudentPhone(pr.studentId);
     if (!contact) continue;

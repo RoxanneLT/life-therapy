@@ -7,8 +7,9 @@ import {
   TokenCredentialAuthenticationProvider,
 } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import { TIMEZONE } from "@/lib/booking-config";
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
+import { saDateStr, saDayStart, saDayEnd } from "@/lib/dates";
 
 // ────────────────────────────────────────────────────────────
 // Config & client
@@ -263,7 +264,7 @@ export async function createRecurringCalendarEvent(params: {
     const jsDayIndex = dayIndexSast === 7 ? 0 : dayIndexSast;
     const dayOfWeek = GRAPH_DAY_NAMES[jsDayIndex];
 
-    const startDateStr = formatInTimeZone(startDate, TIMEZONE, "yyyy-MM-dd");
+    const startDateStr = saDateStr(startDate);
 
     // Compute the week-of-month index in SAST
     const dayOfMonth = parseInt(formatInTimeZone(startDate, TIMEZONE, "d"), 10);
@@ -431,8 +432,8 @@ export async function deleteRecurringEventOccurrences(
     // Build the window in UTC (.toISOString ends in "Z"). A literal "+02:00"
     // offset decodes to a space in the query string ("...T00:00:00 02:00") and
     // Graph rejects it as an invalid StartDateTime — silently failing the delete.
-    const windowStart = fromZonedTime(`${earliest}T00:00:00`, TIMEZONE).toISOString();
-    const windowEnd = fromZonedTime(`${latest}T23:59:59`, TIMEZONE).toISOString();
+    const windowStart = saDayStart(earliest).toISOString();
+    const windowEnd = saDayEnd(latest).toISOString();
     const instances = await withRetry(
       () =>
         client

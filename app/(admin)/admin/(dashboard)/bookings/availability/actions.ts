@@ -5,8 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getFreeBusy } from "@/lib/graph";
-import { fromZonedTime } from "date-fns-tz";
-import { TIMEZONE } from "@/lib/booking-config";
+import { saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
 
 export async function createAvailabilityOverride(formData: FormData) {
   await requireRole("super_admin");
@@ -45,7 +44,7 @@ export async function deleteAvailabilityOverride(id: string) {
 export async function debugAvailability(dateStr: string) {
   await requireRole("super_admin");
 
-  const dateUtc = new Date(`${dateStr}T00:00:00Z`);
+  const dateUtc = calendarDate(dateStr);
 
   // 1. Availability override
   const override = await prisma.availabilityOverride.findUnique({
@@ -53,8 +52,8 @@ export async function debugAvailability(dateStr: string) {
   });
 
   // 2. Graph calendar busy times
-  const dayStartUtc = fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
-  const dayEndUtc = fromZonedTime(`${dateStr}T23:59:59`, TIMEZONE);
+  const dayStartUtc = saDayStart(dateStr);
+  const dayEndUtc = saDayEnd(dateStr);
   const { slots: busySlots, failed: freeBusyFailed } = await getFreeBusy(dayStartUtc, dayEndUtc);
 
   // 3. Existing DB bookings

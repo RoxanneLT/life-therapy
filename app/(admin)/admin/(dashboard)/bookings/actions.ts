@@ -8,20 +8,15 @@ import { redirect } from "next/navigation";
 import { cancelCalendarEvent, createCalendarEvent, createRecurringCalendarEvent, deleteRecurringEventOccurrences } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
-import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
+import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { randomUUID } from "node:crypto";
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
-
-/** Extract SAST date string from a booking date for Graph API occurrence operations. */
-function toSastDateStr(date: Date | string): string {
-  return formatInTimeZone(new Date(date), TIMEZONE, "yyyy-MM-dd");
-}
+import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   const { adminUser } = await requireRole("super_admin", "editor");
@@ -56,7 +51,7 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
   if (status === "cancelled") {
     if (booking.graphEventId) {
       if (booking.recurringSeriesId) {
-        const dateStr = toSastDateStr(booking.date);
+        const dateStr = saDateStr(booking.date);
         const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
         if (delResult.failed.length > 0) {
           calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
@@ -118,7 +113,7 @@ export async function deleteBooking(id: string) {
   // Calendar cleanup
   if (booking.graphEventId) {
     if (booking.recurringSeriesId) {
-      const dateStr = toSastDateStr(booking.date);
+      const dateStr = saDateStr(booking.date);
       await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
     } else {
       await cancelCalendarEvent(booking.graphEventId).catch(console.error);
@@ -144,7 +139,7 @@ export async function deleteBooking(id: string) {
     actorEmail: adminUser.email,
     before: {
       clientName: booking.clientName,
-      date: toSastDateStr(booking.date),
+      date: saDateStr(booking.date),
       startTime: booking.startTime,
       status: booking.status,
       sessionType: booking.sessionType,
@@ -171,7 +166,7 @@ export async function rescheduleBooking(
 
   // Step 1: Create new calendar event FIRST — a temporary duplicate is better than losing both
   const config = getSessionTypeConfig(booking.sessionType);
-  const dateObj = new Date(newDate + "T00:00:00Z");
+  const dateObj = calendarDate(newDate);
   const calResult = await createCalendarEvent({
     subject: `${config.label} — ${booking.clientName}`,
     startDateTime: `${newDate}T${newStartTime}:00`,
@@ -185,7 +180,7 @@ export async function rescheduleBooking(
   // Step 2: Only then remove the old calendar event
   if (booking.graphEventId) {
     if (booking.recurringSeriesId) {
-      const oldDateStr = toSastDateStr(booking.date);
+      const oldDateStr = saDateStr(booking.date);
       const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]);
       if (delResult.failed.length > 0) {
         calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
@@ -304,14 +299,14 @@ export async function rescheduleSeriesAction(
       skipReason = "Public holiday";
     } else {
       const override = await prisma.availabilityOverride.findUnique({
-        where: { date: new Date(newDateStr + "T00:00:00Z") },
+        where: { date: calendarDate(newDateStr) },
       });
       if (override?.isBlocked) {
         skipReason = `Day blocked${override.reason ? `: ${override.reason}` : ""}`;
       } else {
         const existing = await prisma.booking.findFirst({
           where: {
-            date: new Date(newDateStr + "T00:00:00Z"),
+            date: calendarDate(newDateStr),
             startTime: { lte: newEndTime },
             endTime: { gte: newStartTime },
             status: { in: ["confirmed", "pending"] },
@@ -402,7 +397,7 @@ export async function rescheduleSeriesAction(
     await prisma.booking.update({
       where: { id: booking.id },
       data: {
-        date: new Date(newDateStr + "T00:00:00Z"),
+        date: calendarDate(newDateStr),
         startTime: newStartTime,
         endTime: newEndTime,
         graphEventId: newSeriesEventId,
@@ -487,7 +482,7 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
     const gid = b.graphEventId ?? fallbackId;
     if (!gid) continue;
     const dates = datesByEvent.get(gid) ?? [];
-    dates.push(toSastDateStr(b.date));
+    dates.push(saDateStr(b.date));
     datesByEvent.set(gid, dates);
   }
 
@@ -618,7 +613,7 @@ export async function checkSeriesConflictsAction(
     // Check for existing bookings on that date/time (excluding this series)
     const existing = await prisma.booking.findFirst({
       where: {
-        date: new Date(newDateStr + "T00:00:00Z"),
+        date: calendarDate(newDateStr),
         startTime: { lte: newEndTime },
         endTime: { gte: newStartTime },
         status: { in: ["confirmed", "pending"] },
@@ -630,7 +625,7 @@ export async function checkSeriesConflictsAction(
 
     // Check availability overrides (blocked days)
     const override = await prisma.availabilityOverride.findUnique({
-      where: { date: new Date(newDateStr + "T00:00:00Z") },
+      where: { date: calendarDate(newDateStr) },
     });
 
     let conflict: string | null = null;
@@ -704,7 +699,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
   }
 
   const clientName = `${student.firstName} ${student.lastName}`.trim();
-  const bookingDate = new Date(`${data.date}T00:00:00Z`);
+  const bookingDate = calendarDate(data.date);
   const confirmationToken = randomUUID();
 
   // Create calendar event (in-person: block calendar but no Teams link)
@@ -924,7 +919,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 
   // ── Step 3: Create booking records (no individual calendar calls) ──
   for (const dateStr of availableDates) {
-    const bookingDate = new Date(`${dateStr}T00:00:00Z`);
+    const bookingDate = calendarDate(dateStr);
     const confirmationToken = randomUUID();
 
     const booking = await prisma.booking.create({
@@ -1081,7 +1076,7 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
   for (const booking of toDelete) {
     if (booking.graphEventId) {
       if (booking.recurringSeriesId) {
-        await deleteRecurringEventOccurrences(booking.graphEventId, [toSastDateStr(booking.date)]).catch(console.error);
+        await deleteRecurringEventOccurrences(booking.graphEventId, [saDateStr(booking.date)]).catch(console.error);
       } else {
         await cancelCalendarEvent(booking.graphEventId).catch(console.error);
       }
@@ -1213,8 +1208,8 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   if (!booking) throw new Error("Booking not found");
 
   // Server-side late cancel check: is the session within 24 hours?
-  const dateStr = toSastDateStr(booking.date);
-  const bookingDateTime = fromZonedTime(`${dateStr}T${booking.startTime}:00`, TIMEZONE);
+  const dateStr = saDateStr(booking.date);
+  const bookingDateTime = saInstant(dateStr, booking.startTime);
   const hoursUntil = (bookingDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
   const isActuallyLate = hoursUntil < 24 && hoursUntil > -2;
 
@@ -1235,7 +1230,7 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
   let calendarWarning: string | undefined;
   if (booking.graphEventId) {
     if (booking.recurringSeriesId) {
-      const dateStr = toSastDateStr(booking.date);
+      const dateStr = saDateStr(booking.date);
       const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
       if (delResult.failed.length > 0) {
         calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
@@ -1323,8 +1318,8 @@ export async function reinstateBookingAction(id: string) {
   }
 
   // Only future sessions can be reinstated.
-  const dateStr = toSastDateStr(booking.date);
-  const startAt = fromZonedTime(`${dateStr}T${booking.startTime}:00`, TIMEZONE);
+  const dateStr = saDateStr(booking.date);
+  const startAt = saInstant(dateStr, booking.startTime);
   if (startAt.getTime() <= Date.now()) {
     throw new Error("This session is in the past and can't be reinstated.");
   }
@@ -1491,7 +1486,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
   const config = getSessionTypeConfig(data.sessionType);
   const settings = await getSiteSettings();
   const clientName = `${student.firstName} ${student.lastName}`.trim();
-  const bookingDate = new Date(data.date + "T00:00:00Z");
+  const bookingDate = calendarDate(data.date);
   const confirmationToken = randomUUID();
 
   let priceZarCents = 0;

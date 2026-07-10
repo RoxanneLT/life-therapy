@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice, formatPhoneDisplay } from "@/lib/utils";
 import type { Currency } from "@/lib/region";
+import { bookingStartsAt } from "@/lib/dates";
 import { format } from "date-fns";
 import { updateBookingStatus, updateBookingNotes, updateSessionNotes, deleteBooking, togglePolicyOverrideAction } from "../actions";
 import {
@@ -74,12 +75,9 @@ export default async function BookingDetailPage({ params }: Props) {
   const config = getSessionTypeConfig(booking.sessionType);
 
   // Reinstate is offered only for a cancelled session that is still in the future.
-  // SAST is a fixed UTC+2 (no DST); booking.date is midnight UTC of the SAST date.
-  const bookingStartsAt = new Date(
-    `${new Date(booking.date).toISOString().slice(0, 10)}T${booking.startTime}:00+02:00`,
-  );
   const canReinstate =
-    booking.status === "cancelled" && bookingStartsAt.getTime() > new Date().getTime();
+    booking.status === "cancelled" &&
+    bookingStartsAt(booking).getTime() > new Date().getTime();
 
   // Count future bookings in this series (for edit series button)
   const futureSeriesCount = booking.recurringSeriesId

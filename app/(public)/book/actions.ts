@@ -26,6 +26,7 @@ import type { SessionType } from "@/lib/generated/prisma/client";
 import { upsertContact } from "@/lib/contacts";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
+import { calendarDate } from "@/lib/dates";
 
 function formatMinutesToTime(mins: number): string {
   const h = Math.floor(mins / 60);
@@ -324,7 +325,7 @@ export async function createBooking(formData: FormData) {
   const wantsCredit = raw.useSessionCredit === "true";
 
   // Create booking in DB
-  const bookingDate = new Date(`${parsed.date}T00:00:00Z`);
+  const bookingDate = calendarDate(parsed.date);
   const booking = await prisma.booking.create({
     data: {
       sessionType: parsed.sessionType as SessionType,

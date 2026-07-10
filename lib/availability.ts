@@ -5,9 +5,10 @@ import {
   type BusinessHoursDay,
 } from "@/lib/settings";
 import { getFreeBusy } from "@/lib/graph";
-import { TIMEZONE, type SessionTypeConfig } from "@/lib/booking-config";
+import { type SessionTypeConfig } from "@/lib/booking-config";
 import { addDays, eachDayOfInterval } from "date-fns";
-import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
+import { saToday, saInstant, saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
 
 export interface TimeSlot {
   start: string; // "09:00"
@@ -100,7 +101,7 @@ export async function getAvailableSlots(
   if (dayHours.closed) return { slots: [], freeBusyFailed: false };
 
   // 2. Check availability override — midnight UTC for @db.Date
-  const dateUtc = new Date(`${dateStr}T00:00:00Z`);
+  const dateUtc = calendarDate(dateStr);
   const override = await prisma.availabilityOverride.findUnique({
     where: { date: dateUtc },
   });
@@ -117,8 +118,8 @@ export async function getAvailableSlots(
   if (candidates.length === 0) return { slots: [], freeBusyFailed: false };
 
   // 4. Get Exchange calendar busy times (proper UTC boundaries for SAST day)
-  const dayStartUtc = fromZonedTime(`${dateStr}T00:00:00`, TIMEZONE);
-  const dayEndUtc = fromZonedTime(`${dateStr}T23:59:59`, TIMEZONE);
+  const dayStartUtc = saDayStart(dateStr);
+  const dayEndUtc = saDayEnd(dateStr);
   const { slots: busyTimes, failed: freeBusyFailed } = await getFreeBusy(dayStartUtc, dayEndUtc);
 
   // 5. Get existing bookings from our DB (resilience layer)
@@ -148,7 +149,7 @@ export async function getAvailableSlots(
   const minNoticeMs = (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
 
   const slots = candidates.filter((slot) => {
-    const slotUtc = fromZonedTime(`${dateStr}T${slot.start}:00`, TIMEZONE);
+    const slotUtc = saInstant(dateStr, slot.start);
     if (!options?.skipMinNotice && slotUtc.getTime() - nowMs < minNoticeMs) return false;
     return !blockedRanges.some((r) => timeRangesOverlap(slot.start, slot.end, r.start, r.end));
   });
@@ -164,7 +165,7 @@ export async function getAvailableDates(options?: { includeToday?: boolean; maxD
   const businessHours = getBusinessHours(settings);
 
   // Today in SAST — use formatInTimeZone for correct date regardless of server TZ
-  const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const todaySast = saToday();
 
   // Start from today (admin) or tomorrow (public), span maxDays
   const start = options?.includeToday
@@ -172,13 +173,10 @@ export async function getAvailableDates(options?: { includeToday?: boolean; maxD
     : addDays(new Date(`${todaySast}T12:00:00Z`), 1);
   const end = addDays(start, maxDays);
 
-  // Get all overrides in range (use UTC midnight for @db.Date)
-  const startUtc = new Date(
-    `${formatInTimeZone(start, "UTC", "yyyy-MM-dd")}T00:00:00Z`
-  );
-  const endUtc = new Date(
-    `${formatInTimeZone(end, "UTC", "yyyy-MM-dd")}T00:00:00Z`
-  );
+  // Get all overrides in range (use UTC midnight for @db.Date). `start`/`end` are
+  // noon anchors, so their UTC day is already the SAST day — read it back as UTC.
+  const startUtc = calendarDate(formatInTimeZone(start, "UTC", "yyyy-MM-dd"));
+  const endUtc = calendarDate(formatInTimeZone(end, "UTC", "yyyy-MM-dd"));
   const overrides = await prisma.availabilityOverride.findMany({
     where: { date: { gte: startUtc, lte: endUtc } },
   });

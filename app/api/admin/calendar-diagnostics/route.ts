@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCalendarDiagnostics } from "@/lib/graph";
-import { TIMEZONE } from "@/lib/booking-config";
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
+import { saDateStr, saToday, saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
 
 export async function GET(request: Request) {
   try {
@@ -13,16 +13,16 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const todaySast = formatInTimeZone(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const todaySast = saToday();
   const startStr = url.searchParams.get("start") || todaySast;
   // Default end = start + 7 days if not provided
   const endStr =
     url.searchParams.get("end") ||
-    formatInTimeZone(new Date(`${startStr}T00:00:00Z`).getTime() + 7 * 86_400_000, "UTC", "yyyy-MM-dd");
+    formatInTimeZone(calendarDate(startStr).getTime() + 7 * 86_400_000, "UTC", "yyyy-MM-dd");
 
   // SAST day boundaries → UTC instants for the Graph calendarView query
-  const startUtc = fromZonedTime(`${startStr}T00:00:00`, TIMEZONE);
-  const endUtc = fromZonedTime(`${endStr}T23:59:59`, TIMEZONE);
+  const startUtc = saDayStart(startStr);
+  const endUtc = saDayEnd(endStr);
 
   // Teams/Outlook side — identity + actual events on the connected mailbox
   const account = await getCalendarDiagnostics(startUtc, endUtc);
@@ -32,8 +32,8 @@ export async function GET(request: Request) {
     where: {
       status: { in: ["confirmed", "pending"] },
       date: {
-        gte: new Date(`${startStr}T00:00:00Z`),
-        lte: new Date(`${endStr}T00:00:00Z`),
+        gte: calendarDate(startStr),
+        lte: calendarDate(endStr),
       },
     },
     select: {
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
   const portal = bookings.map((b) => ({
     bookingId: b.id,
-    date: formatInTimeZone(new Date(b.date), TIMEZONE, "yyyy-MM-dd"),
+    date: saDateStr(b.date),
     start: b.startTime,
     end: b.endTime,
     clientName: b.clientName,

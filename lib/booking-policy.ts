@@ -1,5 +1,4 @@
-import { fromZonedTime } from "date-fns-tz";
-import { TIMEZONE } from "@/lib/booking-config";
+import { saInstant } from "@/lib/dates";
 
 /** Cancel with >=24hr notice: credit refunded. */
 export const CANCEL_NOTICE_HOURS = 24;
@@ -42,7 +41,7 @@ export type RescheduleResult =
 function buildSessionDateTime(date: Date | string, time: string): Date {
   const d = typeof date === "string" ? date : date.toISOString().slice(0, 10);
   // fromZonedTime converts "wall clock in SAST" → UTC Date
-  return fromZonedTime(`${d}T${time}:00`, TIMEZONE);
+  return saInstant(d, time);
 }
 
 function hoursUntil(target: Date, now: Date): number {

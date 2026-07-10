@@ -19,6 +19,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { SessionType } from "@/lib/generated/prisma/client";
 import { z } from "zod";
+import { calendarDate } from "@/lib/dates";
 
 const portalBookingSchema = z.object({
   sessionType: z.string(),
@@ -200,7 +201,7 @@ export async function createPortalBooking(formData: FormData) {
     : null;
 
   // Create booking in DB
-  const bookingDate = new Date(`${parsed.date}T00:00:00Z`);
+  const bookingDate = calendarDate(parsed.date);
   const booking = await prisma.booking.create({
     data: {
       sessionType: parsed.sessionType as SessionType,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { calendarDate } from "@/lib/dates";
 
 // Financial year runs March → February.
 // "year N" means Mar N – Feb N+1.
@@ -37,8 +38,8 @@ export type MonthlyRevenueData = {
 // ── Bookings per Month ──────────────────────────────────────
 
 export async function getBookingsByMonth(year: number): Promise<MonthlyBookingData[]> {
-  const fyStart = new Date(`${year}-03-01T00:00:00Z`);
-  const fyEnd   = new Date(`${year + 1}-03-01T00:00:00Z`);
+  const fyStart = calendarDate(`${year}-03-01`);
+  const fyEnd   = calendarDate(`${year + 1}-03-01`);
 
   const bookings = await prisma.booking.findMany({
     where: {
@@ -70,8 +71,8 @@ export async function getBookingsByMonth(year: number): Promise<MonthlyBookingDa
 // ── Revenue per Month ───────────────────────────────────────
 
 export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueData[]> {
-  const fyStart = new Date(`${year}-03-01T00:00:00Z`);
-  const fyEnd   = new Date(`${year + 1}-03-01T00:00:00Z`);
+  const fyStart = calendarDate(`${year}-03-01`);
+  const fyEnd   = calendarDate(`${year + 1}-03-01`);
 
   // Billing months spanning this FY: Mar–Dec of `year` plus Jan–Feb of `year+1`
   const billingMonthWhere = {
