@@ -6,8 +6,7 @@ import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
-import { formatInTimeZone } from "date-fns-tz";
-import { TIMEZONE } from "@/lib/booking-config";
+import { saDateStr, saDayStart, addSaDays } from "@/lib/dates";
 
 // ────────────────────────────────────────────────────────────
 // Mark invoice as paid (from invoice list page)
@@ -270,20 +269,23 @@ export async function exportInvoicesCsvAction(
 
   const where: Record<string, unknown> = {};
 
+  // `createdAt` is a real instant, so every boundary here must be a SAST day
+  // boundary (22:00 UTC the day before), not UTC or local midnight. Otherwise an
+  // invoice raised at 00:30 SAST lands in the previous day — and at the 1 March
+  // cutover, the previous financial year — while its exported row shows the SAST
+  // date. Upper bounds are exclusive day-starts, never saDayEnd.
+
   // Financial year: FY2026 = 1 Mar 2025 → 28 Feb 2026
   if (filters.financialYear) {
     const fy = parseInt(filters.financialYear, 10);
-    const fyStart = new Date(fy - 1, 2, 1); // March 1 of previous year
-    const fyEnd = new Date(fy, 2, 1); // March 1 of FY year (exclusive)
+    const fyStart = saDayStart(`${fy - 1}-03-01`); // March 1 of previous year
+    const fyEnd = saDayStart(`${fy}-03-01`); // March 1 of FY year (exclusive)
     where.createdAt = { gte: fyStart, lt: fyEnd };
   } else if (filters.startDate || filters.endDate) {
     const range: Record<string, Date> = {};
-    if (filters.startDate) range.gte = new Date(filters.startDate);
-    if (filters.endDate) {
-      const end = new Date(filters.endDate);
-      end.setDate(end.getDate() + 1);
-      range.lt = end;
-    }
+    if (filters.startDate) range.gte = saDayStart(filters.startDate);
+    // endDate is inclusive for the user, so bound by the start of the next day
+    if (filters.endDate) range.lt = saDayStart(addSaDays(filters.endDate, 1));
     where.createdAt = range;
   }
 
@@ -327,7 +329,7 @@ export async function exportInvoicesCsvAction(
       // instants — paidAt comes from Paystack webhooks and can fire at any hour, so
       // a payment at 00:30 SAST would otherwise export as the previous day (and
       // reconcile into the wrong month).
-      formatInTimeZone(inv.createdAt, TIMEZONE, "yyyy-MM-dd"),
+      saDateStr(inv.createdAt),
       clientName,
       inv.billingName,
       inv.billingEmail,
@@ -339,7 +341,7 @@ export async function exportInvoicesCsvAction(
       (inv.totalCents / 100).toFixed(2),
       inv.status,
       inv.paymentMethod ?? "",
-      inv.paidAt ? formatInTimeZone(inv.paidAt, TIMEZONE, "yyyy-MM-dd") : "",
+      inv.paidAt ? saDateStr(inv.paidAt) : "",
       inv.eftReference ?? inv.paystackReference ?? "",
     ];
   });

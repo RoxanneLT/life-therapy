@@ -1,19 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { createGiftFromOrderItem } from "@/lib/gift";
+import { saToday, saDayStart, addSaDays } from "@/lib/dates";
 
 /**
  * Generate a unique order number: LT-YYYYMMDD-NNNN
+ *
+ * The date stamp and the daily counter are both anchored to the SAST calendar
+ * day. Previously the stamp came from the UTC day while the counter window came
+ * from local midnight — they only agreed because the server runs UTC, and both
+ * were wrong for orders placed between midnight and 02:00 SAST.
  */
 export async function createOrderNumber(): Promise<string> {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const today = saToday();
+  const dateStr = today.replace(/-/g, "");
 
-  const startOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
-  const endOfDay = new Date(startOfDay.getTime() + 86_400_000);
+  const startOfDay = saDayStart(today);
+  const endOfDay = saDayStart(addSaDays(today, 1));
 
   const count = await prisma.order.count({
     where: { createdAt: { gte: startOfDay, lt: endOfDay } },

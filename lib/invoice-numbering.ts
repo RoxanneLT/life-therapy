@@ -9,6 +9,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { saDateStr } from "@/lib/dates";
 
 /**
  * Extract initials from a name.
@@ -35,11 +36,13 @@ export function formatInvoiceNumber(
   initials: string,
   sequence: number,
 ): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
+  // `date` is a real instant (callers pass `new Date()`), so resolve the SAST
+  // calendar day. Local getters read UTC on the server, which would number an
+  // invoice raised at 00:30 SAST with the *previous* day — while the invoice
+  // body displays the SAST date.
+  const ymd = saDateStr(date).replace(/-/g, "");
   const seq = String(sequence).padStart(5, "0");
-  return `${y}${m}${d}-${prefix}-${initials}-${seq}`;
+  return `${ymd}-${prefix}-${initials}-${seq}`;
 }
 
 /**
