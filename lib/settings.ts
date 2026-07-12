@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
+import { cache } from "react";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 
 export type SiteSettings = SiteSetting;
@@ -72,7 +73,14 @@ const DEFAULTS = {
   footerTagline: "Online life coaching, counselling, and self-paced courses. Empowering you to build confidence and create meaningful change.",
 } as const;
 
-export async function getSiteSettings() {
+/**
+ * The site's single settings row. Wrapped in React.cache so the root layout
+ * (metadata + body + JSON-LD) and every page that reads settings share ONE
+ * `findFirst` per request instead of firing it 3–4× on every page load. Cache is
+ * request-scoped only, so a settings edit is reflected on the very next request —
+ * no staleness, and no invalidation to maintain.
+ */
+export const getSiteSettings = cache(async () => {
   const settings = await prisma.siteSetting.findFirst({ orderBy: { updatedAt: "desc" } });
 
   if (!settings) {
@@ -127,7 +135,7 @@ export async function getSiteSettings() {
   }
 
   return settings;
-}
+});
 
 export function getBusinessHours(settings: SiteSetting): BusinessHours {
   if (settings.businessHours && typeof settings.businessHours === "object") {
