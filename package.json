@@ -6,11 +6,15 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && eslint .",
+    "check": "tsc --noEmit && eslint . --max-warnings 0 && node scripts/architecture-audit.mjs && npm run test",
     "postinstall": "prisma generate",
-    "test:dates": "tsx --test lib/dates.test.ts"
+    "test:dates": "tsx --test lib/dates.test.ts",
+    "audit": "node scripts/architecture-audit.mjs",
+    "test:money": "tsx --test lib/billing.test.ts",
+    "test": "tsx --test lib/dates.test.ts lib/billing.test.ts lib/sa-holidays.test.ts",
+    "test:holidays": "tsx --test lib/sa-holidays.test.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
