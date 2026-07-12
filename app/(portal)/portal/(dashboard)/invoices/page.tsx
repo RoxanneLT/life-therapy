@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { format } from "date-fns";
 import { saMonthStart } from "@/lib/dates";
+import { formatPrice } from "@/lib/utils";
 import { PayButton } from "./pay-button";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 
@@ -38,13 +39,6 @@ const TYPE_LABELS: Record<string, string> = {
   credit_note: "Credit Note",
   other: "Other",
 };
-
-function formatCurrency(cents: number): string {
-  return `R ${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 export default async function PortalInvoicesPage({
   searchParams,
@@ -145,7 +139,7 @@ export default async function PortalInvoicesPage({
                                 )}
                               </span>
                               <span className="ml-4 shrink-0">
-                                {formatCurrency(item.totalCents)}
+                                {formatPrice(item.totalCents, pr.currency)}
                               </span>
                             </div>
                           ))}
@@ -160,7 +154,7 @@ export default async function PortalInvoicesPage({
 
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <p className="text-lg font-bold">
-                          {formatCurrency(pr.totalCents)}
+                          {formatPrice(pr.totalCents, pr.currency)}
                         </p>
                         <PayButton type="payment_request" id={pr.id} />
                       </div>
@@ -220,7 +214,7 @@ export default async function PortalInvoicesPage({
 
                     <div className="flex shrink-0 items-center gap-3">
                       <p className="font-mono text-sm font-semibold">
-                        {formatCurrency(inv.totalCents)}
+                        {formatPrice(inv.totalCents, inv.currency)}
                       </p>
 
                       {(inv.status === "payment_requested" ||

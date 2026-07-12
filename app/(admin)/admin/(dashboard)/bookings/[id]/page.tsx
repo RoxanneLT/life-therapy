@@ -388,6 +388,7 @@ export default async function BookingDetailPage({ params }: Props) {
                 bookingDate={booking.date}
                 bookingStartTime={booking.startTime}
                 priceZarCents={booking.priceZarCents}
+                priceCurrency={booking.priceCurrency}
                 clientName={booking.clientName}
                 isFreeSession={booking.priceZarCents === 0}
               />

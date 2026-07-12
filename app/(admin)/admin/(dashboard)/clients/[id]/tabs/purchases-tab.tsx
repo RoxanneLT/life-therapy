@@ -23,6 +23,7 @@ import {
   enrolInCourseAction,
   getAvailableCoursesAction,
 } from "../actions";
+import { formatPrice } from "@/lib/utils";
 
 interface OrderData {
   id: string;
@@ -133,7 +134,7 @@ export function PurchasesTab({ client }: PurchasesTabProps) {
                     <p className="text-sm font-medium">{pkg.description}</p>
                     <p className="text-xs text-muted-foreground">
                       Purchased {format(pkg.purchaseDate, "d MMM yyyy")} ·{" "}
-                      {formatCurrency(pkg.priceCents, pkg.currency)}
+                      {formatPrice(pkg.priceCents, pkg.currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Credits granted: {pkg.creditsGranted} ·{" "}
@@ -229,18 +230,6 @@ export function PurchasesTab({ client }: PurchasesTabProps) {
       </div>
     </div>
   );
-}
-
-function formatCurrency(cents: number, currency: string): string {
-  const amount = cents / 100;
-  const symbols: Record<string, string> = {
-    ZAR: "R",
-    USD: "$",
-    EUR: "\u20AC",
-    GBP: "\u00A3",
-  };
-  const symbol = symbols[currency] || currency + " ";
-  return `${symbol}${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`;
 }
 
 function GrantCreditsDialog({ clientId }: { clientId: string }) {

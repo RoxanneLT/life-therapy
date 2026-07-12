@@ -21,7 +21,7 @@ import { PaymentRequestActions } from "./payment-request-actions";
 import { ExportDialog } from "./export-dialog";
 import { NewPaymentRequestDialog } from "./new-pr-dialog";
 import { SortableHeader } from "@/components/admin/sortable-header";
-import { formatBillingMonth } from "@/lib/utils";
+import { formatBillingMonth, formatPrice, formatByCurrency } from "@/lib/utils";
 import Link from "next/link";
 
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
@@ -57,10 +57,6 @@ type SortDir = "asc" | "desc";
 const VALID_SORT_FIELDS = new Set<SortField>([
   "invoiceNumber", "createdAt", "billingName", "type", "totalCents", "status",
 ]);
-
-function formatCurrency(cents: number): string {
-  return `R ${(cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function formatDate(date: Date): string {
   return new Date(date).toLocaleDateString("en-ZA", {
@@ -314,10 +310,10 @@ export default async function InvoicesPage({
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <SummaryCard label="Last Cycle" value={formatCurrency(lastCycleTotal)} sub={lastCycleLabel} />
-        <SummaryCard label="Collected" value={formatCurrency(lastCyclePaid)} sub={lastCycleLabel} variant="green" />
-        <SummaryCard label="Outstanding" value={formatCurrency(lastCycleOutstanding)} sub={lastCycleLabel} variant="yellow" />
-        <SummaryCard label="Overdue" value={formatCurrency(overdue)} sub="all time" variant="red" />
+        <SummaryCard label="Last Cycle" value={formatPrice(lastCycleTotal, "ZAR")} sub={lastCycleLabel} />
+        <SummaryCard label="Collected" value={formatPrice(lastCyclePaid, "ZAR")} sub={lastCycleLabel} variant="green" />
+        <SummaryCard label="Outstanding" value={formatPrice(lastCycleOutstanding, "ZAR")} sub={lastCycleLabel} variant="yellow" />
+        <SummaryCard label="Overdue" value={formatPrice(overdue, "ZAR")} sub="all time" variant="red" />
       </div>
 
       {/* Filters */}
@@ -398,10 +394,10 @@ export default async function InvoicesPage({
                         {sessionCount} session{sessionCount !== 1 ? "s" : ""}
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className="font-mono text-sm font-medium">{formatCurrency(pr.totalCents)}</span>
+                        <span className="font-mono text-sm font-medium">{formatPrice(pr.totalCents, pr.currency)}</span>
                         {(prPaidAmounts.get(pr.id) ?? 0) > 0 && (
                           <div className="text-xs text-amber-600">
-                            Paid {formatCurrency(prPaidAmounts.get(pr.id)!)} · Due {formatCurrency(pr.totalCents - prPaidAmounts.get(pr.id)!)}
+                            Paid {formatPrice(prPaidAmounts.get(pr.id)!, pr.currency)} · Due {formatPrice(pr.totalCents - prPaidAmounts.get(pr.id)!, pr.currency)}
                           </div>
                         )}
                       </TableCell>
@@ -432,7 +428,7 @@ export default async function InvoicesPage({
                 {pendingRequests.length} pending request{pendingRequests.length !== 1 ? "s" : ""}
               </span>
               <span className="font-mono text-sm font-bold">
-                Total: {formatCurrency(pendingRequests.reduce((s, pr) => s + pr.totalCents, 0))}
+                Total: {formatByCurrency(pendingRequests.map((pr) => ({ currency: pr.currency, cents: pr.totalCents })))}
               </span>
             </div>
           </div>
@@ -498,7 +494,7 @@ export default async function InvoicesPage({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
-                      {formatCurrency(inv.totalCents)}
+                      {formatPrice(inv.totalCents, inv.currency)}
                     </TableCell>
                     <TableCell>
                       <Badge

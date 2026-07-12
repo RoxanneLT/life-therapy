@@ -21,18 +21,13 @@ import {
 } from "@/lib/billing";
 import { saToday, calendarDate, isSameSaDay } from "@/lib/dates";
 import { addDays, format } from "date-fns";
+import { formatPrice } from "@/lib/utils";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
 /** Start of today's SAST calendar day, as a deterministic UTC-midnight Date. */
 function getSASTToday(): Date {
   return calendarDate(saToday());
-}
-
-function formatCents(cents: number, currency: string): string {
-  const amount = (cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 });
-  const symbols: Record<string, string> = { ZAR: "R", USD: "$", EUR: "€", GBP: "£" };
-  return `${symbols[currency] || currency}${amount}`;
 }
 
 // ─── Billing Reminders ───────────────────────────────────────
@@ -86,7 +81,7 @@ async function processBillingReminders(
           parameters: [
             { type: "text", text: contact.firstName },
             { type: "text", text: monthLabel },
-            { type: "text", text: formatCents(pr.totalCents, pr.currency) },
+            { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
             { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
             { type: "text", text: pr.paymentUrl || portalUrl },
           ],
@@ -130,7 +125,7 @@ async function processBillingReminders(
         type: "body",
         parameters: [
           { type: "text", text: contact.firstName },
-          { type: "text", text: formatCents(pr.totalCents, pr.currency) },
+          { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
           { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],
@@ -172,7 +167,7 @@ async function processBillingReminders(
         type: "body",
         parameters: [
           { type: "text", text: contact.firstName },
-          { type: "text", text: formatCents(pr.totalCents, pr.currency) },
+          { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],
       }],
@@ -215,7 +210,7 @@ async function processBillingReminders(
         type: "body",
         parameters: [
           { type: "text", text: contact.firstName },
-          { type: "text", text: formatCents(pr.totalCents, pr.currency) },
+          { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
           { type: "text", text: monthLabel },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],

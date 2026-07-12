@@ -363,7 +363,17 @@ export function getSampleData(key: string): Record<string, string> {
 }
 
 // Fallback rendering using the original hardcoded template functions
-function renderFallback(
+/**
+ * The hardcoded fallback for every template key, used when no ACTIVE DB template
+ * exists for it.
+ *
+ * Exported so it can be tested. This path only runs in the failure case — when a
+ * DB template is missing or an admin has deactivated one — which is precisely why
+ * four keys sat here with no `case` for months without anyone noticing: rendering
+ * through `renderEmail()` always hits the DB template first and masks the gap.
+ * An untestable failure path is an untested one.
+ */
+export function renderFallback(
   key: string,
   variables: Record<string, string>,
   baseUrl = DEFAULT_BASE_URL,
@@ -391,6 +401,104 @@ function renderFallback(
         html: bt(
           "Your Session is Confirmed!",
           `<p>Hi ${variables.clientName || ""},</p><p>Your session has been confirmed.</p>`,
+        ),
+      };
+
+    // ── The four cases below had NO fallback until 2026-07-12 ─────────────────
+    //
+    // They fell through to `default:` — subject "Email: booking_cancellation",
+    // body "<p>Template not found.</p>" — and sendEmail() still reported SUCCESS,
+    // so nothing alerted anyone. It was masked only because email-template-defaults
+    // seeds all four as ACTIVE DB rows, and the admin UI lets anyone toggle
+    // isActive off. The day someone did, real clients would have received
+    // "Template not found" for a cancellation.
+    //
+    // The variables below are exactly what the call sites pass — verified, not
+    // guessed. Adding a variable at a call site without adding it here silently
+    // renders a blank, so keep the two in step.
+
+    case "booking_cancellation":
+      // Sent to the client from bookings/actions.ts + portal/bookings/actions.ts.
+      return {
+        subject: `Session Cancelled: ${variables.sessionType || "Session"} on ${variables.date || ""}`,
+        html: bt(
+          "Your Session Has Been Cancelled",
+          `<p>Hi ${variables.clientName || ""},</p>
+          <p>Your <strong>${variables.sessionType || "session"}</strong> has been cancelled.</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Date:</strong> ${variables.date || ""}</p>
+            <p style="margin: 4px 0;"><strong>Time:</strong> ${variables.time || ""}</p>
+          </div>
+          <p>We're sorry to miss you. You're welcome to book another time whenever you're ready.</p>
+          ${
+            variables.bookUrl
+              ? `<div style="text-align: center; margin: 24px 0;"><a href="${variables.bookUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600;">Book a Session</a></div>`
+              : ""
+          }`,
+        ),
+      };
+
+    case "booking_reminder":
+      // Sent to the client from lib/cron/session-reminders.ts. `teamsButton` is a
+      // pre-rendered HTML block (the call site builds it), not a URL.
+      return {
+        subject: `Reminder: your ${variables.sessionType || "session"} is coming up`,
+        html: bt(
+          "Your Session Is Coming Up",
+          `<p>Hi ${variables.clientName || ""},</p>
+          <p>This is a reminder of your upcoming <strong>${variables.sessionType || "session"}</strong>.</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Date:</strong> ${variables.date || ""}</p>
+            <p style="margin: 4px 0;"><strong>Time:</strong> ${variables.time || ""}</p>
+          </div>
+          ${variables.teamsButton || ""}
+          <p>Looking forward to seeing you.</p>`,
+        ),
+      };
+
+    case "booking_notification":
+      // ADMIN-facing (goes to the practice inbox, not the client). `clientDetails`
+      // and `teamsLink` arrive as pre-rendered HTML blocks.
+      return {
+        subject: `New Booking: ${variables.sessionType || "Session"} — ${variables.clientName || ""} on ${variables.date || ""}`,
+        html: bt(
+          "New Booking",
+          `<p>A new session has been booked.</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Client:</strong> ${variables.clientName || ""}</p>
+            <p style="margin: 4px 0;"><strong>Type:</strong> ${variables.sessionType || ""}</p>
+            <p style="margin: 4px 0;"><strong>Date:</strong> ${variables.date || ""}</p>
+            <p style="margin: 4px 0;"><strong>Time:</strong> ${variables.time || ""}</p>
+            <p style="margin: 4px 0;"><strong>Duration:</strong> ${variables.duration || ""} minutes</p>
+          </div>
+          ${variables.clientDetails || ""}
+          ${variables.teamsLink || ""}`,
+        ),
+      };
+
+    case "order_confirmation":
+      // Sent to the buyer from the Paystack webhook. `orderItemsTable` and
+      // `discountRow` are pre-rendered HTML; `subtotal`/`total` are already
+      // formatted money strings (formatPrice at the call site).
+      return {
+        subject: `Order Confirmed — ${variables.orderNumber || ""}`,
+        html: bt(
+          "Thank You for Your Order",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>Your order is confirmed and your purchase is ready in your portal.</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Order Number:</strong> ${variables.orderNumber || ""}</p>
+            <p style="margin: 4px 0;"><strong>Date:</strong> ${variables.orderDate || ""}</p>
+          </div>
+          ${variables.orderItemsTable || ""}
+          <p style="margin: 4px 0;">Subtotal: ${variables.subtotal || ""}</p>
+          ${variables.discountRow || ""}
+          <p style="margin: 8px 0;"><strong>Total: ${variables.total || ""}</strong></p>
+          ${
+            variables.portalUrl
+              ? `<div style="text-align: center; margin: 24px 0;"><a href="${variables.portalUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600;">Go to My Portal</a></div>`
+              : ""
+          }`,
         ),
       };
     case "account_created":

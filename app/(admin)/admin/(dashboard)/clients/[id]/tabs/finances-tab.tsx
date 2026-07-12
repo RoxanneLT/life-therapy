@@ -68,6 +68,7 @@ import {
 } from "./payment-request-dialogs";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL, PR_STATUS_BADGE, PR_STATUS_LABEL } from "@/lib/status-styles";
+import { formatPrice } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -163,19 +164,6 @@ function getTxnStyle(type: string, description: string) {
   }
   return TXN_TYPE_STYLES[type] || { label: type, className: "bg-gray-100 text-gray-600" };
 }
-
-function formatCurrency(cents: number, currency: string): string {
-  const amount = cents / 100;
-  const symbols: Record<string, string> = {
-    ZAR: "R",
-    USD: "$",
-    EUR: "\u20AC",
-    GBP: "\u00A3",
-  };
-  const symbol = symbols[currency] || currency + " ";
-  return `${symbol}${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`;
-}
-
 
 // ─── Main Component ──────────────────────────────────────────
 
@@ -768,7 +756,7 @@ function InvoiceHistorySection({
                           </Badge>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
-                          {formatCurrency(inv.totalCents, inv.currency)}
+                          {formatPrice(inv.totalCents, inv.currency)}
                         </td>
                         <td className="px-4 py-2.5">
                           <Badge className={INVOICE_STATUS_BADGE[inv.status] ?? ""}>
@@ -945,7 +933,7 @@ function PaymentRequestsSection({
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
-                          {formatCurrency(pr.totalCents, pr.currency)}
+                          {formatPrice(pr.totalCents, pr.currency)}
                         </td>
                         <td className="px-4 py-2.5">
                           <Badge className={PR_STATUS_BADGE[pr.status] ?? ""}>
@@ -1102,7 +1090,7 @@ function UnbilledSessionsSection({
           Upcoming billing
         </h3>
         <span className="font-mono text-sm font-semibold">
-          {formatCurrency(total, currency)}
+          {formatPrice(total, currency)}
         </span>
       </div>
       {billedToLabel && (
@@ -1168,7 +1156,7 @@ function UnbilledSessionsSection({
                         {b.priceZarCents === 0 ? (
                           <span className="text-xs text-muted-foreground">credit</span>
                         ) : (
-                          formatCurrency(net, b.priceCurrency || currency)
+                          formatPrice(net, b.priceCurrency || currency)
                         )}
                       </td>
                     </tr>

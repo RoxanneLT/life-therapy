@@ -439,17 +439,47 @@ const ZAR_BY_CONSTRUCTION = new Set([
   "app/(admin)/admin/(dashboard)/orders/[id]/page.tsx",
 ]);
 
+/** Top-level argument count of every `fn(...)` call — balanced-paren, so a nested
+ *  call in the first argument doesn't truncate it. The naive `[^,)]+` regex
+ *  reported `formatPrice(map.get(id)!, pr.currency)` as a one-argument call,
+ *  because it stopped at the INNER `)`. A false positive in a money check is how
+ *  people learn to wave the money check through. */
+function callArity(src, fnName) {
+  const out = [];
+  const re = new RegExp(String.raw`\b${fnName}\(`, "g");
+  let m;
+  while ((m = re.exec(src))) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    const start = i;
+    while (i < src.length && depth > 0) {
+      if (src[i] === "(") depth++;
+      else if (src[i] === ")") depth--;
+      i++;
+    }
+    const inner = src.slice(start, i - 1);
+    let d = 0;
+    let args = inner.trim() ? 1 : 0;
+    for (const ch of inner) {
+      if ("([{".includes(ch)) d++;
+      else if (")]}".includes(ch)) d--;
+      else if (ch === "," && d === 0) args++;
+    }
+    out.push({ args, text: `${fnName}(${inner.slice(0, 40)})` });
+  }
+  return out;
+}
+
 check("money: formatPrice always passes a currency", () => {
   for (const f of allSource()) {
     if (ZAR_BY_CONSTRUCTION.has(rel(f))) continue;
     const src = code(read(f));
-    // formatPrice(x) with no second argument.
-    const m = src.match(/formatPrice\(\s*[^,)]+\)/g);
-    if (m) {
+    const bare = callArity(src, "formatPrice").filter((c) => c.args === 1);
+    if (bare.length) {
       fail(
         "money",
         rel(f),
-        `${m.length} formatPrice() call(s) with no currency: ${m[0].slice(0, 40)}`,
+        `${bare.length} formatPrice() call(s) with no currency: ${bare[0].text}`,
         "formatPrice(cents, currency) — derive currency from the record, never assume ZAR",
       );
     }
@@ -488,6 +518,62 @@ check("money: no hardcoded currency in business logic", () => {
         rel(f),
         `${m.length} hardcoded currency: "ZAR"`,
         "derive from booking.priceCurrency / student region / PaymentRequest.currency",
+      );
+    }
+  }
+});
+
+/**
+ * Files that may format money without going through formatPrice().
+ * Each is a deliberate exception with a reason — not a silencer.
+ */
+const MONEY_FORMAT_ALLOW = new Set([
+  "lib/utils.ts", // the SSOT itself
+  // CSV export columns must be BARE NUMBERS, not symbol-prefixed strings —
+  // a spreadsheet cannot sum "R 1 234,00".
+  "app/(admin)/admin/(dashboard)/reports/actions.ts",
+  "app/(admin)/admin/(dashboard)/invoices/actions.ts",
+  // Per-currency settings INPUT fields: each currency has its own labelled field,
+  // so the value is a bare number being typed, not a mixed-currency display.
+  "components/admin/finance-settings-form.tsx",
+  // Rand-denominated chart axes, fed by queries that pin currency: "ZAR".
+  "components/admin/revenue-chart.tsx",
+  "app/(admin)/admin/(dashboard)/reports/report-charts.tsx",
+  "app/(admin)/admin/(dashboard)/reports/page.tsx",
+]);
+
+check("money: no local currency formatter — use formatPrice(cents, currency)", () => {
+  // The SSOT is formatPrice(cents, currency) in lib/utils.ts, with 33 importers.
+  // What rots is the TAIL: a local `formatCurrency`/`formatR`/`formatCents` that
+  // hardcodes "R" or pins en-ZA grouping. The portal's own invoice page did this —
+  // a USD client saw Rand symbols on their own invoices — and the file did not
+  // contain the word "currency" anywhere, even though the query returned it.
+  //
+  // A centre with 33 importers still decays if nothing forbids the raw pattern.
+  for (const f of allSource()) {
+    if (MONEY_FORMAT_ALLOW.has(rel(f))) continue;
+    const raw = read(f);
+
+    // A local money formatter: a function whose name says money.
+    const localFn = raw.match(
+      /(?:function|const)\s+(fmt|format)(?:Currency|Cents|Money|Price|R|ZAR|Rand|Amount)\w*\s*[=(]/gi,
+    );
+    if (localFn) {
+      fail(
+        "money",
+        `${rel(f)} → ${localFn[0].replace(/\s*[=(]$/, "")}`,
+        "defines a local money formatter — it will drift from formatPrice (hardcoded 'R', or en-ZA grouping on a USD amount)",
+        "import { formatPrice } from '@/lib/utils' and pass the record's own currency",
+      );
+    }
+
+    // A raw currency-formatting primitive outside the SSOT.
+    if (/Intl\.NumberFormat\s*\(/.test(raw) || /style:\s*["']currency["']/.test(raw)) {
+      fail(
+        "money",
+        rel(f),
+        "formats currency directly (Intl.NumberFormat / style:'currency') instead of using formatPrice",
+        "import { formatPrice } from '@/lib/utils'",
       );
     }
   }
@@ -722,6 +808,42 @@ check("email-safety: throwing sends in cron processors are guarded", () => {
   }
 });
 
+check("email-safety: every rendered template key has a hardcoded fallback", () => {
+  // renderEmail() prefers the DB template and falls back to renderFallback()'s
+  // switch. Four keys had NO case and fell to `default:` — subject
+  // "Email: booking_cancellation", body "<p>Template not found.</p>" — while
+  // sendEmail() STILL REPORTED SUCCESS. Masked only because the seed marks those
+  // templates active, and the admin UI lets anyone toggle isActive off.
+  //
+  // A silent client-facing send failure that reports success is the worst shape
+  // there is. This check is mechanical and would have caught it on day one.
+  const renderer = join(LIB, "email-render.ts");
+  if (!existsSync(renderer)) return;
+  const src = read(renderer);
+
+  const cases = new Set(
+    [...src.matchAll(/case\s+["']([a-z0-9_]+)["']\s*:/g)].map((m) => m[1]),
+  );
+
+  const rendered = new Set();
+  for (const f of allSource()) {
+    for (const m of read(f).matchAll(/renderEmail\(\s*["']([a-z0-9_]+)["']/g)) {
+      rendered.add(m[1]);
+    }
+  }
+
+  for (const key of [...rendered].sort()) {
+    if (!cases.has(key)) {
+      fail(
+        "email-safety",
+        `lib/email-render.ts → "${key}"`,
+        `renderEmail("${key}") is called, but renderFallback has no case for it — if the DB template is deactivated the client silently receives "Template not found", and the send still reports success`,
+        `add a case "${key}": to renderFallback(), using exactly the variables the call site passes`,
+      );
+    }
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // 5. SECRETS
 //
@@ -843,8 +965,17 @@ check("schema: no prisma migrate invocations in scripts", () => {
 // international postpaid client. Fix before either happens, not after.
 // ═══════════════════════════════════════════════════════════════════════════
 const KNOWN_DEFECTS = new Map([
-  // Empty. Every entry was fixed in the multi-currency billing pass.
-  // Add one only when a real, classified defect must wait — never to silence noise.
+  // The two payment-request composition dialogs still render `formatR()` — a
+  // hardcoded "R". The REQUEST they create is already correct: the server resolves
+  // the client's currency (resolveClientCurrency) and stamps it. What is wrong is
+  // the LABEL an admin sees while composing: billing a USD client shows Rand
+  // amounts. Fixing it means threading a `currency` prop down from the parent that
+  // knows the client, which is slice 6 of the centralisation audit — not something
+  // to half-do here.
+  //
+  // Admin-facing, no client impact, and the money that lands is right.
+  ["money|app/(admin)/admin/(dashboard)/invoices/new-pr-dialog.tsx → function formatR", "formatR() hardcodes 'R' in the compose dialog; the created request carries the correct currency. Needs a currency prop from the parent — slice 6."],
+  ["money|app/(admin)/admin/(dashboard)/clients/[id]/tabs/payment-request-dialogs.tsx → function formatR", "same: formatR() in the compose/edit dialogs. The stored request is correct. Slice 6."],
 ]);
 
 // ── Report ──────────────────────────────────────────────────────────────────

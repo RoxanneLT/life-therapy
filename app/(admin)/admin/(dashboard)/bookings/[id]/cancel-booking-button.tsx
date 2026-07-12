@@ -17,12 +17,17 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { XCircle, AlertTriangle, Ban } from "lucide-react";
+import { formatPrice } from "@/lib/utils";
 
 interface CancelBookingButtonProps {
   bookingId: string;
   bookingDate: Date;
   bookingStartTime: string;
   priceZarCents: number;
+  /** The booking's OWN currency. `priceZarCents` is misnamed — it holds cents in
+   *  this currency, not necessarily Rands. Without it the fee dialog told an
+   *  international client's admin they were charging Rands. */
+  priceCurrency: string;
   clientName: string;
   isFreeSession: boolean;
 }
@@ -32,6 +37,7 @@ export function CancelBookingButton({
   bookingDate,
   bookingStartTime,
   priceZarCents,
+  priceCurrency,
   clientName,
   isFreeSession,
 }: CancelBookingButtonProps) {
@@ -86,10 +92,7 @@ export function CancelBookingButton({
                   </p>
                   <p>
                     Would you like to charge the late cancellation fee (
-                    {(priceZarCents / 100).toLocaleString("en-ZA", {
-                      style: "currency",
-                      currency: "ZAR",
-                    })}
+                    {formatPrice(priceZarCents, priceCurrency)}
                     )? An invoice will be generated and emailed to the client.
                   </p>
                 </>
