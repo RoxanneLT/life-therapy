@@ -845,6 +845,67 @@ check("email-safety: every rendered template key has a hardcoded fallback", () =
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4b. ABUSE SURFACE
+//
+// lib/rate-limit.ts keeps its counter in a Map inside ONE lambda. On Vercel each
+// warm instance has its own, and it resets on every cold start — so the real
+// ceiling is `limit × instances`, not `limit`. That is fine for bounding a
+// scraper. It is not a limit on something that creates a real record: public
+// booking creation takes a slot in a finite diary, fires a Graph event and sends
+// email, and it sat on the in-memory limiter while login and password-reset were
+// already on the durable one.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check("abuse: high-value public writes use the DURABLE limiter", () => {
+  // The in-memory limiter is fine for read-ish endpoints (slot lookups,
+  // newsletter). It is not fine for anything that creates a booking or a student.
+  const IN_MEMORY = /\brateLimit(?:Booking|Register|Newsletter|Api)?\s*\(/;
+  const HIGH_VALUE = /prisma\.(?:booking|student)\.(?:create|upsert)/;
+  const ALLOW = new Set([
+    "lib/rate-limit.ts", // the module itself
+    // Read-only / low-value: bounding scrapers is all these need.
+    "app/api/booking/available-slots/route.ts",
+    "app/api/booking/available-dates/route.ts",
+    "app/api/newsletter/subscribe/route.ts",
+  ]);
+  for (const f of [...walk(APP)].filter((p) => !isTest(p))) {
+    if (ALLOW.has(rel(f))) continue;
+    const src = code(read(f));
+    if (!HIGH_VALUE.test(src)) continue;
+    if (IN_MEMORY.test(src) && !/rate-limit-db|checkAndRecord|isRateLimitedDb/.test(read(f))) {
+      fail(
+        "abuse",
+        rel(f),
+        "creates a booking/student but throttles with the IN-MEMORY limiter — on Vercel that is per-lambda, so the real ceiling is limit × warm instances",
+        "use lib/rate-limit-db.ts (rateLimitBookingDb / rateLimitRegisterDb / checkAndRecord)",
+      );
+    }
+  }
+});
+
+check("abuse: no 'use server' in lib/ — it makes every export an endpoint", () => {
+  // A `"use server"` at the TOP of a library file turns every export into a
+  // server-action endpoint any client component can invoke by importing it.
+  // lib/contacts.ts carried it, and its upsertContact() writes to `students` with
+  // no guard of its own. Never exploited (all importers were server-side), but it
+  // was an unguarded endpoint in waiting — and invisible to the server-action
+  // check, which only walks app/**/actions.ts.
+  //
+  // Actions belong in an actions.ts file with a guard. Libraries are libraries.
+  for (const f of walk(LIB).filter((p) => !isTest(p))) {
+    const first = read(f).split("\n").slice(0, 3).join("\n");
+    if (/^\s*["']use server["']/m.test(first)) {
+      fail(
+        "abuse",
+        rel(f),
+        'has a top-level "use server" — every export becomes a callable endpoint, bypassing the server-action auth check',
+        "drop the directive and call it as a library from guarded server code, or move it into an actions.ts with a guard",
+      );
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 5. SECRETS
 //
 // Two shapes, both found in the 2026-07-12 centralisation audit:

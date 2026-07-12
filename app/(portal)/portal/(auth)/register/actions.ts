@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { studentRegisterSchema } from "@/lib/validations";
 import { headers } from "next/headers";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimitRegisterDb } from "@/lib/rate-limit-db";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
@@ -14,8 +14,9 @@ export async function registerStudent(formData: FormData) {
   const headersList = await headers();
   const ip =
     headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const { success } = rateLimit(`register:${ip}`, 5, 60 * 60 * 1000);
-  if (!success) {
+  // Durable limiter — an in-memory Map is per-lambda on Vercel, so the real
+  // ceiling was 5 x warm instances, resetting on every cold start.
+  if (await rateLimitRegisterDb(ip)) {
     return { error: "Too many registration attempts. Please try again later." };
   }
 

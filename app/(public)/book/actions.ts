@@ -17,7 +17,7 @@ import { getCurrency, getBaseUrl } from "@/lib/get-region";
 import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 import { acceptRequiredDocuments } from "@/lib/legal-documents";
 import { getSessionPrice } from "@/lib/pricing";
-import { rateLimitBooking } from "@/lib/rate-limit";
+import { rateLimitBookingDb } from "@/lib/rate-limit-db";
 import { getOptionalStudent } from "@/lib/student-auth";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { redirect } from "next/navigation";
@@ -263,11 +263,18 @@ async function sendBookingEmails(
 }
 
 export async function createBooking(formData: FormData) {
-  // Rate limit by IP
+  // Rate limit by IP — DURABLE (the `rate_limits` table), not the in-memory Map.
+  //
+  // This is the most consequential unauthenticated write in the app: it takes a
+  // slot in a finite diary, creates a Microsoft Graph event, and sends email. The
+  // in-memory limiter keeps its counter inside ONE lambda, so on Vercel every warm
+  // instance has its own — the real ceiling was `10 × warm instances`, and it reset
+  // on every cold start. That bounds a careless script; it does not bound anyone
+  // who cares. Login and password-reset were already on the durable limiter; this
+  // belongs there too.
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for")?.split(",")[0] || "unknown";
-  const { success } = rateLimitBooking(ip);
-  if (!success) {
+  if (await rateLimitBookingDb(ip)) {
     throw new Error("Too many booking attempts. Please try again later.");
   }
 

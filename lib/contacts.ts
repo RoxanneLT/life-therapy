@@ -1,5 +1,19 @@
-"use server";
-
+/**
+ * Contact/audience helpers. A LIBRARY, not an actions file.
+ *
+ * The `"use server"` directive was removed deliberately. At the top of a file it
+ * turns EVERY export into a server-action endpoint that any client component can
+ * invoke by importing it — and `upsertContact` writes to `students` with no auth
+ * guard of its own. It was never exploitable (all six importers are server-side:
+ * server actions and route handlers, each already guarded or rate-limited), but
+ * the directive made it an unguarded endpoint in waiting, and it was invisible to
+ * the audit's server-action check, which only walks `app/**\/actions.ts`.
+ *
+ * These are plain async functions. Callers are server code and call them directly.
+ * If you ever need one of these FROM a client component, wrap it in a real
+ * `actions.ts` with a `requireRole`/`getAuthenticatedStudent` guard — do not put
+ * the directive back.
+ */
 import { prisma } from "@/lib/prisma";
 import type { AudienceFilters } from "@/lib/audience-filters";
 import { normalizePhoneForStorage } from "@/lib/phone";
