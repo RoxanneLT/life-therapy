@@ -14,6 +14,7 @@ import {
 } from "@/lib/create-invoice";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
+import { appBaseUrl } from "@/lib/region";
 
 /** Send order confirmation email to the buyer */
 async function sendOrderConfirmation(orderId: string) {
@@ -52,7 +53,7 @@ async function sendOrderConfirmation(orderId: string) {
     subtotal: fmt(fullOrder.subtotalCents),
     discountRow,
     total: fmt(fullOrder.totalCents),
-    portalUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal`,
+    portalUrl: `${appBaseUrl()}/portal`,
   });
 
   await sendEmail({

@@ -10,6 +10,7 @@ import { addCredits } from "@/lib/credits";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
+import { appBaseUrl } from "@/lib/region";
 
 // ────────────────────────────────────────────────────────────
 // Create new client
@@ -379,7 +380,7 @@ export async function convertToClientAction(clientId: string, data: ConvertData)
 
   // 4. Send welcome email
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
+    const baseUrl = appBaseUrl();
     const { subject, html } = await renderEmail("client_welcome", {
       clientName: `${client.firstName} ${client.lastName}`.trim(),
       portalUrl: `${baseUrl}/portal`,

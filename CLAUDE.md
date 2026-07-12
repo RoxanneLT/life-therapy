@@ -113,6 +113,23 @@ Monthly cron → generateMonthlyPaymentRequests()
   → real tax invoice generated + emailed
 ```
 
+### URLs & the two domains
+
+`life-therapy.co.za` (ZAR) and `life-therapy.online` (international) are served by **one deployment**;
+region is decided per-request from the hostname. So a URL in an email/PDF must follow the recipient's
+region, never a hardcoded domain. Three resolvers, in `lib/region.ts`:
+
+- `getBaseUrl()` (`lib/get-region.ts`) — request context; reads the region cookie the middleware set.
+- `getBaseUrlForCurrency(currency)` — emailing **someone else's** record (cron, webhook, admin action):
+  ZAR → `.co.za`, else `.online`.
+- `appBaseUrl()` — the last resort when you have neither host nor recipient. Folds the two env vars
+  (`NEXT_PUBLIC_APP_URL`/`NEXT_PUBLIC_BASE_URL`); not yet region-aware.
+
+**Never hardcode `https://life-therapy.co.za`.** The `NEXT_PUBLIC_APP_URL` override in
+`getBaseUrlForRegion` is **non-production only** — in prod it would send every international client's
+links to `.co.za`, because there is one env scope for both domains. The audit's `dual-domain` check
+forbids the literal outside `lib/region.ts`/`lib/copy.ts`/`app/layout.tsx`.
+
 ### Multi-Currency
 - Bookings store `priceCurrency` (ZAR/USD/EUR/GBP) and `priceZarCents` (price in that currency's cents)
 - PaymentRequests have a `currency` field

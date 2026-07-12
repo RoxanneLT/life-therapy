@@ -10,8 +10,9 @@ import { sendEmail } from "@/lib/email";
 import { recordAuthEvent } from "@/lib/audit";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import crypto from "crypto";
+import { appBaseUrl } from "@/lib/region";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
+const BASE_URL = appBaseUrl();
 
 export async function inviteUser(formData: FormData) {
   await requireRole("super_admin");

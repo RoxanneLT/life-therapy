@@ -845,6 +845,54 @@ check("email-safety: every rendered template key has a hardcoded fallback", () =
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 4a. THE DUAL-DOMAIN SEAM
+//
+// life-therapy.co.za (ZAR) and life-therapy.online (international) are served by
+// ONE deployment; region is decided per-request from the hostname. So a hardcoded
+// domain literal in an email/PDF is wrong for exactly the clients on the OTHER
+// domain — booking-cancellation links went to .co.za for international clients,
+// and the certificate footer printed .online onto every SA client's certificate.
+//
+// The literal belongs in lib/region.ts / lib/copy.ts (the region → domain map) and
+// nowhere else. Everyone else derives it: getBaseUrl() from the request, or
+// getBaseUrlForCurrency(currency) when emailing someone else's record.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DOMAIN_LITERAL_ALLOW = new Set([
+  "lib/region.ts", // the region → domain map — where the literal is SUPPOSED to live
+  "lib/copy.ts", // per-region marketing copy
+  "app/layout.tsx", // hreflang / canonical — legitimately names both domains
+  "lib/email-render.ts", // SAMPLE_DATA preview block + the DEFAULT_BASE_URL last-resort fallback
+  "lib/email-templates.ts", // hardcoded fallback templates, same last-resort fallback
+  "next.config.mjs",
+  // Admin-authored DEFAULT template footers, edited per campaign before send, and
+  // the admin-only drip PREVIEW page — not a client-facing send path.
+  "app/(admin)/admin/(dashboard)/campaigns/new/campaign-editor.tsx",
+  "app/(admin)/admin/(dashboard)/campaigns/new/birthday-campaign-editor.tsx",
+  "app/(admin)/admin/(dashboard)/drip-emails/[id]/page.tsx",
+]);
+
+check("dual-domain: no hardcoded life-therapy domain in a client-facing path", () => {
+  // Match the domain with an https:// prefix or a "/book"-style path after it —
+  // i.e. a URL, not an email address (hello@life-therapy.co.za is a shared inbox,
+  // handled separately in lib/copy.ts).
+  const RE = /https?:\/\/life-therapy\.(?:co\.za|online)|life-therapy\.(?:co\.za|online)\/\w/;
+  for (const f of allSource()) {
+    if (DOMAIN_LITERAL_ALLOW.has(rel(f))) continue;
+    const raw = read(f).replace(/^\s*(?:\/\/|\*).*$/gm, ""); // drop comment lines
+    if (RE.test(raw)) {
+      const m = RE.exec(raw);
+      fail(
+        "dual-domain",
+        rel(f),
+        `hardcoded domain URL (${m[0]}) — wrong for clients on the other domain`,
+        "getBaseUrl() (request context) or getBaseUrlForCurrency(currency) (emailing someone's record)",
+      );
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 4b. ABUSE SURFACE
 //
 // lib/rate-limit.ts keeps its counter in a Map inside ONE lambda. On Vercel each

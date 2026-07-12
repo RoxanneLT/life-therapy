@@ -7,8 +7,9 @@ import { redirect } from "next/navigation";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import type { DripEmailType } from "@/lib/generated/prisma/client";
+import { appBaseUrl } from "@/lib/region";
 
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = appBaseUrl();
 
 function buildPreviewBody(
   bodyHtml: string,

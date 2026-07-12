@@ -8,6 +8,7 @@ import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { recordAuthEvent } from "@/lib/audit";
 import { isRateLimitedDb, recordHitDb, clearRateLimitDb, hashIdentifier } from "@/lib/rate-limit-db";
+import { appBaseUrl } from "@/lib/region";
 
 const RESET_WINDOW_MS = 15 * 60 * 1000;
 
@@ -16,7 +17,7 @@ function clientIp(h: Headers): string | undefined {
 }
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
+  appBaseUrl();
 
 interface ResetState {
   error?: string;

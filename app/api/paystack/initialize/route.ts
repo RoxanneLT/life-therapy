@@ -2,8 +2,9 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { prisma } from "@/lib/prisma";
 import { initializeTransaction } from "@/lib/paystack";
 import { NextResponse } from "next/server";
+import { appBaseUrl } from "@/lib/region";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+const APP_URL = appBaseUrl();
 
 export async function POST(request: Request) {
   // Auth check

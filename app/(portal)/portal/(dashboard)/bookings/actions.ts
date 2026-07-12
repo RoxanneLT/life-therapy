@@ -12,6 +12,7 @@ import { evaluateCancel, evaluateReschedule } from "@/lib/booking-policy";
 import { refundCredit, forfeitCredit } from "@/lib/credits";
 import { format } from "date-fns";
 import { calendarDate } from "@/lib/dates";
+import { getBaseUrlForCurrency } from "@/lib/region";
 
 export async function portalCancelBookingAction(
   bookingId: string,
@@ -74,7 +75,7 @@ export async function portalCancelBookingAction(
     sessionType: config.label,
     date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
     time: `${booking.startTime} – ${booking.endTime} (SAST)`,
-    bookUrl: "https://life-therapy.co.za/book",
+    bookUrl: `${getBaseUrlForCurrency(booking.priceCurrency)}/book`,
   }).catch(() => null);
 
   if (email) {

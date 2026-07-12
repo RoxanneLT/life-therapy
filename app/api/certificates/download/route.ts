@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { getSiteSettings } from "@/lib/settings";
+import { getBaseUrl } from "@/lib/get-region";
+import { saFormat } from "@/lib/dates";
 import { jsPDF } from "jspdf";
 
 // ─── Brand colours ───────────────────────────────────────────
@@ -79,15 +81,16 @@ export async function GET(request: NextRequest) {
 
   const studentName = `${student.firstName} ${student.lastName}`;
   const courseTitle = certificate.course.title;
-  const issuedDate = new Date(certificate.issuedAt).toLocaleDateString(
-    "en-ZA",
-    { day: "numeric", month: "long", year: "numeric" },
-  );
+  // issuedAt is a real instant — render it in SAST, not the server's timezone.
+  const issuedDate = saFormat(certificate.issuedAt, "d MMMM yyyy");
 
-  // Company footer — built from site settings
+  // Company footer — built from site settings. The domain follows the visitor's
+  // region (this route is served on both hosts), not a hardcoded ".online" that
+  // printed the wrong domain onto every SA client's certificate.
   const regNr = settings.businessRegistrationNumber || "2019/570691/07";
   const email = settings.email || "hello@life-therapy.co.za";
-  const footerText = `Life Therapy (Pty) Ltd  |  Reg: ${regNr}  |  ${email}  |  life-therapy.online`;
+  const domain = (await getBaseUrl()).replace(/^https?:\/\//, "");
+  const footerText = `Life Therapy (Pty) Ltd  |  Reg: ${regNr}  |  ${email}  |  ${domain}`;
 
   // Load images
   const sigImage = loadImage("signature.png");

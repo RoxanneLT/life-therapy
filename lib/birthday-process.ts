@@ -2,8 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { saToday } from "@/lib/dates";
+import { appBaseUrl } from "@/lib/region";
 
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = appBaseUrl();
 
 /**
  * Get the gender category for template selection.

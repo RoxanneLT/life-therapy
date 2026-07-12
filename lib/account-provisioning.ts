@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
+import { appBaseUrl } from "@/lib/region";
 /**
  * Find an existing student by email or auto-create one.
  * Used for gift recipients who may not have an account yet.
@@ -51,7 +52,7 @@ export async function findOrCreateStudent(
   renderEmail("account_provisioned", {
     firstName,
     tempPassword,
-    loginUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/login`,
+    loginUrl: `${appBaseUrl()}/portal/login`,
   }).then(({ subject, html }) =>
     sendEmail({ to: email, subject, html, templateKey: "account_provisioned", studentId: student.id })
   ).catch((err) =>

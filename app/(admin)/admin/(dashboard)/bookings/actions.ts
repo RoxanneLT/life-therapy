@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
+import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   const { adminUser } = await requireRole("super_admin", "editor");
@@ -70,7 +71,7 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
       sessionType: config.label,
       date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
       time: `${booking.startTime} – ${booking.endTime} (SAST)`,
-      bookUrl: "https://life-therapy.co.za/book",
+      bookUrl: `${getBaseUrlForCurrency(booking.priceCurrency)}/book`,
     });
     await sendEmail({ to: booking.clientEmail, ...email, templateKey: "booking_cancellation", metadata: { bookingId: id } }).catch(console.error);
   }
@@ -420,7 +421,7 @@ export async function rescheduleSeriesAction(
       newDate: `Every ${dayName}`,
       newTime: `${newStartTime} – ${newEndTime} (SAST)`,
       teamsMeetingUrl: bookings[0].teamsMeetingUrl ?? "",
-      bookUrl: "https://life-therapy.co.za/book",
+      bookUrl: `${getBaseUrlForCurrency(bookings[0].priceCurrency)}/book`,
     });
     await sendEmail({
       to: first.clientEmail,
@@ -552,7 +553,7 @@ export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled:
       sessionType: config.label,
       date: `Recurring series (${bookings.length} session${bookings.length !== 1 ? "s" : ""})`,
       time: `${first.startTime} – ${first.endTime} (SAST)`,
-      bookUrl: "https://life-therapy.co.za/book",
+      bookUrl: `${getBaseUrlForCurrency(first.priceCurrency)}/book`,
     });
     await sendEmail({
       to: first.clientEmail,
@@ -749,7 +750,7 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
 
   // Send confirmation email
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
+    const baseUrl = appBaseUrl();
     const dateStr = format(bookingDate, "EEEE, d MMMM yyyy");
     const timeStr = `${data.startTime} – ${data.endTime} (SAST)`;
 
@@ -966,7 +967,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
   // Send single summary email
   if (createdDates.length > 0) {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://life-therapy.co.za";
+      const baseUrl = appBaseUrl();
       const patternLabels: Record<string, string> = {
         weekly: "weekly",
         bimonthly: "bi-monthly (every 2 weeks)",
@@ -1250,7 +1251,7 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
     sessionType: config.label,
     date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
     time: `${booking.startTime} – ${booking.endTime} (SAST)`,
-    bookUrl: "https://life-therapy.co.za/book",
+    bookUrl: `${getBaseUrlForCurrency(booking.priceCurrency)}/book`,
   });
   await sendEmail({
     to: booking.clientEmail,

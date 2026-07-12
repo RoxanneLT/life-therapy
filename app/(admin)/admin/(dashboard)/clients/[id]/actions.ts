@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { saToday, calendarDate, addSaDays } from "@/lib/dates";
 import { initializeTransaction } from "@/lib/paystack";
 import type { Booking, Student } from "@/lib/generated/prisma/client";
+import { appBaseUrl } from "@/lib/region";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
 async function autoActivatePayerIfNeeded(billedClientId: string, payerId: string) {
@@ -1082,7 +1083,7 @@ export async function resendInvoiceAction(invoiceId: string) {
 // Payment Requests — Regenerate payment link
 // ────────────────────────────────────────────────────────────
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+const APP_URL = appBaseUrl();
 
 export async function regeneratePaymentLinkAction(
   paymentRequestId: string,
@@ -1687,7 +1688,7 @@ export async function createManualPaymentRequestAction(data: {
             amount: pr.totalCents,
             currency: pr.currency || "ZAR",
             reference,
-            callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+            callback_url: `${appBaseUrl()}/portal/invoices`,
             metadata: { paymentRequestId: pr.id },
           });
           await prisma.paymentRequest.update({
@@ -1878,7 +1879,7 @@ export async function updatePaymentRequestAction(data: {
             amount: totals.totalCents,
             currency: pr.currency || "ZAR",
             reference,
-            callback_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za"}/portal/invoices`,
+            callback_url: `${appBaseUrl()}/portal/invoices`,
             metadata: { paymentRequestId: data.paymentRequestId },
           });
           await prisma.paymentRequest.update({

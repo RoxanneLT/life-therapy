@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { sendEmail } from "./email";
 import { renderEmail } from "./email-render";
 import { getBaseUrl } from "./get-region";
+import { appBaseUrl } from "./region";
 
 /**
  * Recalculates and updates the progress percentage for an enrollment.
@@ -61,7 +62,7 @@ export async function recalculateProgress(
 
     if (student && course) {
       let baseUrl: string;
-      try { baseUrl = await getBaseUrl(); } catch { baseUrl = "https://life-therapy.co.za"; }
+      try { baseUrl = await getBaseUrl(); } catch { baseUrl = appBaseUrl(); }
       renderEmail("course_completed", {
         firstName: student.firstName,
         courseTitle: course.title,

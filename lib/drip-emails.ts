@@ -3,8 +3,9 @@ import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
+import { appBaseUrl } from "@/lib/region";
 
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 1200;
 

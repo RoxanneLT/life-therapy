@@ -4,8 +4,9 @@ import { sendEmail } from "@/lib/email";
 import { baseTemplate, normalizeEmailHtml } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
+import { appBaseUrl } from "@/lib/region";
 
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 1200;
 const COLD_THRESHOLD = 5; // Auto-pause after 5 consecutive unopened emails

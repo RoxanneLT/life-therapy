@@ -15,9 +15,10 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { saToday, diffSaDays } from "@/lib/dates";
+import { appBaseUrl } from "@/lib/region";
 
 const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+  appBaseUrl();
 
 export async function processDormantFollowUp(): Promise<{
   atRisk30: number;

@@ -10,8 +10,9 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { revalidatePath } from "next/cache";
+import { getBaseUrlForCurrency } from "@/lib/region";
+import { resolveClientCurrencies } from "@/lib/billing";
 
-const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 
 export async function publishDocumentVersionAction(
   slug: LegalDocumentSlug,
@@ -66,15 +67,21 @@ async function sendDocumentUpdateNotifications(
     select: { id: true, firstName: true, email: true },
   });
 
+  // Each client's portal link must point at THEIR domain, not a hardcoded .co.za —
+  // this goes to every active client, international ones included.
+  const currencies = await resolveClientCurrencies(activeClients.map((c) => c.id));
+  const currencyById = new Map(currencies.map((c) => [c.studentId, c.currency]));
+
   for (const client of activeClients) {
     if (!client.email) continue;
 
     try {
+      const portalBase = getBaseUrlForCurrency(currencyById.get(client.id));
       const email = await renderEmail("legal_document_updated", {
         firstName: client.firstName || "",
         documentTitle,
         changeSummary,
-        portalUrl: DEFAULT_BASE_URL + "/portal",
+        portalUrl: portalBase + "/portal",
       });
 
       await sendEmail({

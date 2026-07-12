@@ -3,6 +3,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { findOrCreateStudent } from "@/lib/account-provisioning";
 import { escapeHtml } from "@/lib/utils";
+import { appBaseUrl } from "@/lib/region";
 
 /**
  * Create a Gift record for a gift order item.
@@ -96,7 +97,7 @@ export async function sendGiftEmail(giftId: string) {
     dp?.title ||
     "Session Credits";
   const buyerName = `${gift.buyer.firstName} ${gift.buyer.lastName}`;
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://life-therapy.co.za";
+  const baseUrl = appBaseUrl();
   const redeemUrl = `${baseUrl}/gift/redeem?token=${gift.redeemToken}`;
 
   const messageBlock = gift.message
