@@ -26,7 +26,7 @@ const EASTER_SUNDAYS: Record<number, [number, number]> = {
 function getEasterSunday(year: number): Date {
   const precomputed = EASTER_SUNDAYS[year];
   if (precomputed) {
-    return new Date(year, precomputed[0] - 1, precomputed[1]);
+    return new Date(Date.UTC(year, precomputed[0] - 1, precomputed[1]));
   }
   // Anonymous Gregorian algorithm fallback
   const a = year % 19;
@@ -43,38 +43,64 @@ function getEasterSunday(year: number): Date {
   const m = Math.floor((a + 11 * h + 22 * l) / 451);
   const month = Math.floor((h + l - 7 * m + 114) / 31);
   const day = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(year, month - 1, day);
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
-  d.setDate(d.getDate() + days);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
 function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return d.toISOString().slice(0, 10); // UTC-midnight anchor → exact
 }
 
 /**
  * Returns all SA public holidays for the given year as Date objects (midnight local).
  * Includes the "Sunday → Monday" substitution rule.
  */
+/**
+ * Once-off holidays PROCLAIMED BY THE PRESIDENT under s2A of the Public Holidays
+ * Act 36 of 1994. **No algorithm can derive these** — they are political acts,
+ * announced in the Government Gazette. Election days have done it; so has the
+ * Christmas-on-a-Sunday gap.
+ *
+ * They matter here because business-day arithmetic drives billing: the monthly
+ * run date (last business day), payment due dates, reminders (2 business days
+ * before) and overdue triggers (1 after). Miss a proclaimed day and a reminder
+ * goes out on a public holiday, or a client is marked overdue a day early.
+ *
+ * **Every entry needs a Gazette reference.** If you cannot cite it, do not add it
+ * — a fabricated holiday is worse than a missing one, because it silently moves
+ * a real due date.
+ *
+ * Known recurrence to watch: when 25 December falls on a Sunday, s2(1) shifts it
+ * to the Monday — but that Monday is ALREADY Day of Goodwill, so the shift has no
+ * work to do (the algorithm below correctly produces no extra day). Historically
+ * the gap was then filled by a separate proclamation on the 27th. Next occurrence:
+ * **2033**.
+ */
+const PROCLAIMED_HOLIDAYS: Record<string, string> = {
+  // date: Gazette reference
+  "2022-12-27": "GG 45832, Proc R.63 of 2022 — Christmas fell on a Sunday; 26 Dec was already Day of Goodwill",
+};
+
 export function getSAPublicHolidays(year: number): Date[] {
   const easter = getEasterSunday(year);
 
   // Fixed holidays (month is 0-indexed)
   const fixed: Date[] = [
-    new Date(year, 0, 1),   // New Year's Day
-    new Date(year, 2, 21),  // Human Rights Day
-    new Date(year, 3, 27),  // Freedom Day
-    new Date(year, 4, 1),   // Workers' Day
-    new Date(year, 5, 16),  // Youth Day
-    new Date(year, 7, 9),   // National Women's Day
-    new Date(year, 8, 24),  // Heritage Day
-    new Date(year, 11, 16), // Day of Reconciliation
-    new Date(year, 11, 25), // Christmas Day
-    new Date(year, 11, 26), // Day of Goodwill
+    new Date(Date.UTC(year, 0, 1)),   // New Year's Day
+    new Date(Date.UTC(year, 2, 21)),  // Human Rights Day
+    new Date(Date.UTC(year, 3, 27)),  // Freedom Day
+    new Date(Date.UTC(year, 4, 1)),   // Workers' Day
+    new Date(Date.UTC(year, 5, 16)),  // Youth Day
+    new Date(Date.UTC(year, 7, 9)),   // National Women's Day
+    new Date(Date.UTC(year, 8, 24)),  // Heritage Day
+    new Date(Date.UTC(year, 11, 16)), // Day of Reconciliation
+    new Date(Date.UTC(year, 11, 25)), // Christmas Day
+    new Date(Date.UTC(year, 11, 26)), // Day of Goodwill
   ];
 
   // Easter-dependent holidays
@@ -85,15 +111,30 @@ export function getSAPublicHolidays(year: number): Date[] {
 
   const all = [...fixed, ...dynamic];
 
-  // If a holiday falls on a Sunday, the following Monday is a public holiday
+  // Public Holidays Act s2(1): a holiday falling on a SUNDAY moves to the Monday.
+  // (Saturday holidays are NOT shifted.) When Christmas lands on a Sunday the
+  // Monday is already Day of Goodwill, so this legitimately produces a duplicate
+  // rather than a new day — dedupe below, never fabricate a Tuesday.
   const extras: Date[] = [];
   for (const h of all) {
-    if (h.getDay() === 0) {
+    if (h.getUTCDay() === 0) {
       extras.push(addDays(h, 1));
     }
   }
 
-  return [...all, ...extras];
+  // s2A proclamations for this year — the days no algorithm can know.
+  const proclaimed = Object.keys(PROCLAIMED_HOLIDAYS)
+    .filter((d) => d.startsWith(`${year}-`))
+    .map((d) => new Date(`${d}T00:00:00Z`));
+
+  // Dedupe: the Sunday shift can land on a day that is already a holiday.
+  const seen = new Set<string>();
+  return [...all, ...extras, ...proclaimed].filter((d) => {
+    const k = d.toISOString().slice(0, 10);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 // Cache holiday keys per year for fast lookup
@@ -110,13 +151,13 @@ function getHolidaySet(year: number): Set<string> {
 
 /** Saturday (6) or Sunday (0) */
 export function isWeekend(date: Date): boolean {
-  const day = date.getDay();
+  const day = date.getUTCDay();
   return day === 0 || day === 6;
 }
 
 /** Checks if the date is a SA public holiday */
 export function isSAPublicHoliday(date: Date): boolean {
-  return getHolidaySet(date.getFullYear()).has(dateKey(date));
+  return getHolidaySet(date.getUTCFullYear()).has(dateKey(date));
 }
 
 /** True if the date is a Mon–Fri working day and not a public holiday */
@@ -169,7 +210,7 @@ export function subtractBusinessDays(date: Date, days: number): Date {
  * month is 1-indexed (1 = Jan, 12 = Dec).
  */
 export function getLastBusinessDayOfMonth(year: number, month: number): Date {
-  // new Date(year, month, 0) = last calendar day of the month (month is 1-indexed here)
-  const lastCalendarDay = new Date(year, month, 0);
+  // new Date(Date.UTC(year, month, 0)) = last calendar day of the month (month is 1-indexed here)
+  const lastCalendarDay = new Date(Date.UTC(year, month, 0));
   return getPrecedingBusinessDay(lastCalendarDay);
 }
