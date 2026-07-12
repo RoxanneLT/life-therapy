@@ -23,8 +23,6 @@ import { getRelatedCourses } from "@/lib/recommendations";
 import { buildMetadata } from "@/lib/metadata";
 import { courseJsonLd, breadcrumbJsonLd, JsonLdScript } from "@/lib/json-ld";
 
-export const revalidate = 60;
-
 export async function generateMetadata({
   params,
 }: {

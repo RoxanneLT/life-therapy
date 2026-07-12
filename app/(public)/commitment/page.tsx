@@ -1,5 +1,4 @@
 export const dynamic = "force-dynamic";
-export const revalidate = 60;
 
 import { getActiveDocument } from "@/lib/legal-documents";
 import { buildStaticPageMetadata } from "@/lib/metadata";
