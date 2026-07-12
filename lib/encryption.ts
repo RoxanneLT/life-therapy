@@ -1,11 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { env } from "@/lib/env";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // NIST SP 800-38D recommended for GCM
 const AUTH_TAG_LENGTH = 16;
 
 function getKey(): Buffer {
-  const hex = process.env.ENCRYPTION_KEY;
+  const hex = env("ENCRYPTION_KEY");
   if (!hex || hex.length !== 64) {
     throw new Error("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
   }

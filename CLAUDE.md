@@ -216,6 +216,26 @@ Rules:
 
 ---
 
+## Environment access — `lib/env.ts` is the only reader of server vars
+
+A var read raw at its point of use is discovered MISSING only there, mid-request. `lib/env.ts`
+declares every server var once and reads it through a validating accessor:
+
+- `env(name)` — the value or `undefined` (typed name; a typo won't compile).
+- `requireEnv(name)` — the value or a **named throw** (fail-closed).
+- `envOr(name, default)` — genuine config with a default.
+- `isConfigured(...names)` — an integration is on only if ALL its vars are set (a half-set one reads
+  as off, never as a mid-request error).
+- `missingRequiredEnv()` — the required set that's absent; asserted once/day from the daily cron.
+
+Rules:
+- **Server vars go through `lib/env.ts`.** The `env` audit check forbids raw `process.env.<SERVER_VAR>`
+  elsewhere. Exceptions (allowlisted): the Supabase/Prisma client constructors (hard deps, guarded at
+  construction), and `CRON_SECRET`/`AUDIT_IP_HMAC_KEY` (their own single guarded readers).
+- **`NEXT_PUBLIC_*` stays a literal `process.env.NEXT_PUBLIC_X`** — the Next.js compiler inlines it into
+  the client bundle, which only works on a literal member-access. Routing it through a function leaves
+  `undefined` in the browser. These are client-safe by definition.
+
 ## Environment Variables (key ones)
 
 ```

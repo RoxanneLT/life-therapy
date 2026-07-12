@@ -17,13 +17,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import {
   createStreamVideo,
+  getStreamUploadTarget,
   getStreamEmbedUrl,
   extractStreamGuid,
   deleteStreamVideo,
 } from "@/lib/bunny";
 
-const STREAM_LIBRARY_ID = process.env.BUNNY_STREAM_LIBRARY_ID!;
-const STREAM_API_KEY = process.env.BUNNY_STREAM_API_KEY!;
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,8 +40,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     guid,
-    uploadUrl: `https://video.bunnycdn.com/library/${STREAM_LIBRARY_ID}/videos/${guid}`,
-    apiKey: STREAM_API_KEY,
+    ...getStreamUploadTarget(guid),
     embedUrl: getStreamEmbedUrl(guid),
   });
 }

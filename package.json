@@ -13,11 +13,12 @@
     "test:dates": "tsx --test lib/dates.test.ts",
     "audit": "node scripts/architecture-audit.mjs",
     "test:money": "tsx --test lib/billing.test.ts",
-    "test": "tsx --test lib/dates.test.ts lib/billing.test.ts lib/sa-holidays.test.ts lib/cron/with-cron-run.test.ts lib/email-render.test.ts lib/region.test.ts",
+    "test": "tsx --test lib/dates.test.ts lib/billing.test.ts lib/sa-holidays.test.ts lib/cron/with-cron-run.test.ts lib/email-render.test.ts lib/region.test.ts lib/env.test.ts",
     "test:holidays": "tsx --test lib/sa-holidays.test.ts",
     "test:cron": "tsx --test lib/cron/with-cron-run.test.ts",
     "test:email": "tsx --test lib/email-render.test.ts",
-    "test:region": "tsx --test lib/region.test.ts"
+    "test:region": "tsx --test lib/region.test.ts",
+    "test:env": "tsx --test lib/env.test.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

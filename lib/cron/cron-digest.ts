@@ -1,5 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import { getSiteSettings } from "@/lib/settings";
+import { envOr } from "@/lib/env";
 
 export interface CronJobDetail {
   status: string; // "ok" | "failed" | "error" | "partial" | "skipped"
@@ -33,7 +34,7 @@ export async function sendCronDigest(
 
   const settings = await getSiteSettings();
   const adminEmail =
-    settings.email || process.env.ADMIN_EMAIL || "hello@life-therapy.co.za";
+    settings.email || envOr("ADMIN_EMAIL", "hello@life-therapy.co.za");
 
   const issueLines = issues
     .map(([name, d]) => {

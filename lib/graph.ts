@@ -10,6 +10,7 @@ import { TIMEZONE } from "@/lib/booking-config";
 import { formatInTimeZone } from "date-fns-tz";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 import { saDateStr, saDayStart, saDayEnd } from "@/lib/dates";
+import { env } from "@/lib/env";
 
 // ────────────────────────────────────────────────────────────
 // Config & client
@@ -23,10 +24,10 @@ interface GraphConfig {
 }
 
 export function getGraphConfig(): GraphConfig | null {
-  const tenantId = process.env.MS_GRAPH_TENANT_ID;
-  const clientId = process.env.MS_GRAPH_CLIENT_ID;
-  const clientSecret = process.env.MS_GRAPH_CLIENT_SECRET;
-  const userEmail = process.env.MS_GRAPH_USER_EMAIL;
+  const tenantId = env("MS_GRAPH_TENANT_ID");
+  const clientId = env("MS_GRAPH_CLIENT_ID");
+  const clientSecret = env("MS_GRAPH_CLIENT_SECRET");
+  const userEmail = env("MS_GRAPH_USER_EMAIL");
 
   if (!tenantId || !clientId || !clientSecret || !userEmail) return null;
 

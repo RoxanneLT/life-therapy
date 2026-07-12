@@ -394,6 +394,51 @@ check("server-action-auth: every mutating action is guarded for its route group"
   }
 });
 
+check("server-action-auth: mutating API routes and inline actions are guarded", () => {
+  // The check above only walks app/**/actions.ts. It cannot see two other places a
+  // guarded write should live, both of which the 2026-07-12 audit flagged as blind
+  // spots: API route handlers (app/api/**/route.ts) and inline `"use server"`
+  // closures written directly inside a page.
+  const ANY_GUARD =
+    /requireRole\s*\(|getAuthenticatedAdmin\s*\(|getAuthenticatedStudent\s*\(|getOptionalStudent\s*\(|requirePasswordChanged\s*\(|verifyWebhookSignature\s*\(|isCronAuthorised\s*\(|withCronRun\s*\(|rate-?limit|auth\.getUser\s*\(|unsubscribeToken/i;
+
+  // 1. API route handlers that mutate.
+  for (const f of walk(join(APP, "api"), /route\.ts$/)) {
+    const raw = read(f);
+    if (!MUTATION.test(code(raw))) continue;
+    // Public-by-design, low-value writes carry their own note; allow the tracking
+    // pixels and the coupon oracle (now rate-limited in slice 3).
+    if (/track\/(?:click|open)/.test(rel(f))) continue;
+    if (!ANY_GUARD.test(raw)) {
+      fail(
+        "server-action-auth",
+        rel(f),
+        "an API route mutates the DB with no auth/rate-limit/webhook guard — invisible to the actions.ts check",
+        "guard it (requireRole / getAuthenticatedStudent / a webhook signature / a rate limit)",
+      );
+    }
+  }
+
+  // 2. Any lib/**/*.ts that carries a top-level "use server" is an action endpoint
+  //    in disguise (handled by the abuse check), but flag a MUTATING inline
+  //    `"use server"` closure inside a page that guards neither itself nor via an
+  //    imported action.
+  for (const f of walk(APP, /page\.tsx$/)) {
+    const raw = read(f);
+    // inline closures: `"use server";` INSIDE a function body (indented), not the
+    // file-level directive.
+    if (!/\n\s+["']use server["']/.test(raw)) continue;
+    if (MUTATION.test(code(raw)) && !ANY_GUARD.test(raw)) {
+      fail(
+        "server-action-auth",
+        rel(f),
+        'an inline "use server" closure in a page mutates the DB with no guard — the actions.ts check cannot see it',
+        "call requireRole()/getAuthenticatedStudent(), or delegate to a guarded actions.ts function",
+      );
+    }
+  }
+});
+
 check("mutation-revalidate: every mutating action calls revalidatePath", () => {
   for (const f of walk(APP, /actions\.ts$/)) {
     const raw = read(f);
@@ -948,6 +993,52 @@ check("abuse: no 'use server' in lib/ — it makes every export an endpoint", ()
         rel(f),
         'has a top-level "use server" — every export becomes a callable endpoint, bypassing the server-action auth check',
         "drop the directive and call it as a library from guarded server code, or move it into an actions.ts with a guard",
+      );
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4c. ENV ACCESS
+//
+// A var read raw at its point of use is discovered MISSING only there, mid-request
+// — the "June-outage" class. lib/env.ts declares every server var once, reads it
+// through a validating accessor, and asserts the required set from the daily cron.
+// Raw `process.env` elsewhere reopens the hole.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ENV_ALLOW = new Set([
+  "lib/env.ts", // the accessor itself
+  // Bundler requirement: NEXT_PUBLIC_* must be a literal member-access so the
+  // Next.js compiler can inline it into the client bundle — a function would leave
+  // `undefined` in the browser. (The regex below already skips NEXT_PUBLIC_*; these
+  // files are listed for the reads that AREN'T NEXT_PUBLIC.)
+  "lib/prisma.ts", // DATABASE_URL — hard dependency, guarded at the client constructor
+  "lib/supabase.ts",
+  "lib/supabase-server.ts",
+  "lib/supabase-admin.ts",
+  "lib/supabase/middleware.ts",
+  "lib/supabase/config.ts",
+  "lib/cron/with-cron-run.ts", // CRON_SECRET — its own single guarded reader
+  "lib/audit.ts", // AUDIT_IP_HMAC_KEY — same
+]);
+
+check("env: no raw process.env for a server var outside lib/env.ts", () => {
+  // NEXT_PUBLIC_* and NODE_ENV are exempt: the first is a bundler literal, the
+  // second is framework config, not a secret.
+  const RAW = /process\.env\.(?!NEXT_PUBLIC_|NODE_ENV\b)([A-Z][A-Z0-9_]*)/g;
+  for (const f of allSource()) {
+    if (ENV_ALLOW.has(rel(f))) continue;
+    const src = code(read(f)); // comments/strings stripped
+    const names = new Set();
+    let m;
+    while ((m = RAW.exec(src))) names.add(m[1]);
+    if (names.size > 0) {
+      fail(
+        "env",
+        rel(f),
+        `reads ${[...names].join(", ")} straight from process.env — a missing value is discovered mid-request, not at boot`,
+        "read it through lib/env.ts: env() / requireEnv() / envOr() / isConfigured()",
       );
     }
   }

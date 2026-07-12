@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
 import { appBaseUrl } from "@/lib/region";
+import { requireEnv, isConfigured, envOr } from "@/lib/env";
 
 const DEFAULT_BASE_URL = appBaseUrl();
 
@@ -55,7 +56,7 @@ function injectTracking(html: string, trackingId: string, baseUrl: string): stri
 async function sendViaResend(
   opts: { from: string; to: string; subject: string; html: string; replyTo?: string; attachments?: EmailAttachment[] },
 ) {
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const resend = new Resend(requireEnv("RESEND_API_KEY"));
   const { error } = await resend.emails.send({
     from: opts.from,
     to: opts.to,
@@ -111,12 +112,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
   const trackingId = skipTracking ? undefined : randomUUID();
   const finalHtml = trackingId ? injectTracking(html, trackingId, DEFAULT_BASE_URL) : html;
 
-  const useResend = !!process.env.RESEND_API_KEY;
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT ? Number.parseInt(process.env.SMTP_PORT, 10) : null;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const hasSMTP = !!(smtpHost && smtpPort && smtpUser && smtpPass);
+  const useResend = isConfigured("RESEND_API_KEY");
+  const hasSMTP = isConfigured("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS");
 
   if (!useResend && !hasSMTP) {
     console.error("No email provider configured — email not sent:", subject);
@@ -130,13 +127,18 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       if (useResend) {
-        const from = process.env.RESEND_FROM || `${settings.smtpFromName || "Life-Therapy"} <hello@life-therapy.co.za>`;
+        const from = envOr("RESEND_FROM", `${settings.smtpFromName || "Life-Therapy"} <hello@life-therapy.co.za>`);
         await sendViaResend({ from, to, subject, html: finalHtml, replyTo, attachments });
       } else {
-        const from = `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || smtpUser}>`;
+        // hasSMTP guaranteed all four present above; requireEnv makes that explicit.
+        const host = requireEnv("SMTP_HOST");
+        const port = Number.parseInt(requireEnv("SMTP_PORT"), 10);
+        const user = requireEnv("SMTP_USER");
+        const pass = requireEnv("SMTP_PASS");
+        const from = `"${settings.smtpFromName || "Life-Therapy"}" <${settings.smtpFromEmail || user}>`;
         await sendViaSMTP(
           { from, to, subject, html: finalHtml, replyTo, attachments },
-          { host: smtpHost!, port: smtpPort!, user: smtpUser!, pass: smtpPass! },
+          { host, port, user, pass },
         );
       }
       await logEmail({ to, subject, templateKey, studentId, metadata, status: "sent", trackingId });

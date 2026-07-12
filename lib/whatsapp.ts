@@ -11,6 +11,7 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
 import { normalizePhone, isValidPhone as isValidPhoneStrict } from "@/lib/phone";
+import { env } from "@/lib/env";
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v21.0";
 
@@ -66,7 +67,7 @@ export function isValidPhone(phone: string): boolean {
 export async function sendWhatsAppTemplate(
   params: SendTemplateParams,
 ): Promise<SendResult> {
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const token = env("WHATSAPP_ACCESS_TOKEN");
   const settings = await getSiteSettings();
   const phoneNumberId = settings.whatsappPhoneNumberId;
 

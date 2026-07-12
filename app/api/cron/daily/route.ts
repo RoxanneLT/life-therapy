@@ -13,6 +13,7 @@ import { checkBunnyBalance } from "@/lib/cron/bunny-balance-check";
 import { processPhoneNormalization } from "@/lib/cron/normalize-phones";
 import { sendCronDigest, type CronJobDetail } from "@/lib/cron/cron-digest";
 import { collectCronRunFailures, isCronAuthorised } from "@/lib/cron/with-cron-run";
+import { missingRequiredEnv } from "@/lib/env";
 
 /**
  * Combined daily cron — runs at 08:00 SAST (06:00 UTC).
@@ -59,6 +60,18 @@ export async function GET(request: NextRequest) {
   // highest-value endpoint in the system: the orchestrator for all ten jobs.
   if (!isCronAuthorised(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Fail LOUD on a missing required var, once per day, rather than have each of the
+  // ten jobs discover it mid-run as a fetch-to-undefined. This runs on the machine
+  // that serves requests, so a missing var here means it's missing for the app too.
+  const missing = missingRequiredEnv();
+  if (missing.length > 0) {
+    console.error("[daily-cron] Missing required environment variables:", missing.join(", "));
+    return NextResponse.json(
+      { error: "Missing required environment variables", missing },
+      { status: 500 },
+    );
   }
 
   const startedAt = new Date();

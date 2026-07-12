@@ -1,9 +1,10 @@
 import crypto from "crypto";
+import { env } from "@/lib/env";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 function getSecretKey(): string {
-  const key = process.env.PAYSTACK_SECRET_KEY;
+  const key = env("PAYSTACK_SECRET_KEY");
   if (!key) throw new Error("PAYSTACK_SECRET_KEY is not set");
   return key;
 }

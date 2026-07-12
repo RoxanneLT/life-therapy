@@ -4,12 +4,13 @@
  */
 
 import { sendEmail } from "@/lib/email";
+import { env } from "@/lib/env";
 
 const LOW_BALANCE_THRESHOLD = 1.0; // USD
 const WARN_EMAIL = "hello@life-therapy.co.za";
 
 export async function checkBunnyBalance(): Promise<{ balance: number | null; warned: boolean }> {
-  const key = process.env.BUNNY_ACCOUNT_API_KEY;
+  const key = env("BUNNY_ACCOUNT_API_KEY");
   if (!key) return { balance: null, warned: false };
 
   try {

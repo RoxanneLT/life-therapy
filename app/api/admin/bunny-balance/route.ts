@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
+import { env } from "@/lib/env";
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const key = process.env.BUNNY_ACCOUNT_API_KEY;
+  const key = env("BUNNY_ACCOUNT_API_KEY");
   if (!key) {
     return NextResponse.json({ error: "Not configured" }, { status: 404 });
   }

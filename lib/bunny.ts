@@ -5,15 +5,33 @@
  * Bunny Stream  → Course video hosting
  */
 
+import { requireEnv, envOr } from "@/lib/env";
 // ─── Environment ──────────────────────────────────────────────────────────────
+// Read at USE, fail-closed. requireEnv throws a named error the moment a Bunny var
+// is missing — never bakes the literal string "undefined" into a URL, which is what
+// the module-level `!` reads did (and what the two app/api/bunny routes copied
+// without even the guard). getStorageCreds()/getStreamCreds() are the single
+// readers; nothing else reads the raw vars.
 
-const STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE_NAME!;
-const STORAGE_API_KEY = process.env.BUNNY_STORAGE_API_KEY!;
-const STORAGE_REGION = process.env.BUNNY_STORAGE_REGION || "de"; // "de" = Frankfurt
-const CDN_HOSTNAME = process.env.NEXT_PUBLIC_BUNNY_CDN_HOSTNAME!; // e.g. life-therapy-cdn.b-cdn.net or cdn.life-therapy.co.za
+// CDN hostname is NEXT_PUBLIC (inlined into the client bundle), so it stays a
+// literal member-access — it can't go through a function.
+const CDN_HOSTNAME = process.env.NEXT_PUBLIC_BUNNY_CDN_HOSTNAME || "";
 
-const STREAM_LIBRARY_ID = process.env.BUNNY_STREAM_LIBRARY_ID!;
-const STREAM_API_KEY = process.env.BUNNY_STREAM_API_KEY!;
+function getStorageCreds(): { zone: string; key: string; hostname: string } {
+  const region = envOr("BUNNY_STORAGE_REGION", "de"); // "de" = Frankfurt
+  return {
+    zone: requireEnv("BUNNY_STORAGE_ZONE_NAME"),
+    key: requireEnv("BUNNY_STORAGE_API_KEY"),
+    hostname: STORAGE_HOSTNAMES[region] || STORAGE_HOSTNAMES.de,
+  };
+}
+
+function getStreamCreds(): { libraryId: string; key: string } {
+  return {
+    libraryId: requireEnv("BUNNY_STREAM_LIBRARY_ID"),
+    key: requireEnv("BUNNY_STREAM_API_KEY"),
+  };
+}
 
 // Storage zone regional hostnames
 const STORAGE_HOSTNAMES: Record<string, string> = {
@@ -23,10 +41,6 @@ const STORAGE_HOSTNAMES: Record<string, string> = {
   sg: "sg.storage.bunnycdn.com", // Singapore
   syd: "syd.storage.bunnycdn.com", // Sydney
 };
-
-function storageHostname(): string {
-  return STORAGE_HOSTNAMES[STORAGE_REGION] || STORAGE_HOSTNAMES.de;
-}
 
 // ─── Storage Zone: File Upload ─────────────────────────────────────────────
 
@@ -43,16 +57,13 @@ export async function uploadToStorage(
   path: string,
   mimeType: string
 ): Promise<string> {
-  if (!STORAGE_ZONE_NAME || !STORAGE_API_KEY) {
-    throw new Error("Bunny Storage env vars are not configured (BUNNY_STORAGE_ZONE_NAME, BUNNY_STORAGE_API_KEY)");
-  }
-
-  const url = `https://${storageHostname()}/${STORAGE_ZONE_NAME}/${path}`;
+  const { zone, key, hostname } = getStorageCreds();
+  const url = `https://${hostname}/${zone}/${path}`;
 
   const res = await fetch(url, {
     method: "PUT",
     headers: {
-      AccessKey: STORAGE_API_KEY,
+      AccessKey: key,
       "Content-Type": mimeType,
     },
     body: buffer as unknown as BodyInit,
@@ -70,14 +81,15 @@ export async function uploadToStorage(
  * Delete a file from Bunny Storage Zone by its CDN URL or path.
  */
 export async function deleteFromStorage(pathOrUrl: string): Promise<void> {
+  const { zone, key, hostname } = getStorageCreds();
   const path = pathOrUrl.startsWith("http")
     ? pathOrUrl.replace(`https://${CDN_HOSTNAME}/`, "")
     : pathOrUrl;
 
-  const url = `https://${storageHostname()}/${STORAGE_ZONE_NAME}/${path}`;
+  const url = `https://${hostname}/${zone}/${path}`;
   await fetch(url, {
     method: "DELETE",
-    headers: { AccessKey: STORAGE_API_KEY },
+    headers: { AccessKey: key },
   });
 }
 
@@ -104,14 +116,14 @@ export interface BunnyVideo {
  * Create a new video entry in Bunny Stream (returns a GUID for direct upload).
  */
 export async function createStreamVideo(title: string): Promise<{ guid: string }> {
-  assertStreamEnv();
+  const { libraryId, key } = getStreamCreds();
 
   const res = await fetch(
-    `https://video.bunnycdn.com/library/${STREAM_LIBRARY_ID}/videos`,
+    `https://video.bunnycdn.com/library/${libraryId}/videos`,
     {
       method: "POST",
       headers: {
-        AccessKey: STREAM_API_KEY,
+        AccessKey: key,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ title }),
@@ -134,14 +146,14 @@ export async function uploadStreamVideo(
   guid: string,
   buffer: Buffer
 ): Promise<void> {
-  assertStreamEnv();
+  const { libraryId, key } = getStreamCreds();
 
   const res = await fetch(
-    `https://video.bunnycdn.com/library/${STREAM_LIBRARY_ID}/videos/${guid}`,
+    `https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`,
     {
       method: "PUT",
       headers: {
-        AccessKey: STREAM_API_KEY,
+        AccessKey: key,
         "Content-Type": "video/*",
       },
       body: buffer as unknown as BodyInit,
@@ -158,11 +170,11 @@ export async function uploadStreamVideo(
  * Fetch metadata for a Bunny Stream video.
  */
 export async function getStreamVideo(guid: string): Promise<BunnyVideo> {
-  assertStreamEnv();
+  const { libraryId, key } = getStreamCreds();
 
   const res = await fetch(
-    `https://video.bunnycdn.com/library/${STREAM_LIBRARY_ID}/videos/${guid}`,
-    { headers: { AccessKey: STREAM_API_KEY } }
+    `https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`,
+    { headers: { AccessKey: key } }
   );
 
   if (!res.ok) throw new Error(`Bunny Stream fetch failed (${res.status})`);
@@ -173,13 +185,13 @@ export async function getStreamVideo(guid: string): Promise<BunnyVideo> {
  * Delete a video from Bunny Stream.
  */
 export async function deleteStreamVideo(guid: string): Promise<void> {
-  assertStreamEnv();
+  const { libraryId, key } = getStreamCreds();
 
   await fetch(
-    `https://video.bunnycdn.com/library/${STREAM_LIBRARY_ID}/videos/${guid}`,
+    `https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`,
     {
       method: "DELETE",
-      headers: { AccessKey: STREAM_API_KEY },
+      headers: { AccessKey: key },
     }
   );
 }
@@ -189,7 +201,35 @@ export async function deleteStreamVideo(guid: string): Promise<void> {
  * This is what gets stored in `Lecture.videoUrl`.
  */
 export function getStreamEmbedUrl(guid: string): string {
-  return `https://iframe.mediadelivery.net/embed/${STREAM_LIBRARY_ID}/${guid}?autoplay=false&responsive=true`;
+  return `https://iframe.mediadelivery.net/embed/${requireEnv("BUNNY_STREAM_LIBRARY_ID")}/${guid}?autoplay=false&responsive=true`;
+}
+
+/**
+ * Direct-upload target for a storage-zone path: the URL and key the browser needs
+ * to PUT a file straight to Bunny. Guarded — a missing env var throws here rather
+ * than returning the string "undefined" as the zone in a client-facing URL, which
+ * is what the /api/bunny/upload route did before it called this.
+ */
+export function getStorageUploadTarget(path: string): {
+  uploadUrl: string;
+  apiKey: string;
+  cdnUrl: string;
+} {
+  const { zone, key, hostname } = getStorageCreds();
+  return {
+    uploadUrl: `https://${hostname}/${zone}/${path}`,
+    apiKey: key,
+    cdnUrl: getCdnUrl(path),
+  };
+}
+
+/** Direct-upload target for a freshly-created Bunny Stream video. Guarded. */
+export function getStreamUploadTarget(guid: string): { uploadUrl: string; apiKey: string } {
+  const { libraryId, key } = getStreamCreds();
+  return {
+    uploadUrl: `https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`,
+    apiKey: key,
+  };
 }
 
 /**
@@ -201,14 +241,6 @@ export function extractStreamGuid(embedUrl: string): string | null {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function assertStreamEnv() {
-  if (!STREAM_LIBRARY_ID || !STREAM_API_KEY) {
-    throw new Error(
-      "Bunny Stream env vars are not configured (BUNNY_STREAM_LIBRARY_ID, BUNNY_STREAM_API_KEY)"
-    );
-  }
-}
 
 /**
  * Build the folder path for a lecture's worksheet inside the storage zone.
