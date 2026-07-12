@@ -5,14 +5,19 @@ import { prisma } from "@/lib/prisma";
 import { BookingsClient } from "./bookings-client";
 import { getSiteSettings } from "@/lib/settings";
 import { getSessionPrice } from "@/lib/pricing";
+import { resolveClientCurrency } from "@/lib/billing";
 import Link from "next/link";
 
 export default async function PortalBookingsPage() {
   const { student } = await requirePasswordChanged();
   const settings = await getSiteSettings();
+  // Fallback rates only — used when a booking carries no stored price. Priced in
+  // the CLIENT's currency, not Rands: an international client was previously shown
+  // a ZAR-denominated late-cancellation fee for a session billed in USD.
+  const currency = await resolveClientCurrency(student.id);
   const sessionRates: Record<string, number> = {
-    individual: getSessionPrice("individual", "ZAR", settings),
-    couples: getSessionPrice("couples", "ZAR", settings),
+    individual: getSessionPrice("individual", currency, settings),
+    couples: getSessionPrice("couples", currency, settings),
     free_consultation: 0,
   };
 
@@ -42,6 +47,10 @@ export default async function PortalBookingsPage() {
       policyOverride: true,
       recurringSeriesId: true,
       recurringPattern: true,
+      // The price the client actually agreed to, in the currency they agreed it
+      // in. `priceZarCents` is MISNAMED — it holds cents in `priceCurrency`.
+      priceZarCents: true,
+      priceCurrency: true,
     },
   });
 
@@ -69,6 +78,8 @@ export default async function PortalBookingsPage() {
     policyOverride: b.policyOverride,
     recurringSeriesId: b.recurringSeriesId,
     recurringPattern: b.recurringPattern,
+    priceCents: b.priceZarCents,
+    priceCurrency: b.priceCurrency || "ZAR",
   }));
 
   return (

@@ -60,16 +60,20 @@ export async function getFinancialSummary(fyYear: number) {
   const { start: monthStart, end: monthEnd } = currentMonthRange();
 
   const [paidInvoices, thisMonthInvoices, pendingRequests] = await Promise.all([
+    // ZAR ONLY. `totalCents` holds cents in the row's OWN currency, so a plain
+    // reduce() adds USD cents to ZAR cents and reports the total as Rands — a
+    // fabricated number. This is a Rand-denominated financial report; international
+    // revenue needs its own section before it can appear in these figures.
     prisma.invoice.findMany({
-      where: { status: "paid", paidAt: { gte: start, lt: end } },
+      where: { status: "paid", currency: "ZAR", paidAt: { gte: start, lt: end } },
       select: { totalCents: true },
     }),
     prisma.invoice.findMany({
-      where: { status: "paid", paidAt: { gte: monthStart, lt: monthEnd } },
+      where: { status: "paid", currency: "ZAR", paidAt: { gte: monthStart, lt: monthEnd } },
       select: { totalCents: true },
     }),
     prisma.paymentRequest.findMany({
-      where: { status: "pending" },
+      where: { status: "pending", currency: "ZAR" },
       select: { totalCents: true },
     }),
   ]);
@@ -93,7 +97,7 @@ export async function getRevenueBySource(fyYear: number) {
   const { start, end } = getFYRange(fyYear);
 
   const invoices = await prisma.invoice.findMany({
-    where: { status: "paid", paidAt: { gte: start, lt: end } },
+    where: { status: "paid", currency: "ZAR", paidAt: { gte: start, lt: end } },
     select: { type: true, totalCents: true },
   });
 
@@ -115,6 +119,7 @@ export async function getPaymentStatusByMonth(fyYear: number) {
     prisma.invoice.findMany({
       where: {
         status: "paid",
+        currency: "ZAR", // never sum cents across currencies
         paidAt: { gte: months[0].start, lt: months[11].end },
       },
       select: { totalCents: true, paidAt: true },
@@ -122,6 +127,7 @@ export async function getPaymentStatusByMonth(fyYear: number) {
     prisma.paymentRequest.findMany({
       where: {
         status: { in: ["pending", "overdue"] },
+        currency: "ZAR",
       },
       select: { totalCents: true, billingMonth: true, status: true },
     }),
@@ -129,17 +135,22 @@ export async function getPaymentStatusByMonth(fyYear: number) {
 
   return months.map(({ label, start, end }) => {
     const monthStr = saFormat(start, "yyyy-MM");
+    // PREFIX match, not equality. A billingMonth key is not a bare "2026-07": the
+    // ad-hoc and manual paths mint "2026-07-adhoc-1", "2026-07-manual-2" and
+    // "2026-07-USD-adhoc-1". `=== monthStr` matched only the monthly auto-run and
+    // silently dropped every other payment request from this report.
+    const inMonth = (key: string | null) => !!key && key.startsWith(monthStr);
 
     const paid = invoices
       .filter((i) => i.paidAt && i.paidAt >= start && i.paidAt < end)
       .reduce((s, i) => s + i.totalCents, 0);
 
     const pending = requests
-      .filter((r) => r.billingMonth === monthStr && r.status === "pending")
+      .filter((r) => inMonth(r.billingMonth) && r.status === "pending")
       .reduce((s, r) => s + r.totalCents, 0);
 
     const overdue = requests
-      .filter((r) => r.billingMonth === monthStr && r.status === "overdue")
+      .filter((r) => inMonth(r.billingMonth) && r.status === "overdue")
       .reduce((s, r) => s + r.totalCents, 0);
 
     return { month: label, paid, pending, overdue };
@@ -150,7 +161,7 @@ export async function getOutstandingAging() {
   const now = new Date();
 
   const pending = await prisma.paymentRequest.findMany({
-    where: { status: "pending" },
+    where: { status: "pending", currency: "ZAR" }, // aging buckets are Rand amounts
     select: { totalCents: true, dueDate: true },
   });
 

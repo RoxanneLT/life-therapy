@@ -13,7 +13,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
-import { resolveBillingContact, calculateInvoiceTotals } from "@/lib/billing";
+import { resolveBillingContact, calculateInvoiceTotals, vatApplies, resolveClientCurrency } from "@/lib/billing";
 import { getNextInvoiceNumber } from "@/lib/invoice-numbering";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import type { InvoiceLineItem } from "@/lib/billing-types";
@@ -90,7 +90,10 @@ async function createInvoiceRecord(params: {
   status?: string;
 }): Promise<Invoice> {
   const settings = await getSiteSettings();
-  const isVat = settings.vatRegistered;
+  // VAT is ZAR-only — an international invoice is zero-rated. This is the
+  // chokepoint EVERY invoice passes through, so gating here covers the manual,
+  // ad-hoc and regenerated paths as well as the monthly run.
+  const isVat = vatApplies(params.currency, settings.vatRegistered);
   const vatPercent = isVat ? settings.vatPercent : 0;
 
   // Calculate totals
@@ -297,7 +300,14 @@ export async function createManualInvoice(params: {
   invoiceDiscountCents?: number;
   sessionType?: "individual" | "couples" | "free_consultation";
 }): Promise<Invoice> {
-  const currency = params.currency ?? "ZAR";
+  // Do NOT default to "ZAR". The VAT gate in createInvoiceRecord is only as
+  // honest as the currency it is handed, and ZAR is the one value that turns VAT
+  // ON — so a caller that omits currency would fail OPEN: an international
+  // client's late-cancellation fee stamped in Rands, with 15% SA VAT on an
+  // exported service. Fall back to the client's established currency instead.
+  const currency =
+    params.currency ??
+    (params.studentId ? await resolveClientCurrency(params.studentId) : "ZAR");
 
   let billingName = "Unknown";
   let billingEmail = "";

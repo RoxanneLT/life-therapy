@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { format, isToday } from "date-fns";
 import { getSessionTypeConfig } from "@/lib/booking-config";
+import { formatByCurrency } from "@/lib/utils";
 import Link from "next/link";
 
 export default async function PortalDashboardPage() {
@@ -73,7 +74,12 @@ export default async function PortalDashboardPage() {
         createdAt: true,
       },
     }),
-    prisma.paymentRequest.aggregate({
+    // Group by currency — an international client's pending requests are in USD/
+    // EUR/GBP, and a bare _sum would add their cents to any ZAR ones and render
+    // the total with a hardcoded "R". The client would see their own money in the
+    // wrong currency, on their own portal.
+    prisma.paymentRequest.groupBy({
+      by: ["currency"],
       where: { studentId: student.id, status: "pending" },
       _count: true,
       _sum: { totalCents: true },
@@ -87,8 +93,10 @@ export default async function PortalDashboardPage() {
     : null;
   const bookingIsToday = nextBooking ? isToday(new Date(nextBooking.date)) : false;
 
-  const outstandingCount = pendingPayments._count ?? 0;
-  const outstandingTotal = pendingPayments._sum.totalCents ?? 0;
+  const outstandingCount = pendingPayments.reduce((n, g) => n + (g._count ?? 0), 0);
+  const outstandingTotal = formatByCurrency(
+    pendingPayments.map((g) => ({ currency: g.currency, cents: g._sum.totalCents ?? 0 })),
+  );
 
   return (
     <div className="space-y-6">
@@ -115,7 +123,7 @@ export default async function PortalDashboardPage() {
                     Payment Outstanding
                   </p>
                   <p className="text-sm text-amber-700 dark:text-amber-400">
-                    {outstandingCount} payment{outstandingCount !== 1 ? "s" : ""} due — R{(outstandingTotal / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+                    {outstandingCount} payment{outstandingCount !== 1 ? "s" : ""} due — {outstandingTotal}
                   </p>
                 </div>
               </div>

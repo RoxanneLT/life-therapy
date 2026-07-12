@@ -51,6 +51,9 @@ const IN_PERSON_ADDRESS = "Brown House Unit 2, 13 Station Street, Paarl";
 interface SerializedBooking {
   id: string;
   sessionType: string;
+  /** The agreed price, in `priceCurrency` cents. 0 = credit-paid or unpriced. */
+  priceCents: number;
+  priceCurrency: string;
   sessionMode: string;
   date: string;
   startTime: string;
@@ -352,7 +355,11 @@ function CancelBookingDialog({
 
   const isFreeConsultation = b.sessionType === "free_consultation";
   const isPostpaid = billingType === "postpaid";
-  const sessionRate = sessionRates[b.sessionType] || 0;
+  // The price this client actually agreed to, in the currency they agreed it in.
+  // sessionRates is only a fallback for a booking with no stored price — and it
+  // is now priced in the client's currency, not hardcoded Rands.
+  const sessionRate = b.priceCents || sessionRates[b.sessionType] || 0;
+  const rateCurrency = b.priceCurrency || "ZAR";
 
   // Determine cancel type for UI hints (server re-validates)
   const isAntiAbuse =
@@ -457,7 +464,7 @@ function CancelBookingDialog({
               <div>
                 <p className="font-medium">Less than {CANCEL_NOTICE_HOURS} hours notice</p>
                 <p className="mt-1">
-                  This session will be charged at <strong>{formatPrice(sessionRate)}</strong> on your next invoice.
+                  This session will be charged at <strong>{formatPrice(sessionRate, rateCurrency)}</strong> on your next invoice.
                   Consider rescheduling instead if a different time works for you.
                 </p>
               </div>
@@ -486,7 +493,7 @@ function CancelBookingDialog({
                 <p className="font-medium">Session will be charged</p>
                 <p className="mt-1">
                   This session was rescheduled from a time within the {CANCEL_NOTICE_HOURS}-hour
-                  cancellation window. It will be charged at <strong>{formatPrice(sessionRate)}</strong> on your next invoice.
+                  cancellation window. It will be charged at <strong>{formatPrice(sessionRate, rateCurrency)}</strong> on your next invoice.
                 </p>
               </div>
             </div>

@@ -178,14 +178,16 @@ export default async function InvoicesPage({
     lastCycleBillingMonth
       ? prisma.invoice.groupBy({
           by: ["status"],
-          where: { billingMonth: lastCycleBillingMonth },
+          // ZAR only: `totalCents` is per-currency, so summing across currencies
+          // would report USD cents as Rands on the Finance summary cards.
+          where: { billingMonth: lastCycleBillingMonth, currency: "ZAR" },
           _count: true,
           _sum: { totalCents: true },
         })
       : Promise.resolve([]),
-    // Overdue: all overdue invoices across all months
+    // Overdue: all overdue invoices across all months (ZAR only — see above)
     prisma.invoice.aggregate({
-      where: { status: "overdue" },
+      where: { status: "overdue", currency: "ZAR" },
       _sum: { totalCents: true },
     }),
     showPaymentRequests
@@ -281,7 +283,7 @@ export default async function InvoicesPage({
   let lastCycleOutstanding = 0;
   if (lastCycleBillingMonth) {
     const prTotal = await prisma.paymentRequest.aggregate({
-      where: { status: "pending", billingMonth: lastCycleBillingMonth },
+      where: { status: "pending", billingMonth: lastCycleBillingMonth, currency: "ZAR" },
       _sum: { totalCents: true },
     });
     lastCycleOutstanding = prTotal._sum.totalCents ?? 0;

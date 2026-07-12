@@ -1568,7 +1568,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
       });
 
       if (existingPR && existingPR.status !== "paid") {
-        const { calculateInvoiceTotals } = await import("@/lib/billing");
+        const { calculateInvoiceTotals, vatApplies } = await import("@/lib/billing");
         const { generateAndStoreInvoicePDF } = await import("@/lib/generate-invoice-pdf");
         const { sendInvoiceEmail } = await import("@/lib/send-invoice");
 
@@ -1587,8 +1587,11 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
         };
         const updatedLines = [...existingLines, newLine];
 
-        const isVat = settings.vatRegistered ?? false;
-        const vatPercent = settings.vatPercent ?? 0;
+        // Re-cost the request in ITS OWN currency. Taking `vatRegistered` raw here
+        // would add 15% SA VAT to a USD payment request when a historical session
+        // is appended to it — VAT is ZAR-only.
+        const isVat = vatApplies(existingPR.currency, settings.vatRegistered);
+        const vatPercent = isVat ? (settings.vatPercent ?? 0) : 0;
         type LineObj = { unitPriceCents: number; quantity: number; discountPercent?: number; discountCents?: number };
         const lineCalcs = (updatedLines as LineObj[]).map((li) => ({
           unitPriceCents: li.unitPriceCents,

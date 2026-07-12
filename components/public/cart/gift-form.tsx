@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { CartItemLocal } from "@/lib/cart-store";
+import { saToday } from "@/lib/dates";
 
 interface GiftFormProps {
   item: CartItemLocal;
@@ -73,7 +74,7 @@ export function GiftForm({ item, onUpdate }: GiftFormProps) {
             onUpdate(item.id, { giftDeliveryDate: e.target.value })
           }
           className="mt-1 h-8 w-48 text-sm"
-          min={new Date().toISOString().split("T")[0]}
+          min={saToday()}
         />
       </div>
     </div>

@@ -80,16 +80,6 @@ interface CreditTxnData {
   createdAt: string;
 }
 
-interface OrderData {
-  id: string;
-  orderNumber: string;
-  totalCents: number;
-  currency: string;
-  status: string;
-  paidAt: string | null;
-  createdAt: string;
-}
-
 interface InvoiceData {
   id: string;
   invoiceNumber: string;
@@ -205,7 +195,6 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
   const creditBalance =
     (mergedClient.creditBalance as { balance: number } | null)?.balance ?? 0;
   const creditTxns = (mergedClient.creditTransactions as CreditTxnData[]) || [];
-  const orders = (mergedClient.orders as OrderData[]) || [];
   const invoices = (mergedClient.invoices as InvoiceData[]) || [];
   const paymentRequests = (mergedClient.paymentRequests as PaymentRequestData[]) || [];
   const billedToMe = (mergedClient._billedToMe as BilledToMeEntry[]) || [];

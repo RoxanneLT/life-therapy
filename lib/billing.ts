@@ -5,6 +5,7 @@
 
 import { getSiteSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
+import { CURRENCIES, type Currency } from "@/lib/region";
 import {
   subtractBusinessDays,
   getNextBusinessDay,
@@ -36,12 +37,15 @@ export function calculateDueDate(
   if (type === "business") {
     return addBusinessDays(billingDate, days);
   }
-  // Calendar days
+  // Calendar days. UTC getters throughout: these Dates are DAYS (UTC midnight, as
+  // calendarDate() builds them), not moments. Local getters would read the wrong
+  // day for any value not anchored at local midnight — which is exactly how a
+  // dueDate stored at 22:00 UTC came back as the previous date.
   const d = new Date(billingDate);
-  d.setDate(d.getDate() + days);
-  const dow = d.getDay();
-  if (dow === 6) d.setDate(d.getDate() + 2); // Sat → Mon
-  else if (dow === 0) d.setDate(d.getDate() + 1); // Sun → Mon
+  d.setUTCDate(d.getUTCDate() + days);
+  const dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() + 2); // Sat → Mon
+  else if (dow === 0) d.setUTCDate(d.getUTCDate() + 1); // Sun → Mon
   return d;
 }
 
@@ -57,11 +61,11 @@ export function getReminderDate(dueDate: Date): Date {
  */
 export function getOverdueDate(dueDate: Date): Date {
   return getNextBusinessDay(
-    new Date(
-      dueDate.getFullYear(),
-      dueDate.getMonth(),
-      dueDate.getDate() + 1,
-    ),
+    new Date(Date.UTC(
+      dueDate.getUTCFullYear(),
+      dueDate.getUTCMonth(),
+      dueDate.getUTCDate() + 1,
+    )),
   );
 }
 
@@ -87,7 +91,7 @@ export function getBillingPeriod(
   }
   const prevBillingDate = getEffectiveBillingDate(prevYear, prevMonth);
   const start = new Date(prevBillingDate);
-  start.setDate(start.getDate() + 1);
+  start.setUTCDate(start.getUTCDate() + 1);
 
   return { start, end };
 }
@@ -128,6 +132,64 @@ export function calculateLineTotal(item: LineItemCalc): {
 }
 
 /**
+ * Does South African VAT apply to an amount in this currency?
+ *
+ * **VAT is ZAR-only.** Life-Therapy is registered in South Africa; an export of
+ * services to an international client is zero-rated. So a USD/EUR/GBP invoice
+ * never carries VAT, no matter what `vatRegistered` says.
+ *
+ * This is the single definition of that rule. It exists because the automated
+ * billing run gated VAT on currency while `createInvoiceRecord` — the chokepoint
+ * every invoice passes through — took `settings.vatRegistered` raw, and would
+ * have added 15% SA VAT to an international client's invoice the moment VAT
+ * registration was switched on. Two copies of a rule is one copy too many.
+ */
+export function vatApplies(
+  currency: string,
+  vatRegistered: boolean | null | undefined,
+): boolean {
+  return currency === "ZAR" && Boolean(vatRegistered);
+}
+
+/**
+ * The currency a client is billed in.
+ *
+ * There is no `currency` column on Student — currency is established per booking
+ * (`priceCurrency`), set from the domain the client booked through
+ * (life-therapy.co.za → ZAR, life-therapy.online → USD/EUR/GBP). So a client's
+ * billing currency is the one their sessions are actually priced in; we take the
+ * most recent, and fall back to ZAR for a client with no priced sessions yet.
+ *
+ * Use this for MANUAL billing (an admin composing a payment request or invoice
+ * by hand), where there are no bookings to read the currency from. Automated
+ * billing should always use the booking's own `priceCurrency` — never this.
+ */
+export async function resolveClientCurrency(studentId: string): Promise<Currency> {
+  const latest = await prisma.booking.findFirst({
+    where: { studentId },
+    orderBy: { date: "desc" },
+    select: { priceCurrency: true },
+  });
+  return toCurrency(latest?.priceCurrency);
+}
+
+/**
+ * Narrow an unconstrained DB string to the Currency union, falling back to ZAR.
+ *
+ * `Booking.priceCurrency` is a plain Postgres `String` — nothing stops a legacy
+ * row, a lowercase "usd", or a bad import from holding a value outside the union.
+ * Casting one with `as Currency` is a lie that TypeScript cannot catch: it flows
+ * into `getSessionPrice`, whose switch has no default, which then returns
+ * `undefined` in spite of its `: number` signature — and the client is shown a
+ * late-cancellation fee of R0,00. Validate at the boundary instead of asserting.
+ */
+export function toCurrency(value: string | null | undefined): Currency {
+  return value && (CURRENCIES as readonly string[]).includes(value)
+    ? (value as Currency)
+    : "ZAR";
+}
+
+/**
  * Calculate full invoice totals from line items, optional invoice-level
  * discount, and optional VAT.
  *
@@ -135,6 +197,8 @@ export function calculateLineTotal(item: LineItemCalc): {
  *   discountCents  = invoice-level discount applied to subtotal
  *   vatAmountCents = (subtotal − discount) × vatPercent / 100  (if registered)
  *   totalCents     = subtotal − discount + vat
+ *
+ * Pass `vatRegistered` through `vatApplies(currency, …)` — never raw.
  */
 export function calculateInvoiceTotals(
   lineItems: LineItemCalc[],

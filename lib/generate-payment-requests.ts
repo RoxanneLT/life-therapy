@@ -14,6 +14,7 @@ import { getSiteSettings } from "@/lib/settings";
 import {
   resolveBillingContact,
   calculateInvoiceTotals,
+  vatApplies,
   getBillingPeriod,
   calculateDueDate,
   type BillingContact,
@@ -213,7 +214,7 @@ async function createGroupPaymentRequest(
   }));
 
   // International currencies are VAT zero-rated (exported services)
-  const isVat = currency === "ZAR" ? settings.vatRegistered : false;
+  const isVat = vatApplies(currency, settings.vatRegistered);
   const vatPercent = isVat ? (settings.vatPercent ?? 0) : 0;
   const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
 

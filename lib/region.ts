@@ -3,7 +3,12 @@
 // ============================================================
 
 export type Region = "za" | "int";
-export type Currency = "ZAR" | "USD" | "EUR" | "GBP";
+
+/** The runtime source of truth for the Currency union — derive, never duplicate.
+ *  A DB column is a plain String, so any value read from one must be validated
+ *  against THIS list (see `toCurrency` in lib/billing.ts) rather than cast. */
+export const CURRENCIES = ["ZAR", "USD", "EUR", "GBP"] as const;
+export type Currency = (typeof CURRENCIES)[number];
 
 export const LT_REGION_COOKIE = "lt-region";
 export const LT_CURRENCY_COOKIE = "lt-currency";

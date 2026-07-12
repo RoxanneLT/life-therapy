@@ -11,10 +11,10 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
-import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, type BillingContact } from "@/lib/billing";
+import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, type BillingContact } from "@/lib/billing";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
-import { saToday, calendarDate } from "@/lib/dates";
+import { saToday, calendarDate, addSaDays } from "@/lib/dates";
 import { initializeTransaction } from "@/lib/paystack";
 import type { Booking, Student } from "@/lib/generated/prisma/client";
 
@@ -220,6 +220,9 @@ export async function adminLateCancelWithFeeAction(
     const invoice = await createManualInvoice({
       type: "late_cancel",
       studentId,
+      // The booking's own currency — the fee is the session price, in the currency
+      // the client agreed it in. Omitting this would stamp the invoice ZAR.
+      currency: booking.priceCurrency || "ZAR",
       paymentMethod: "eft",
       lineItems: [
         {
@@ -1163,23 +1166,39 @@ async function uniqueBillingMonthKey(
   return key;
 }
 
+/** The currency a booking was priced in. `priceZarCents` is MISNAMED — it holds
+ *  cents in whatever currency `priceCurrency` names. */
+function bookingCurrency(booking: Booking): string {
+  return (booking.priceCurrency as string) || "ZAR";
+}
+
+/**
+ * Create ONE ad-hoc payment request, for bookings that all share a currency.
+ * The caller partitions by currency; mixing them in a single request would sum
+ * USD and ZAR cents into one meaningless total.
+ */
 async function createAdhocPaymentRequest(opts: {
   contact: BillingContact;
   bookings: Booking[];
   student: Student;
   settings: Awaited<ReturnType<typeof getSiteSettings>>;
+  currency: string;
   billingMonth: string;
   periodStart: Date;
   periodEnd: Date;
   dueDate: Date;
 }) {
-  const { contact, bookings, student, settings, billingMonth, periodStart, periodEnd, dueDate } = opts;
+  const { contact, bookings, student, settings, currency, billingMonth, periodStart, periodEnd, dueDate } = opts;
   const lineItems: InvoiceLineItem[] = [];
   for (const booking of bookings) {
-    const rate = await getSessionRate(
-      booking.sessionType as "individual" | "couples" | "free_consultation",
-      "ZAR",
-    );
+    // Credit-paid sessions are already settled (priceZarCents === 0) — bill nothing.
+    if (booking.priceZarCents === 0) continue;
+
+    // The booking's STORED price, in its own currency — the amount the client
+    // agreed to at booking time. Re-fetching the rate (and in ZAR, no less) both
+    // ignores the agreed price and bills an international client in Rands. The
+    // monthly run has always done it this way; Bill-to-Date had drifted.
+    const rate = booking.priceZarCents;
     const dateStr = format(new Date(booking.date), "d MMM yyyy");
     const subLine = `${dateStr}, ${booking.startTime}–${booking.endTime}`;
 
@@ -1207,7 +1226,9 @@ async function createAdhocPaymentRequest(opts: {
     });
   }
 
-  const isVat = settings.vatRegistered;
+  if (lineItems.length === 0) return null;
+
+  const isVat = vatApplies(currency, settings.vatRegistered);
   const vatPercent = isVat ? settings.vatPercent : 0;
   const lineCalcs = lineItems.map((li) => ({
     unitPriceCents: li.unitPriceCents,
@@ -1220,8 +1241,11 @@ async function createAdhocPaymentRequest(opts: {
   // Bill-to-date / ad-hoc invoices can legitimately run more than once a month as
   // new sessions accrue, so each gets its own "YYYY-MM-adhoc-N" key (the
   // (studentId, billingMonth) constraint would otherwise throw P2002 → 500).
+  // The currency goes in the key too: a client with both ZAR and USD sessions
+  // gets one request per currency, and they must not collide.
   const sid = contact.type === "corporate" ? undefined : contact.studentId;
-  const billingKey = await uniqueBillingMonthKey(sid, `${billingMonth}-adhoc`);
+  const base = currency === "ZAR" ? `${billingMonth}-adhoc` : `${billingMonth}-${currency}-adhoc`;
+  const billingKey = await uniqueBillingMonthKey(sid, base);
 
   const pr = await prisma.paymentRequest.create({
     data: {
@@ -1230,7 +1254,7 @@ async function createAdhocPaymentRequest(opts: {
       billingMonth: billingKey,
       periodStart,
       periodEnd,
-      currency: "ZAR",
+      currency,
       subtotalCents: totals.subtotalCents,
       discountCents: totals.discountCents,
       vatAmountCents: totals.vatAmountCents,
@@ -1241,7 +1265,13 @@ async function createAdhocPaymentRequest(opts: {
     },
   });
 
-  const bookingIds = lineItems.map((li) => li.bookingId).filter((id): id is string => !!id);
+  // Link EVERY booking in this slice — including the credit-paid R0 ones that were
+  // skipped as line items. The monthly run does the same, deliberately: a booking
+  // with no paymentRequestId stays in the unbilled pool forever. Deriving these
+  // ids from `lineItems` would leave credit-paid sessions permanently unbilled,
+  // and every later Bill-to-Date would pass the "any unbilled?" guard, produce no
+  // line items, and throw at the admin — a red error on a client with nothing wrong.
+  const bookingIds = bookings.map((b) => b.id);
   if (bookingIds.length > 0) {
     await prisma.booking.updateMany({
       where: { id: { in: bookingIds } },
@@ -1291,29 +1321,61 @@ export async function billToDateAction(studentId: string) {
       || (!indivContact.billingEntityId && !couplesContact.billingEntityId && indivContact.studentId === couplesContact.studentId));
 
   const settings = await getSiteSettings();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const billingMonth = `${year}-${String(month).padStart(2, "0")}`;
-  const periodStart = new Date(year, month - 1, 1); // first of current month
-  const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + 7);
+  // SAST, not the server's local time. These were local getters on a real instant,
+  // which read UTC on Vercel — so a Bill-to-Date run between midnight and 02:00
+  // SAST on the 1st produced the PREVIOUS month's key. `billingMonth` is half of
+  // the (studentId, billingMonth) unique constraint, so that is not cosmetic: it
+  // writes the payment request into the wrong month and can collide there.
+  const today = saToday();
+  const billingMonth = today.slice(0, 7);
+  const periodStart = calendarDate(`${billingMonth}-01`);
+  // `dueDate` is a DAY, and it must use the same UTC-midnight convention as the
+  // monthly run — the reminder/overdue arithmetic in lib/billing.ts reads it with
+  // LOCAL getters. `saDayStart` would store it at 22:00 UTC the day BEFORE, which
+  // a UTC server reads back as the previous date: the client would be told
+  // "due the 19th" and then be marked overdue on the 19th.
+  const dueDate = calendarDate(addSaDays(today, 7));
 
-  const created = [];
+  const created: Awaited<ReturnType<typeof createAdhocPaymentRequest>>[] = [];
 
   const base = { student, settings, billingMonth, periodStart, periodEnd: now, dueDate };
 
+  /**
+   * One request per (contact, currency). A client can hold both ZAR and USD
+   * sessions — billing them together would add cents across currencies into a
+   * single nonsense total. The monthly run already partitions this way.
+   */
+  const billByCurrency = async (contact: BillingContact, set: Booking[]) => {
+    const byCurrency = new Map<string, Booking[]>();
+    for (const b of set) {
+      const curr = bookingCurrency(b);
+      if (!byCurrency.has(curr)) byCurrency.set(curr, []);
+      byCurrency.get(curr)!.push(b);
+    }
+    for (const [currency, currBookings] of byCurrency) {
+      const pr = await createAdhocPaymentRequest({
+        ...base,
+        contact,
+        bookings: currBookings,
+        currency,
+      });
+      if (pr) created.push(pr);
+    }
+  };
+
   if (sameContact && indivContact) {
-    const pr = await createAdhocPaymentRequest({ ...base, contact: indivContact, bookings });
-    created.push(pr);
+    await billByCurrency(indivContact, bookings);
   } else {
     if (indivContact && indivBookings.length > 0) {
-      const pr = await createAdhocPaymentRequest({ ...base, contact: indivContact, bookings: indivBookings });
-      created.push(pr);
+      await billByCurrency(indivContact, indivBookings);
     }
     if (couplesContact && couplesBookings.length > 0) {
-      const pr = await createAdhocPaymentRequest({ ...base, contact: couplesContact, bookings: couplesBookings });
-      created.push(pr);
+      await billByCurrency(couplesContact, couplesBookings);
     }
+  }
+
+  if (created.length === 0) {
+    throw new Error("No billable sessions found — all unbilled sessions were paid with credits.");
   }
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -1536,6 +1598,8 @@ export async function createManualPaymentRequestAction(data: {
   discountFixedCents?: number;
   dueDate: string;
   billingMonth?: string;
+  /** Omit to bill in the client's established currency (see resolveClientCurrency). */
+  currency?: string;
   note?: string;
   sendImmediately: boolean;
 }): Promise<{ success: boolean; paymentRequestId?: string; error?: string }> {
@@ -1543,6 +1607,12 @@ export async function createManualPaymentRequestAction(data: {
 
   try {
     const settings = await getSiteSettings();
+
+    // An admin composing line items by hand gives us no currency to read, so take
+    // the client's established one (from their most recent priced session) rather
+    // than assuming Rands. VAT then follows the currency, not the setting alone.
+    const currency = data.currency ?? (await resolveClientCurrency(data.studentId));
+    const isVat = vatApplies(currency, settings.vatRegistered);
 
     const lineItemsCalc = data.lineItems.map((li) => ({
       unitPriceCents: li.unitPriceCents,
@@ -1555,8 +1625,8 @@ export async function createManualPaymentRequestAction(data: {
       lineItemsCalc,
       data.discountPercent,
       data.discountFixedCents,
-      settings.vatRegistered ?? false,
-      settings.vatPercent ?? 15,
+      isVat,
+      isVat ? (settings.vatPercent ?? 15) : 0,
     );
 
     // Default to the current SAST month, not the server's local month.
@@ -1569,8 +1639,10 @@ export async function createManualPaymentRequestAction(data: {
     const periodEnd = new Date(Date.UTC(ymYear, ymMonth, 0)); // last day of month
 
     // Manual invoices get their own "YYYY-MM-manual-N" key so they never collide
-    // with the monthly auto-run (bare "YYYY-MM") or with each other.
-    const billingMonth = await uniqueBillingMonthKey(data.studentId, `${baseMonth}-manual`);
+    // with the monthly auto-run (bare "YYYY-MM") or with each other. Non-ZAR keys
+    // carry the currency so a client billed in two currencies can't collide.
+    const keyBase = currency === "ZAR" ? `${baseMonth}-manual` : `${baseMonth}-${currency}-manual`;
+    const billingMonth = await uniqueBillingMonthKey(data.studentId, keyBase);
 
     const lineItemsJson: InvoiceLineItem[] = data.lineItems.map((li) => ({
       description: li.description,
@@ -1588,7 +1660,7 @@ export async function createManualPaymentRequestAction(data: {
         billingMonth,
         periodStart,
         periodEnd,
-        currency: "ZAR",
+        currency,
         subtotalCents: totals.subtotalCents,
         discountCents: totals.discountCents,
         vatAmountCents: totals.vatAmountCents,
@@ -1748,6 +1820,9 @@ export async function updatePaymentRequestAction(data: {
     }
 
     const settings = await getSiteSettings();
+    // Re-cost the request in ITS OWN currency (already selected above) — VAT is
+    // ZAR-only, so editing a USD request must not silently add 15% SA VAT.
+    const isVat = vatApplies(pr.currency, settings.vatRegistered);
     const lineItemsCalc = data.lineItems.map((li) => ({
       unitPriceCents: li.unitPriceCents,
       quantity: li.quantity,
@@ -1759,8 +1834,8 @@ export async function updatePaymentRequestAction(data: {
       lineItemsCalc,
       data.discountPercent,
       data.discountFixedCents,
-      settings.vatRegistered ?? false,
-      settings.vatPercent ?? 15,
+      isVat,
+      isVat ? (settings.vatPercent ?? 15) : 0,
     );
 
     const lineItemsJson: InvoiceLineItem[] = data.lineItems.map((li) => ({

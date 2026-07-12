@@ -5,7 +5,7 @@ import { getAuthenticatedAdmin } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video, ArrowRight, AlertTriangle } from "lucide-react";
 import { MarkAllCompletedButton } from "./mark-all-completed-button";
-import { formatPrice, cn } from "@/lib/utils";
+import { formatByCurrency, cn } from "@/lib/utils";
 import Link from "next/link";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
 import { saToday, saDateStr, saDayStart, saMonthStart, saFormat, bookingStartsAt } from "@/lib/dates";
@@ -86,14 +86,25 @@ export default async function AdminDashboard({
     recentSyncFailures,
   ] = await Promise.all([
     prisma.student.count({ where: { clientStatus: "active" } }),
-    prisma.invoice.aggregate({
-      where: {
-        status: "paid",
-        billingMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-      },
-      _sum: { paidAmountCents: true },
+    // Revenue = CASH RECEIVED THIS MONTH, so filter on `paidAt` — not on
+    // `billingMonth`, which was wrong twice over:
+    //   1. Only the payment-request path ever populates `billingMonth`, so every
+    //      course sale, product sale, late-cancel fee and manual invoice was
+    //      invisible to this tile.
+    //   2. It names the billing PERIOD, not the payment. A June request settled
+    //      in July landed in no month's tile at all.
+    // `paidAt` is a real instant, so the bounds are SAST month starts.
+    //
+    // Rows rather than a _sum: cents are per-currency and must never be added,
+    // and `paidAmountCents` is nullable (an invoice marked paid from the list
+    // view never sets it) — so coalesce to `totalCents` per row instead of
+    // silently dropping the amount.
+    prisma.invoice.findMany({
+      where: { status: "paid", paidAt: { gte: monthStart, lt: monthEnd } },
+      select: { currency: true, paidAmountCents: true, totalCents: true },
     }),
-    prisma.paymentRequest.aggregate({
+    prisma.paymentRequest.groupBy({
+      by: ["currency"],
       where: { status: "pending" },
       _count: true,
       _sum: { totalCents: true },
@@ -143,8 +154,21 @@ export default async function AdminDashboard({
   const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, todayStart, farFuture).slice(0, 3);
   const isSessionSoon = nextSession ? isWithinTwoHours(nextSession, twoHoursFromNow) : false;
 
-  const pendingCount = pendingPayments._count ?? 0;
-  const pendingTotal = pendingPayments._sum.totalCents ?? 0;
+  const pendingCount = pendingPayments.reduce((n, g) => n + (g._count ?? 0), 0);
+  // One figure per currency, joined — never one fused number. A client billed in
+  // USD and one in ZAR are two amounts, and adding their cents means nothing.
+  const pendingTotal = formatByCurrency(
+    pendingPayments.map((g) => ({ currency: g.currency, cents: g._sum.totalCents ?? 0 })),
+  );
+  // Fold the paid invoices into one figure per currency.
+  const revenueByCurrency = new Map<string, number>();
+  for (const inv of thisMonthRevenue) {
+    const cents = inv.paidAmountCents ?? inv.totalCents;
+    revenueByCurrency.set(inv.currency, (revenueByCurrency.get(inv.currency) ?? 0) + cents);
+  }
+  const revenueThisMonth = formatByCurrency(
+    [...revenueByCurrency].map(([currency, cents]) => ({ currency, cents })),
+  );
 
   const stats = [
     {
@@ -155,7 +179,7 @@ export default async function AdminDashboard({
     },
     {
       label: "Revenue (This Month)",
-      value: formatPrice(thisMonthRevenue._sum.paidAmountCents ?? 0),
+      value: revenueThisMonth,
       icon: Banknote,
       href: "/admin/invoices?status=paid",
     },
@@ -324,7 +348,7 @@ export default async function AdminDashboard({
             {pendingCount > 0 ? (
               <>
                 <div>
-                  <p className="text-2xl font-bold">{formatPrice(pendingTotal)}</p>
+                  <p className="text-2xl font-bold">{pendingTotal}</p>
                   <p className="text-sm text-muted-foreground">{pendingCount} payment{pendingCount === 1 ? "" : "s"} outstanding</p>
                 </div>
                 <Button asChild size="sm" variant="outline" className="w-full">

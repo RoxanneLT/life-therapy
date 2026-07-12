@@ -350,6 +350,11 @@ export async function convertToClientAction(clientId: string, data: ConvertData)
         paidAt: new Date(),
         subtotalCents: 0,
         totalCents: 0,
+        // ZAR is correct here, not an oversight: every Order is ZAR by design —
+        // checkout resolves the cart in ZAR because Paystack only charges ZAR
+        // (app/api/checkout/route.ts). This is a zero-value admin grant, so the
+        // amount is 0 in any currency; stamping anything else would make this row
+        // inconsistent with the rest of the Order table.
         currency: "ZAR",
         items: {
           create: {
