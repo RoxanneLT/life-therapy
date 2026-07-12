@@ -20,17 +20,11 @@ import {
   createManualPaymentRequestAction,
   getActiveBillingPresetsAction,
 } from "../clients/[id]/actions";
+import { formatPrice } from "@/lib/utils";
 
 type BillingPreset = Awaited<ReturnType<typeof getActiveBillingPresetsAction>>[number];
 
 // ─── Helpers ─────────────────────────────────────────────────
-
-function formatR(cents: number) {
-  return `R ${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 function todayPlus7(): string {
   return format(addDays(new Date(), 7), "yyyy-MM-dd");
@@ -79,6 +73,8 @@ interface ClientResult {
   billingEmail: string | null;
   standingDiscountPercent: number | null;
   standingDiscountFixed: number | null;
+  /** The currency this client will actually be billed in (resolveClientCurrencies). */
+  currency: string;
 }
 
 // ─── Client Picker ────────────────────────────────────────────
@@ -334,8 +330,8 @@ export function NewPaymentRequestDialog() {
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmAction === "send"
-              ? `Send payment request of ${formatR(totals.total)} to ${client?.firstName} ${client?.lastName} at ${clientDisplayEmail}?`
-              : `Save draft payment request of ${formatR(totals.total)} for ${client?.firstName} ${client?.lastName}?`}
+              ? `Send payment request of ${formatPrice(totals.total, client?.currency ?? "ZAR")} to ${client?.firstName} ${client?.lastName} at ${clientDisplayEmail}?`
+              : `Save draft payment request of ${formatPrice(totals.total, client?.currency ?? "ZAR")} for ${client?.firstName} ${client?.lastName}?`}
           </p>
           <DialogFooter>
             <Button
@@ -489,7 +485,7 @@ export function NewPaymentRequestDialog() {
                       className="h-7 text-xs"
                       onClick={() => addPreset(preset)}
                     >
-                      + {preset.label} ({formatR(preset.priceCents)})
+                      + {preset.label} ({formatPrice(preset.priceCents, client?.currency ?? "ZAR")})
                     </Button>
                   ))}
                 </div>
@@ -499,7 +495,7 @@ export function NewPaymentRequestDialog() {
             {/* Discount — invoice-level only when no per-line discounts */}
             {totals.hasLineDiscounts ? (
               <p className="text-xs text-muted-foreground">
-                Discount applied per line item · total discount: {formatR(totals.discountCents)}
+                Discount applied per line item · total discount: {formatPrice(totals.discountCents, client?.currency ?? "ZAR")}
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-4">
@@ -537,17 +533,17 @@ export function NewPaymentRequestDialog() {
             <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm space-y-1.5">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span>{formatR(totals.subtotal)}</span>
+                <span>{formatPrice(totals.subtotal, client?.currency ?? "ZAR")}</span>
               </div>
               {totals.discountCents > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Discount</span>
-                  <span>-{formatR(totals.discountCents)}</span>
+                  <span>-{formatPrice(totals.discountCents, client?.currency ?? "ZAR")}</span>
                 </div>
               )}
               <div className="flex justify-between border-t pt-2 font-semibold">
                 <span>Total</span>
-                <span>{formatR(totals.total)}</span>
+                <span>{formatPrice(totals.total, client?.currency ?? "ZAR")}</span>
               </div>
             </div>
 

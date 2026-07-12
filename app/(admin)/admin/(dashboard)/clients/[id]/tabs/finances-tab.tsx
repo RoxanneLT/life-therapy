@@ -187,6 +187,13 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
   const paymentRequests = (mergedClient.paymentRequests as PaymentRequestData[]) || [];
   const billedToMe = (mergedClient._billedToMe as BilledToMeEntry[]) || [];
 
+  // The client's billing currency, for the "new payment request" dialog (which
+  // has no existing PR to read one from). The most recent priced booking is the
+  // best signal available client-side; the SERVER re-resolves it authoritatively
+  // on create, so this is only the compose-time label.
+  const clientBookings = (mergedClient.bookings as BookingData[]) || [];
+  const clientCurrency = clientBookings[0]?.priceCurrency || "ZAR";
+
   function invalidateFinances() {
     void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.finances(clientId) });
   }
@@ -448,6 +455,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
               billingEmail={billingEmail}
               standingDiscountPercent={standingDiscountPercent}
               standingDiscountFixed={standingDiscountFixed}
+              currency={clientCurrency}
               onSuccess={invalidateFinances}
             />
           )}
@@ -842,6 +850,7 @@ function PaymentRequestsSection({
   billingEmail,
   standingDiscountPercent,
   standingDiscountFixed,
+  currency,
   onSuccess,
 }: Readonly<{
   paymentRequests: PaymentRequestData[];
@@ -850,6 +859,7 @@ function PaymentRequestsSection({
   billingEmail: string;
   standingDiscountPercent: number;
   standingDiscountFixed: number;
+  currency: string;
   onSuccess?: () => void;
 }>) {
   const [isPending, startTransition] = useTransition();
@@ -901,6 +911,7 @@ function PaymentRequestsSection({
           billingEmail={billingEmail}
           standingDiscountPercent={standingDiscountPercent}
           standingDiscountFixed={standingDiscountFixed}
+          currency={currency}
         />
       </div>
       {paymentRequests.length > 0 ? (
@@ -971,6 +982,7 @@ function PaymentRequestsSection({
                                   clientId={clientId}
                                   clientName={clientName}
                                   billingEmail={billingEmail}
+                                  currency={pr.currency}
                                 />
                                 <ResendPRButton
                                   paymentRequestId={pr.id}
@@ -979,6 +991,7 @@ function PaymentRequestsSection({
                                   billingEmail={billingEmail}
                                   totalCents={pr.totalCents}
                                   isDraft={pr.status === "draft"}
+                                  currency={pr.currency}
                                 />
                                 <Button
                                   variant="ghost"

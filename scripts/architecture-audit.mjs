@@ -1026,17 +1026,9 @@ check("schema: no prisma migrate invocations in scripts", () => {
 // international postpaid client. Fix before either happens, not after.
 // ═══════════════════════════════════════════════════════════════════════════
 const KNOWN_DEFECTS = new Map([
-  // The two payment-request composition dialogs still render `formatR()` — a
-  // hardcoded "R". The REQUEST they create is already correct: the server resolves
-  // the client's currency (resolveClientCurrency) and stamps it. What is wrong is
-  // the LABEL an admin sees while composing: billing a USD client shows Rand
-  // amounts. Fixing it means threading a `currency` prop down from the parent that
-  // knows the client, which is slice 6 of the centralisation audit — not something
-  // to half-do here.
-  //
-  // Admin-facing, no client impact, and the money that lands is right.
-  ["money|app/(admin)/admin/(dashboard)/invoices/new-pr-dialog.tsx → function formatR", "formatR() hardcodes 'R' in the compose dialog; the created request carries the correct currency. Needs a currency prop from the parent — slice 6."],
-  ["money|app/(admin)/admin/(dashboard)/clients/[id]/tabs/payment-request-dialogs.tsx → function formatR", "same: formatR() in the compose/edit dialogs. The stored request is correct. Slice 6."],
+  // Empty. The payment-request compose dialogs now take a `currency` prop
+  // (slice 3 close-out), so formatPrice renders the client's real currency.
+  // Add an entry only for a real, classified defect that must wait — never noise.
 ]);
 
 // ── Report ──────────────────────────────────────────────────────────────────

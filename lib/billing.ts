@@ -165,12 +165,34 @@ export function vatApplies(
  * billing should always use the booking's own `priceCurrency` — never this.
  */
 export async function resolveClientCurrency(studentId: string): Promise<Currency> {
-  const latest = await prisma.booking.findFirst({
-    where: { studentId },
+  const [only] = await resolveClientCurrencies([studentId]);
+  return only?.currency ?? "ZAR";
+}
+
+/**
+ * Batch form, for lists (an admin client picker, a billing table). One query
+ * instead of N — and, more to the point, the RULE ("the currency of their most
+ * recent priced session, else ZAR") stays in one place. A caller that
+ * re-implements it inline is how the next drift starts.
+ */
+export async function resolveClientCurrencies(
+  studentIds: string[],
+): Promise<{ studentId: string; currency: Currency }[]> {
+  if (studentIds.length === 0) return [];
+  const bookings = await prisma.booking.findMany({
+    where: { studentId: { in: studentIds } },
     orderBy: { date: "desc" },
-    select: { priceCurrency: true },
+    select: { studentId: true, priceCurrency: true },
   });
-  return toCurrency(latest?.priceCurrency);
+  // Sorted newest-first, so the first row seen for a student is their latest.
+  const latest = new Map<string, string>();
+  for (const b of bookings) {
+    if (b.studentId && !latest.has(b.studentId)) latest.set(b.studentId, b.priceCurrency);
+  }
+  return studentIds.map((studentId) => ({
+    studentId,
+    currency: toCurrency(latest.get(studentId)),
+  }));
 }
 
 /**

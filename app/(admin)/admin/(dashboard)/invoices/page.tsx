@@ -414,6 +414,7 @@ export default async function InvoicesPage({
                           billingEmail={pr.student?.billingEmail ?? pr.student?.email ?? pr.billingEntity?.email ?? ""}
                           totalCents={pr.totalCents}
                           paidCents={prPaidAmounts.get(pr.id) ?? 0}
+                          currency={pr.currency}
                         />
                       </TableCell>
                     </TableRow>

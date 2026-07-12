@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
 import { saDateStr, saDayStart, addSaDays } from "@/lib/dates";
+import { resolveClientCurrencies } from "@/lib/billing";
 
 // ────────────────────────────────────────────────────────────
 // Mark invoice as paid (from invoice list page)
@@ -226,7 +227,7 @@ export async function searchClientsForBillingAction(query: string) {
 
   if (!query.trim()) return [];
 
-  return prisma.student.findMany({
+  const clients = await prisma.student.findMany({
     where: {
       OR: [
         { firstName: { contains: query, mode: "insensitive" } },
@@ -248,6 +249,14 @@ export async function searchClientsForBillingAction(query: string) {
     take: 10,
     orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
   });
+
+  // Carry each client's billing currency, so the compose dialog labels amounts in
+  // the currency the request will ACTUALLY be created in. Without it the dialog
+  // showed "R" while the server stamped USD — the admin was told one thing and the
+  // client billed another.
+  const currencies = await resolveClientCurrencies(clients.map((c) => c.id));
+  const byId = new Map(currencies.map((c) => [c.studentId, c.currency]));
+  return clients.map((c) => ({ ...c, currency: byId.get(c.id) ?? "ZAR" }));
 }
 
 // ────────────────────────────────────────────────────────────

@@ -22,14 +22,11 @@ import {
   updatePaymentRequestAction,
   resendPaymentRequestAction,
 } from "../actions";
+import { formatPrice } from "@/lib/utils";
 
 type BillingPreset = Awaited<ReturnType<typeof getActiveBillingPresetsAction>>[number];
 
 // ─── Helpers ─────────────────────────────────────────────────
-
-function formatR(cents: number) {
-  return `R ${(cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function todayPlus7(): string {
   return format(addDays(new Date(), 7), "yyyy-MM-dd");
@@ -76,9 +73,10 @@ interface LineEditorProps {
   onLinesChange: (lines: LineItem[]) => void;
   presets: BillingPreset[];
   loadingPresets: boolean;
+  currency: string;
 }
 
-function LineEditor({ lines, onLinesChange, presets, loadingPresets }: LineEditorProps) {
+function LineEditor({ lines, onLinesChange, presets, loadingPresets, currency }: LineEditorProps) {
   function updateLine(i: number, patch: Partial<LineItem>) {
     const next = lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l));
     onLinesChange(next);
@@ -122,7 +120,7 @@ function LineEditor({ lines, onLinesChange, presets, loadingPresets }: LineEdito
               onClick={() => addPreset(preset)}
             >
               <Plus className="mr-1 h-3 w-3" />
-              {preset.label} ({formatR(preset.priceCents)})
+              {preset.label} ({formatPrice(preset.priceCents, currency)})
             </Button>
           ))
         ) : null}
@@ -214,25 +212,25 @@ function LineEditor({ lines, onLinesChange, presets, loadingPresets }: LineEdito
 // ─── Totals display (shared) ──────────────────────────────────
 
 function TotalsDisplay({
-  subtotal, discountCents, vatCents, total,
-}: { subtotal: number; discountCents: number; vatCents: number; total: number }) {
+  subtotal, discountCents, vatCents, total, currency,
+}: { subtotal: number; discountCents: number; vatCents: number; total: number; currency: string }) {
   return (
     <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm space-y-1.5">
       <div className="flex justify-between text-muted-foreground">
-        <span>Subtotal</span><span>{formatR(subtotal)}</span>
+        <span>Subtotal</span><span>{formatPrice(subtotal, currency)}</span>
       </div>
       {discountCents > 0 && (
         <div className="flex justify-between text-green-600">
-          <span>Discount</span><span>-{formatR(discountCents)}</span>
+          <span>Discount</span><span>-{formatPrice(discountCents, currency)}</span>
         </div>
       )}
       {vatCents > 0 && (
         <div className="flex justify-between text-muted-foreground">
-          <span>VAT</span><span>{formatR(vatCents)}</span>
+          <span>VAT</span><span>{formatPrice(vatCents, currency)}</span>
         </div>
       )}
       <div className="flex justify-between border-t pt-2 font-semibold">
-        <span>Total</span><span>{formatR(total)}</span>
+        <span>Total</span><span>{formatPrice(total, currency)}</span>
       </div>
     </div>
   );
@@ -246,6 +244,7 @@ interface CreatePaymentRequestDialogProps {
   readonly billingEmail: string;
   readonly standingDiscountPercent: number;
   readonly standingDiscountFixed: number;
+  readonly currency: string;
 }
 
 export function CreatePaymentRequestDialog({
@@ -254,6 +253,7 @@ export function CreatePaymentRequestDialog({
   billingEmail,
   standingDiscountPercent,
   standingDiscountFixed,
+  currency,
 }: CreatePaymentRequestDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -360,8 +360,8 @@ export function CreatePaymentRequestDialog({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmAction === "send"
-              ? `This will email a payment request of ${formatR(totals.total)} to ${clientName} at ${billingEmail} with a pro-forma invoice attached.`
-              : `The payment request of ${formatR(totals.total)} will be saved as a draft. You can send it later.`}
+              ? `This will email a payment request of ${formatPrice(totals.total, currency)} to ${clientName} at ${billingEmail} with a pro-forma invoice attached.`
+              : `The payment request of ${formatPrice(totals.total, currency)} will be saved as a draft. You can send it later.`}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmAction(null)} disabled={isPending}>Cancel</Button>
@@ -384,6 +384,7 @@ export function CreatePaymentRequestDialog({
             <div>
               <Label className="mb-2 block text-sm font-medium">Line items</Label>
               <LineEditor
+                currency={currency}
                 lines={lines}
                 onLinesChange={setLines}
                 presets={presets}
@@ -394,7 +395,7 @@ export function CreatePaymentRequestDialog({
             {/* Discount — invoice-level only shown when no per-line discounts */}
             {totals.hasLineDiscounts ? (
               <p className="text-xs text-muted-foreground">
-                Discount applied per line item · total discount: {formatR(totals.discountCents)}
+                Discount applied per line item · total discount: {formatPrice(totals.discountCents, currency)}
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-4">
@@ -425,7 +426,7 @@ export function CreatePaymentRequestDialog({
             )}
 
             {/* Totals */}
-            <TotalsDisplay {...totals} />
+            <TotalsDisplay {...totals} currency={currency} />
 
             {/* Due date + billing month */}
             <div className="grid grid-cols-2 gap-4">
@@ -485,6 +486,7 @@ interface EditPaymentRequestDialogProps {
   readonly clientId: string;
   readonly clientName: string;
   readonly billingEmail: string;
+  readonly currency: string;
 }
 
 export function EditPaymentRequestDialog({
@@ -492,6 +494,7 @@ export function EditPaymentRequestDialog({
   clientId,
   clientName,
   billingEmail,
+  currency,
 }: EditPaymentRequestDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -611,7 +614,7 @@ export function EditPaymentRequestDialog({
             <DialogTitle>Save &amp; resend?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This will resend the updated payment request of {formatR(totals.total)} to {clientName} at {billingEmail}. The previous version will be superseded.
+            This will resend the updated payment request of {formatPrice(totals.total, currency)} to {clientName} at {billingEmail}. The previous version will be superseded.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmResend(false)} disabled={isPending}>Cancel</Button>
@@ -640,6 +643,7 @@ export function EditPaymentRequestDialog({
               <div>
                 <Label className="mb-2 block text-sm font-medium">Line items</Label>
                 <LineEditor
+                currency={currency}
                   lines={lines}
                   onLinesChange={setLines}
                   presets={presets}
@@ -649,7 +653,7 @@ export function EditPaymentRequestDialog({
 
               {totals.hasLineDiscounts ? (
                 <p className="text-xs text-muted-foreground">
-                  Discount applied per line item · total discount: {formatR(totals.discountCents)}
+                  Discount applied per line item · total discount: {formatPrice(totals.discountCents, currency)}
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
@@ -679,7 +683,7 @@ export function EditPaymentRequestDialog({
                 </div>
               )}
 
-              <TotalsDisplay {...totals} />
+              <TotalsDisplay {...totals} currency={currency} />
 
               <div>
                 <Label className="mb-1.5 block text-sm font-medium">Due date</Label>
@@ -716,6 +720,7 @@ interface ResendPRButtonProps {
   readonly billingEmail: string;
   readonly totalCents: number;
   readonly isDraft: boolean;
+  readonly currency: string;
 }
 
 export function ResendPRButton({
@@ -725,6 +730,7 @@ export function ResendPRButton({
   billingEmail,
   totalCents,
   isDraft,
+  currency,
 }: ResendPRButtonProps) {
   const [isPending, startTransition] = useTransition();
   const [confirm, setConfirm] = useState(false);
@@ -754,8 +760,8 @@ export function ResendPRButton({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {isDraft
-              ? `Send payment request of ${formatR(totalCents)} to ${clientName} at ${billingEmail}?`
-              : `Resend payment request of ${formatR(totalCents)} to ${clientName} at ${billingEmail}?`}
+              ? `Send payment request of ${formatPrice(totalCents, currency)} to ${clientName} at ${billingEmail}?`
+              : `Resend payment request of ${formatPrice(totalCents, currency)} to ${clientName} at ${billingEmail}?`}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirm(false)} disabled={isPending}>Cancel</Button>

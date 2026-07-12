@@ -39,6 +39,7 @@ interface PaymentRequestActionsProps {
   readonly billingEmail: string;
   readonly totalCents: number;
   readonly paidCents: number;
+  readonly currency: string;
 }
 
 export function PaymentRequestActions({
@@ -48,6 +49,7 @@ export function PaymentRequestActions({
   billingEmail,
   totalCents,
   paidCents,
+  currency,
 }: PaymentRequestActionsProps) {
   const remainingCents = totalCents - paidCents;
   const [isPending, startTransition] = useTransition();
@@ -96,6 +98,7 @@ export function PaymentRequestActions({
         clientId={studentId ?? ""}
         clientName={clientName}
         billingEmail={billingEmail}
+        currency={currency}
       />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
