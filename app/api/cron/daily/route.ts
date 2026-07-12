@@ -12,7 +12,7 @@ import { processBirthdayEmails } from "@/lib/birthday-process";
 import { checkBunnyBalance } from "@/lib/cron/bunny-balance-check";
 import { processPhoneNormalization } from "@/lib/cron/normalize-phones";
 import { sendCronDigest, type CronJobDetail } from "@/lib/cron/cron-digest";
-import { collectCronRunFailures } from "@/lib/cron/with-cron-run";
+import { collectCronRunFailures, isCronAuthorised } from "@/lib/cron/with-cron-run";
 
 /**
  * Combined daily cron — runs at 08:00 SAST (06:00 UTC).
@@ -53,11 +53,11 @@ async function runTask(
 }
 
 export async function GET(request: NextRequest) {
-  const secret =
-    request.headers.get("x-cron-secret") ??
-    request.headers.get("authorization")?.replace("Bearer ", "") ??
-    new URL(request.url).searchParams.get("secret");
-  if (secret !== process.env.CRON_SECRET) {
+  // Use the shared check — do NOT re-implement it. This route had its own copy,
+  // which meant a change to the auth logic (removing the ?secret= query param,
+  // making the compare constant-time) would have silently missed the single
+  // highest-value endpoint in the system: the orchestrator for all ten jobs.
+  if (!isCronAuthorised(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

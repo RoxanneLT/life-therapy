@@ -214,7 +214,18 @@ MS_GRAPH_CLIENT_SECRET            — Azure AD secret
 MS_GRAPH_USER_EMAIL               — Roxanne's Microsoft 365 email (calendar owner)
 RESEND_API_KEY                    — Email delivery via Resend
 SUPABASE_ACCESS_TOKEN             — Supabase Management API (schema changes; see .claude/rules/)
+CRON_SECRET                       — cron auth. ONE reader: lib/cron/with-cron-run.ts. Headers only.
+AUDIT_IP_HMAC_KEY                 — keys the IP hash in the audit trail (any long random string)
 ```
+
+> **`AUDIT_IP_HMAC_KEY` is new.** Without it, `recordAuthEvent` still records the event but omits the
+> IP hash entirely, and logs an error. It refuses to write an unkeyed hash: IPv4 is only 2^32 values,
+> so an IP "hashed" with a key anyone can read is reversible by brute force in minutes — a column that
+> looks protected and isn't is worse than storing the raw IP.
+>
+> **`CRON_SECRET` is headers-only.** The query-string path (`?secret=`) was removed: it put a live
+> credential into Vercel access logs and browser history. Trigger a job by hand with a header:
+> `curl -H "x-cron-secret: $CRON_SECRET" https://life-therapy.co.za/api/cron/daily`
 
 > The Graph vars are `MS_GRAPH_*`, **not** `GRAPH_*`. This was mis-documented and cost a debugging
 > session. The real values live in `.env.local`; `.env` holds a `johndoe@localhost` placeholder

@@ -16,9 +16,32 @@ import type { Prisma } from "@/lib/generated/prisma/client";
  * Hash an IP for the audit trail. Keyed HMAC (not a bare hash) so the small IPv4
  * space can't be reversed by rainbow table, while the same IP still maps to the
  * same value — enough to correlate repeat offenders without storing raw PII.
+ *
+ * **Fails closed.** This used to fall back to a literal key committed to this
+ * repo (`… || "lt-auth-fallback-key"`), which defeated the entire point: IPv4 is
+ * only 2^32 values, so with a public key anyone holding the source could reverse
+ * every "hashed" IP by brute force in minutes. A privacy guard that silently
+ * degrades to no guard is worse than none, because the column still *looks*
+ * protected. If the key is missing we throw rather than write a reversible hash.
+ *
+ * It also no longer borrows SUPABASE_SERVICE_ROLE_KEY — overloading one secret
+ * for an unrelated purpose means rotating it silently re-keys the audit trail,
+ * and every previously-stored hash stops correlating.
  */
-function hashIp(ip: string): string {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "lt-auth-ip-fallback-key";
+function hashIp(ip: string): string | null {
+  const key = process.env.AUDIT_IP_HMAC_KEY;
+  if (!key) {
+    // Return null, don't throw: recordAuthEvent's contract is "never throws", and
+    // hashIp is evaluated while BUILDING recordAudit's argument — outside its
+    // try/catch — so a throw here would escape into the login path and take auth
+    // down. Fail closed on the HASH (write none), not on the request.
+    console.error(
+      "[audit] AUDIT_IP_HMAC_KEY is not set — recording this auth event WITHOUT an " +
+        "IP hash. Set it (any long random string); an unkeyed hash of an IPv4 " +
+        "address is reversible by brute force and offers no privacy at all.",
+    );
+    return null;
+  }
   return createHmac("sha256", key).update(ip.trim()).digest("hex").slice(0, 16);
 }
 
@@ -89,13 +112,16 @@ export async function recordAuthEvent(input: {
   reason?: string;
 }): Promise<void> {
   const email = input.email?.trim().toLowerCase() || "unknown";
+  const ipHash = input.ip ? hashIp(input.ip) : null;
   await recordAudit({
     action: input.action,
     entityType: "auth",
     entityId: input.userId || email,
     actorEmail: email,
     metadata: {
-      ...(input.ip ? { ipHash: hashIp(input.ip) } : {}),
+      // Omit the field entirely when the key is unset — never write `ipHash: null`,
+      // which reads like "no IP was seen" rather than "we refused to fake-protect one".
+      ...(ipHash ? { ipHash } : {}),
       ...(input.userAgent ? { userAgent: input.userAgent } : {}),
       ...(input.userId ? { userId: input.userId } : {}),
       ...(input.reason ? { reason: input.reason } : {}),

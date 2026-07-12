@@ -1,17 +1,48 @@
 import { NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { CronJobDetail } from "./cron-digest";
 
 type CronHandler = (req: NextRequest) => Promise<Response>;
 
-/** Accept Vercel's Bearer header, cPanel/xneelo x-cron-secret header, or ?secret= query. */
+/**
+ * The ONLY place that may read CRON_SECRET.
+ *
+ * **Headers only.** This used to also accept `?secret=` in the query string, which
+ * put a live production credential into Vercel access logs, browser history, and
+ * the Referer header of any outbound request. Vercel Cron sends
+ * `Authorization: Bearer <CRON_SECRET>`; an external scheduler can send
+ * `x-cron-secret`. Neither needs the URL. To trigger a job by hand, pass a header:
+ *
+ *     curl -H "x-cron-secret: $CRON_SECRET" https://…/api/cron/daily
+ *
+ * Comparison is constant-time. A `===` on a secret leaks its length and, in
+ * principle, its prefix through timing — cheap to close once there is one reader.
+ */
+function secretsMatch(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  // timingSafeEqual throws on a length mismatch, which would itself be an oracle.
+  // Compare lengths in a way that still runs the full compare.
+  if (a.length !== b.length) {
+    timingSafeEqual(b, b); // burn equivalent time
+    return false;
+  }
+  return timingSafeEqual(a, b);
+}
+
 export function isCronAuthorised(req: NextRequest): boolean {
-  const secret =
+  const expected = process.env.CRON_SECRET;
+  if (!expected) return false; // fail closed: no secret configured → nothing is authorised
+
+  const provided =
     req.headers.get("x-cron-secret") ??
     req.headers.get("authorization")?.replace("Bearer ", "") ??
-    new URL(req.url).searchParams.get("secret");
-  return !!process.env.CRON_SECRET && secret === process.env.CRON_SECRET;
+    null;
+  if (!provided) return false;
+
+  return secretsMatch(provided, expected);
 }
 
 export function withCronRun(jobName: string, handler: CronHandler): CronHandler {

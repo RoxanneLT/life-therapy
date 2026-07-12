@@ -723,7 +723,86 @@ check("email-safety: throwing sends in cron processors are guarded", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 5. SCHEMA / MIGRATIONS
+// 5. SECRETS
+//
+// Two shapes, both found in the 2026-07-12 centralisation audit:
+//
+//   • A secret with more than one reader drifts. `daily/route.ts` hand-rolled the
+//     cron auth check that `isCronAuthorised` already implemented — so removing
+//     the `?secret=` query-param path (a live credential in Vercel access logs and
+//     browser history) would have silently missed the single highest-value
+//     endpoint in the system, the orchestrator for all ten jobs.
+//
+//   • A secret with a hardcoded fallback is not a secret. `lib/audit.ts` hashed
+//     IPs with `SERVICE_ROLE_KEY || "lt-auth-…-key"` — a literal committed to this
+//     repo. IPv4 is only 2^32 values, so with a public key every "hashed" IP is
+//     reversible by brute force. The guard silently degraded to no guard while the
+//     column still LOOKED protected, which is worse than storing the raw IP.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check("secrets: CRON_SECRET has exactly one reader", () => {
+  const readers = allSource().filter((f) => /process\.env\.CRON_SECRET/.test(code(read(f))));
+  if (readers.length !== 1 || rel(readers[0]) !== "lib/cron/with-cron-run.ts") {
+    fail(
+      "secrets",
+      readers.map(rel).join(", ") || "(none)",
+      `CRON_SECRET is read in ${readers.length} file(s) — exactly one may know its name`,
+      "call isCronAuthorised(req) / withCronRun() instead of re-implementing the check",
+    );
+  }
+});
+
+check("secrets: the cron secret is never read from the URL", () => {
+  // A credential in a query string is written to Vercel's access logs, kept in
+  // browser history, and leaked in the Referer of any outbound request. Headers only.
+  const helper = join(LIB, "cron", "with-cron-run.ts");
+  if (existsSync(helper) && /searchParams/.test(code(read(helper)))) {
+    fail(
+      "secrets",
+      "lib/cron/with-cron-run.ts",
+      "isCronAuthorised reads the secret from the query string",
+      "accept it as a header only (Authorization: Bearer …, or x-cron-secret)",
+    );
+  }
+  for (const f of walk(join(APP, "api"))) {
+    if (!/\/cron\//.test(rel(f))) continue;
+    const raw = read(f);
+    if (/searchParams\.get\(\s*["']secret["']\s*\)/.test(raw)) {
+      fail(
+        "secrets",
+        rel(f),
+        "reads the cron secret from the query string",
+        "call isCronAuthorised(req) — headers only",
+      );
+    }
+  }
+});
+
+check("secrets: no hardcoded fallback for a secret", () => {
+  // `process.env.SOME_KEY || "a-literal"` means the LITERAL is the secret whenever
+  // the env var is unset — and the literal is in the repo. For a signing/HMAC key
+  // that is indistinguishable from no protection at all. A URL or email default is
+  // fine; a key default is not.
+  const SECRETISH = /(?:KEY|SECRET|TOKEN|PASSWORD|HMAC|SALT)$/;
+  for (const f of allSource()) {
+    const raw = read(f);
+    const re = /process\.env\.([A-Z0-9_]+)\s*(?:\|\||\?\?)\s*["'`]([^"'`\n]{6,})["'`]/g;
+    let m;
+    while ((m = re.exec(raw))) {
+      const [, name, literal] = m;
+      if (!SECRETISH.test(name)) continue;
+      fail(
+        "secrets",
+        `${rel(f)} → ${name}`,
+        `falls back to a hardcoded literal (${JSON.stringify(literal.slice(0, 20))}) — that literal IS the secret whenever the var is unset`,
+        "fail closed: throw, or skip the protected write — never use a value committed to the repo",
+      );
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. SCHEMA / MIGRATIONS
 //
 // `prisma migrate` does not work here (the pgbouncer pooler). DDL goes through
 // the Supabase Management API. A stray migration folder means someone tried.
