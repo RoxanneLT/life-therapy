@@ -20,7 +20,11 @@ import type { Booking, Student } from "@/lib/generated/prisma/client";
 import { appBaseUrl } from "@/lib/region";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
-async function autoActivatePayerIfNeeded(billedClientId: string, payerId: string) {
+async function autoActivatePayerIfNeeded(
+  billedClientId: string,
+  payerId: string,
+  actorEmail: string,
+) {
   const [billedClient, payer] = await Promise.all([
     prisma.student.findUnique({ where: { id: billedClientId }, select: { clientStatus: true } }),
     prisma.student.findUnique({ where: { id: payerId }, select: { clientStatus: true } }),
@@ -29,6 +33,18 @@ async function autoActivatePayerIfNeeded(billedClientId: string, payerId: string
     await prisma.student.update({
       where: { id: payerId },
       data: { clientStatus: "active" },
+    });
+    // A status change is auditable like any other — this one is machine-triggered by
+    // a billing assignment rather than an explicit admin toggle, so it records the
+    // admin who caused it and notes the trigger in metadata.
+    await recordAudit({
+      action: "client_status_changed",
+      entityType: "student",
+      entityId: payerId,
+      actorEmail,
+      before: { clientStatus: "inactive" },
+      after: { clientStatus: "active" },
+      metadata: { trigger: "billing_assignment", billedClientId },
     });
     revalidatePath(`/admin/clients/${payerId}`);
   }
@@ -926,7 +942,7 @@ export async function updateBillingAssignmentAction(
   sessionType: "individual" | "couples",
   relationshipId: string | null,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   // Validate: if relationshipId is provided, ensure it's a relationship involving this student
   if (relationshipId) {
@@ -940,7 +956,7 @@ export async function updateBillingAssignmentAction(
     // Auto-activate the payer if they're inactive and the billed client is active
     const payerId = rel.studentId === studentId ? rel.relatedStudentId : rel.studentId;
     if (payerId) {
-      await autoActivatePayerIfNeeded(studentId, payerId);
+      await autoActivatePayerIfNeeded(studentId, payerId, adminUser.email);
     }
   }
 

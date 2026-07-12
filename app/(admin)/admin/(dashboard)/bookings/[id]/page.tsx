@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
-import { formatPrice, formatPhoneDisplay } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
+import { formatPhone } from "@/lib/phone";
 import type { Currency } from "@/lib/region";
 import { bookingStartsAt } from "@/lib/dates";
 import { format } from "date-fns";
@@ -315,7 +316,7 @@ export default async function BookingDetailPage({ params }: Props) {
                 <Separator />
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Phone</span>
-                  <span className="font-medium">{formatPhoneDisplay(booking.clientPhone)}</span>
+                  <span className="font-medium">{formatPhone(booking.clientPhone)}</span>
                 </div>
               </>
             )}

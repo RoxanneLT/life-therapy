@@ -21,7 +21,7 @@ import { BulkAssignBranchDialog } from "./bulk-assign-branch-dialog";
 
 import { CLIENT_STATUS_BADGE } from "@/lib/status-styles";
 import { PaginationControls } from "@/components/admin/pagination-controls";
-import { formatPhoneDisplay } from "@/lib/utils";
+import { formatPhone } from "@/lib/phone";
 
 const STATUS_TABS = ["all", "active", "at_risk", "potential", "inactive", "archived"] as const;
 
@@ -273,7 +273,7 @@ export default async function ClientsPage({
                   </TableCell>
                   <TableCell className="text-sm">{c.email}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {c.phone ? formatPhoneDisplay(c.phone) : "—"}
+                    {c.phone ? formatPhone(c.phone) : "—"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
