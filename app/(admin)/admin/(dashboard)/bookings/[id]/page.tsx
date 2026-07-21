@@ -49,6 +49,7 @@ import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { RescheduleSeriesDialog } from "./reschedule-series-dialog";
+import { RebuildSeriesCalendarButton } from "./rebuild-series-calendar-button";
 import { CancelBookingButton } from "./cancel-booking-button";
 import { ReinstateButton } from "../reinstate-button";
 import { CalendarWarningToast } from "./calendar-warning-toast";
@@ -270,12 +271,20 @@ export default async function BookingDetailPage({ params }: Props) {
                       View all
                     </Link>
                     {futureSeriesCount > 0 && (
-                      <RescheduleSeriesDialog
-                        seriesId={booking.recurringSeriesId!}
-                        currentDayOfWeek={new Date(booking.date).getUTCDay()}
-                        currentTime={booking.startTime}
-                        futureCount={futureSeriesCount}
-                      />
+                      <>
+                        <RescheduleSeriesDialog
+                          seriesId={booking.recurringSeriesId!}
+                          currentDayOfWeek={new Date(booking.date).getUTCDay()}
+                          currentTime={booking.startTime}
+                          futureCount={futureSeriesCount}
+                        />
+                        {/* Repair: bookings are right, Outlook is wrong/missing. */}
+                        <RebuildSeriesCalendarButton
+                          seriesId={booking.recurringSeriesId!}
+                          clientName={booking.clientName}
+                          futureCount={futureSeriesCount}
+                        />
+                      </>
                     )}
                   </div>
                 </div>

@@ -16,7 +16,8 @@ import { format } from "date-fns";
 import { randomUUID } from "node:crypto";
 import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
-import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
+import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
+import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
@@ -441,6 +442,145 @@ export async function rescheduleSeriesAction(
 
   revalidatePath("/admin/bookings");
   return { updated, skipped, calendarWarning: seriesCalendarWarning };
+}
+
+// ────────────────────────────────────────────────────────────
+// Rebuild a series' calendar event (repair — does NOT move any booking)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Repair primitive for a series whose Outlook event is wrong or missing, while the
+ * bookings themselves are correct.
+ *
+ * Born from the 2026-07 incident: the day-of-week bug put recurring events one weekday
+ * late, and the reconcile then deleted them as ghosts without recreating them. The
+ * bookings were right the whole time — only the calendar needed rebuilding. That could
+ * not be done through "Reschedule series", whose dialog requires the day or time to
+ * actually CHANGE, and routing around it (move away, move back) risks fragmenting the
+ * series because conflicting/holiday dates get skipped on the intermediate hop.
+ *
+ * So: delete whatever series event exists, create a correct one from the bookings AS
+ * THEY STAND, and point every future booking at it. No booking date, time or status is
+ * touched.
+ *
+ * Pruning matters. A recurrence spans a contiguous range, but the bookings inside it
+ * rarely are — a public holiday or a cancelled session leaves a hole, and every
+ * generated occurrence without a booking behind it is an instant ghost. (Chanene's real
+ * series: 43 bookings across 50 weekly slots.) Occurrences with no booking are removed
+ * straight after creation.
+ */
+export async function rebuildSeriesCalendarAction(seriesId: string): Promise<{
+  rebuilt: number;
+  pruned: number;
+  warning?: string;
+}> {
+  const { adminUser } = await requireRole("super_admin");
+
+  const bookings = await prisma.booking.findMany({
+    where: {
+      recurringSeriesId: seriesId,
+      status: { in: ["confirmed", "pending"] },
+      date: { gte: calendarDate(saToday()) },
+    },
+    orderBy: { date: "asc" },
+  });
+
+  if (bookings.length === 0) {
+    return { rebuilt: 0, pruned: 0, warning: "No future bookings in this series." };
+  }
+
+  const first = bookings[0];
+  const pattern = (first.recurringPattern as "weekly" | "bimonthly" | "monthly") || "weekly";
+  const firstDate = saDateStr(first.date);
+  const lastDate = saDateStr(bookings[bookings.length - 1].date);
+
+  // 1. Remove the existing series event. An ALREADY-DELETED event is the normal case
+  //    here (the incident deleted several), so a failure is not worth alarming about.
+  const oldEventId = first.graphEventId;
+  if (oldEventId) {
+    await cancelCalendarEvent(oldEventId).catch(() => {
+      /* already gone — that is precisely the state we are repairing */
+    });
+  }
+
+  // 2. Build a correct one from the bookings as they stand.
+  const config = getSessionTypeConfig(first.sessionType);
+  const inPerson = first.sessionMode === "in_person";
+  const calResult = await createRecurringCalendarEvent({
+    subject: `${config.label} — ${first.clientName}${inPerson ? " (In Person)" : ""}`,
+    startDateTime: `${firstDate}T${first.startTime}:00`,
+    endDateTime: `${firstDate}T${first.endTime}:00`,
+    clientName: first.clientName,
+    clientEmail: first.clientEmail,
+    recurrencePattern: pattern,
+    seriesEndDate: lastDate,
+    isOnlineMeeting: !inPerson,
+  }).catch(() => null);
+
+  if (!calResult?.seriesEventId) {
+    await recordAudit({
+      action: "calendar_series_rebuilt",
+      entityType: "booking",
+      entityId: seriesId,
+      actorEmail: adminUser.email,
+      after: { outcome: "failed", clientName: first.clientName },
+    });
+    return {
+      rebuilt: 0,
+      pruned: 0,
+      warning: "Could not create the recurring calendar event — nothing was changed on the bookings.",
+    };
+  }
+
+  // 3. Prune generated occurrences that have no booking behind them.
+  let pruned = 0;
+  let warning: string | undefined;
+  if (pattern === "weekly" || pattern === "bimonthly") {
+    const bookedDates = new Set(bookings.map((b) => saDateStr(b.date)));
+    const surplus = weeklyOccurrenceDates(
+      firstDate,
+      lastDate,
+      pattern === "bimonthly" ? 2 : 1,
+    ).filter((d) => !bookedDates.has(d));
+    if (surplus.length > 0) {
+      const res = await deleteRecurringEventOccurrences(calResult.seriesEventId, surplus);
+      pruned = res.deleted.length;
+      if (res.failed.length > 0) {
+        warning = `${res.failed.length} surplus occurrence(s) could not be removed — check Outlook for sessions on: ${res.failed.join(", ")}.`;
+      }
+    }
+  } else {
+    // Monthly recurrences are not expanded here; a gap would leave a stray occurrence
+    // that the next check-only reconcile will surface as stale.
+    warning = "Monthly series: surplus occurrences are not pruned — run a Check afterwards.";
+  }
+
+  // 4. Point every future booking at the new event.
+  await prisma.booking.updateMany({
+    where: { id: { in: bookings.map((b) => b.id) } },
+    data: {
+      graphEventId: calResult.seriesEventId,
+      ...(calResult.teamsMeetingUrl ? { teamsMeetingUrl: calResult.teamsMeetingUrl } : {}),
+    },
+  });
+
+  await recordAudit({
+    action: "calendar_series_rebuilt",
+    entityType: "booking",
+    entityId: seriesId,
+    actorEmail: adminUser.email,
+    before: { graphEventId: oldEventId ?? null },
+    after: {
+      graphEventId: calResult.seriesEventId,
+      clientName: first.clientName,
+      bookings: bookings.length,
+      pruned,
+    },
+  });
+
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/settings");
+  return { rebuilt: bookings.length, pruned, warning };
 }
 
 // ────────────────────────────────────────────────────────────
