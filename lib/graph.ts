@@ -9,8 +9,8 @@ import {
 import { TIMEZONE } from "@/lib/booking-config";
 import { formatInTimeZone } from "date-fns-tz";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
-import { saDateStr, saDayStart, saDayEnd } from "@/lib/dates";
-import { graphDayOfWeek, GRAPH_WEEK_INDEX } from "@/lib/graph-recurrence";
+import { saDayStart, saDayEnd } from "@/lib/dates";
+import { buildSingleEventPayload, buildRecurringEventPayload } from "@/lib/graph-payloads";
 import { env } from "@/lib/env";
 
 // ────────────────────────────────────────────────────────────
@@ -178,32 +178,7 @@ export async function createCalendarEvent(params: {
       () =>
         client
           .api(`/users/${config.userEmail}/events`)
-          .post({
-            subject: params.subject,
-            body: {
-              contentType: "HTML",
-              content: params.description || "",
-            },
-            start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
-            end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
-            ...(params.suppressAttendees
-              ? {}
-              : {
-                  attendees: [
-                    {
-                      emailAddress: {
-                        address: params.clientEmail,
-                        name: params.clientName,
-                      },
-                      type: "required",
-                    },
-                  ],
-                }),
-            ...(params.isOnlineMeeting !== false && {
-              isOnlineMeeting: true,
-              onlineMeetingProvider: "teamsForBusiness",
-            }),
-          }),
+          .post(buildSingleEventPayload(params)),
       "createCalendarEvent",
     );
 
@@ -252,73 +227,14 @@ export async function createRecurringCalendarEvent(params: {
   try {
     const client = createGraphClient(config);
 
-    // Weekday name in SAST (pinned + unit-tested in lib/graph-recurrence.ts — this is
-    // where the "one weekday late" bug lived; the helper enforces the ISO "i" token).
-    const startDate = new Date(params.startDateTime);
-    const dayOfWeek = graphDayOfWeek(startDate);
-
-    const startDateStr = saDateStr(startDate);
-
-    // Compute the week-of-month index in SAST
-    const dayOfMonth = parseInt(formatInTimeZone(startDate, TIMEZONE, "d"), 10);
-    const weekIndex = Math.min(Math.ceil(dayOfMonth / 7) - 1, 4); // 0-4
-
-    // Build the recurrence object based on pattern
-    let recurrence: Record<string, unknown>;
-
-    if (params.recurrencePattern === "weekly" || params.recurrencePattern === "bimonthly") {
-      recurrence = {
-        pattern: {
-          type: "weekly",
-          interval: params.recurrencePattern === "bimonthly" ? 2 : 1,
-          daysOfWeek: [dayOfWeek],
-        },
-        range: {
-          type: "endDate",
-          startDate: startDateStr,
-          endDate: params.seriesEndDate,
-        },
-      };
-    } else {
-      // monthly — use "relativeMonthly" (nth weekday of month)
-      recurrence = {
-        pattern: {
-          type: "relativeMonthly",
-          interval: 1,
-          daysOfWeek: [dayOfWeek],
-          index: GRAPH_WEEK_INDEX[weekIndex],
-        },
-        range: {
-          type: "endDate",
-          startDate: startDateStr,
-          endDate: params.seriesEndDate,
-        },
-      };
-    }
-
+    // The whole payload — weekday, recurrence pattern/range, attendee and Teams flags —
+    // is built by the PURE builder in lib/graph-payloads.ts and asserted in
+    // lib/graph-payloads.test.ts. This is where the "one weekday late" bug lived.
     const event = await withRetry(
       () =>
         client
           .api(`/users/${config.userEmail}/events`)
-          .post({
-            subject: params.subject,
-            start: { dateTime: params.startDateTime, timeZone: TIMEZONE },
-            end: { dateTime: params.endDateTime, timeZone: TIMEZONE },
-            recurrence,
-            attendees: [
-              {
-                emailAddress: {
-                  address: params.clientEmail,
-                  name: params.clientName,
-                },
-                type: "required",
-              },
-            ],
-            ...(params.isOnlineMeeting !== false && {
-              isOnlineMeeting: true,
-              onlineMeetingProvider: "teamsForBusiness",
-            }),
-          }),
+          .post(buildRecurringEventPayload(params)),
       "createRecurringCalendarEvent",
     );
 
