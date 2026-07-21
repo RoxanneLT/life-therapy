@@ -1,22 +1,35 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 // Shared with the reconciler so the UI and the cron agree on who an event belongs to
-// (and both strip the " (In Person)" suffix — bug #3).
+// (and both strip the " (In Person)" suffix — bug #3), and on what may safely be done.
 import { parseClientName } from "@/lib/calendar-classify";
+import type {
+  ClassifiedMismatch,
+  ClassifiedMissing,
+  ClassifiedOrphan,
+  ClassifiedDuplicate,
+  RepairItem,
+} from "@/lib/calendar-classify";
+import { applyCalendarRepairsAction } from "./calendar-sync-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   RefreshCw,
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Copy,
-  CalendarClock,
-  CalendarX,
-  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -31,32 +44,6 @@ interface SyncLogEntry {
   createdAt: string;
 }
 
-interface MismatchDetail {
-  bookingId: string;
-  clientName: string;
-  bookingDate: string;
-  bookingTime: string;
-  outlookDate: string;
-  outlookTime: string;
-  autoFixed: boolean;
-}
-
-interface MissingDetail {
-  bookingId: string;
-  clientName: string;
-  date: string;
-  time: string;
-  reason: string;
-  autoFixed: boolean;
-}
-
-interface OrphanDetail {
-  graphEventId: string;
-  subject: string;
-  date: string;
-  deleted: boolean;
-}
-
 interface HolidayDetail {
   bookingId: string;
   clientName: string;
@@ -65,17 +52,20 @@ interface HolidayDetail {
   holiday: string;
 }
 
+/** Mirrors lib/calendar-reconcile.ts ReconcileResult — the classification plus context.
+ *  Findings carry their own `proposal`; the UI never decides what is safe to do. */
 interface ReconcileResult {
   checked: number;
   matched: number;
-  mismatched: MismatchDetail[];
-  missing: MissingDetail[];
-  orphaned: OrphanDetail[];
+  mismatched: ClassifiedMismatch[];
+  missing: ClassifiedMissing[];
+  orphaned: ClassifiedOrphan[];
+  duplicates: ClassifiedDuplicate[];
   onHoliday: HolidayDetail[];
-  fixed: number;
   errors: string[];
   scannedEvents?: number;
   sessionEventsScanned?: number;
+  missingByClient?: Array<{ client: string; count: number; nextDate: string }>;
 }
 
 interface CalendarSyncSectionProps {
@@ -125,43 +115,60 @@ function reasonLabel(reason: string): string {
 }
 
 /** Build a plain-text report for the copy button. */
-function buildReport(r: ReconcileResult, mode: string, ranAt: Date): string {
+function buildReport(r: ReconcileResult, ranAt: Date): string {
   const lines: string[] = [];
-  lines.push(`Calendar Reconciliation — ${format(ranAt, "d MMM yyyy, HH:mm")}`);
-  lines.push(`Mode: ${mode}`);
+  lines.push(`Calendar Check — ${format(ranAt, "d MMM yyyy, HH:mm")} (report only — nothing changed)`);
   lines.push(
-    `Checked ${r.checked} · Matched ${r.matched} · Auto-fixed ${r.fixed} · ` +
-      `Mismatched ${r.mismatched.length} · Missing ${r.missing.length} · ` +
-      `Stale ${r.orphaned.length} · Holiday ${r.onHoliday.length} · Errors ${r.errors.length}`,
+    `Checked ${r.checked} · Matched ${r.matched} · Missing ${r.missing.length} · ` +
+      `Duplicates ${r.duplicates.length} · Unmatched events ${r.orphaned.length} · ` +
+      `Wrong duration ${r.mismatched.length} · Holiday ${r.onHoliday.length} · Errors ${r.errors.length}`,
   );
 
-  if (r.mismatched.length) {
-    lines.push("", `MISMATCHED (${r.mismatched.length}) — booking and Outlook disagree:`);
-    for (const m of r.mismatched) {
-      lines.push(
-        `  • ${m.clientName}: booking ${m.bookingDate} ${m.bookingTime} vs Outlook ${m.outlookDate} ${m.outlookTime}`,
-      );
+  if (r.missingByClient?.length) {
+    lines.push("", "SESSIONS WITH NO CALENDAR EVENT, by client (soonest first):");
+    for (const m of r.missingByClient) {
+      lines.push(`  • ${m.client} — ${m.count} session(s), next ${m.nextDate}`);
     }
   }
 
-  const unfixed = r.missing.filter((m) => !m.autoFixed);
-  const fixed = r.missing.filter((m) => m.autoFixed);
-  if (unfixed.length) {
-    lines.push("", `MISSING — needs fixing (${unfixed.length}):`);
-    for (const m of unfixed) {
+  const rebuild = r.missing.filter((m) => m.proposal === "reschedule_series");
+  const create = r.missing.filter((m) => m.proposal === "create");
+  if (create.length) {
+    lines.push("", `MISSING — single sessions, can be recreated (${create.length}):`);
+    for (const m of create) {
       lines.push(`  • ${m.clientName} ${m.date} ${m.time} — ${reasonLabel(m.reason)}`);
     }
   }
-  if (fixed.length) {
-    lines.push("", `MISSING — auto-recreated (${fixed.length}):`);
-    for (const m of fixed) {
-      lines.push(`  • ${m.clientName} ${m.date} ${m.time}`);
-    }
+  if (rebuild.length) {
+    lines.push("", `MISSING — recurring, REBUILD THE SERIES (${rebuild.length}):`);
+    for (const m of rebuild) lines.push(`  • ${m.clientName} ${m.date} ${m.time}`);
   }
 
-  if (r.orphaned.length) {
-    lines.push("", `STALE / WRONG EVENTS IN OUTLOOK (${r.orphaned.length}) — no matching booking, delete manually:`);
-    for (const o of r.orphaned) lines.push(`  • ${o.subject} — ${o.date}`);
+  const dupDelete = r.duplicates.filter((d) => d.proposal === "delete");
+  const dupReview = r.duplicates.filter((d) => d.proposal !== "delete");
+  if (dupDelete.length) {
+    lines.push("", `DUPLICATES — surplus event in a slot that already has one (${dupDelete.length}):`);
+    for (const d of dupDelete) lines.push(`  • ${d.subject} — ${d.date} ${d.start}`);
+  }
+  if (dupReview.length) {
+    lines.push("", `DUPLICATES — NEEDS A DECISION, ownership unclear (${dupReview.length}):`);
+    for (const d of dupReview) lines.push(`  • ${d.subject} — ${d.date} ${d.start}`);
+  }
+
+  const ghosts = r.orphaned.filter((o) => o.deletable);
+  const protectedGhosts = r.orphaned.filter((o) => !o.deletable);
+  if (ghosts.length) {
+    lines.push("", `UNMATCHED EVENTS — no booking, safe to delete (${ghosts.length}):`);
+    for (const o of ghosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start}`);
+  }
+  if (protectedGhosts.length) {
+    lines.push(
+      "",
+      `SUSPECTED WRONG-DAY SESSIONS (${protectedGhosts.length}) — DO NOT DELETE.`,
+      "  These clients still have sessions with no event. Rebuild their series instead;",
+      "  deleting these wipes real sessions off the calendar.",
+    );
+    for (const o of protectedGhosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start}`);
   }
 
   if (r.onHoliday.length) {
@@ -174,7 +181,14 @@ function buildReport(r: ReconcileResult, mode: string, ranAt: Date): string {
     for (const e of r.errors) lines.push(`  • ${e}`);
   }
 
-  if (!r.mismatched.length && !unfixed.length && !r.orphaned.length && !r.onHoliday.length && !r.errors.length) {
+  if (
+    !r.mismatched.length &&
+    !r.missing.length &&
+    !r.orphaned.length &&
+    !r.duplicates.length &&
+    !r.onHoliday.length &&
+    !r.errors.length
+  ) {
     lines.push("", "✓ No issues — every booking matches Outlook.");
   }
   return lines.join("\n");
@@ -205,231 +219,356 @@ function StatChip({
   );
 }
 
-function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileResult; mode: string; ranAt: Date }>) {
-  const unfixedMissing = result.missing.filter((m) => !m.autoFixed);
-  const fixedMissing = result.missing.filter((m) => m.autoFixed);
+/** A group of findings the admin can approve, or a read-only group they cannot. */
+function FindingGroup({
+  title,
+  note,
+  tone,
+  items,
+  selected,
+  onToggle,
+  onToggleAll,
+}: Readonly<{
+  title: string;
+  note?: string;
+  tone: "warn" | "bad" | "neutral";
+  items: Array<{ key: string; label: string; sub?: string }>;
+  /** Omit to render read-only (no checkboxes) — used for anything not safe to automate. */
+  selected?: Set<string>;
+  onToggle?: (key: string) => void;
+  onToggleAll?: (keys: string[], on: boolean) => void;
+}>) {
+  if (items.length === 0) return null;
+  const approvable = !!selected && !!onToggle;
+  const keys = items.map((i) => i.key);
+  const allOn = approvable && keys.every((k) => selected.has(k));
+  const toneClass =
+    tone === "bad"
+      ? "border-red-200 bg-red-50"
+      : tone === "warn"
+        ? "border-amber-200 bg-amber-50"
+        : "border-border bg-muted/30";
+
+  return (
+    <div className={`rounded-md border p-3 ${toneClass}`}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold">
+          {title} ({items.length})
+        </h4>
+        {approvable && onToggleAll && (
+          <button
+            type="button"
+            className="text-xs text-brand-600 hover:underline"
+            onClick={() => onToggleAll(keys, !allOn)}
+          >
+            {allOn ? "Clear all" : "Select all"}
+          </button>
+        )}
+      </div>
+      {note && <p className="mb-2 text-xs text-muted-foreground">{note}</p>}
+      <ul className="max-h-56 space-y-1 overflow-auto text-sm">
+        {items.map((i) => (
+          <li key={i.key} className="flex items-start gap-2 rounded px-1 py-0.5">
+            {approvable ? (
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={selected.has(i.key)}
+                onChange={() => onToggle(i.key)}
+                aria-label={i.label}
+              />
+            ) : (
+              <span className="mt-1 text-muted-foreground">•</span>
+            )}
+            <span>
+              {i.label}
+              {i.sub && <span className="block text-xs text-muted-foreground">{i.sub}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReconcileReport({
+  result,
+  ranAt,
+  onApplied,
+}: Readonly<{ result: ReconcileResult; ranAt: Date; onApplied: () => void }>) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isApplying, startApply] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Split every finding by what the SERVER proposed. The UI never decides what is safe;
+  // it only offers what classify() already judged safe, and the apply step re-verifies.
+  const createable = result.missing.filter((m) => m.proposal === "create");
+  const needsRebuild = result.missing.filter((m) => m.proposal === "reschedule_series");
+  const dupDelete = result.duplicates.filter((d) => d.proposal === "delete");
+  const dupReview = result.duplicates.filter((d) => d.proposal !== "delete");
+  const ghosts = result.orphaned.filter((o) => o.deletable);
+  const protectedGhosts = result.orphaned.filter((o) => !o.deletable);
+
   const issueCount =
     result.mismatched.length +
-    unfixedMissing.length +
+    result.missing.length +
     result.orphaned.length +
+    result.duplicates.length +
     result.onHoliday.length +
     result.errors.length;
 
+  function toggle(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleAll(keys: string[], on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) {
+        if (on) next.add(k);
+        else next.delete(k);
+      }
+      return next;
+    });
+  }
+
+  const chosenDeletes = [...selected].filter((k) => k.startsWith("delete:")).length;
+  const chosenCreates = [...selected].filter((k) => k.startsWith("create:")).length;
+
+  // Say exactly what pressing the button will do — never "fix everything".
+  const summary = [
+    chosenDeletes > 0 ? `Delete ${chosenDeletes} event${chosenDeletes === 1 ? "" : "s"}` : null,
+    chosenCreates > 0 ? `create ${chosenCreates} missing event${chosenCreates === 1 ? "" : "s"}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  function apply() {
+    const items: RepairItem[] = [...selected].map((k) => {
+      const [action, id] = [k.slice(0, k.indexOf(":")), k.slice(k.indexOf(":") + 1)];
+      return action === "delete"
+        ? { action: "delete", graphEventId: id }
+        : { action: "create", bookingId: id };
+    });
+
+    startApply(async () => {
+      try {
+        const res = await applyCalendarRepairsAction(items);
+        if (res.applied > 0) toast.success(`${res.applied} repair(s) applied.`);
+        if (res.skipped > 0) toast.warning(`${res.skipped} skipped — state changed since approval.`);
+        if (res.failed > 0) toast.error(`${res.failed} failed. See the outcomes below.`);
+        if (res.applied === 0 && res.skipped === 0 && res.failed === 0) {
+          toast.info("Nothing to do.");
+        }
+        setSelected(new Set());
+        setConfirmOpen(false);
+        onApplied();
+      } catch {
+        toast.error("Could not apply repairs — nothing was changed.");
+      }
+    });
+  }
+
   function handleCopy() {
-    const text = buildReport(result, mode, ranAt);
-    navigator.clipboard.writeText(text).then(
+    navigator.clipboard.writeText(buildReport(result, ranAt)).then(
       () => toast.success("Report copied to clipboard"),
       () => toast.error("Could not copy — select and copy manually"),
     );
   }
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            {issueCount === 0 ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                All bookings match Outlook
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                {issueCount} item{issueCount === 1 ? "" : "s"} need attention
-              </>
-            )}
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {mode} · {format(ranAt, "d MMM yyyy, HH:mm")}
-            {result.scannedEvents != null && (
-              <>
-                {" "}· reverse-scanned {result.scannedEvents} Outlook event
-                {result.scannedEvents === 1 ? "" : "s"} ({result.sessionEventsScanned ?? 0} session)
-              </>
-            )}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleCopy}>
-          <Copy className="mr-1.5 h-3.5 w-3.5" />
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {format(ranAt, "d MMM yyyy, HH:mm")} · report only — nothing has been changed
+        </p>
+        <Button variant="ghost" size="sm" onClick={handleCopy}>
           Copy report
         </Button>
       </div>
 
-      {/* Summary chips */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatChip label="Checked" value={result.checked} tone="neutral" />
         <StatChip label="Matched" value={result.matched} tone="good" />
-        <StatChip label="Auto-fixed" value={result.fixed} tone={result.fixed > 0 ? "good" : "neutral"} />
-        <StatChip label="Mismatched" value={result.mismatched.length} tone={result.mismatched.length ? "warn" : "neutral"} />
-        <StatChip label="Missing" value={unfixedMissing.length} tone={unfixedMissing.length ? "bad" : "neutral"} />
-        <StatChip label="Stale" value={result.orphaned.length} tone={result.orphaned.length ? "warn" : "neutral"} />
-        <StatChip label="Holiday" value={result.onHoliday.length} tone={result.onHoliday.length ? "warn" : "neutral"} />
-        <StatChip label="Errors" value={result.errors.length} tone={result.errors.length ? "bad" : "neutral"} />
+        <StatChip label="No event" value={result.missing.length} tone={result.missing.length ? "bad" : "good"} />
+        <StatChip
+          label="Needs review"
+          value={result.orphaned.length + result.duplicates.length}
+          tone={result.orphaned.length + result.duplicates.length ? "warn" : "good"}
+        />
       </div>
 
-      {/* Mismatched */}
-      {result.mismatched.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-            <CalendarClock className="h-4 w-4" /> Mismatched ({result.mismatched.length})
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            The booking and the Outlook event disagree on date/time. Open the booking and reschedule it
-            (which rewrites the Outlook event), or fix the event directly in Outlook.
-          </p>
-          <ul className="space-y-1.5">
-            {result.mismatched.map((m) => (
-              <li
-                key={m.bookingId}
-                className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm"
-              >
-                <span>
-                  <strong>{m.clientName}</strong> — booking{" "}
-                  <span className="font-medium">{m.bookingDate} {m.bookingTime}</span>, Outlook{" "}
-                  <span className="font-medium">{m.outlookDate} {m.outlookTime}</span>
-                </span>
-                <Link
-                  href={`/admin/bookings/${m.bookingId}`}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
-                >
-                  Open <ExternalLink className="h-3 w-3" />
-                </Link>
+      {issueCount === 0 && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          ✓ Every booking matches Outlook. Nothing to do.
+        </div>
+      )}
+
+      {result.missingByClient && result.missingByClient.length > 0 && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <strong>Sessions with no calendar event</strong> (soonest first):
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {result.missingByClient.map((m) => (
+              <li key={m.client}>
+                {m.client} — {m.count} session(s), next {m.nextDate}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* Missing — needs fixing */}
-      {unfixedMissing.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-red-700">
-            <CalendarX className="h-4 w-4" /> Missing from Outlook ({unfixedMissing.length})
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            No Outlook event exists for these bookings. Run <strong>Check &amp; Auto-Fix</strong> to recreate them
-            (clients are not re-invited).
-          </p>
-          <ul className="space-y-1.5">
-            {unfixedMissing.map((m) => (
-              <li
-                key={m.bookingId}
-                className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50/50 px-3 py-2 text-sm"
-              >
-                <span>
-                  <strong>{m.clientName}</strong> — {m.date} {m.time}{" "}
-                  <span className="text-muted-foreground">({reasonLabel(m.reason)})</span>
-                </span>
-                <Link
-                  href={`/admin/bookings/${m.bookingId}`}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
-                >
-                  Open <ExternalLink className="h-3 w-3" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <FindingGroup
+        title="Missing — can be recreated"
+        note="Single sessions with no calendar event. Recreating sends the client a fresh invite."
+        tone="bad"
+        items={createable.map((m) => ({
+          key: `create:${m.bookingId}`,
+          label: `${m.clientName} — ${m.date} ${m.time}`,
+          sub: reasonLabel(m.reason),
+        }))}
+        selected={selected}
+        onToggle={toggle}
+        onToggleAll={toggleAll}
+      />
 
-      {/* Missing — auto-recreated */}
-      {fixedMissing.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-green-700">
-            <CheckCircle2 className="h-4 w-4" /> Auto-recreated ({fixedMissing.length})
-          </h4>
-          <ul className="space-y-1.5">
-            {fixedMissing.map((m) => (
-              <li
-                key={m.bookingId}
-                className="rounded-md border border-green-200 bg-green-50/50 px-3 py-2 text-sm"
-              >
-                <strong>{m.clientName}</strong> — {m.date} {m.time} · recreated in Outlook
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <FindingGroup
+        title="Missing — recurring, rebuild the series"
+        note="Creating a single occurrence would fork the series and hand the client a different meeting. Open the booking and use 'Rebuild calendar' instead."
+        tone="bad"
+        items={needsRebuild.map((m) => ({
+          key: `rebuild:${m.bookingId}`,
+          label: `${m.clientName} — ${m.date} ${m.time}`,
+        }))}
+      />
 
-      {/* Stale / wrong events in Outlook (no matching booking) */}
-      {result.orphaned.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-            <CalendarClock className="h-4 w-4" /> Stale / wrong events in Outlook ({result.orphaned.length})
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            Events on the calendar with <strong>no matching booking</strong> — leftovers from past
-            reschedules/cancels, the cause of &quot;wrong time&quot; sessions. Portal is the source of truth, so{" "}
-            <strong>Check &amp; Auto-Fix deletes these</strong>. Check-only just lists them.
-          </p>
-          <ul className="space-y-1.5">
-            {result.orphaned.map((o) => (
-              <li
-                key={o.graphEventId}
-                className={`rounded-md border px-3 py-2 text-sm ${
-                  o.deleted ? "border-green-200 bg-green-50/50" : "border-amber-200 bg-amber-50/50"
-                }`}
-              >
-                <strong>{o.subject}</strong> — {o.date}
-                {o.deleted ? (
-                  <span className="ml-1 text-xs font-medium text-green-700">· deleted</span>
-                ) : (
-                  <span className="ml-1 text-xs font-medium text-amber-700">· will be deleted on auto-fix</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <FindingGroup
+        title="Duplicates — surplus event in a booked slot"
+        note="The booking owns a different event in this slot, so this one is spare."
+        tone="warn"
+        items={dupDelete.map((d) => ({
+          key: `delete:${d.graphEventId}`,
+          label: `${d.subject} — ${d.date} ${d.start}`,
+          sub: d.reason,
+        }))}
+        selected={selected}
+        onToggle={toggle}
+        onToggleAll={toggleAll}
+      />
 
-      {/* Bookings on public holidays */}
-      {result.onHoliday.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-            <CalendarX className="h-4 w-4" /> Bookings on public holidays ({result.onHoliday.length})
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            These confirmed bookings fall on SA public holidays. Confirm whether they should be cancelled.
-          </p>
-          <ul className="space-y-1.5">
-            {result.onHoliday.map((h) => (
-              <li
-                key={h.bookingId}
-                className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm"
-              >
-                <span>
-                  <strong>{h.clientName}</strong> — {h.date} {h.time}
-                </span>
-                <Link
-                  href={`/admin/bookings/${h.bookingId}`}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
-                >
-                  Open <ExternalLink className="h-3 w-3" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <FindingGroup
+        title="Duplicates — needs your decision"
+        note="Several events share a slot and none is linked to the booking. Deleting the wrong one would break the invite the client is holding, so pick manually in Outlook."
+        tone="warn"
+        items={dupReview.map((d) => ({
+          key: `review:${d.graphEventId}`,
+          label: `${d.subject} — ${d.date} ${d.start}`,
+        }))}
+      />
 
-      {/* Errors */}
+      <FindingGroup
+        title="Events with no booking"
+        note="Nothing in the portal corresponds to these, and the client they belong to has no missing sessions — safe to remove."
+        tone="warn"
+        items={ghosts.map((o) => ({
+          key: `delete:${o.graphEventId}`,
+          label: `${o.subject} — ${o.date} ${o.start}`,
+        }))}
+        selected={selected}
+        onToggle={toggle}
+        onToggleAll={toggleAll}
+      />
+
+      <FindingGroup
+        title="Suspected wrong-day sessions — do NOT delete"
+        note="These clients still have sessions with no calendar event, so these are very likely their real sessions sitting on the wrong day. Rebuild the client's series instead; deleting them wipes real sessions off the calendar."
+        tone="bad"
+        items={protectedGhosts.map((o) => ({
+          key: `protected:${o.graphEventId}`,
+          label: `${o.subject} — ${o.date} ${o.start}`,
+          sub: o.reason,
+        }))}
+      />
+
+      <FindingGroup
+        title="Wrong duration"
+        note="The booking and the calendar event start together but end at different times. Reported only."
+        tone="neutral"
+        items={result.mismatched.map((m) => ({
+          key: `mismatch:${m.bookingId}`,
+          label: `${m.clientName} — ${m.date}`,
+          sub: `booking ${m.bookingTime} vs Outlook ${m.outlookTime}`,
+        }))}
+      />
+
+      <FindingGroup
+        title="Bookings on public holidays"
+        tone="neutral"
+        items={result.onHoliday.map((h) => ({
+          key: `holiday:${h.bookingId}`,
+          label: `${h.clientName} — ${h.date} ${h.time}`,
+        }))}
+      />
+
       {result.errors.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="flex items-center gap-1.5 text-sm font-semibold text-red-700">
-            <XCircle className="h-4 w-4" /> Could not be checked ({result.errors.length})
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            Graph API errors — these bookings were skipped. Re-run the check; if they persist, copy the report
-            and send it over.
-          </p>
-          <ul className="max-h-40 space-y-1 overflow-auto rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+          <strong>Errors ({result.errors.length}):</strong>
+          <ul className="mt-1 space-y-0.5">
             {result.errors.map((e) => (
-              <li key={e} className="border-b border-border/50 pb-1 last:border-0">{e}</li>
+              <li key={e}>{e}</li>
             ))}
           </ul>
         </div>
       )}
+
+      {selected.size > 0 && (
+        <div className="sticky bottom-0 flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-2 shadow-sm">
+          <span className="text-sm font-medium">{summary}</span>
+          <Button size="sm" onClick={() => setConfirmOpen(true)} disabled={isApplying}>
+            {isApplying ? "Applying…" : `Apply ${selected.size} change${selected.size === 1 ? "" : "s"}`}
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply these calendar changes?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  <strong>{summary}.</strong>
+                </p>
+                <p>
+                  Each change is re-checked against Outlook immediately before it runs. Anything
+                  that no longer applies is skipped and reported rather than forced.
+                </p>
+                {chosenCreates > 0 && (
+                  <p className="text-amber-700">
+                    Creating an event sends the client a fresh calendar invite.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isApplying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                apply();
+              }}
+              disabled={isApplying}
+            >
+              {isApplying ? "Applying…" : "Apply changes"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Raw data for power users */}
       <details className="text-xs">
@@ -439,6 +578,7 @@ function ReconcileReport({ result, mode, ranAt }: Readonly<{ result: ReconcileRe
     </div>
   );
 }
+
 
 function cmpKey(date: string, start: string, name: string): string {
   return `${date}|${start}|${name.toLowerCase().replace(/\s+/g, " ").trim()}`;
@@ -540,12 +680,18 @@ export function CalendarSyncSection({
 }: CalendarSyncSectionProps) {
   const [isPending, startTransition] = useTransition();
   const [reconcileResult, setReconcileResult] = useState<ReconcileResult | null>(null);
-  const [ranMode, setRanMode] = useState<string>("");
   const [ranAt, setRanAt] = useState<Date | null>(null);
   const [diag, setDiag] = useState<DiagnosticsResponse | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagStart, setDiagStart] = useState("");
   const [diagEnd, setDiagEnd] = useState("");
+
+  // Drift carried over from the last SCHEDULED run, so the card shows a problem even
+  // when nobody has pressed anything this session. Silence should mean "verified clean",
+  // not "nobody looked" — that distinction is what let a broken series sit for 12 days.
+  const lastRun = (lastReconcileResult ?? {}) as Record<string, number | undefined>;
+  const driftFromLastRun =
+    (lastRun.missing ?? 0) + (lastRun.orphaned ?? 0) + (lastRun.duplicates ?? 0);
 
   function handleDiagnostics() {
     setDiagLoading(true);
@@ -568,23 +714,12 @@ export function CalendarSyncSection({
       .finally(() => setDiagLoading(false));
   }
 
-  function handleReconcile(autoFix: boolean) {
-    if (
-      !confirm(
-        autoFix
-          ? "Run reconciliation and auto-fix? This CREATES calendar events for bookings missing from Outlook, and DELETES stale 'ghost' events that have no matching booking (portal is the source of truth). Up to 60 changes per run."
-          : "Run reconciliation in check-only mode? No changes will be made.",
-      )
-    )
-      return;
-
+  /** Run a check. This NEVER changes anything — repairs are approved item-by-item in
+   *  the report below and applied through a separate, re-verified step. */
+  function handleReconcile() {
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/admin/reconcile-calendar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ autoFix }),
-        });
+        const res = await fetch(`/api/admin/reconcile-calendar`, { method: "POST" });
         const text = await res.text();
         let data: ReconcileResult & { error?: string };
         try {
@@ -592,17 +727,22 @@ export function CalendarSyncSection({
         } catch {
           throw new Error(
             res.status === 504
-              ? "Timed out — too many bookings to process in one go. Try again (it resumes where it left off)."
+              ? "Timed out — too many bookings to check in one go. Try again."
               : `Server error (${res.status}). ${text.slice(0, 120)}`,
           );
         }
-        if (!res.ok) throw new Error(data.error || "Reconciliation failed");
+        if (!res.ok) throw new Error(data.error || "Check failed");
         setReconcileResult(data);
-        setRanMode(autoFix ? "Check & auto-fix" : "Check only");
         setRanAt(new Date());
-        toast.success(
-          `Reconciliation complete: ${data.matched} matched, ${data.mismatched?.length || 0} mismatched, ${data.fixed || 0} fixed`,
-        );
+        const issues =
+          (data.missing?.length ?? 0) +
+          (data.orphaned?.length ?? 0) +
+          (data.duplicates?.length ?? 0);
+        if (issues === 0) {
+          toast.success(`All clear — ${data.matched} booking(s) match Outlook.`);
+        } else {
+          toast.warning(`${issues} item(s) need review. Nothing has been changed.`);
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Reconciliation failed");
       }
@@ -695,7 +835,17 @@ export function CalendarSyncSection({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Calendar Reconciliation</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">Calendar Reconciliation</CardTitle>
+            {/* Drift badge — the last scheduled run's own numbers, so a problem is
+                visible on the page without anyone remembering to press anything. */}
+            {driftFromLastRun > 0 && (
+              <Badge variant="destructive">
+                <AlertTriangle className="mr-1 h-3 w-3" />
+                {driftFromLastRun} need{driftFromLastRun === 1 ? "s" : ""} review
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {lastReconcileAt && (
@@ -704,34 +854,32 @@ export function CalendarSyncSection({
               {lastReconcileResult && (
                 <>
                   {" "}— {(lastReconcileResult as { matched?: number }).matched || 0} matched,{" "}
-                  {(lastReconcileResult as { mismatched?: number }).mismatched || 0} mismatched,{" "}
-                  {(lastReconcileResult as { fixed?: number }).fixed || 0} auto-fixed
+                  {(lastReconcileResult as { missing?: number }).missing || 0} with no event
                 </>
               )}
             </p>
           )}
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleReconcile(false)}
-              disabled={isPending}
-            >
+            <Button size="sm" onClick={handleReconcile} disabled={isPending}>
               <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-              Check Only
-            </Button>
-            <Button size="sm" onClick={() => handleReconcile(true)} disabled={isPending}>
-              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-              Check &amp; Auto-Fix
+              Run check
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            A check never changes anything. Repairs are proposed below, approved one by one, and
+            re-verified against Outlook at the moment they run.
+          </p>
 
           {isPending && (
             <p className="text-sm text-muted-foreground">Checking every upcoming booking against Outlook…</p>
           )}
 
           {reconcileResult && ranAt && !isPending && (
-            <ReconcileReport result={reconcileResult} mode={ranMode} ranAt={ranAt} />
+            <ReconcileReport
+              result={reconcileResult}
+              ranAt={ranAt}
+              onApplied={handleReconcile}
+            />
           )}
         </CardContent>
       </Card>

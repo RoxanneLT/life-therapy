@@ -201,6 +201,40 @@ export function summariseMissingByClient(
 }
 
 /**
+ * A single repair the admin approved. Identified by WHAT it targets, never by a
+ * position in a list or a blanket "fix everything" flag — an approval must not be able
+ * to mean something different by the time it is executed.
+ */
+export type RepairItem =
+  | { action: "delete"; graphEventId: string }
+  | { action: "create"; bookingId: string };
+
+/**
+ * Is this approved item STILL the right thing to do, given freshly-read state?
+ *
+ * Approval and execution are separated in time, and anything can happen in the gap: the
+ * event gets deleted in Outlook, the booking is cancelled, someone repairs the series,
+ * or the page is simply left open and the button pressed an hour later. Re-checking
+ * against a fresh classification is what stops a stale approval from acting on a world
+ * that no longer exists.
+ *
+ * It also enforces the guard a second time, for free: a protected wrong-day ghost never
+ * carries proposal "delete", so an approval naming it can never be honoured — even if
+ * the request is hand-crafted.
+ */
+export function isStillProposed(item: RepairItem, fresh: Classification): boolean {
+  if (item.action === "delete") {
+    const proposedDeletes = [...fresh.orphaned, ...fresh.duplicates].filter(
+      (f) => f.proposal === "delete",
+    );
+    return proposedDeletes.some((f) => f.graphEventId === item.graphEventId);
+  }
+  return fresh.missing.some(
+    (m) => m.bookingId === item.bookingId && m.proposal === "create",
+  );
+}
+
+/**
  * Compare bookings (the source of truth) against calendar events, and propose what to
  * do about each discrepancy. Proposes only — nothing here writes.
  *

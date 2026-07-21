@@ -1,26 +1,28 @@
 import { withCronRun } from "@/lib/cron/with-cron-run";
-import { reconcileCalendar } from "@/lib/calendar-reconcile";
+import { reconcileCalendar, hasDrift } from "@/lib/calendar-reconcile";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 
 export const maxDuration = 120; // 2 minutes max (Vercel)
 
+/**
+ * Scheduled calendar check — REPORT ONLY, permanently.
+ *
+ * reconcileCalendar cannot write; repairs go through the admin's propose → review →
+ * apply flow. A cron that silently "fixed" things is what deleted 50 of a client's real
+ * sessions in July 2026, and the ability was removed rather than switched off.
+ *
+ * Its job now is to notice drift EARLY and name it. The July incident went unseen for
+ * twelve days because the logs recorded a bare "missing: 26" and never a client.
+ */
 async function handler() {
-  const result = await reconcileCalendar({
-    // GATED OFF 2026-07-21 — the reverse pass deletes recurring-series occurrences it
-    // will never recreate, and the day-of-week bug made every wrong-day occurrence look
-    // like a ghost. A manual autoFix run deleted 50 of Chanene Norman's real events.
-    // Keep check-only until the day-of-week fix is deployed AND the reverse-pass gets a
-    // recurring guard. See docs/CALENDAR_SYNC_HANDOVER_2026-07-21.md (bug #5).
-    autoFix: false,
-    daysAhead: 365, // check the full booking horizon
-  });
+  const result = await reconcileCalendar({ daysAhead: 365 });
 
-  const unfixedMissing = result.missing.filter((m) => !m.autoFixed);
-  const unresolvedOrphans = result.orphaned.filter((o) => !o.deleted);
+  const protectedWrongDay = result.orphaned.filter((o) => !o.deletable).length;
   const driftCount =
     result.mismatched.length +
-    unfixedMissing.length +
-    unresolvedOrphans.length +
+    result.missing.length +
+    result.orphaned.length +
+    result.duplicates.length +
     result.onHoliday.length;
 
   await logCalendarOp({
@@ -31,67 +33,67 @@ async function handler() {
       matched: result.matched,
       mismatched: result.mismatched.length,
       missing: result.missing.length,
-      // WHO is eventless, not just how many — a bare count is why Mia Pretorius's
-      // series sat broken for twelve days before anyone noticed.
+      // WHO is eventless, not just how many — a bare count is why a broken series sat
+      // unnoticed for twelve days.
       missingByClient: result.missingByClient,
       orphaned: result.orphaned.length,
-      protectedWrongDay: result.orphaned.filter((o) => o.protectedWrongDay).length,
+      protectedWrongDay,
+      duplicates: result.duplicates.length,
       onHoliday: result.onHoliday.length,
-      fixed: result.fixed,
       errors: result.errors,
     },
   });
 
-  // Send an immediate alert email if there are unfixed issues
-  if (driftCount > 0) {
-    try {
-      const { sendEmail } = await import("@/lib/email");
-      const { getSiteSettings } = await import("@/lib/settings");
-      const settings = await getSiteSettings();
-
-      const mismatchList = result.mismatched
-        .map(
-          (m) =>
-            `• ${m.clientName} on ${m.bookingDate}: booking says ${m.bookingTime}, Outlook says ${m.outlookDate} ${m.outlookTime}`,
-        )
-        .join("\n");
-
-      const missingList = unfixedMissing
-        .map((m) => `• ${m.clientName} on ${m.date} at ${m.time} (${m.reason})`)
-        .join("\n");
-
-      const orphanList = unresolvedOrphans
-        .map((o) => `• ${o.subject} — ${o.date}`)
-        .join("\n");
-
-      const holidayList = result.onHoliday
-        .map((h) => `• ${h.clientName} on ${h.date} at ${h.time}`)
-        .join("\n");
-
-      const ghostsDeleted = result.orphaned.filter((o) => o.deleted).length;
-
-      await sendEmail({
-        to: settings.email || "hello@life-therapy.co.za",
-        subject: `⚠️ Calendar sync: ${result.mismatched.length} mismatched, ${unfixedMissing.length} missing, ${unresolvedOrphans.length} stale`,
-        html: `
-          <h3>Calendar Reconciliation Report</h3>
-          <p>Checked ${result.checked} bookings, ${result.matched} matched, ${result.fixed} auto-fixed (incl. ${ghostsDeleted} ghost event(s) deleted).</p>
-          ${mismatchList ? `<h4>Mismatched (wrong date/time in Outlook):</h4><pre>${mismatchList}</pre>` : ""}
-          ${missingList ? `<h4>Missing from Outlook (could not auto-fix):</h4><pre>${missingList}</pre>` : ""}
-          ${orphanList ? `<h4>Stale / wrong events still in Outlook (no matching booking):</h4><pre>${orphanList}</pre>` : ""}
-          ${holidayList ? `<h4>Bookings on public holidays (should not exist):</h4><pre>${holidayList}</pre>` : ""}
-          ${result.errors.length > 0 ? `<h4>Errors:</h4><pre>${result.errors.join("\n")}</pre>` : ""}
-        `,
-        templateKey: "system_notification",
-        skipTracking: true,
-      }).catch(console.error);
-    } catch {
-      // Email failure shouldn't break the cron
-    }
+  if (hasDrift(result)) {
+    await sendDriftAlert(result, protectedWrongDay).catch(console.error);
   }
 
   // `failed` lets withCronRun mark this run as failed when there is drift
   return Response.json({ ok: true, failed: driftCount, ...result });
+}
+
+async function sendDriftAlert(
+  result: Awaited<ReturnType<typeof reconcileCalendar>>,
+  protectedWrongDay: number,
+) {
+  const { sendEmail } = await import("@/lib/email");
+  const { getSiteSettings } = await import("@/lib/settings");
+  const settings = await getSiteSettings();
+
+  // Lead with WHO, and with the soonest session — that is the number that decides
+  // whether this is urgent.
+  const byClient = result.missingByClient
+    .map((m) => `• ${m.client} — ${m.count} session(s) with no calendar event, next ${m.nextDate}`)
+    .join("\n");
+
+  const soonest = result.missingByClient[0];
+  const headline = soonest
+    ? `${soonest.client} has no calendar event for ${soonest.nextDate}`
+    : `${result.orphaned.length + result.duplicates.length} calendar event(s) need review`;
+
+  const protectedNote =
+    protectedWrongDay > 0
+      ? `<p><strong>${protectedWrongDay} event(s) look like wrong-day sessions.</strong> Do NOT delete these by hand — rebuild the client's series instead, which moves them to the correct day.</p>`
+      : "";
+
+  await sendEmail({
+    to: settings.email || "hello@life-therapy.co.za",
+    subject: `⚠️ Calendar drift: ${headline}`,
+    html: `
+      <h3>Calendar check — action needed</h3>
+      <p>Checked ${result.checked} bookings, ${result.matched} matched.</p>
+      ${byClient ? `<h4>Sessions with no calendar event:</h4><pre>${byClient}</pre>` : ""}
+      ${result.duplicates.length > 0 ? `<p>${result.duplicates.length} duplicate event(s) in a slot that already has one.</p>` : ""}
+      ${result.orphaned.length > 0 ? `<p>${result.orphaned.length} event(s) with no matching booking.</p>` : ""}
+      ${result.mismatched.length > 0 ? `<p>${result.mismatched.length} event(s) with the wrong duration.</p>` : ""}
+      ${protectedNote}
+      <p>Review and approve repairs under <strong>Admin → Settings → Calendar sync</strong>.
+      Nothing is changed automatically.</p>
+      ${result.errors.length > 0 ? `<h4>Errors:</h4><pre>${result.errors.join("\n")}</pre>` : ""}
+    `,
+    templateKey: "system_notification",
+    skipTracking: true,
+  });
 }
 
 export const GET = withCronRun("reconcile_calendar", handler);

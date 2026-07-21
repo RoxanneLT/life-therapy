@@ -113,28 +113,29 @@ export async function GET(request: NextRequest) {
     detail,
   );
 
-  // Calendar reconciliation — CHECK-ONLY (auto-fix gated off 2026-07-21).
-  // autoFix's reverse pass deletes recurring-series occurrences it never recreates;
-  // combined with the day-of-week bug it deleted 50 of a client's real events. Stays
-  // check-only until the fix is deployed and the reverse pass gets a recurring guard.
-  // See docs/CALENDAR_SYNC_HANDOVER_2026-07-21.md (bug #5).
+  // Calendar reconciliation — REPORT ONLY. reconcileCalendar cannot write; repairs go
+  // through the admin's propose → review → apply flow. See docs/CALENDAR_SYNC_*.md.
   await runTask(
     "calendarReconcile",
     async () => {
       const { reconcileCalendar } = await import("@/lib/calendar-reconcile");
-      const r = await reconcileCalendar({ autoFix: false, daysAhead: 365 });
-      const unfixedMissing = r.missing.filter((m) => !m.autoFixed).length;
-      const unresolvedOrphans = r.orphaned.filter((o) => !o.deleted).length;
+      const r = await reconcileCalendar({ daysAhead: 365 });
       return {
         checked: r.checked,
         matched: r.matched,
-        fixed: r.fixed,
-        // Name the drift in the daily digest, don't just count it.
+        // Name the drift in the daily digest, don't just count it — a bare number is
+        // why an eventless series went unnoticed for twelve days.
         missingByClient: r.missingByClient,
-        protectedWrongDay: r.orphaned.filter((o) => o.protectedWrongDay).length,
-        // Surface remaining drift (mismatched + missing + un-deleted stale +
-        // holiday) so it shows up in the digest
-        failed: r.mismatched.length + unfixedMissing + unresolvedOrphans + r.onHoliday.length,
+        missing: r.missing.length,
+        duplicates: r.duplicates.length,
+        protectedWrongDay: r.orphaned.filter((o) => !o.deletable).length,
+        // Surface all drift so it shows up in the digest
+        failed:
+          r.mismatched.length +
+          r.missing.length +
+          r.orphaned.length +
+          r.duplicates.length +
+          r.onHoliday.length,
       };
     },
     detail,

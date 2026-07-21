@@ -1,30 +1,47 @@
+/**
+ * lib/calendar-reconcile.ts — compare the portal against Outlook and PROPOSE repairs.
+ *
+ * This module is READ-ONLY. It never creates, deletes or modifies a calendar event, and
+ * writes nothing to the database. That is not an accident of the current call sites: a
+ * blanket auto-fix is what deleted 50 of a client's real sessions in July 2026, so the
+ * ability to act was removed from here entirely rather than merely switched off.
+ *
+ * Repairs happen in lib/calendar-apply.ts, against explicitly approved items that are
+ * re-verified at execution time.
+ */
 import { prisma } from "@/lib/prisma";
-import {
-  createGraphClient,
-  getGraphConfig,
-  createCalendarEvent,
-  cancelCalendarEvent,
-} from "@/lib/graph";
-import { TIMEZONE, getSessionTypeConfig } from "@/lib/booking-config";
+import { createGraphClient, getGraphConfig } from "@/lib/graph";
+import { TIMEZONE } from "@/lib/booking-config";
 import { saDateStr } from "@/lib/dates";
-import { logCalendarOp } from "@/lib/calendar-sync-log";
 import {
   classify,
   isSessionSubject,
   parseClientName,
   summariseMissingByClient,
   type ClassifyEvent,
+  type ClassifiedMismatch,
+  type ClassifiedMissing,
+  type ClassifiedOrphan,
+  type ClassifiedDuplicate,
 } from "@/lib/calendar-classify";
-import type { SessionType, SessionMode } from "@/lib/generated/prisma/client";
 
+export interface HolidayDetail {
+  bookingId: string;
+  clientName: string;
+  date: string;
+  time: string;
+  holiday: string;
+}
+
+/** The classification, plus the context needed to judge and act on it. */
 export interface ReconcileResult {
   checked: number;
   matched: number;
-  mismatched: MismatchDetail[];
-  missing: MissingDetail[];
-  orphaned: OrphanedDetail[];
+  mismatched: ClassifiedMismatch[];
+  missing: ClassifiedMissing[];
+  orphaned: ClassifiedOrphan[];
+  duplicates: ClassifiedDuplicate[];
   onHoliday: HolidayDetail[];
-  fixed: number;
   errors: string[];
   // Diagnostics for the reverse scan — confirms it actually inspected Outlook
   scannedEvents: number; // total events returned by calendarView
@@ -34,49 +51,20 @@ export interface ReconcileResult {
   missingByClient: Array<{ client: string; count: number; nextDate: string }>;
 }
 
-interface MismatchDetail {
-  bookingId: string;
-  clientName: string;
-  bookingDate: string;
-  bookingTime: string;
-  outlookDate: string;
-  outlookTime: string;
-  autoFixed: boolean;
+/** True when anything at all needs a human's attention. Drives the digest alert and the
+ *  admin drift badge — silence should mean "verified clean", not "nobody looked". */
+export function hasDrift(r: ReconcileResult): boolean {
+  return (
+    r.missing.length > 0 ||
+    r.orphaned.length > 0 ||
+    r.duplicates.length > 0 ||
+    r.mismatched.length > 0
+  );
 }
-
-interface MissingDetail {
-  bookingId: string;
-  clientName: string;
-  date: string;
-  time: string;
-  reason: string; // "no_graph_id" | "event_not_found" | "event_deleted"
-  autoFixed: boolean;
-}
-
-interface OrphanedDetail {
-  graphEventId: string;
-  subject: string;
-  date: string;
-  deleted: boolean; // auto-removed from the calendar (portal is the source of truth)
-  /** The reverse-pass guard REFUSED to delete this: its client has a missing booking
-   *  this run, so it's a suspected wrong-day series occurrence, not a stale duplicate. */
-  protectedWrongDay?: boolean;
-}
-
-interface HolidayDetail {
-  bookingId: string;
-  clientName: string;
-  date: string;
-  time: string;
-  holiday: string;
-}
-
 
 export async function reconcileCalendar(options?: {
-  autoFix?: boolean;
   daysAhead?: number;
 }): Promise<ReconcileResult> {
-  const autoFix = options?.autoFix ?? false;
   const daysAhead = options?.daysAhead ?? 365;
 
   const result: ReconcileResult = {
@@ -85,8 +73,8 @@ export async function reconcileCalendar(options?: {
     mismatched: [],
     missing: [],
     orphaned: [],
+    duplicates: [],
     onHoliday: [],
-    fixed: 0,
     errors: [],
     scannedEvents: 0,
     sessionEventsScanned: 0,
@@ -104,7 +92,7 @@ export async function reconcileCalendar(options?: {
   const futureLimit = new Date(now);
   futureLimit.setDate(futureLimit.getDate() + daysAhead);
 
-  // 1. Get all future confirmed/pending bookings
+  // 1. Every future confirmed/pending booking — the source of truth.
   const bookings = await prisma.booking.findMany({
     where: {
       status: { in: ["confirmed", "pending"] },
@@ -116,18 +104,14 @@ export async function reconcileCalendar(options?: {
       startTime: true,
       endTime: true,
       clientName: true,
-      clientEmail: true,
-      sessionType: true,
-      // Needed so a recreated in-person booking is NOT turned into a Teams meeting.
-      sessionMode: true,
       graphEventId: true,
       recurringSeriesId: true,
     },
     orderBy: { date: "asc" },
   });
 
-  // 2. Pull the WHOLE calendar once (calendarView expands recurrences). A GET
-  //    per booking timed out on Vercel; matching in-memory is far faster.
+  // 2. Pull the WHOLE calendar once (calendarView expands recurrences). A GET per
+  //    booking timed out on Vercel; matching in-memory is far faster.
   let events: GraphEvent[];
   try {
     events = await fetchCalendarEvents(client, config, now, futureLimit);
@@ -157,9 +141,8 @@ export async function reconcileCalendar(options?: {
     });
   }
 
-  // 4. CLASSIFY — the pure core in lib/calendar-classify.ts, fixture-tested against the
-  //    real 2026-06/07 incidents. Everything below is only the I/O it implies; no
-  //    matching decision is made here, so the tests and production share one brain.
+  // 4. Classify — the pure core in lib/calendar-classify.ts, fixture-tested against the
+  //    real 2026-06/07 incidents. Production and the tests share one brain.
   const classified = classify(
     bookings.map((b) => ({
       id: b.id,
@@ -175,88 +158,16 @@ export async function reconcileCalendar(options?: {
 
   result.checked = classified.checked;
   result.matched = classified.matched;
-  result.mismatched = classified.mismatched.map((m) => ({
-    bookingId: m.bookingId,
-    clientName: m.clientName,
-    bookingDate: m.date,
-    bookingTime: m.bookingTime,
-    outlookDate: m.date,
-    outlookTime: m.outlookTime,
-    autoFixed: false,
-  }));
+  result.mismatched = classified.mismatched;
+  result.missing = classified.missing;
+  result.orphaned = classified.orphaned;
+  result.duplicates = classified.duplicates;
 
-  // 5. Act on the missing. Only NON-recurring gaps are auto-created — recreating a
-  //    recurring occurrence as a standalone event fragments the series and gives the
-  //    client a different meeting than the coach. Recurring gaps are reported instead.
-  const bookingById = new Map(bookings.map((b) => [b.id, b]));
-  for (const m of classified.missing) {
-    const detail: MissingDetail = {
-      bookingId: m.bookingId,
-      clientName: m.clientName,
-      date: m.date,
-      time: m.time,
-      reason: m.reason,
-      autoFixed: false,
-    };
-    result.missing.push(detail);
-    const booking = bookingById.get(m.bookingId);
-    if (autoFix && booking && !m.isRecurring && writeBudgetLeft(result) > 0) {
-      await tryCreateMissingEvent(booking, m.date, m.startTime, m.endTime, detail, result);
-    }
-  }
-
-  // 6. Act on the ghosts. classify() has already applied the SAFETY GUARD (bug #5):
-  //    a ghost is `deletable: false` when its client still has a missing booking, which
-  //    means it's a suspected wrong-day twin rather than a stale duplicate. Those are
-  //    flagged durably for human review and NEVER deleted — this is the fix for the
-  //    incident where 50 of one client's real occurrences were silently wiped.
-  for (const o of classified.orphaned) {
-    const orphan: OrphanedDetail = {
-      graphEventId: o.graphEventId,
-      subject: o.subject,
-      date: `${o.date} ${o.start}`,
-      deleted: false,
-    };
-    result.orphaned.push(orphan);
-
-    if (!o.deletable) {
-      orphan.protectedWrongDay = true;
-      await logCalendarOp({
-        operation: "reconcile",
-        status: "partial",
-        graphEventId: o.graphEventId,
-        metadata: {
-          action: "protected_suspected_wrong_day",
-          date: o.date,
-          subject: o.subject,
-          client: o.clientName,
-        },
-      });
-      continue;
-    }
-
-    if (autoFix && writeBudgetLeft(result) > 0) {
-      try {
-        await cancelCalendarEvent(o.graphEventId);
-        orphan.deleted = true;
-        result.fixed++;
-        await logCalendarOp({
-          operation: "delete",
-          status: "success",
-          graphEventId: o.graphEventId,
-          metadata: { action: "deleted_ghost_event", date: o.date, subject: o.subject },
-        });
-      } catch (error) {
-        result.errors.push(`Failed to delete ghost "${o.subject}" on ${o.date}: ${error}`);
-      }
-    }
-  }
-
-  // Name the drift. A bare "missing: 26" is why Mia's eventless series went unnoticed
-  // for twelve days; this rolls it up per client, soonest session first.
+  // Name the drift. A bare "missing: 26" is why an eventless series went unnoticed for
+  // twelve days; this rolls it up per client, soonest session first.
   result.missingByClient = summariseMissingByClient(result.missing);
 
-  // 7. Business-rule check: bookings on SA public holidays (DB only, cheap).
+  // 5. Business-rule check: bookings on SA public holidays (DB only, cheap).
   try {
     const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
     for (const booking of bookings) {
@@ -289,15 +200,8 @@ interface GraphEvent {
   seriesMasterId?: string | null;
 }
 
-/** Cap on Graph write operations (creates + deletes) per run so a large backlog
- *  can't blow the serverless timeout — the rest resolve on the next run. */
-const WRITE_BUDGET = 60;
-function writeBudgetLeft(result: ReconcileResult): number {
-  return Math.max(0, WRITE_BUDGET - result.fixed);
-}
-
-/** Pull every event in the window via calendarView (recurrences expanded),
- *  following pagination. One bulk read replaces a GET per booking. */
+/** Pull every event in the window via calendarView (recurrences expanded), following
+ *  pagination. One bulk read replaces a GET per booking. */
 async function fetchCalendarEvents(
   client: ReturnType<typeof createGraphClient>,
   config: NonNullable<ReturnType<typeof getGraphConfig>>,
@@ -323,11 +227,10 @@ async function fetchCalendarEvents(
   const events: GraphEvent[] = [...(page.value || [])];
   let guard = 0;
   while (page["@odata.nextLink"] && guard < 25) {
-    // BUG #4: the Prefer header MUST be re-sent on every page. Without it Graph returns
-    // page 2+ in UTC while page 1 is SAST, and the callers slice substring(11,16)
-    // assuming SAST — so every later event reads 2 hours off, manufacturing a matched
-    // pair of false "missing" + false "ghost". Under auto-fix that would delete CORRECT
-    // events. Only bites past 999 events in the window, which is why it stayed latent.
+    // The Prefer header MUST be re-sent on every page. Without it Graph returns page 2+
+    // in UTC while page 1 is SAST, and the parser slices substring(11,16) assuming SAST —
+    // so every later event reads 2 hours off, manufacturing matched pairs of false
+    // "missing" and false "ghost".
     page = await client
       .api(page["@odata.nextLink"])
       .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
@@ -336,70 +239,4 @@ async function fetchCalendarEvents(
     guard++;
   }
   return events;
-}
-
-/** Auto-fix a NON-recurring booking whose Outlook event is missing by creating a new one
- *  and re-inviting the client. An ONLINE booking gets a fresh Teams meeting; an IN-PERSON
- *  one must not (bug #3 — recreating it as a Teams meeting silently converts the session). */
-async function tryCreateMissingEvent(
-  booking: {
-    id: string;
-    clientName: string;
-    clientEmail: string;
-    sessionType: SessionType;
-    sessionMode: SessionMode;
-  },
-  expectedDate: string,
-  expectedStart: string,
-  expectedEnd: string,
-  detail: MissingDetail,
-  result: ReconcileResult,
-): Promise<void> {
-  try {
-    const sessionConfig = getSessionTypeConfig(booking.sessionType);
-    const inPerson = booking.sessionMode === "in_person";
-    const calResult = await createCalendarEvent({
-      // Match the subject admin bookings use, suffix included, so the recreated event is
-      // indistinguishable from a hand-made one. Both parsers strip the suffix, so this
-      // does not affect matching.
-      subject: `${sessionConfig.label} — ${booking.clientName}${inPerson ? " (In Person)" : ""}`,
-      startDateTime: `${expectedDate}T${expectedStart}:00`,
-      endDateTime: `${expectedDate}T${expectedEnd}:00`,
-      clientName: booking.clientName,
-      clientEmail: booking.clientEmail,
-      // Carry the session mode through — an in-person session stays in-person.
-      isOnlineMeeting: !inPerson,
-      // Re-invite the client. An online recreation has a NEW Teams meeting, so the
-      // client's old invite is stale — suppressing it would leave them on a
-      // different meeting than the coach. Sending the invite keeps them aligned.
-      suppressAttendees: false,
-      bookingId: booking.id,
-    });
-    if (calResult) {
-      await prisma.booking.update({
-        where: { id: booking.id },
-        data: {
-          graphEventId: calResult.eventId,
-          // Persist the NEW meeting link too — otherwise the client's portal keeps
-          // the old link while the coach's calendar has a different one.
-          ...(calResult.teamsMeetingUrl
-            ? { teamsMeetingUrl: calResult.teamsMeetingUrl }
-            : {}),
-        },
-      });
-      detail.autoFixed = true;
-      result.fixed++;
-      await logCalendarOp({
-        bookingId: booking.id,
-        operation: "reconcile",
-        status: "success",
-        graphEventId: calResult.eventId,
-        metadata: { action: "created_missing_event", date: expectedDate },
-      });
-    }
-  } catch (error) {
-    result.errors.push(
-      `Auto-fix failed for ${booking.clientName} on ${expectedDate}: ${error}`,
-    );
-  }
 }

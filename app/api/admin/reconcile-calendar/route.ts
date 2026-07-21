@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
-import { reconcileCalendar } from "@/lib/calendar-reconcile";
+import { reconcileCalendar, hasDrift } from "@/lib/calendar-reconcile";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 
 export const maxDuration = 300;
 
-export async function POST(request: Request) {
+/**
+ * Run a calendar check and return the PROPOSED repairs.
+ *
+ * There is no auto-fix flag any more — not disabled, gone. reconcileCalendar cannot
+ * write at all, and repairs are applied by applyCalendarRepairsAction against items the
+ * admin explicitly approved and which are re-verified at execution time.
+ */
+export async function POST() {
   try {
     await requireRole("super_admin");
   } catch {
@@ -13,48 +20,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json().catch(() => ({}));
-    const requestedAutoFix = body.autoFix === true;
-
-    // TEMPORARY SAFETY GATE (2026-07-21) — auto-fix is disabled SERVER-SIDE, so the flag
-    // is ignored no matter which browser/tab sends it. The reconcile reverse pass deletes
-    // recurring-series occurrences it never recreates; a manual auto-fix run deleted 50 of
-    // a client's real events. Re-enable (remove this gate) ONLY after the day-of-week fix
-    // is deployed AND the reverse pass has a recurring guard. Check-only still works.
-    // See docs/CALENDAR_SYNC_HANDOVER_2026-07-21.md (bugs #1, #5).
-    const AUTOFIX_DISABLED = true;
-    const autoFix = requestedAutoFix && !AUTOFIX_DISABLED;
-
-    const result = await reconcileCalendar({ autoFix, daysAhead: 365 });
-
-    const unresolved =
-      result.mismatched.length +
-      result.missing.filter((m) => !m.autoFixed).length +
-      result.orphaned.filter((o) => !o.deleted).length +
-      result.onHoliday.length;
+    const result = await reconcileCalendar({ daysAhead: 365 });
 
     await logCalendarOp({
       operation: "reconcile",
-      status: unresolved > 0 ? "partial" : "success",
+      status: hasDrift(result) ? "partial" : "success",
       metadata: {
         checked: result.checked,
         matched: result.matched,
         mismatched: result.mismatched.length,
         missing: result.missing.length,
+        missingByClient: result.missingByClient,
         orphaned: result.orphaned.length,
+        duplicates: result.duplicates.length,
+        protectedWrongDay: result.orphaned.filter((o) => !o.deletable).length,
         onHoliday: result.onHoliday.length,
-        fixed: result.fixed,
         manual: true,
-        autoFix,
-        autoFixRequested: requestedAutoFix,
       },
     });
 
-    return NextResponse.json({
-      ...result,
-      // Tell the UI the button ran check-only despite the request, so it can say so.
-      autoFixDisabled: requestedAutoFix && AUTOFIX_DISABLED,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     // Always return JSON so the client never chokes on an HTML error page
     return NextResponse.json(
