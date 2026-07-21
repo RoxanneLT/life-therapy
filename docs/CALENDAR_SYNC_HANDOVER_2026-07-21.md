@@ -28,11 +28,25 @@ to any day-mismatched series in the window.** Gate it off before the next run
 
 | # | Bug | Severity | Status |
 |---|-----|----------|--------|
-| 1 | Recurring Teams events created **one weekday late** (date-fns `"e"` vs `"i"`) | High — every recurring series wrong in Teams, and it drives the deletion in #5 | **Fixed in code** (`8dd7e59`, local master, **NOT pushed/deployed**) |
-| 5 | Reconcile reverse-pass **deletes recurring-series occurrences it never recreates** (asymmetric: forward pass skips recurring *creates*, reverse pass has no such guard on *deletes*) | **Critical — active data loss** (50 of Chanene's occurrences already deleted) | Diagnosed, not fixed |
-| 2 | "Connection Check" compares portal against a **50-event cap** → false "missing 69" | Medium — alarming but **read-only**, not destructive | Diagnosed, not fixed |
-| 3 | **In-person** bookings never reconcile; daily auto-fix **converts them to Teams meetings** | High — silent data change + wrong meeting type (0 in-person bookings in prod right now, so not currently biting) | Diagnosed, not fixed |
-| 4 | `calendarView` pagination **drops the timezone header** on page 2+ | Latent — only bites at >999 events in the window | Diagnosed, not fixed |
+| 1 | Recurring Teams events created **one weekday late** (date-fns `"e"` vs `"i"`) | High — every recurring series wrong in Teams, and it drove the deletion in #5 | **FIXED + DEPLOYED** (`995ce96`), pinned by a 7-weekday regression test |
+| 5 | Reconcile reverse-pass **deleted recurring occurrences it never recreates** | **Critical — caused the data loss** | **FIXED** — per-client guard: a ghost is deletable only if its client has no missing booking this run |
+| 2 | "Connection Check" compared portal against a **50-event cap** → false "missing 69" | Medium — read-only, not destructive | **FIXED** — paginates the full window |
+| 3 | **In-person** bookings never reconciled (`" (In Person)"` suffix broke name matching) | High — would silently convert in-person to Teams | **FIXED** — one shared `parseClientName` for reconciler + admin UI |
+| 4 | `calendarView` pagination **dropped the timezone header** on page 2+ | Latent — bites past 999 events, would delete CORRECT events | **FIXED** — header re-sent on every page, both fetchers |
+
+**Auto-fix is gated OFF** in both crons and server-side on the admin button until the
+four repairs are done and a check-only run reads `missing≈0, orphaned=0`.
+
+### Test suite (121 tests, in `npm run check`)
+`graph-recurrence` (weekday scar) · `graph-payloads` (booking→payload contract, all 7
+weekdays, recurrence patterns, range, in-person, attendee suppression) ·
+`calendar-lifecycle` (FakeGraph simulation of every booking operation, asserting
+*calendar == bookings* after each step) · `calendar-classify` (the four incidents as
+fixtures). **Both probes proven to fire**: planting the `"e"` token fails 21/41 calendar
+tests; planting the pre-fix guard fails exactly the two protection fixtures.
+
+Every run now logs `missingByClient` — who is eventless, soonest session first — so drift
+is named the day it appears rather than discovered twelve days later from a bare count.
 
 **The two reported symptoms explained:**
 - *"Auto-fix found nothing wrong, but Chanene is still wrong"* → bug #1 + the reconcile
