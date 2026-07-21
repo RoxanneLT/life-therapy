@@ -113,12 +113,16 @@ export async function GET(request: NextRequest) {
     detail,
   );
 
-  // Calendar reconciliation (auto-fix missing events, flag mismatches)
+  // Calendar reconciliation — CHECK-ONLY (auto-fix gated off 2026-07-21).
+  // autoFix's reverse pass deletes recurring-series occurrences it never recreates;
+  // combined with the day-of-week bug it deleted 50 of a client's real events. Stays
+  // check-only until the fix is deployed and the reverse pass gets a recurring guard.
+  // See docs/CALENDAR_SYNC_HANDOVER_2026-07-21.md (bug #5).
   await runTask(
     "calendarReconcile",
     async () => {
       const { reconcileCalendar } = await import("@/lib/calendar-reconcile");
-      const r = await reconcileCalendar({ autoFix: true, daysAhead: 365 });
+      const r = await reconcileCalendar({ autoFix: false, daysAhead: 365 });
       const unfixedMissing = r.missing.filter((m) => !m.autoFixed).length;
       const unresolvedOrphans = r.orphaned.filter((o) => !o.deleted).length;
       return {

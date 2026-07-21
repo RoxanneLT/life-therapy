@@ -6,7 +6,12 @@ export const maxDuration = 120; // 2 minutes max (Vercel)
 
 async function handler() {
   const result = await reconcileCalendar({
-    autoFix: true, // auto-create missing events
+    // GATED OFF 2026-07-21 — the reverse pass deletes recurring-series occurrences it
+    // will never recreate, and the day-of-week bug made every wrong-day occurrence look
+    // like a ghost. A manual autoFix run deleted 50 of Chanene Norman's real events.
+    // Keep check-only until the day-of-week fix is deployed AND the reverse-pass gets a
+    // recurring guard. See docs/CALENDAR_SYNC_HANDOVER_2026-07-21.md (bug #5).
+    autoFix: false,
     daysAhead: 365, // check the full booking horizon
   });
 
