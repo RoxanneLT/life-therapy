@@ -27,7 +27,7 @@ const bk = (
 ): ClassifyBooking => ({
   startTime: "11:30",
   endTime: "12:30",
-  hasGraphEvent: true,
+  graphEventId: "master-1",
   isRecurring: true,
   ...over,
 });
@@ -174,8 +174,8 @@ test("same start, different end → mismatched (not missing, not a ghost)", () =
 
 test("missing carries the right reason and the recurring flag", () => {
   const bookings = [
-    bk({ id: "b1", date: "2026-08-11", clientName: "A", hasGraphEvent: true, isRecurring: true }),
-    bk({ id: "b2", date: "2026-08-12", clientName: "B", hasGraphEvent: false, isRecurring: false }),
+    bk({ id: "b1", date: "2026-08-11", clientName: "A", graphEventId: "m1", isRecurring: true }),
+    bk({ id: "b2", date: "2026-08-12", clientName: "B", graphEventId: null, isRecurring: false }),
   ];
   const c = classify(bookings, []);
 
@@ -183,6 +183,100 @@ test("missing carries the right reason and the recurring flag", () => {
   assert.equal(c.missing.find((m) => m.bookingId === "b2")?.reason, "no_graph_id");
   assert.equal(c.missing.find((m) => m.bookingId === "b1")?.isRecurring, true);
   assert.equal(c.missing.find((m) => m.bookingId === "b2")?.isRecurring, false);
+});
+
+// ── Proposals ───────────────────────────────────────────────────────────────
+
+test("PROPOSALS: recurring gaps rebuild the series, single gaps create, ghosts delete", () => {
+  const c = classify(
+    [
+      bk({ id: "rec", date: "2026-08-11", clientName: "Chanene Norman", isRecurring: true }),
+      bk({ id: "one", date: "2026-08-12", clientName: "Joe de Wet", isRecurring: false }),
+    ],
+    [],
+  );
+  assert.equal(c.missing.find((m) => m.bookingId === "rec")?.proposal, "reschedule_series");
+  assert.equal(c.missing.find((m) => m.bookingId === "one")?.proposal, "create");
+});
+
+test("PROPOSALS: a protected ghost proposes NOTHING and carries a reason", () => {
+  // Chanene has a missing booking, so her wrong-day twin must never be proposed for
+  // deletion — this is the incident, encoded as a proposal.
+  const c = classify(
+    [bk({ id: "b1", date: "2026-08-11", clientName: "Chanene Norman" })],
+    [ev({ id: "e1", date: "2026-08-12", clientName: "Chanene Norman" })],
+  );
+  assert.equal(c.orphaned[0].proposal, "none");
+  assert.equal(c.orphaned[0].deletable, false);
+  assert.match(c.orphaned[0].reason ?? "", /wrong-day/i);
+});
+
+// ── Same-slot duplicates (the Mia case) ─────────────────────────────────────
+
+test("DUPLICATES: two events in one slot are now VISIBLE (they were not before)", () => {
+  // Mia's manually-added entry sitting beside the occurrence her rebuild created. The
+  // classifier previously reported matched=1, missing=0, orphaned=0 — perfectly clean.
+  const booking = bk({
+    id: "b1",
+    date: "2026-07-23",
+    clientName: "Mia Pretorius",
+    graphEventId: "series-master",
+  });
+  const c = classify([booking], [
+    ev({ id: "manual-entry", date: "2026-07-23", clientName: "Mia Pretorius" }),
+    ev({
+      id: "occurrence-1",
+      date: "2026-07-23",
+      clientName: "Mia Pretorius",
+      seriesMasterId: "series-master",
+    }),
+  ]);
+
+  assert.equal(c.matched, 1, "the booking is still satisfied");
+  assert.equal(c.missing.length, 0);
+  assert.equal(c.orphaned.length, 0, "neither is a ghost — the slot has a booking");
+  assert.equal(c.duplicates.length, 1, "the surplus event is surfaced");
+  assert.equal(c.duplicates[0].graphEventId, "manual-entry", "the un-owned one is surplus");
+  assert.equal(c.duplicates[0].proposal, "delete");
+});
+
+test("DUPLICATES: a recurring occurrence is matched to its booking via seriesMasterId", () => {
+  // calendarView gives occurrences their OWN ids, so matching on id alone would fail to
+  // identify the keeper for every recurring series — and we'd propose deleting the real one.
+  const c = classify(
+    [bk({ id: "b1", date: "2026-08-11", clientName: "X", graphEventId: "master-9" })],
+    [
+      ev({ id: "occ-abc", date: "2026-08-11", clientName: "X", seriesMasterId: "master-9" }),
+      ev({ id: "stray", date: "2026-08-11", clientName: "X" }),
+    ],
+  );
+  assert.equal(c.duplicates.length, 1);
+  assert.equal(c.duplicates[0].graphEventId, "stray", "the series occurrence is kept");
+  assert.equal(c.duplicates[0].proposal, "delete");
+});
+
+test("DUPLICATES: when ownership is unprovable, propose NOTHING and let a human choose", () => {
+  // Two events, neither linked to the booking. Guessing could sever the invite the
+  // client actually holds, so both are reported and neither is proposed for deletion.
+  const c = classify(
+    [bk({ id: "b1", date: "2026-08-11", clientName: "Y", graphEventId: "master-none" })],
+    [
+      ev({ id: "one", date: "2026-08-11", clientName: "Y" }),
+      ev({ id: "two", date: "2026-08-11", clientName: "Y" }),
+    ],
+  );
+  assert.equal(c.duplicates.length, 2, "both are surfaced");
+  assert.ok(c.duplicates.every((d) => d.proposal === "none"), "neither is proposed for deletion");
+  assert.match(c.duplicates[0].reason, /pick which to keep/i);
+});
+
+test("DUPLICATES: a single event in a slot is never a duplicate", () => {
+  const c = classify(
+    [bk({ id: "b1", date: "2026-08-11", clientName: "Z" })],
+    [ev({ id: "e1", date: "2026-08-11", clientName: "Z" })],
+  );
+  assert.deepEqual(c.duplicates, []);
+  assert.equal(c.matched, 1);
 });
 
 test("summariseMissingByClient names the drift, soonest session first", () => {

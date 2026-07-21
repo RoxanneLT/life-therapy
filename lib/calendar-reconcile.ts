@@ -153,6 +153,7 @@ export async function reconcileCalendar(options?: {
       start: startDt.substring(11, 16),
       end: (ev.end?.dateTime ?? "").substring(11, 16),
       clientName: parseClientName(subject),
+      seriesMasterId: ev.seriesMasterId ?? null,
     });
   }
 
@@ -166,7 +167,7 @@ export async function reconcileCalendar(options?: {
       startTime: b.startTime,
       endTime: b.endTime,
       clientName: b.clientName,
-      hasGraphEvent: !!b.graphEventId,
+      graphEventId: b.graphEventId,
       isRecurring: !!b.recurringSeriesId,
     })),
     sessionEvents,
@@ -282,6 +283,10 @@ interface GraphEvent {
   subject?: string;
   start?: { dateTime?: string };
   end?: { dateTime?: string };
+  /** Present on an expanded occurrence: the id of the series master it came from.
+   *  calendarView gives occurrences their OWN ids, so this is the only reliable way a
+   *  booking holding a master id can be matched to its occurrence. */
+  seriesMasterId?: string | null;
 }
 
 /** Cap on Graph write operations (creates + deletes) per run so a large backlog
@@ -306,7 +311,10 @@ async function fetchCalendarEvents(
       // UTC ("Z") — a literal "+02:00" would be decoded as a space and rejected
       startDateTime: windowStart.toISOString(),
       endDateTime: windowEnd.toISOString(),
-      $select: "id,subject,start,end",
+      // seriesMasterId lets a booking that stores the series master id be matched to its
+      // expanded occurrence — without it, every recurring occurrence looks unowned and
+      // the duplicate check cannot tell which event in a slot to keep.
+      $select: "id,subject,start,end,seriesMasterId",
       $top: 999,
     })
     .header("Prefer", `outlook.timezone="${TIMEZONE}"`)

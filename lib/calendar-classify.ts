@@ -3,12 +3,19 @@
  *
  * Extracted from calendar-reconcile.ts so the decisions that caused the 2026-06/07
  * incident can be tested against literal fixtures with no Prisma, no Graph, no network:
- * which bookings are missing an event, which events are ghosts, and — critically —
- * which ghosts may be deleted.
+ * which bookings are missing an event, which events are ghosts, which are surplus
+ * duplicates, and — critically — what may safely be done about each.
  *
- * calendar-reconcile.ts fetches, calls classify(), then performs the I/O the
- * classification implies. Everything judgemental lives here.
+ * This module PROPOSES. It never acts. calendar-reconcile.ts fetches and calls
+ * classify(); an explicit, approved, re-verified apply step performs any write.
  */
+
+/**
+ * What the tool suggests for a finding. `none` means a human must look — either the
+ * safe action is unknowable from the data, or acting automatically is what caused the
+ * incident in the first place.
+ */
+export type ProposedAction = "delete" | "create" | "reschedule_series" | "none";
 
 /** A booking, already resolved to its SAST calendar day. */
 export interface ClassifyBooking {
@@ -17,9 +24,10 @@ export interface ClassifyBooking {
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
   clientName: string;
-  /** Whether the booking row carries a graphEventId — drives the "missing" reason. */
-  hasGraphEvent: boolean;
-  /** Recurring occurrences are never auto-created (recreating one forks the series). */
+  /** The Graph event this booking believes it owns. For a recurring series every
+   *  booking carries the SERIES MASTER id, not a per-occurrence id. */
+  graphEventId: string | null;
+  /** Recurring occurrences are never auto-created — recreating one forks the series. */
   isRecurring: boolean;
 }
 
@@ -31,6 +39,10 @@ export interface ClassifyEvent {
   start: string; // "HH:mm"
   end: string; // "HH:mm"
   clientName: string;
+  /** For an expanded occurrence of a recurring series, the id of its master event.
+   *  calendarView returns occurrences with their OWN ids, so this is the only honest
+   *  way a booking holding a master id can claim its occurrence. */
+  seriesMasterId?: string | null;
 }
 
 export interface ClassifiedMismatch {
@@ -39,6 +51,8 @@ export interface ClassifiedMismatch {
   date: string;
   bookingTime: string;
   outlookTime: string;
+  /** Always "none" for now — duration drift is reported, not auto-corrected. */
+  proposal: ProposedAction;
 }
 
 export interface ClassifiedMissing {
@@ -51,6 +65,9 @@ export interface ClassifiedMissing {
   endTime: string;
   reason: "no_graph_id" | "event_not_found";
   isRecurring: boolean;
+  /** Single bookings can be recreated directly; a recurring gap must go through the
+   *  series rebuild, because creating one standalone occurrence forks the series. */
+  proposal: ProposedAction;
 }
 
 export interface ClassifiedOrphan {
@@ -62,6 +79,24 @@ export interface ClassifiedOrphan {
   /** False when the guard refuses deletion — the client still has a missing booking,
    *  so this is a suspected wrong-day twin rather than a stale duplicate. */
   deletable: boolean;
+  proposal: ProposedAction;
+  /** Why the guard refused, when it did. */
+  reason?: string;
+}
+
+export interface ClassifiedDuplicate {
+  graphEventId: string;
+  subject: string;
+  clientName: string;
+  date: string;
+  start: string;
+  /** The booking this slot belongs to. */
+  bookingId: string;
+  /** "delete" only when the booking provably owns a DIFFERENT event in this slot, so
+   *  this one is demonstrably surplus. "none" when ownership can't be established and
+   *  deleting either could sever the invite the client actually holds. */
+  proposal: ProposedAction;
+  reason: string;
 }
 
 export interface Classification {
@@ -70,6 +105,10 @@ export interface Classification {
   mismatched: ClassifiedMismatch[];
   missing: ClassifiedMissing[];
   orphaned: ClassifiedOrphan[];
+  /** Extra events sitting in a slot that already has a matched booking. Invisible
+   *  before this existed — which is how a manually-added entry sat alongside a rebuilt
+   *  occurrence while the reconcile still reported a clean 0/0. */
+  duplicates: ClassifiedDuplicate[];
 }
 
 /** Normalise a client name for matching: lowercase, collapse internal whitespace. */
@@ -102,6 +141,19 @@ export function parseClientName(subject: string): string {
 /** Match key: a booking and an event are "the same" if day, start time and client agree. */
 export function matchKey(date: string, start: string, clientName: string): string {
   return `${date}|${start}|${normName(clientName)}`;
+}
+
+/**
+ * Does this event demonstrably belong to this booking?
+ *
+ * Two ways: the booking points straight at it (a single booking), or the event is an
+ * expanded occurrence whose master is what the booking points at (a recurring series).
+ * Matching only on `id` would be wrong for every recurring occurrence, since
+ * calendarView gives occurrences their own ids.
+ */
+export function eventBelongsToBooking(ev: ClassifyEvent, booking: ClassifyBooking): boolean {
+  if (!booking.graphEventId) return false;
+  return ev.id === booking.graphEventId || ev.seriesMasterId === booking.graphEventId;
 }
 
 /**
@@ -149,14 +201,15 @@ export function summariseMissingByClient(
 }
 
 /**
- * Compare bookings (the source of truth) against calendar events.
+ * Compare bookings (the source of truth) against calendar events, and propose what to
+ * do about each discrepancy. Proposes only — nothing here writes.
  *
  * Forward pass — every booking should have an event at its day/start/client:
- *   found + same end time → matched
- *   found + different end → mismatched (duration drift)
- *   not found            → missing
- * Reverse pass — every session event should belong to a booking; those that don't are
- * ghosts, each marked deletable or protected by the guard above.
+ *   found, same end time      → matched (extras in that slot become duplicates)
+ *   found, different end time → mismatched (duration drift, reported only)
+ *   not found                 → missing (create, or rebuild the series if recurring)
+ * Reverse pass — session events belonging to no booking are ghosts, each marked
+ * deletable or protected by the guard above.
  */
 export function classify(
   bookings: ClassifyBooking[],
@@ -168,63 +221,121 @@ export function classify(
     mismatched: [],
     missing: [],
     orphaned: [],
+    duplicates: [],
   };
 
+  const byKey = indexEventsByKey(events);
+  const consumed = new Set<string>();
+
+  for (const b of bookings) {
+    out.checked++;
+    const key = matchKey(b.date, b.startTime, b.clientName);
+    const candidates = byKey.get(key);
+
+    if (!candidates?.length) {
+      out.missing.push(missingFor(b));
+      continue;
+    }
+
+    consumed.add(key);
+    if (candidates.some((c) => c.end === b.endTime)) {
+      out.matched++;
+    } else {
+      out.mismatched.push({
+        bookingId: b.id,
+        clientName: b.clientName,
+        date: b.date,
+        bookingTime: `${b.startTime}–${b.endTime}`,
+        outlookTime: `${b.startTime}–${candidates[0].end}`,
+        proposal: "none",
+      });
+    }
+    out.duplicates.push(...surplusInSlot(candidates, b));
+  }
+
+  // The guard's input: clients that still have at least one eventless booking.
+  const clientsWithMissingBookings = new Set(out.missing.map((m) => normName(m.clientName)));
+  out.orphaned.push(...collectOrphans(events, consumed, clientsWithMissingBookings));
+
+  return out;
+}
+
+function indexEventsByKey(events: ClassifyEvent[]): Map<string, ClassifyEvent[]> {
   const byKey = new Map<string, ClassifyEvent[]>();
   for (const ev of events) {
     const k = matchKey(ev.date, ev.start, ev.clientName);
     byKey.set(k, [...(byKey.get(k) ?? []), ev]);
   }
+  return byKey;
+}
 
-  const consumed = new Set<string>();
-  for (const b of bookings) {
-    out.checked++;
-    const k = matchKey(b.date, b.startTime, b.clientName);
-    const candidates = byKey.get(k);
+function missingFor(b: ClassifyBooking): ClassifiedMissing {
+  return {
+    bookingId: b.id,
+    clientName: b.clientName,
+    date: b.date,
+    time: `${b.startTime}–${b.endTime}`,
+    startTime: b.startTime,
+    endTime: b.endTime,
+    reason: b.graphEventId ? "event_not_found" : "no_graph_id",
+    isRecurring: b.isRecurring,
+    // A recurring gap must be repaired by rebuilding the whole series; creating a lone
+    // occurrence forks it and hands the client a different meeting than the coach.
+    proposal: b.isRecurring ? "reschedule_series" : "create",
+  };
+}
 
-    if (candidates?.length) {
-      consumed.add(k);
-      if (candidates.some((c) => c.end === b.endTime)) {
-        out.matched++;
-      } else {
-        out.mismatched.push({
-          bookingId: b.id,
-          clientName: b.clientName,
-          date: b.date,
-          bookingTime: `${b.startTime}–${b.endTime}`,
-          outlookTime: `${b.startTime}–${candidates[0].end}`,
-        });
-      }
-      continue;
-    }
-
-    out.missing.push({
+/**
+ * One booking cannot justify several events in the same slot; the ones it does not own
+ * are surplus. Deleting is only PROPOSED when ownership is provable — otherwise the
+ * wrong choice severs the invite the client is actually holding, so a human picks.
+ */
+function surplusInSlot(
+  candidates: ClassifyEvent[],
+  b: ClassifyBooking,
+): ClassifiedDuplicate[] {
+  if (candidates.length <= 1) return [];
+  const owned = candidates.find((c) => eventBelongsToBooking(c, b));
+  return candidates
+    .filter((c) => c.id !== owned?.id) // no owner → every candidate is reported
+    .map((c) => ({
+      graphEventId: c.id,
+      subject: c.subject,
+      clientName: c.clientName,
+      date: c.date,
+      start: c.start,
       bookingId: b.id,
-      clientName: b.clientName,
-      date: b.date,
-      time: `${b.startTime}–${b.endTime}`,
-      startTime: b.startTime,
-      endTime: b.endTime,
-      reason: b.hasGraphEvent ? "event_not_found" : "no_graph_id",
-      isRecurring: b.isRecurring,
-    });
-  }
+      proposal: owned ? ("delete" as const) : ("none" as const),
+      reason: owned
+        ? "Surplus — the booking owns a different event in this slot"
+        : "Several events in one slot and none is linked to the booking — pick which to keep",
+    }));
+}
 
-  // The guard's input: clients that still have at least one eventless booking.
-  const clientsWithMissingBookings = new Set(out.missing.map((m) => normName(m.clientName)));
-
+function collectOrphans(
+  events: ClassifyEvent[],
+  consumed: Set<string>,
+  clientsWithMissingBookings: Set<string>,
+): ClassifiedOrphan[] {
+  const out: ClassifiedOrphan[] = [];
   for (const ev of events) {
-    const k = matchKey(ev.date, ev.start, ev.clientName);
-    if (consumed.has(k)) continue;
-    out.orphaned.push({
+    if (consumed.has(matchKey(ev.date, ev.start, ev.clientName))) continue;
+    const deletable = isGhostDeletable(normName(ev.clientName), clientsWithMissingBookings);
+    out.push({
       graphEventId: ev.id,
       subject: ev.subject,
       clientName: ev.clientName,
       date: ev.date,
       start: ev.start,
-      deletable: isGhostDeletable(normName(ev.clientName), clientsWithMissingBookings),
+      deletable,
+      proposal: deletable ? "delete" : "none",
+      ...(deletable
+        ? {}
+        : {
+            reason:
+              "Suspected wrong-day session — this client still has sessions with no event. Rebuild their series instead of deleting.",
+          }),
     });
   }
-
   return out;
 }
