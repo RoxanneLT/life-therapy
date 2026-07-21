@@ -255,10 +255,14 @@ export async function createRecurringCalendarEvent(params: {
     const client = createGraphClient(config);
 
     // Use formatInTimeZone to get the correct day-of-week in SAST,
-    // not the system timezone (which differs on Vercel vs dev machine)
+    // not the system timezone (which differs on Vercel vs dev machine).
+    // Token MUST be "i" (ISO day of week, 1=Monday..7=Sunday). "e" is the LOCALE
+    // day of week — en-US counts 1=Sunday — which shifted every recurring Teams
+    // event one weekday LATE (a Tuesday booking produced a Wednesday event). The
+    // 7→0 remap below is correct only for ISO, confirming "i" is what was intended.
     const startDate = new Date(params.startDateTime);
     const dayIndexSast = parseInt(
-      formatInTimeZone(startDate, TIMEZONE, "e"), // 1=Monday, 7=Sunday (ISO)
+      formatInTimeZone(startDate, TIMEZONE, "i"), // 1=Monday, 7=Sunday (ISO)
       10,
     );
     // Convert ISO day index to JS getDay() style (0=Sunday, 6=Saturday)
