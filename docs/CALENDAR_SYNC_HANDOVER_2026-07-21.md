@@ -266,6 +266,46 @@ mass-repair all 22** — only these 6 need rebuilding after fix #1 deploys.
 *freshly created today at 11:26 UTC* (not a reschedule) and deleted 34 minutes later,
 so she likely received ~50 invites then ~50 cancellations today (the "invite noise").
 
+### ⚠ Damage is FAR broader than 6 — ghost deletions have run since day one (2026-06-24)
+
+The "6 at-risk series" (above) is the wrong-day *creation* scope. But the auto-fix has
+been **deleting** events since the bug landed. The very first `deleted_ghost_event` is
+`2026-06-24 17:07:42 UTC` — minutes after the `3a8e5bb` "harden calendar sync" deploy —
+and it kicked off a mass purge. Ghost deletions by client since 2026-06-24:
+
+| Client | Deleted | First → Last | Next session | State |
+|---|---|---|---|---|
+| **Lisa Toms** | **54** | 2026-06-24 → 06-25 | **2026-07-22 (tomorrow)** | calendar empty ~4 weeks, session imminent |
+| Frikkie Erasmus | 1 | 2026-06-24 | 2026-07-23 | mostly intact (1 delete) |
+| **Mia Pretorius** | **26** | 2026-07-09 | 2026-07-23 | calendar empty ~12 days (= the `missing:26`) |
+| Joe de Wet | 1 | 2026-06-24 | 2026-07-27 | mostly intact |
+| Tasmin Mackier | 6 | 2026-06-24 | 2026-07-29 | partial |
+| Martin Smith | 1 | 2026-06-24 | 2026-07-30 | mostly intact |
+| **Huibri Smith** | **9** | 2026-06-24 | 2026-07-31 | calendar empty ~4 weeks |
+| Aiden Kilian | 2 | 2026-06-24 | 2026-08-03 | partial |
+| Winifred Michaels | 11 | 2026-07-06 | 2026-08-03 | calendar empty ~2 weeks |
+| Angela Gohre | 18 | 2026-06-24 | 2026-08-04 | calendar empty ~4 weeks |
+| Chanene Norman | 50 (+2) | 2026-07-21 | 2026-08-11 | deleted today (freshest) |
+| Andrea Behnsen / Micaella White | 1 each | 2026-06-24/26 | — | single stale, likely legit |
+
+**~13 clients affected, not 6.** The single-event deletions (Frikkie, Joe, Martin,
+Micaella, Andrea) are probably legitimate stale-event cleanup; the **large counts
+(Lisa 54, Mia 26, Angela 18, Winifred 11, Huibri 9)** are wrong-day recurring series
+that were mass-deleted with no recreation. Note the 2026-06-24 wave hit series that
+predate the bug too, so `3a8e5bb` likely caused a one-time false-ghost purge on top of
+the ongoing day-of-week issue — the exact *current* missing set needs a **check-only
+reconcile** to confirm (the delete log is history, not present state).
+
+**URGENT:** Lisa Toms has a session **tomorrow (2026-07-22)** with no calendar event on
+Roxanne's side (deleted ~4 weeks ago, never recreated). She must be handled *today* —
+manual calendar entry now, and "reschedule series" once the fix deploys. Frikkie and
+Mia are 2026-07-23. Prioritise repairs by soonest session, not by delete count.
+
+### Genevieve Chang & Camryn Gohre — wrong-day events still LIVE (gated safe)
+Created/rescheduled today through the still-buggy code, but **no ghost deletions logged**
+for them — their wrong-day events are sitting on the calendar right now. Auto-fix is
+gated off, so they won't be deleted; they still need "reschedule series" post-deploy.
+
 **Reconcile logs:**
 - Scheduled 4-hourly runs (02/06/10/14/18/22:00), 2026-07-19 → 21: stable
   `checked≈298–300, matched≈271–274, missing:26, orphaned:0`.
