@@ -7,6 +7,7 @@
  *
  * Run: npm run test:payloads  (part of `npm run check`)
  */
+import "./test-tz"; // MUST be first — pins TZ=UTC (see the module)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {

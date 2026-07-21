@@ -31,7 +31,7 @@ to any day-mismatched series in the window.** Gate it off before the next run
 | 1 | Recurring Teams events created **one weekday late** (date-fns `"e"` vs `"i"`) | High — every recurring series wrong in Teams, and it drove the deletion in #5 | **FIXED + DEPLOYED** (`995ce96`), pinned by a 7-weekday regression test |
 | 5 | Reconcile reverse-pass **deleted recurring occurrences it never recreates** | **Critical — caused the data loss** | **FIXED** — per-client guard: a ghost is deletable only if its client has no missing booking this run |
 | 2 | "Connection Check" compared portal against a **50-event cap** → false "missing 69" | Medium — read-only, not destructive | **FIXED** — paginates the full window |
-| 3 | **In-person** bookings never reconciled (`" (In Person)"` suffix broke name matching) | High — would silently convert in-person to Teams | **FIXED** — one shared `parseClientName` for reconciler + admin UI |
+| 3 | **In-person** bookings never reconciled (`" (In Person)"` suffix broke name matching) | High — would silently convert in-person to Teams | **FIXED (both halves)** — shared `parseClientName` for reconciler + admin UI, AND `sessionMode` threaded through `tryCreateMissingEvent` so a recreated in-person booking is not turned into a Teams meeting |
 | 4 | `calendarView` pagination **dropped the timezone header** on page 2+ | Latent — bites past 999 events, would delete CORRECT events | **FIXED** — header re-sent on every page, both fetchers |
 
 **Auto-fix is gated OFF** in both crons and server-side on the admin button until the

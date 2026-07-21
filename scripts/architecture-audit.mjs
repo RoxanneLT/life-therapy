@@ -1021,6 +1021,11 @@ const ENV_ALLOW = new Set([
   "lib/supabase/config.ts",
   "lib/cron/with-cron-run.ts", // CRON_SECRET — its own single guarded reader
   "lib/audit.ts", // AUDIT_IP_HMAC_KEY — same
+  // TEST-ONLY, and a WRITE not a read: pins process.env.TZ = "UTC" so the payload suite
+  // is deterministic regardless of the CI machine's timezone (buildRecurrence parses a
+  // naive wall-clock string in the ambient zone — under Pacific/Auckland 11 tests flip).
+  // TZ is not a server var and has no lib/env.ts accessor; nothing is read here.
+  "lib/test-tz.ts",
 ]);
 
 check("env: no raw process.env for a server var outside lib/env.ts", () => {

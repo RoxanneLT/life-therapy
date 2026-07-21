@@ -8,6 +8,7 @@
  *
  * Run: npm run test:graph  (part of `npm run check`)
  */
+import "./test-tz"; // MUST be first — pins TZ=UTC (see the module)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { graphDayOfWeek, GRAPH_DAY_NAMES } from "./graph-recurrence";

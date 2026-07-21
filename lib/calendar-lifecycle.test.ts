@@ -18,10 +18,12 @@
  *
  * Run: npm run test:lifecycle  (part of `npm run check`)
  */
+import "./test-tz"; // MUST be first — pins TZ=UTC (see the module)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addSaDays } from "./dates";
 import { graphDayOfWeek } from "./graph-recurrence";
+import { parseClientName } from "./calendar-classify";
 import {
   buildSingleEventPayload,
   buildRecurringEventPayload,
@@ -44,7 +46,9 @@ interface Occurrence {
 const weekdayOf = (date: string) => graphDayOfWeek(new Date(`${date}T10:00:00Z`));
 const timeOf = (dateTime: string) => dateTime.slice(11, 16);
 const dayOf = (dateTime: string) => dateTime.slice(0, 10);
-const clientOf = (subject: string) => subject.split(" — ").slice(1).join(" — ").trim();
+// Use the REAL parser so the sim identifies clients exactly as the reconciler does
+// (including the " (In Person)" strip) rather than via a lookalike of its own.
+const clientOf = parseClientName;
 
 /**
  * In-memory Microsoft Graph. Accepts the real payloads and implements only the

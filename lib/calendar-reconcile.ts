@@ -15,7 +15,7 @@ import {
   summariseMissingByClient,
   type ClassifyEvent,
 } from "@/lib/calendar-classify";
-import type { SessionType } from "@/lib/generated/prisma/client";
+import type { SessionType, SessionMode } from "@/lib/generated/prisma/client";
 
 export interface ReconcileResult {
   checked: number;
@@ -118,6 +118,8 @@ export async function reconcileCalendar(options?: {
       clientName: true,
       clientEmail: true,
       sessionType: true,
+      // Needed so a recreated in-person booking is NOT turned into a Teams meeting.
+      sessionMode: true,
       graphEventId: true,
       recurringSeriesId: true,
     },
@@ -328,14 +330,16 @@ async function fetchCalendarEvents(
   return events;
 }
 
-/** Auto-fix a NON-recurring booking whose Outlook event is missing by creating a
- *  new one and re-inviting the client (the new event has a new Teams meeting). */
+/** Auto-fix a NON-recurring booking whose Outlook event is missing by creating a new one
+ *  and re-inviting the client. An ONLINE booking gets a fresh Teams meeting; an IN-PERSON
+ *  one must not (bug #3 — recreating it as a Teams meeting silently converts the session). */
 async function tryCreateMissingEvent(
   booking: {
     id: string;
     clientName: string;
     clientEmail: string;
     sessionType: SessionType;
+    sessionMode: SessionMode;
   },
   expectedDate: string,
   expectedStart: string,
@@ -345,13 +349,19 @@ async function tryCreateMissingEvent(
 ): Promise<void> {
   try {
     const sessionConfig = getSessionTypeConfig(booking.sessionType);
+    const inPerson = booking.sessionMode === "in_person";
     const calResult = await createCalendarEvent({
-      subject: `${sessionConfig.label} — ${booking.clientName}`,
+      // Match the subject admin bookings use, suffix included, so the recreated event is
+      // indistinguishable from a hand-made one. Both parsers strip the suffix, so this
+      // does not affect matching.
+      subject: `${sessionConfig.label} — ${booking.clientName}${inPerson ? " (In Person)" : ""}`,
       startDateTime: `${expectedDate}T${expectedStart}:00`,
       endDateTime: `${expectedDate}T${expectedEnd}:00`,
       clientName: booking.clientName,
       clientEmail: booking.clientEmail,
-      // Re-invite the client. The recreated event has a NEW Teams meeting, so the
+      // Carry the session mode through — an in-person session stays in-person.
+      isOnlineMeeting: !inPerson,
+      // Re-invite the client. An online recreation has a NEW Teams meeting, so the
       // client's old invite is stale — suppressing it would leave them on a
       // different meeting than the coach. Sending the invite keeps them aligned.
       suppressAttendees: false,
