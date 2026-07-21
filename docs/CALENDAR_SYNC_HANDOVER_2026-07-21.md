@@ -288,18 +288,33 @@ and it kicked off a mass purge. Ghost deletions by client since 2026-06-24:
 | Chanene Norman | 50 (+2) | 2026-07-21 | 2026-08-11 | deleted today (freshest) |
 | Andrea Behnsen / Micaella White | 1 each | 2026-06-24/26 | — | single stale, likely legit |
 
-**~13 clients affected, not 6.** The single-event deletions (Frikkie, Joe, Martin,
-Micaella, Andrea) are probably legitimate stale-event cleanup; the **large counts
-(Lisa 54, Mia 26, Angela 18, Winifred 11, Huibri 9)** are wrong-day recurring series
-that were mass-deleted with no recreation. Note the 2026-06-24 wave hit series that
-predate the bug too, so `3a8e5bb` likely caused a one-time false-ghost purge on top of
-the ongoing day-of-week issue — the exact *current* missing set needs a **check-only
-reconcile** to confirm (the delete log is history, not present state).
+### RESOLVED — only 2 clients are currently eventless (forensic, confirmed)
 
-**URGENT:** Lisa Toms has a session **tomorrow (2026-07-22)** with no calendar event on
-Roxanne's side (deleted ~4 weeks ago, never recreated). She must be handled *today* —
-manual calendar entry now, and "reschedule series" once the fix deploys. Frikkie and
-Mia are 2026-07-23. Prioritise repairs by soonest session, not by delete count.
+Deletion history is NOT current state. Cross-referencing every deletion's timestamp
+against the reconcile `missing` counter timeline settles it definitively:
+
+- The **2026-06-24/25 wave** (Lisa 54, Angela 18, Huibri 9, Tasmin 6, …) is **proven
+  harmless**: `missing` was **0 immediately before and after** those deletions. They
+  were same-day duplicate / stale-event cleanup (leftovers from the pre-refactor
+  one-event-per-booking format), not the day-of-week bug. Those clients' real events
+  remained. **Leave them alone** — rescheduling a healthy series just spams the client
+  with invites.
+- Only **two** waves moved `missing` and never recovered:
+  - **Mia Pretorius** — `missing` +26 at **2026-07-09 14:00**, still missing 12+ days
+    later. Eventless. Next session **2026-07-23**.
+  - **Chanene Norman** — `missing` +43 at **2026-07-21 12:00** (today's manual run).
+    Eventless. Next session **2026-08-11**.
+  - 26 + 43 = **69** = the exact live `missing` total. Clean reconciliation.
+
+**Confirmed by hand against Outlook (2026-07-21): Lisa Toms present** (right day/time,
+fine); **Mia Pretorius absent** (eventless). The weekday heuristic alone would have
+wrongly flagged Lisa — the counter cross-reference is the reliable test.
+
+**Two more, different failure mode — wrong-day but LIVE (not eventless):** Genevieve
+Chang and Camryn Gohre were created/rescheduled *today* through the still-buggy code, so
+their events sit in Outlook on the **wrong weekday**. No deletions logged for them
+(auto-fix is gated off, so they weren't purged). They need reschedule-series to move to
+the correct day, but no session is being missed in the meantime.
 
 ### Genevieve Chang & Camryn Gohre — wrong-day events still LIVE (gated safe)
 Created/rescheduled today through the still-buggy code, but **no ghost deletions logged**
@@ -340,11 +355,18 @@ full list preserved in the investigation transcript.
    series then land on the correct weekday. **Do NOT reschedule any series before this
    deploys** — a pre-fix reschedule just makes fresh wrong-day events for the next
    auto-fix to delete.
-2. **Repair the 6 at-risk series** (see prod section — NOT all 22). Chanene first (her
-   50 occurrences were deleted today); then Genevieve Chang, Mia Pretorius, Lisa Toms,
-   Huibri Smith, Camryn Gohre. After #1 is live, admin "reschedule series" rebuilds each
-   Graph event on the correct weekday and re-invites. Roxanne should send Chanene a short
-   personal note about the invite/cancellation noise.
+2. **Repair only the 4 confirmed-affected series** (NOT the June-wave clients — they're
+   fine). In priority order:
+   - **Mia Pretorius — URGENT.** Eventless since 2026-07-09, next session **2026-07-23**.
+     *Stopgap now, independent of deploy:* Roxanne manually adds Mia's near-term sessions
+     to Outlook so 07-23 isn't missed. Then reschedule-series once the deploy is verified.
+   - **Chanene Norman** — eventless (deleted today), next session 2026-08-11 (runway).
+     Reschedule-series post-deploy; a short personal note re the invite/cancellation noise.
+   - **Genevieve Chang, Camryn Gohre** — wrong-day events live in Outlook (not eventless);
+     reschedule-series post-deploy to move them to the correct weekday.
+   Do NOT reschedule any series until the deploy of #1 is verified live in Vercel — a
+   pre-fix reschedule recreates wrong-day events. Leave Lisa/Huibri/Angela/Tasmin/etc.
+   untouched.
 3. **Fix bug #5** — guard the reverse pass so it never deletes an event mapping to an
    active recurring series (report for manual review instead). This is the real
    safety fix; #1 removes the trigger, #5 removes the loaded gun.
