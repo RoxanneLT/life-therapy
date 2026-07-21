@@ -8,6 +8,12 @@ import {
 import { TIMEZONE, getSessionTypeConfig } from "@/lib/booking-config";
 import { saDateStr } from "@/lib/dates";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
+import {
+  classify,
+  isSessionSubject,
+  parseClientName,
+  type ClassifyEvent,
+} from "@/lib/calendar-classify";
 import type { SessionType } from "@/lib/generated/prisma/client";
 
 export interface ReconcileResult {
@@ -61,39 +67,6 @@ interface HolidayDetail {
   holiday: string;
 }
 
-/** Normalise a client name for matching: lowercase, collapse internal whitespace. */
-export function normName(clientName: string): string {
-  return clientName.toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-/** Normalised match key: a booking and a Teams event are "the same" if their
- *  SAST date, start time, and client name agree. */
-function reconcileKey(date: string, time: string, clientName: string): string {
-  return `${date}|${time}|${normName(clientName)}`;
-}
-
-/**
- * The reverse-pass safety guard — the fix for the 2026-06/07 mass-deletion incident.
- *
- * A ghost (session event with no matching booking) is safe to delete ONLY if its client
- * has NO booking left unmatched this run. If the same client DOES have a missing booking,
- * the ghost is almost certainly the wrong-day twin of that now-eventless booking
- * (Mia/Chanene) — deleting it is the silent-data-loss failure, so we refuse and flag it.
- * If every one of the client's bookings matched, the ghost is a true duplicate (the
- * booking is already satisfied by another event — the harmless June cleanup) and stays
- * deletable.
- *
- * This one set-membership check separates the two cases that a blanket "never delete a
- * recurring occurrence" rule could not: it would have blocked June's correct cleanup too.
- * Replayed against history: June wave → clients all matched → dupes deleted; Jul-09 Mia
- * and today's Chanene → client had missing bookings → deletion refused.
- */
-export function isGhostDeletable(
-  ghostClientNorm: string,
-  clientsWithMissingBookings: Set<string>,
-): boolean {
-  return !clientsWithMissingBookings.has(ghostClientNorm);
-}
 
 export async function reconcileCalendar(options?: {
   autoFix?: boolean;
@@ -157,130 +130,116 @@ export async function reconcileCalendar(options?: {
   }
   result.scannedEvents = events.length;
 
-  // 3. Index session events ("{label} — {clientName}") by date|start|client.
-  const eventsByKey = new Map<string, SessionEvent[]>();
-  const sessionEvents: SessionEvent[] = [];
+  // 3. Parse session events ("{label} — {clientName}"). parseClientName strips the
+  //    " (In Person)" suffix so in-person events match their booking (bug #3).
+  const sessionEvents: ClassifyEvent[] = [];
   for (const ev of events) {
     const subject = ev.subject || "";
-    if (!subject.includes(" — ")) continue; // personal/blocked — leave alone
+    if (!isSessionSubject(subject)) continue; // personal/blocked — leave alone
     const startDt = ev.start?.dateTime;
     if (!startDt) continue;
     result.sessionEventsScanned++;
-    const entry: SessionEvent = {
+    sessionEvents.push({
       id: ev.id,
       subject,
       date: startDt.substring(0, 10),
       start: startDt.substring(11, 16),
       end: (ev.end?.dateTime ?? "").substring(11, 16),
-      clientName: subject.split(" — ").slice(1).join(" — ").trim(),
-    };
-    sessionEvents.push(entry);
-    const key = reconcileKey(entry.date, entry.start, entry.clientName);
-    const list = eventsByKey.get(key) ?? [];
-    list.push(entry);
-    eventsByKey.set(key, list);
+      clientName: parseClientName(subject),
+    });
   }
 
-  // 4. Forward pass — every booking should have a matching event.
-  const consumedKeys = new Set<string>();
-  for (const booking of bookings) {
-    result.checked++;
-    const expectedDate = saDateStr(booking.date);
-    const expectedStart = booking.startTime;
-    const expectedEnd = booking.endTime;
-    const key = reconcileKey(expectedDate, expectedStart, booking.clientName);
-    const candidates = eventsByKey.get(key);
+  // 4. CLASSIFY — the pure core in lib/calendar-classify.ts, fixture-tested against the
+  //    real 2026-06/07 incidents. Everything below is only the I/O it implies; no
+  //    matching decision is made here, so the tests and production share one brain.
+  const classified = classify(
+    bookings.map((b) => ({
+      id: b.id,
+      date: saDateStr(b.date),
+      startTime: b.startTime,
+      endTime: b.endTime,
+      clientName: b.clientName,
+      hasGraphEvent: !!b.graphEventId,
+      isRecurring: !!b.recurringSeriesId,
+    })),
+    sessionEvents,
+  );
 
-    if (candidates && candidates.length > 0) {
-      consumedKeys.add(key);
-      if (candidates.some((c) => c.end === expectedEnd)) {
-        result.matched++;
-      } else {
-        // Start matches but the duration differs (second-pass check).
-        result.mismatched.push({
-          bookingId: booking.id,
-          clientName: booking.clientName,
-          bookingDate: expectedDate,
-          bookingTime: `${expectedStart}–${expectedEnd}`,
-          outlookDate: expectedDate,
-          outlookTime: `${expectedStart}–${candidates[0].end}`,
-          autoFixed: false,
-        });
-      }
-      continue;
-    }
+  result.checked = classified.checked;
+  result.matched = classified.matched;
+  result.mismatched = classified.mismatched.map((m) => ({
+    bookingId: m.bookingId,
+    clientName: m.clientName,
+    bookingDate: m.date,
+    bookingTime: m.bookingTime,
+    outlookDate: m.date,
+    outlookTime: m.outlookTime,
+    autoFixed: false,
+  }));
 
-    // No event at that slot → missing
+  // 5. Act on the missing. Only NON-recurring gaps are auto-created — recreating a
+  //    recurring occurrence as a standalone event fragments the series and gives the
+  //    client a different meeting than the coach. Recurring gaps are reported instead.
+  const bookingById = new Map(bookings.map((b) => [b.id, b]));
+  for (const m of classified.missing) {
     const detail: MissingDetail = {
-      bookingId: booking.id,
-      clientName: booking.clientName,
-      date: expectedDate,
-      time: `${expectedStart}–${expectedEnd}`,
-      reason: booking.graphEventId ? "event_not_found" : "no_graph_id",
+      bookingId: m.bookingId,
+      clientName: m.clientName,
+      date: m.date,
+      time: m.time,
+      reason: m.reason,
       autoFixed: false,
     };
     result.missing.push(detail);
-    // Only auto-create for NON-recurring bookings. Recreating a recurring
-    // occurrence as a standalone event fragments the series and gives the client
-    // a different meeting than the coach (the source of the Teams-link drift).
-    // Recurring gaps are reported for manual review instead of silently forked.
-    if (autoFix && !booking.recurringSeriesId && writeBudgetLeft(result) > 0) {
-      await tryCreateMissingEvent(booking, expectedDate, expectedStart, expectedEnd, detail, result);
+    const booking = bookingById.get(m.bookingId);
+    if (autoFix && booking && !m.isRecurring && writeBudgetLeft(result) > 0) {
+      await tryCreateMissingEvent(booking, m.date, m.startTime, m.endTime, detail, result);
     }
   }
 
-  // 5. Reverse pass — session events with no matching booking are ghosts.
-  //    Portal is the source of truth, so under auto-fix we DELETE them — EXCEPT where
-  //    the guard below refuses (a suspected wrong-day twin of a still-missing booking).
-  //
-  // Clients that have at least one booking with no matching event this run. A ghost for
-  // one of these is the suspected wrong-day occurrence of that now-eventless booking
-  // (Mia/Chanene) — never delete it (see isGhostDeletable). The June cleanup is unaffected
-  // because those clients' bookings all matched, so they're absent from this set.
-  const clientsWithMissingBookings = new Set(
-    result.missing.map((m) => normName(m.clientName)),
-  );
-
-  for (const ev of sessionEvents) {
-    const key = reconcileKey(ev.date, ev.start, ev.clientName);
-    if (consumedKeys.has(key)) continue; // belongs to a real booking
+  // 6. Act on the ghosts. classify() has already applied the SAFETY GUARD (bug #5):
+  //    a ghost is `deletable: false` when its client still has a missing booking, which
+  //    means it's a suspected wrong-day twin rather than a stale duplicate. Those are
+  //    flagged durably for human review and NEVER deleted — this is the fix for the
+  //    incident where 50 of one client's real occurrences were silently wiped.
+  for (const o of classified.orphaned) {
     const orphan: OrphanedDetail = {
-      graphEventId: ev.id,
-      subject: ev.subject,
-      date: `${ev.date} ${ev.start}`,
+      graphEventId: o.graphEventId,
+      subject: o.subject,
+      date: `${o.date} ${o.start}`,
       deleted: false,
     };
     result.orphaned.push(orphan);
 
-    // SAFETY GUARD (bug #5) — the fix for the mass-deletion incident. If this ghost's
-    // client still has a missing booking, it's a suspected wrong-day series occurrence:
-    // refuse to delete, flag it durably for human review instead of silently wiping it.
-    // (Name-matching relies on the parsed client name; bug #3's " (In Person)" suffix
-    // strip will extend this guard to in-person events — none exist in prod today.)
-    if (!isGhostDeletable(normName(ev.clientName), clientsWithMissingBookings)) {
+    if (!o.deletable) {
       orphan.protectedWrongDay = true;
       await logCalendarOp({
         operation: "reconcile",
         status: "partial",
-        graphEventId: ev.id,
-        metadata: { action: "protected_suspected_wrong_day", date: ev.date, subject: ev.subject },
+        graphEventId: o.graphEventId,
+        metadata: {
+          action: "protected_suspected_wrong_day",
+          date: o.date,
+          subject: o.subject,
+          client: o.clientName,
+        },
       });
       continue;
     }
 
     if (autoFix && writeBudgetLeft(result) > 0) {
       try {
-        await cancelCalendarEvent(ev.id);
+        await cancelCalendarEvent(o.graphEventId);
         orphan.deleted = true;
         result.fixed++;
         await logCalendarOp({
           operation: "delete",
           status: "success",
-          graphEventId: ev.id,
-          metadata: { action: "deleted_ghost_event", date: ev.date, subject: ev.subject },
+          graphEventId: o.graphEventId,
+          metadata: { action: "deleted_ghost_event", date: o.date, subject: o.subject },
         });
       } catch (error) {
-        result.errors.push(`Failed to delete ghost "${ev.subject}" on ${ev.date}: ${error}`);
+        result.errors.push(`Failed to delete ghost "${o.subject}" on ${o.date}: ${error}`);
       }
     }
   }
@@ -312,15 +271,6 @@ interface GraphEvent {
   subject?: string;
   start?: { dateTime?: string };
   end?: { dateTime?: string };
-}
-
-interface SessionEvent {
-  id: string;
-  subject: string;
-  date: string;
-  start: string;
-  end: string;
-  clientName: string;
 }
 
 /** Cap on Graph write operations (creates + deletes) per run so a large backlog
