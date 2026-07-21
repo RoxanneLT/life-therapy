@@ -48,6 +48,9 @@ interface OrphanedDetail {
   subject: string;
   date: string;
   deleted: boolean; // auto-removed from the calendar (portal is the source of truth)
+  /** The reverse-pass guard REFUSED to delete this: its client has a missing booking
+   *  this run, so it's a suspected wrong-day series occurrence, not a stale duplicate. */
+  protectedWrongDay?: boolean;
 }
 
 interface HolidayDetail {
@@ -58,10 +61,38 @@ interface HolidayDetail {
   holiday: string;
 }
 
+/** Normalise a client name for matching: lowercase, collapse internal whitespace. */
+export function normName(clientName: string): string {
+  return clientName.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 /** Normalised match key: a booking and a Teams event are "the same" if their
  *  SAST date, start time, and client name agree. */
 function reconcileKey(date: string, time: string, clientName: string): string {
-  return `${date}|${time}|${clientName.toLowerCase().replace(/\s+/g, " ").trim()}`;
+  return `${date}|${time}|${normName(clientName)}`;
+}
+
+/**
+ * The reverse-pass safety guard — the fix for the 2026-06/07 mass-deletion incident.
+ *
+ * A ghost (session event with no matching booking) is safe to delete ONLY if its client
+ * has NO booking left unmatched this run. If the same client DOES have a missing booking,
+ * the ghost is almost certainly the wrong-day twin of that now-eventless booking
+ * (Mia/Chanene) — deleting it is the silent-data-loss failure, so we refuse and flag it.
+ * If every one of the client's bookings matched, the ghost is a true duplicate (the
+ * booking is already satisfied by another event — the harmless June cleanup) and stays
+ * deletable.
+ *
+ * This one set-membership check separates the two cases that a blanket "never delete a
+ * recurring occurrence" rule could not: it would have blocked June's correct cleanup too.
+ * Replayed against history: June wave → clients all matched → dupes deleted; Jul-09 Mia
+ * and today's Chanene → client had missing bookings → deletion refused.
+ */
+export function isGhostDeletable(
+  ghostClientNorm: string,
+  clientsWithMissingBookings: Set<string>,
+): boolean {
+  return !clientsWithMissingBookings.has(ghostClientNorm);
 }
 
 export async function reconcileCalendar(options?: {
@@ -199,7 +230,17 @@ export async function reconcileCalendar(options?: {
   }
 
   // 5. Reverse pass — session events with no matching booking are ghosts.
-  //    Portal is the source of truth, so under auto-fix we DELETE them.
+  //    Portal is the source of truth, so under auto-fix we DELETE them — EXCEPT where
+  //    the guard below refuses (a suspected wrong-day twin of a still-missing booking).
+  //
+  // Clients that have at least one booking with no matching event this run. A ghost for
+  // one of these is the suspected wrong-day occurrence of that now-eventless booking
+  // (Mia/Chanene) — never delete it (see isGhostDeletable). The June cleanup is unaffected
+  // because those clients' bookings all matched, so they're absent from this set.
+  const clientsWithMissingBookings = new Set(
+    result.missing.map((m) => normName(m.clientName)),
+  );
+
   for (const ev of sessionEvents) {
     const key = reconcileKey(ev.date, ev.start, ev.clientName);
     if (consumedKeys.has(key)) continue; // belongs to a real booking
@@ -210,6 +251,23 @@ export async function reconcileCalendar(options?: {
       deleted: false,
     };
     result.orphaned.push(orphan);
+
+    // SAFETY GUARD (bug #5) — the fix for the mass-deletion incident. If this ghost's
+    // client still has a missing booking, it's a suspected wrong-day series occurrence:
+    // refuse to delete, flag it durably for human review instead of silently wiping it.
+    // (Name-matching relies on the parsed client name; bug #3's " (In Person)" suffix
+    // strip will extend this guard to in-person events — none exist in prod today.)
+    if (!isGhostDeletable(normName(ev.clientName), clientsWithMissingBookings)) {
+      orphan.protectedWrongDay = true;
+      await logCalendarOp({
+        operation: "reconcile",
+        status: "partial",
+        graphEventId: ev.id,
+        metadata: { action: "protected_suspected_wrong_day", date: ev.date, subject: ev.subject },
+      });
+      continue;
+    }
+
     if (autoFix && writeBudgetLeft(result) > 0) {
       try {
         await cancelCalendarEvent(ev.id);

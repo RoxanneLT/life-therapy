@@ -10,6 +10,7 @@ import { TIMEZONE } from "@/lib/booking-config";
 import { formatInTimeZone } from "date-fns-tz";
 import { logCalendarOp } from "@/lib/calendar-sync-log";
 import { saDateStr, saDayStart, saDayEnd } from "@/lib/dates";
+import { graphDayOfWeek, GRAPH_WEEK_INDEX } from "@/lib/graph-recurrence";
 import { env } from "@/lib/env";
 
 // ────────────────────────────────────────────────────────────
@@ -235,9 +236,6 @@ export async function createCalendarEvent(params: {
 // Create recurring calendar event
 // ────────────────────────────────────────────────────────────
 
-const GRAPH_DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
-const GRAPH_WEEK_INDEX = ["first", "second", "third", "fourth", "last"] as const;
-
 export async function createRecurringCalendarEvent(params: {
   subject: string;
   startDateTime: string;       // first occurrence: "2026-04-21T09:00:00"
@@ -254,20 +252,10 @@ export async function createRecurringCalendarEvent(params: {
   try {
     const client = createGraphClient(config);
 
-    // Use formatInTimeZone to get the correct day-of-week in SAST,
-    // not the system timezone (which differs on Vercel vs dev machine).
-    // Token MUST be "i" (ISO day of week, 1=Monday..7=Sunday). "e" is the LOCALE
-    // day of week — en-US counts 1=Sunday — which shifted every recurring Teams
-    // event one weekday LATE (a Tuesday booking produced a Wednesday event). The
-    // 7→0 remap below is correct only for ISO, confirming "i" is what was intended.
+    // Weekday name in SAST (pinned + unit-tested in lib/graph-recurrence.ts — this is
+    // where the "one weekday late" bug lived; the helper enforces the ISO "i" token).
     const startDate = new Date(params.startDateTime);
-    const dayIndexSast = parseInt(
-      formatInTimeZone(startDate, TIMEZONE, "i"), // 1=Monday, 7=Sunday (ISO)
-      10,
-    );
-    // Convert ISO day index to JS getDay() style (0=Sunday, 6=Saturday)
-    const jsDayIndex = dayIndexSast === 7 ? 0 : dayIndexSast;
-    const dayOfWeek = GRAPH_DAY_NAMES[jsDayIndex];
+    const dayOfWeek = graphDayOfWeek(startDate);
 
     const startDateStr = saDateStr(startDate);
 
