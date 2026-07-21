@@ -564,17 +564,36 @@ export async function getCalendarDiagnostics(
   // Calendar read — needs Calendars.Read(Write). This is the real test of
   // whether we can see the connected mailbox's events.
   try {
-    const view = await client
+    // BUG #2: this used $top: 50 with NO pagination. The admin "compared to portal" view
+    // builds its Teams-side key set from these events, so over any range with more than
+    // 50 events every later booking was reported "no matching Teams event" — that is
+    // where the alarming "69 missing" came from. Page through the whole window, re-sending
+    // the Prefer header each time (bug #4) so later pages stay in SAST.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let page: any = await client
       .api(`/users/${config.userEmail}/calendarView`)
       .query({
         startDateTime: startDate.toISOString(),
         endDateTime: endDate.toISOString(),
         $select: "subject,start,end,isOnlineMeeting,organizer",
         $orderby: "start/dateTime",
-        $top: 50,
+        $top: 999,
       })
       .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
       .get();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const collected: any[] = [...(page.value || [])];
+    let guard = 0;
+    while (page["@odata.nextLink"] && guard < 25) {
+      page = await client
+        .api(page["@odata.nextLink"])
+        .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+        .get();
+      collected.push(...(page.value || []));
+      guard++;
+    }
+    const view = { value: collected };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     out.upcomingEvents = (view.value || []).map((e: any) => ({

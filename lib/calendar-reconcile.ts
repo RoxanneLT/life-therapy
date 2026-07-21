@@ -12,6 +12,7 @@ import {
   classify,
   isSessionSubject,
   parseClientName,
+  summariseMissingByClient,
   type ClassifyEvent,
 } from "@/lib/calendar-classify";
 import type { SessionType } from "@/lib/generated/prisma/client";
@@ -28,6 +29,9 @@ export interface ReconcileResult {
   // Diagnostics for the reverse scan — confirms it actually inspected Outlook
   scannedEvents: number; // total events returned by calendarView
   sessionEventsScanned: number; // of those, ones matching our "{label} — {client}" pattern
+  /** Who is eventless, how many sessions each, soonest first. Persisted on every run so
+   *  drift is named the day it appears, not discovered weeks later from a bare count. */
+  missingByClient: Array<{ client: string; count: number; nextDate: string }>;
 }
 
 interface MismatchDetail {
@@ -86,6 +90,7 @@ export async function reconcileCalendar(options?: {
     errors: [],
     scannedEvents: 0,
     sessionEventsScanned: 0,
+    missingByClient: [],
   };
 
   const config = getGraphConfig();
@@ -244,7 +249,11 @@ export async function reconcileCalendar(options?: {
     }
   }
 
-  // 6. Business-rule check: bookings on SA public holidays (DB only, cheap).
+  // Name the drift. A bare "missing: 26" is why Mia's eventless series went unnoticed
+  // for twelve days; this rolls it up per client, soonest session first.
+  result.missingByClient = summariseMissingByClient(result.missing);
+
+  // 7. Business-rule check: bookings on SA public holidays (DB only, cheap).
   try {
     const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
     for (const booking of bookings) {
@@ -304,7 +313,15 @@ async function fetchCalendarEvents(
   const events: GraphEvent[] = [...(page.value || [])];
   let guard = 0;
   while (page["@odata.nextLink"] && guard < 25) {
-    page = await client.api(page["@odata.nextLink"]).get();
+    // BUG #4: the Prefer header MUST be re-sent on every page. Without it Graph returns
+    // page 2+ in UTC while page 1 is SAST, and the callers slice substring(11,16)
+    // assuming SAST — so every later event reads 2 hours off, manufacturing a matched
+    // pair of false "missing" + false "ghost". Under auto-fix that would delete CORRECT
+    // events. Only bites past 999 events in the window, which is why it stayed latent.
+    page = await client
+      .api(page["@odata.nextLink"])
+      .header("Prefer", `outlook.timezone="${TIMEZONE}"`)
+      .get();
     events.push(...(page.value || []));
     guard++;
   }

@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+// Shared with the reconciler so the UI and the cron agree on who an event belongs to
+// (and both strip the " (In Person)" suffix — bug #3).
+import { parseClientName } from "@/lib/calendar-classify";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -457,7 +460,7 @@ function WeekComparison({
       ...e,
       date: e.start.slice(0, 10),
       time: e.start.slice(11, 16),
-      clientName: e.subject.split(" — ").slice(1).join(" — ").trim(),
+      clientName: parseClientName(e.subject),
     }));
   const teamsKeys = new Set(teamsSession.map((e) => cmpKey(e.date, e.time, e.clientName)));
 
@@ -508,7 +511,7 @@ function WeekComparison({
             <ul className="space-y-1 text-sm">
               {events.map((e, i) => {
                 const isSession = e.subject.includes(" — ");
-                const name = isSession ? e.subject.split(" — ").slice(1).join(" — ").trim() : "";
+                const name = isSession ? parseClientName(e.subject) : "";
                 const ghost = isSession && !portalKeys.has(cmpKey(e.start.slice(0, 10), e.start.slice(11, 16), name));
                 return (
                   <li

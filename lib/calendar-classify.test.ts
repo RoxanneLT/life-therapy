@@ -17,6 +17,7 @@ import {
   parseClientName,
   isSessionSubject,
   normName,
+  summariseMissingByClient,
   type ClassifyBooking,
   type ClassifyEvent,
 } from "./calendar-classify";
@@ -182,6 +183,26 @@ test("missing carries the right reason and the recurring flag", () => {
   assert.equal(c.missing.find((m) => m.bookingId === "b2")?.reason, "no_graph_id");
   assert.equal(c.missing.find((m) => m.bookingId === "b1")?.isRecurring, true);
   assert.equal(c.missing.find((m) => m.bookingId === "b2")?.isRecurring, false);
+});
+
+test("summariseMissingByClient names the drift, soonest session first", () => {
+  // The Mia lesson: a bare "missing: 26" hid a broken series for twelve days.
+  const summary = summariseMissingByClient([
+    { clientName: "Chanene Norman", date: "2026-08-11" },
+    { clientName: "Mia Pretorius", date: "2026-07-30" },
+    { clientName: "Chanene Norman", date: "2026-08-18" },
+    { clientName: "Mia Pretorius", date: "2026-07-23" },
+  ]);
+
+  assert.deepEqual(summary, [
+    { client: "Mia Pretorius", count: 2, nextDate: "2026-07-23" },
+    { client: "Chanene Norman", count: 2, nextDate: "2026-08-11" },
+  ]);
+  assert.equal(summary[0].client, "Mia Pretorius", "soonest session is the top priority");
+});
+
+test("summariseMissingByClient is empty for a healthy calendar", () => {
+  assert.deepEqual(summariseMissingByClient([]), []);
 });
 
 test("a clean calendar classifies as all-matched, nothing missing or orphaned", () => {

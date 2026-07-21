@@ -124,6 +124,31 @@ export function isGhostDeletable(
 }
 
 /**
+ * Roll the missing set up per client: who is eventless, how many sessions, and the
+ * soonest one. This is what gets persisted on every check-only run — the Mia incident
+ * sat unnoticed for twelve days precisely because the logs recorded a bare count
+ * ("missing: 26") and never a name.
+ *
+ * Sorted by soonest session, because that is the repair priority: an eventless booking
+ * two days out is a session about to be missed.
+ */
+export function summariseMissingByClient(
+  missing: Array<{ clientName: string; date: string }>,
+): Array<{ client: string; count: number; nextDate: string }> {
+  const byClient = new Map<string, { client: string; count: number; nextDate: string }>();
+  for (const m of missing) {
+    const existing = byClient.get(m.clientName);
+    if (existing) {
+      existing.count++;
+      if (m.date < existing.nextDate) existing.nextDate = m.date;
+    } else {
+      byClient.set(m.clientName, { client: m.clientName, count: 1, nextDate: m.date });
+    }
+  }
+  return [...byClient.values()].sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+}
+
+/**
  * Compare bookings (the source of truth) against calendar events.
  *
  * Forward pass — every booking should have an event at its day/start/client:

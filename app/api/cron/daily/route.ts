@@ -129,6 +129,9 @@ export async function GET(request: NextRequest) {
         checked: r.checked,
         matched: r.matched,
         fixed: r.fixed,
+        // Name the drift in the daily digest, don't just count it.
+        missingByClient: r.missingByClient,
+        protectedWrongDay: r.orphaned.filter((o) => o.protectedWrongDay).length,
         // Surface remaining drift (mismatched + missing + un-deleted stale +
         // holiday) so it shows up in the digest
         failed: r.mismatched.length + unfixedMissing + unresolvedOrphans + r.onHoliday.length,

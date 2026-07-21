@@ -31,7 +31,11 @@ async function handler() {
       matched: result.matched,
       mismatched: result.mismatched.length,
       missing: result.missing.length,
+      // WHO is eventless, not just how many — a bare count is why Mia Pretorius's
+      // series sat broken for twelve days before anyone noticed.
+      missingByClient: result.missingByClient,
       orphaned: result.orphaned.length,
+      protectedWrongDay: result.orphaned.filter((o) => o.protectedWrongDay).length,
       onHoliday: result.onHoliday.length,
       fixed: result.fixed,
       errors: result.errors,
