@@ -37,3 +37,6 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# Scratch: review patches and verification copies. Never committed, never compiled.
+_to_delete/
