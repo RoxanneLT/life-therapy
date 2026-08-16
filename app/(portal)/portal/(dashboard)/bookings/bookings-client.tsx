@@ -376,7 +376,11 @@ function CancelBookingDialog({
     setError("");
     startTransition(async () => {
       try {
-        await portalCancelBookingAction(b.id, reason);
+        const result = await portalCancelBookingAction(b.id, reason);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
         setOpen(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -574,6 +578,7 @@ function SessionDetailDialog({
   const [notes, setNotes] = useState(b.clientNotes || "");
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [notesError, setNotesError] = useState("");
   const statusCfg = STATUS_CONFIG[b.status] ?? STATUS_CONFIG.pending;
 
   // Reset notes when dialog opens with fresh data
@@ -589,8 +594,14 @@ function SessionDetailDialog({
   );
 
   function handleSaveNotes() {
+    setNotesError("");
     startTransition(async () => {
-      await updateClientNotesAction(b.id, notes);
+      // The result was previously discarded, so a refused save still showed "Saved".
+      const result = await updateClientNotesAction(b.id, notes);
+      if (!result.success) {
+        setNotesError(result.error ?? "We couldn't save your note. Please try again.");
+        return;
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     });
@@ -687,7 +698,10 @@ function SessionDetailDialog({
                   rows={4}
                 />
                 <div className="flex items-center justify-end gap-2">
-                  {saved && (
+                  {notesError && (
+                    <span className="text-xs text-destructive">{notesError}</span>
+                  )}
+                  {saved && !notesError && (
                     <span className="flex items-center gap-1 text-xs text-green-600">
                       <Check className="h-3.5 w-3.5" /> Saved
                     </span>
@@ -751,7 +765,11 @@ function RescheduleBookingDialog({
     setError("");
     startTransition(async () => {
       try {
-        await portalRescheduleBookingAction(b.id, date, startTime, endTime);
+        const result = await portalRescheduleBookingAction(b.id, date, startTime, endTime);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
         setOpen(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");

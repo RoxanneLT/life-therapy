@@ -39,26 +39,36 @@ function parseTimeToMinutes(t: string): number {
   return h * 60 + m;
 }
 
-/** Handle session credit validation and deduction */
-async function handleSessionCredit(
-  wantsCredit: boolean,
-  isFree: boolean,
-  bookingId: string,
-  sessionLabel: string,
-): Promise<{ paidWithCredit: boolean }> {
-  if (!wantsCredit || isFree) return { paidWithCredit: false };
+type CreditIntent =
+  | { ok: true; useCredit: false }
+  | { ok: true; useCredit: true; studentId: string }
+  | { ok: false; error: string };
+
+/**
+ * Decide whether this booking will be paid with a session credit — BEFORE anything
+ * is created. Read-only on purpose.
+ *
+ * This used to run AFTER the booking row and the Graph calendar event existed, and
+ * signalled refusal by throwing: "not logged in" or "no credits left" therefore left
+ * a confirmed booking and a real diary event behind, for a session nobody had paid
+ * for. Resolving first means a refusal costs nothing.
+ */
+async function resolveCreditIntent(wantsCredit: boolean, isFree: boolean): Promise<CreditIntent> {
+  if (!wantsCredit || isFree) return { ok: true, useCredit: false };
 
   const student = await getOptionalStudent();
-  if (!student) throw new Error("You must be logged in to use session credits.");
+  if (!student) return { ok: false, error: "You must be logged in to use session credits." };
 
-  // Postpaid clients don't use credits — sessions are invoiced monthly
-  if (student.billingType === "postpaid") return { paidWithCredit: false };
+  // Postpaid clients don't use credits — their sessions are invoiced monthly, so the
+  // booking must keep its full price. The price was previously zeroed on the caller's
+  // `useSessionCredit` flag alone, which for a postpaid client both charged nothing
+  // and deducted nothing: a free session.
+  if (student.billingType === "postpaid") return { ok: true, useCredit: false };
 
   const balance = await getBalance(student.id);
-  if (balance < 1) throw new Error("Insufficient session credits.");
+  if (balance < 1) return { ok: false, error: "Insufficient session credits." };
 
-  await deductCredit(student.id, bookingId, `Session booking: ${sessionLabel}`);
-  return { paidWithCredit: true };
+  return { ok: true, useCredit: true, studentId: student.id };
 }
 
 /** Auto-provision portal access for free consultation bookings */
@@ -262,7 +272,18 @@ async function sendBookingEmails(
   });
 }
 
-export async function createBooking(formData: FormData) {
+/**
+ * Refusals are RETURNED; only success redirects.
+ *
+ * Everything below used to throw. A thrown server-action message is stripped in
+ * production — React replaces it with "An error occurred in the Server Components
+ * render… a digest property is included" — and the booking form renders
+ * `err.message` straight to the client. So a client who simply hadn't ticked the
+ * Terms box was shown that wall of text, on the public booking page.
+ */
+export type CreateBookingResult = { error: string };
+
+export async function createBooking(formData: FormData): Promise<CreateBookingResult | void> {
   // Rate limit by IP — DURABLE (the `rate_limits` table), not the in-memory Map.
   //
   // This is the most consequential unauthenticated write in the app: it takes a
@@ -275,19 +296,27 @@ export async function createBooking(formData: FormData) {
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for")?.split(",")[0] || "unknown";
   if (await rateLimitBookingDb(ip)) {
-    throw new Error("Too many booking attempts. Please try again later.");
+    return { error: "Too many booking attempts. Please try again later." };
   }
 
   const raw = Object.fromEntries(formData.entries());
-  const parsed = bookingFormSchema.parse({
+  // safeParse, not parse: a ZodError is masked in production exactly like any other
+  // throw, so a bad field showed the client the digest string instead of the field.
+  const parsedResult = bookingFormSchema.safeParse({
     ...raw,
     clientPhone: raw.clientPhone || undefined,
     clientNotes: raw.clientNotes || undefined,
   });
+  if (!parsedResult.success) {
+    const issue = parsedResult.error.issues[0];
+    const field = issue?.path?.join(".");
+    return { error: field ? `${field}: ${issue.message}` : (issue?.message ?? "Please check the booking details and try again.") };
+  }
+  const parsed = parsedResult.data;
 
   // Validate + canonicalise the phone (E.164) once, reused for the booking + student
   const phoneErr = phoneError(parsed.clientPhone, false);
-  if (phoneErr) throw new Error(`Phone number: ${phoneErr}`);
+  if (phoneErr) return { error: `Phone number: ${phoneErr}` };
   const clientPhone = normalizePhoneForStorage(parsed.clientPhone);
 
   const sessionConfig = getSessionTypeConfig(parsed.sessionType as SessionType);
@@ -295,7 +324,7 @@ export async function createBooking(formData: FormData) {
   // Terms + commitment: required for paid sessions, optional for free consultations.
   const agreedToTerms = raw.agreedToTerms === "true";
   if (!sessionConfig.isFree && !agreedToTerms) {
-    throw new Error("Please accept the Terms & Conditions and Therapeutic Commitment to book this session.");
+    return { error: "Please accept the Terms & Conditions and Therapeutic Commitment to book this session." };
   }
 
   // Compute session price in the user's currency
@@ -309,10 +338,13 @@ export async function createBooking(formData: FormData) {
   const { slots } = await getAvailableSlots(parsed.date, sessionConfig);
   const slotAvailable = slots.some((s) => s.start === parsed.startTime);
   if (!slotAvailable) {
-    throw new Error(
-      "This time slot is no longer available. Please choose another."
-    );
+    return { error: "This time slot is no longer available. Please choose another." };
   }
+
+  // Resolve the credit decision while a refusal is still free — see resolveCreditIntent.
+  const wantsCredit = raw.useSessionCredit === "true";
+  const creditIntent = await resolveCreditIntent(wantsCredit, sessionConfig.isFree);
+  if (!creditIntent.ok) return { error: creditIntent.error };
 
   // Calculate end time
   const startMins = parseTimeToMinutes(parsed.startTime);
@@ -329,7 +361,6 @@ export async function createBooking(formData: FormData) {
   });
 
   const confirmationToken = randomUUID();
-  const wantsCredit = raw.useSessionCredit === "true";
 
   // Create booking in DB
   const bookingDate = calendarDate(parsed.date);
@@ -340,7 +371,7 @@ export async function createBooking(formData: FormData) {
       startTime: parsed.startTime,
       endTime,
       durationMinutes: sessionConfig.durationMinutes,
-      priceZarCents: wantsCredit && !sessionConfig.isFree ? 0 : sessionPriceCents,
+      priceZarCents: creditIntent.useCredit ? 0 : sessionPriceCents,
       priceCurrency: currency,
       clientName: parsed.clientName,
       clientEmail: parsed.clientEmail,
@@ -355,8 +386,10 @@ export async function createBooking(formData: FormData) {
     },
   });
 
-  // Handle session credit deduction
-  await handleSessionCredit(wantsCredit, sessionConfig.isFree, booking.id, sessionConfig.label);
+  // Deduct the credit now that the booking it pays for exists.
+  if (creditIntent.useCredit) {
+    await deductCredit(creditIntent.studentId, booking.id, `Session booking: ${sessionConfig.label}`);
+  }
 
   // Link booking to student / auto-provision portal
   const nameParts = parsed.clientName.trim().split(/\s+/);

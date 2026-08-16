@@ -131,17 +131,29 @@ async function sendPortalBookingEmails(opts: {
   });
 }
 
-export async function createPortalBooking(formData: FormData) {
+/** Refusals are RETURNED; only success redirects — see the note on the public
+ *  `createBooking`. These messages are read by clients. */
+export type CreatePortalBookingResult = { error: string };
+
+export async function createPortalBooking(
+  formData: FormData,
+): Promise<CreatePortalBookingResult | void> {
   const { student } = await requirePasswordChanged();
 
   const raw = Object.fromEntries(formData.entries());
-  const parsed = portalBookingSchema.parse({
+  const parsedResult = portalBookingSchema.safeParse({
     sessionType: raw.sessionType,
     date: raw.date,
     startTime: raw.startTime,
     clientNotes: raw.clientNotes || undefined,
     useSessionCredit: raw.useSessionCredit === "true",
   });
+  if (!parsedResult.success) {
+    const issue = parsedResult.error.issues[0];
+    const field = issue?.path?.join(".");
+    return { error: field ? `${field}: ${issue.message}` : (issue?.message ?? "Please check the booking details and try again.") };
+  }
+  const parsed = parsedResult.data;
 
   const sessionConfig = getSessionTypeConfig(parsed.sessionType as SessionType);
 
@@ -158,7 +170,7 @@ export async function createPortalBooking(formData: FormData) {
       select: { id: true },
     });
     if (existingFree) {
-      throw new Error("You have already used your free consultation.");
+      return { error: "You have already used your free consultation." };
     }
   }
 
@@ -175,7 +187,17 @@ export async function createPortalBooking(formData: FormData) {
   const { slots } = await getAvailableSlots(parsed.date, sessionConfig);
   const slotAvailable = slots.some((s) => s.start === parsed.startTime);
   if (!slotAvailable) {
-    throw new Error("This time slot is no longer available. Please choose another.");
+    return { error: "This time slot is no longer available. Please choose another." };
+  }
+
+  // Resolve the credit decision BEFORE the booking and its calendar event exist —
+  // the balance check used to run after both, and threw, leaving a confirmed
+  // booking and a real diary entry behind for a session nobody had paid for.
+  const wantsCredit = parsed.useSessionCredit ?? false;
+  const useCredit =
+    wantsCredit && !sessionConfig.isFree && studentRecord.billingType !== "postpaid";
+  if (useCredit && (await getBalance(studentRecord.id)) < 1) {
+    return { error: "Insufficient session credits." };
   }
 
   // Calculate end time
@@ -193,7 +215,6 @@ export async function createPortalBooking(formData: FormData) {
   });
 
   const confirmationToken = randomUUID();
-  const wantsCredit = parsed.useSessionCredit ?? false;
 
   // Couples partner name (from linked partner or form input)
   const couplesPartnerName = parsed.sessionType === "couples"
@@ -209,7 +230,10 @@ export async function createPortalBooking(formData: FormData) {
       startTime: parsed.startTime,
       endTime,
       durationMinutes: sessionConfig.durationMinutes,
-      priceZarCents: wantsCredit && !sessionConfig.isFree ? 0 : sessionPriceCents,
+      // `useCredit`, not the raw `wantsCredit` flag: a POSTPAID client who ticked the
+      // box was priced at zero here while the deduction below skipped them — charged
+      // nothing, deducted nothing, a free session.
+      priceZarCents: useCredit ? 0 : sessionPriceCents,
       priceCurrency: currency,
       clientName,
       clientEmail: studentRecord.email,
@@ -226,10 +250,8 @@ export async function createPortalBooking(formData: FormData) {
     },
   });
 
-  // Handle session credit deduction
-  if (wantsCredit && !sessionConfig.isFree && studentRecord.billingType !== "postpaid") {
-    const balance = await getBalance(studentRecord.id);
-    if (balance < 1) throw new Error("Insufficient session credits.");
+  // Deduct the credit now that the booking it pays for exists.
+  if (useCredit) {
     await deductCredit(studentRecord.id, booking.id, `Session booking: ${sessionConfig.label}`);
   }
 

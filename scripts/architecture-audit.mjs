@@ -394,6 +394,78 @@ check("server-action-auth: every mutating action is guarded for its route group"
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 4b-bis. SERVER-ACTION FAILURE CHANNEL
+//
+// This check exists because of the 2026-08-16 incident: Roxanne could not add or
+// update a client, and every attempt returned "An error occurred in the Server
+// Components render. The specific message is omitted in production builds…".
+//
+// That string is not a crash. React STRIPS the message off a server action that
+// threw, in production, and hands the client a digest instead. So a `throw new
+// Error("A client with this email already exists.")` — a sentence written to be
+// read by a person — is guaranteed to reach that person as unreadable boilerplate.
+// Catching it does not help: `err.message` IS the boilerplate.
+//
+// The same bug was live on the PUBLIC booking form ("Please accept the Terms &
+// Conditions…", "This time slot is no longer available…") and in the client portal,
+// where the audience is paying clients rather than staff.
+//
+// Rule: in a server action, a refusal a human is meant to read is RETURNED
+// ({ success: false, error }), never thrown. Throwing is reserved for genuine
+// invariants — where nobody is meant to read the message anyway.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A thrown message that is plainly addressed to a person: it contains a space and
+ * either ends in sentence punctuation or uses second-person/polite phrasing. Terse
+ * internal invariants ("Booking not found", "Unauthorized") are NOT matched — they
+ * are developer assertions, and a digest is an acceptable outcome for those.
+ */
+const HUMAN_MESSAGE =
+  /\b(?:you|your|please|already|no longer|cannot|can't|couldn't|we|choose another|try again|must be|insufficient|required)\b/i;
+
+/**
+ * Comments out, STRING LITERALS IN. The shared `code()` helper blanks every literal,
+ * and the message is the only thing this check looks at — running against `code()`
+ * made it unfailable, which is how the +02:00 check silently died. Proven by planting
+ * a violation and watching it fire; see the note above.
+ */
+const stripComments = (src) =>
+  src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => "\n".repeat((m.match(/\n/g) || []).length))
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+
+check("server-action-ux: a refusal a human reads is returned, not thrown", () => {
+  const THROW = /throw new Error\(\s*([`"'])((?:\\.|(?!\1)[\s\S])*?)\1/g;
+  const ACTION = /export\s+async\s+function\s+(\w+)\s*\(/g;
+
+  for (const f of walk(APP, /actions\.ts$/)) {
+    const raw = read(f);
+    if (!raw.includes('"use server"') && !raw.includes("'use server'")) continue;
+    const src = stripComments(raw);
+    const path = rel(f);
+
+    // Action boundaries by offset, so a throw is attributed to its enclosing action
+    // without brace-matching over un-blanked strings.
+    const starts = [];
+    for (let m; (m = ACTION.exec(src)); ) starts.push({ at: m.index, name: m[1] });
+
+    for (let m; (m = THROW.exec(src)); ) {
+      const message = m[2];
+      if (!HUMAN_MESSAGE.test(message)) continue; // terse internal invariant — fine
+      const owner = [...starts].reverse().find((s) => s.at < m.index);
+      if (!owner) continue; // module-level helper, not an action surface
+      fail(
+        "server-action-ux",
+        `${path} → ${owner.name}`,
+        `throws a message written for a person ("${message.slice(0, 60)}${message.length > 60 ? "…" : ""}") — production replaces it with React's digest text, so they never see it`,
+        "return { success: false, error } (or { error } where the success path redirects) and render it at the call site",
+      );
+    }
+  }
+});
+
 check("server-action-auth: mutating API routes and inline actions are guarded", () => {
   // The check above only walks app/**/actions.ts. It cannot see two other places a
   // guarded write should live, both of which the 2026-07-12 audit flagged as blind
@@ -1170,9 +1242,59 @@ check("schema: no prisma migrate invocations in scripts", () => {
 // international postpaid client. Fix before either happens, not after.
 // ═══════════════════════════════════════════════════════════════════════════
 const KNOWN_DEFECTS = new Map([
-  // Empty. The payment-request compose dialogs now take a `currency` prop
-  // (slice 3 close-out), so formatPrice renders the client's real currency.
-  // Add an entry only for a real, classified defect that must wait — never noise.
+  // ── server-action-ux (opened 2026-08-16) ────────────────────────────────────
+  // The `server-action-ux` check was added the day the "can't add or update a
+  // client" incident was diagnosed. Every CLIENT-FACING surface it found was fixed
+  // the same day: the public booking form, the portal book/cancel/reschedule/notes
+  // actions, and the client create/update/relationship actions.
+  //
+  // What remains below is ADMIN-ONLY. The harm is real but bounded and one person
+  // wide: Roxanne sees React's digest text instead of "Campaign name is required",
+  // and can tell us. Converting 20 more actions plus their call sites in the same
+  // change as the client fix, days before a month-end billing run, buys a small UX
+  // win for a large regression surface — so it waits, recorded, rather than
+  // shipping half-tested. Each entry is a debt: delete it when the action returns
+  // its refusal instead of throwing.
+  ["server-action-ux|app/(admin)/admin/(dashboard)/bookings/actions.ts → adminCreateBookingAction",
+    "slot-taken and insufficient-credits refusals; admin books on a client's behalf, so a masked message costs a retry, not a booking"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/bookings/actions.ts → reinstateBookingAction",
+    "'session is in the past and can't be reinstated' — a guard rail, hit rarely and only by admin"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → saveCampaignAction",
+    "'Campaign name is required' — form validation, also enforced client-side before submit"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → saveBirthdayCampaignAction",
+    "'Campaign name is required' — as above"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → deleteCampaignAction",
+    "'Campaign ID is required' — an internal invariant phrased as a sentence; unreachable from the UI"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → grantCreditsAction",
+    "'Amount must be 1-20' — the dialog already bounds the input, so this fires only if that is bypassed"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → regeneratePaymentLinkAction",
+    "'Cannot regenerate link for a <status> payment request' — billing-adjacent; convert first when this list is worked"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → createDripEmailAction",
+    "'Type, subject, body, and day offset are required' — form validation, mirrored client-side"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → updateDripEmailAction",
+    "'Subject and body are required' — as above"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → updateDripEmailDayOffsetAction",
+    "'Day offset must be a non-negative number' — as above"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/email-templates/actions.ts → updateTemplateAction",
+    "'Subject and body are required' — as above"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/gifts/actions.ts → resendGiftEmailAction",
+    "'Gift ID required' — an internal invariant phrased as a sentence; unreachable from the UI"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/legal-documents/actions.ts → publishDocumentVersionAction",
+    "publish guard rail; admin-only and rare"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/testimonials/actions.ts → createTestimonial",
+    "form validation on an admin-only editor"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/testimonials/actions.ts → updateTestimonial",
+    "form validation on an admin-only editor"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/testimonials/actions.ts → deleteTestimonial",
+    "form validation on an admin-only editor"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → inviteUser",
+    "admin-user management; super_admin only, and the messages are validation not policy"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → updateUser",
+    "as above"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → deleteUser",
+    "as above"],
+  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → changePassword",
+    "as above — note this one is worth converting early, since a masked 'password too short' is genuinely confusing"],
 ]);
 
 // ── Report ──────────────────────────────────────────────────────────────────

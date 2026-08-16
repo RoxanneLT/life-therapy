@@ -59,8 +59,13 @@ export function BookingReviewStep({ data, onBack, creditBalance = 0, sessionPric
       if (useCredit) formData.set("useSessionCredit", "true");
       formData.set("agreedToTerms", String(agreed));
 
-      await createBooking(formData);
-      // redirect happens in the server action
+      // Success redirects inside the action; a refusal comes back as { error }.
+      const result = await createBooking(formData);
+      if (result?.error) {
+        toast.error(result.error);
+        setSubmitting(false);
+        return;
+      }
     } catch (err) {
       // Next.js redirect() throws a special error — re-throw it so navigation works
       if (

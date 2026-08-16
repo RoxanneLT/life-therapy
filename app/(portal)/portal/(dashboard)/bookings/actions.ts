@@ -14,18 +14,32 @@ import { format } from "date-fns";
 import { calendarDate } from "@/lib/dates";
 import { getBaseUrlForCurrency } from "@/lib/region";
 
+/**
+ * Refusals are RETURNED, never thrown — these messages are read by CLIENTS.
+ *
+ * `evaluateCancel`/`evaluateReschedule` produce a policy sentence ("you're inside the
+ * 24-hour window", "you've reached the reschedule limit") written for the person on
+ * the screen. Thrown, that sentence is stripped in production and the portal rendered
+ * React's digest text at them instead — so the one thing they needed to know, the
+ * reason, was the one thing they could never see.
+ */
 export async function portalCancelBookingAction(
   bookingId: string,
   cancellationReason?: string
-) {
+): Promise<
+  | { success: true; type: string; creditRefunded: boolean }
+  | { success: false; error: string }
+> {
   const { student } = await getAuthenticatedStudent();
 
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking) throw new Error("Booking not found");
-  if (booking.studentId !== student.id) throw new Error("Unauthorized");
+  if (!booking) return { success: false, error: "We couldn't find that session." };
+  if (booking.studentId !== student.id) {
+    return { success: false, error: "That session doesn't belong to your account." };
+  }
 
   const result = evaluateCancel(booking);
-  if (!result.allowed) throw new Error(result.reason);
+  if (!result.allowed) return { success: false, error: result.reason };
 
   // Cancel calendar event
   if (booking.graphEventId) {
@@ -89,7 +103,7 @@ export async function portalCancelBookingAction(
 
   revalidatePath("/portal/bookings");
 
-  return { type: result.type, creditRefunded };
+  return { success: true, type: result.type, creditRefunded };
 }
 
 export async function portalRescheduleBookingAction(
@@ -97,15 +111,17 @@ export async function portalRescheduleBookingAction(
   newDate: string,
   newStartTime: string,
   newEndTime: string
-) {
+): Promise<{ success: true } | { success: false; error: string }> {
   const { student } = await getAuthenticatedStudent();
 
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking) throw new Error("Booking not found");
-  if (booking.studentId !== student.id) throw new Error("Unauthorized");
+  if (!booking) return { success: false, error: "We couldn't find that session." };
+  if (booking.studentId !== student.id) {
+    return { success: false, error: "That session doesn't belong to your account." };
+  }
 
   const result = evaluateReschedule(booking);
-  if (!result.allowed) throw new Error(result.reason);
+  if (!result.allowed) return { success: false, error: result.reason };
 
   // Re-validate slot availability (race condition guard)
   const config = getSessionTypeConfig(booking.sessionType);
@@ -113,7 +129,9 @@ export async function portalRescheduleBookingAction(
   const slotValid = slots.some(
     (s) => s.start === newStartTime && s.end === newEndTime
   );
-  if (!slotValid) throw new Error("Selected time slot is no longer available.");
+  if (!slotValid) {
+    return { success: false, error: "That time slot has just been taken. Please choose another." };
+  }
 
   // Cancel old calendar event
   if (booking.graphEventId) {
@@ -168,18 +186,26 @@ export async function portalRescheduleBookingAction(
   }
 
   revalidatePath("/portal/bookings");
+  return { success: true };
 }
 
-export async function updateClientNotesAction(bookingId: string, notes: string) {
+export async function updateClientNotesAction(
+  bookingId: string,
+  notes: string,
+): Promise<{ success: boolean; error?: string }> {
   const { student } = await getAuthenticatedStudent();
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     select: { id: true, studentId: true, status: true },
   });
-  if (!booking) throw new Error("Booking not found");
-  if (booking.studentId !== student.id) throw new Error("Unauthorized");
-  if (booking.status === "cancelled") throw new Error("Cannot update notes on a cancelled session");
+  if (!booking) return { success: false, error: "We couldn't find that session." };
+  if (booking.studentId !== student.id) {
+    return { success: false, error: "That session doesn't belong to your account." };
+  }
+  if (booking.status === "cancelled") {
+    return { success: false, error: "This session was cancelled, so its notes can no longer be changed." };
+  }
 
   await prisma.booking.update({
     where: { id: bookingId },

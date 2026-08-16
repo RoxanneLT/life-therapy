@@ -24,6 +24,17 @@ const REQUIRED_IN_PROD = [
   "NEXT_PUBLIC_SUPABASE_URL", // also read literally in client constructors
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY", // admin auth, server-only
+  // Field-level PII encryption (lib/encryption.ts, applied by the Prisma extension
+  // to student.phone/address/emergencyContact/adminNotes, booking.clientPhone/notes,
+  // intake free-text and the consent IP/user-agent columns).
+  //
+  // It sat in OPTIONAL, which was wrong in a way that hid itself: `encrypt()` THROWS
+  // without the key, but `decrypt()` catches the same failure and returns the raw
+  // ciphertext. So losing this var does not read as "integration off" — every client
+  // and booking WRITE breaks, while every PII field silently renders as
+  // `iv:tag:ciphertext` in the admin UI, in emails and in PDFs. Required, so
+  // missingRequiredEnv() names it from the daily cron instead.
+  "ENCRYPTION_KEY",
 ] as const;
 
 /**
@@ -50,7 +61,6 @@ const OPTIONAL = [
   "BUNNY_STREAM_LIBRARY_ID",
   "BUNNY_STREAM_API_KEY",
   "BUNNY_ACCOUNT_API_KEY",
-  "ENCRYPTION_KEY",
   "ADMIN_EMAIL",
 ] as const;
 

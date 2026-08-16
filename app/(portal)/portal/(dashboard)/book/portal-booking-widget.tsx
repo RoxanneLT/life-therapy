@@ -112,8 +112,13 @@ export function PortalBookingWidget({
         formData.set("partnerPhone", partnerPhone);
       }
 
-      await createPortalBooking(formData);
-      // redirect happens in the server action
+      // Success redirects inside the action; a refusal comes back as { error }.
+      const result = await createPortalBooking(formData);
+      if (result?.error) {
+        toast.error(result.error);
+        setSubmitting(false);
+        return;
+      }
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Booking failed. Please try again."
