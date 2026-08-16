@@ -39,67 +39,101 @@ interface CreateClientData {
   adminNotes?: string;
 }
 
-export async function createClientAction(data: CreateClientData) {
+/**
+ * Failure is RETURNED, never thrown.
+ *
+ * A server action that throws has its message stripped in production — React
+ * replaces it with the opaque "An error occurred in the Server Components
+ * render… a digest property is included" string. So every reason this action can
+ * legitimately refuse (duplicate email, bad phone, no email on an adult) reached
+ * the admin as the same unreadable sentence, and "the client already exists" was
+ * indistinguishable from a real outage. Every sibling action in this folder
+ * already returns a result object; these two had drifted.
+ */
+export type CreateClientResult =
+  | { success: true; clientId: string }
+  | { success: false; error: string; existingClientId?: string };
+
+export async function createClientAction(data: CreateClientData): Promise<CreateClientResult> {
   await requireRole("super_admin");
 
-  // Determine email — minors get a placeholder
-  let email = data.email?.trim().toLowerCase();
-  if (!email && data.isMinor) {
-    email = `minor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@noemail.internal`;
-  }
-  if (!email) {
-    throw new Error("Email is required for non-minor clients.");
-  }
-
-  // Validate + canonicalise phone (E.164) when provided
-  const phoneErr = phoneError(data.phone, false);
-  if (phoneErr) throw new Error(phoneErr);
-  const phone = normalizePhoneForStorage(data.phone);
-
-  // Check for existing email (skip placeholder emails)
-  if (!email.endsWith("@noemail.internal")) {
-    const existing = await prisma.student.findUnique({
-      where: { email },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new Error("A client with this email already exists.");
+  try {
+    // Determine email — minors get a placeholder
+    let email = data.email?.trim().toLowerCase();
+    if (!email && data.isMinor) {
+      email = `minor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@noemail.internal`;
     }
+    if (!email) {
+      return { success: false, error: "Email is required for non-minor clients." };
+    }
+
+    // Validate + canonicalise phone (E.164) when provided
+    const phoneErr = phoneError(data.phone, false);
+    if (phoneErr) return { success: false, error: `Phone: ${phoneErr}` };
+    const phone = normalizePhoneForStorage(data.phone);
+
+    // Check for existing email (skip placeholder emails). Name the person and
+    // hand back their id — most of these are imported contacts or past bookers,
+    // and the admin's real intent is to open that profile, not create a second.
+    if (!email.endsWith("@noemail.internal")) {
+      const existing = await prisma.student.findUnique({
+        where: { email },
+        select: { id: true, firstName: true, lastName: true, clientStatus: true },
+      });
+      if (existing) {
+        const name = `${existing.firstName} ${existing.lastName}`.trim() || email;
+        return {
+          success: false,
+          error: `${email} already belongs to ${name} (${existing.clientStatus}). Open their profile to update them instead of adding a new client.`,
+          existingClientId: existing.id,
+        };
+      }
+    }
+
+    const client = await prisma.student.create({
+      data: {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email,
+        phone,
+        clientStatus: data.clientStatus,
+        billingType: data.billingType,
+        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+        gender: data.gender || null,
+        relationshipStatus: data.relationshipStatus || null,
+        address: data.address || null,
+        branch: data.branch || null,
+        emergencyContact: data.emergencyContact || null,
+        referralSource: data.referralSource || null,
+        referralDetail: data.referralDetail || null,
+        newsletterOptIn: data.newsletterOptIn,
+        marketingOptIn: data.marketingOptIn,
+        smsOptIn: data.smsOptIn,
+        sessionReminders: data.sessionReminders,
+        adminNotes: data.adminNotes || null,
+        source: "manual",
+        convertedAt: data.clientStatus === "active" ? new Date() : null,
+      },
+    });
+
+    // Initialize credit balance
+    await prisma.sessionCreditBalance.create({
+      data: { studentId: client.id, balance: 0 },
+    });
+
+    revalidatePath("/admin/clients");
+    return { success: true, clientId: client.id };
+  } catch (err) {
+    console.error("createClientAction error:", err);
+    const code = (err as { code?: string })?.code;
+    if (code === "P2002") {
+      return { success: false, error: "A client with this email already exists." };
+    }
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to create client.",
+    };
   }
-
-  const client = await prisma.student.create({
-    data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email,
-      phone,
-      clientStatus: data.clientStatus,
-      billingType: data.billingType,
-      dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
-      gender: data.gender || null,
-      relationshipStatus: data.relationshipStatus || null,
-      address: data.address || null,
-      branch: data.branch || null,
-      emergencyContact: data.emergencyContact || null,
-      referralSource: data.referralSource || null,
-      referralDetail: data.referralDetail || null,
-      newsletterOptIn: data.newsletterOptIn,
-      marketingOptIn: data.marketingOptIn,
-      smsOptIn: data.smsOptIn,
-      sessionReminders: data.sessionReminders,
-      adminNotes: data.adminNotes || null,
-      source: "manual",
-      convertedAt: data.clientStatus === "active" ? new Date() : null,
-    },
-  });
-
-  // Initialize credit balance
-  await prisma.sessionCreditBalance.create({
-    data: { studentId: client.id, balance: 0 },
-  });
-
-  revalidatePath("/admin/clients");
-  return { clientId: client.id };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -155,43 +189,61 @@ export async function updateAdminNotesAction(clientId: string, notes: string) {
 // Update client profile fields
 // ────────────────────────────────────────────────────────────
 
-export async function updateClientProfileAction(clientId: string, formData: FormData) {
+/** Failure is RETURNED, never thrown — see the note on `createClientAction`.
+ *  This one mattered twice over: the Personal tab calls it from a `<form action>`
+ *  with no try/catch, and the app has no error boundary, so a rejected save took
+ *  the whole admin page down instead of flagging the offending field. */
+export async function updateClientProfileAction(
+  clientId: string,
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin");
 
-  const firstName = (formData.get("firstName") as string)?.trim();
-  const lastName = (formData.get("lastName") as string)?.trim();
-  if (!firstName || !lastName) throw new Error("First name and last name are required");
+  try {
+    const firstName = (formData.get("firstName") as string)?.trim();
+    const lastName = (formData.get("lastName") as string)?.trim();
+    if (!firstName || !lastName) {
+      return { success: false, error: "First name and last name are required." };
+    }
 
-  const phoneRaw = (formData.get("phone") as string)?.trim() || null;
-  const phoneErr = phoneError(phoneRaw, false);
-  if (phoneErr) throw new Error(phoneErr);
-  const phone = normalizePhoneForStorage(phoneRaw);
-  const gender = (formData.get("gender") as string)?.trim() || null;
-  const address = (formData.get("address") as string)?.trim() || null;
-  const relationshipStatus = (formData.get("relationshipStatus") as string)?.trim() || null;
-  const emergencyContact = (formData.get("emergencyContact") as string)?.trim() || null;
-  const referralSource = (formData.get("referralSource") as string)?.trim() || null;
-  const referralDetail = (formData.get("referralDetail") as string)?.trim() || null;
-  const dateOfBirth = (formData.get("dateOfBirth") as string)?.trim() || null;
+    const phoneRaw = (formData.get("phone") as string)?.trim() || null;
+    const phoneErr = phoneError(phoneRaw, false);
+    if (phoneErr) return { success: false, error: `Phone: ${phoneErr}` };
+    const phone = normalizePhoneForStorage(phoneRaw);
+    const gender = (formData.get("gender") as string)?.trim() || null;
+    const address = (formData.get("address") as string)?.trim() || null;
+    const relationshipStatus = (formData.get("relationshipStatus") as string)?.trim() || null;
+    const emergencyContact = (formData.get("emergencyContact") as string)?.trim() || null;
+    const referralSource = (formData.get("referralSource") as string)?.trim() || null;
+    const referralDetail = (formData.get("referralDetail") as string)?.trim() || null;
+    const dateOfBirth = (formData.get("dateOfBirth") as string)?.trim() || null;
 
-  // Communication preferences are managed on the Communications tab, not here.
-  await prisma.student.update({
-    where: { id: clientId },
-    data: {
-      firstName,
-      lastName,
-      phone,
-      gender,
-      address,
-      relationshipStatus,
-      emergencyContact,
-      referralSource,
-      referralDetail,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-    },
-  });
+    // Communication preferences are managed on the Communications tab, not here.
+    await prisma.student.update({
+      where: { id: clientId },
+      data: {
+        firstName,
+        lastName,
+        phone,
+        gender,
+        address,
+        relationshipStatus,
+        emergencyContact,
+        referralSource,
+        referralDetail,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      },
+    });
 
-  revalidatePath(`/admin/clients/${clientId}`);
+    revalidatePath(`/admin/clients/${clientId}`);
+    return { success: true };
+  } catch (err) {
+    console.error("updateClientProfileAction error:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to save this client's details.",
+    };
+  }
 }
 
 // ────────────────────────────────────────────────────────────

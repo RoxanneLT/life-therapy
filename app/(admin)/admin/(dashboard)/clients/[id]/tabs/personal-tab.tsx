@@ -131,6 +131,7 @@ function UpdateEmailDialog({ clientId, currentEmail }: Readonly<{ clientId: stri
 
 export function PersonalTab({ client }: PersonalTabProps) {
   const [editing, setEditing] = useState(false);
+  const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const dateOfBirth = client.dateOfBirth
@@ -141,8 +142,15 @@ export function PersonalTab({ client }: PersonalTabProps) {
     : null;
 
   function handleSubmit(formData: FormData) {
+    setError("");
     startTransition(async () => {
-      await updateClientProfileAction(client.id as string, formData);
+      // Keep the form OPEN on failure — closing it would discard everything the
+      // admin just typed along with the reason it was refused.
+      const result = await updateClientProfileAction(client.id as string, formData);
+      if (!result.success) {
+        setError(result.error ?? "Failed to save this client's details.");
+        return;
+      }
       setEditing(false);
     });
   }
@@ -158,7 +166,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setEditing(false)}
+                onClick={() => { setError(""); setEditing(false); }}
                 disabled={isPending}
               >
                 <X className="mr-1.5 h-3.5 w-3.5" />
@@ -171,6 +179,11 @@ export function PersonalTab({ client }: PersonalTabProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {error && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="First Name" name="firstName" defaultValue={client.firstName as string} />
               <FormField label="Last Name" name="lastName" defaultValue={client.lastName as string} />

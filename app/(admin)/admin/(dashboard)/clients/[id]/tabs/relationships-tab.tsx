@@ -412,7 +412,7 @@ function AddRelationshipDialog({
             relationshipLabel: label || undefined,
           });
         } else if (mode === "new_client") {
-          await createClientAndLinkRelationshipAction({
+          const result = await createClientAndLinkRelationshipAction({
             parentClientId: clientId,
             firstName: newFirstName,
             lastName: newLastName,
@@ -423,6 +423,12 @@ function AddRelationshipDialog({
             relationshipType: type,
             relationshipLabel: label || undefined,
           });
+          if (!result.success) {
+            // Keep the dialog open — the admin's typing is still in it, and the
+            // usual fix is to switch to "Link existing client".
+            toast.error(result.error);
+            return;
+          }
         } else {
           if (!selectedClient) return;
           await addRelationshipAction({

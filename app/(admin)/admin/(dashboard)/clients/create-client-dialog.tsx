@@ -38,6 +38,9 @@ export function CreateClientDialog() {
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState<Step>(1);
   const [error, setError] = useState("");
+  // Set when the email is already on file — lets the admin jump straight to that
+  // client instead of retyping, which is what they actually wanted to do.
+  const [existingClientId, setExistingClientId] = useState<string | null>(null);
 
   // Step 1: Basic details (required)
   const [firstName, setFirstName] = useState("");
@@ -75,6 +78,7 @@ export function CreateClientDialog() {
   function resetForm() {
     setStep(1);
     setError("");
+    setExistingClientId(null);
     setFirstName("");
     setLastName("");
     setIsMinor(false);
@@ -128,6 +132,7 @@ export function CreateClientDialog() {
 
   function handleSubmit() {
     setError("");
+    setExistingClientId(null);
     startTransition(async () => {
       try {
         const result = await createClientAction({
@@ -152,6 +157,11 @@ export function CreateClientDialog() {
           sessionReminders,
           adminNotes: adminNotes.trim() || undefined,
         });
+        if (!result.success) {
+          setError(result.error);
+          setExistingClientId(result.existingClientId ?? null);
+          return;
+        }
         setOpen(false);
         resetForm();
         router.push(`/admin/clients/${result.clientId}`);
@@ -427,7 +437,24 @@ export function CreateClientDialog() {
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && (
+          <div className="space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+            <p className="text-sm text-destructive">{error}</p>
+            {existingClientId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setOpen(false);
+                  resetForm();
+                  router.push(`/admin/clients/${existingClientId}`);
+                }}
+              >
+                Open their profile
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Navigation buttons */}
         <div className="flex justify-between pt-2">

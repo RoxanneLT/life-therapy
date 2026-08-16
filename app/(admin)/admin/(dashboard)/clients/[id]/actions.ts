@@ -755,6 +755,14 @@ const INVERSE_REL: Record<string, string> = {
   other: "other",
 };
 
+/** Failure is RETURNED, never thrown: a thrown server-action message is stripped
+ *  in production, so "this email already belongs to X" reached the admin as the
+ *  opaque "Server Components render" digest string — on the very path used to
+ *  attach a payer before a billing run. */
+export type CreateLinkedClientResult =
+  | { success: true; clientId: string }
+  | { success: false; error: string; existingClientId?: string };
+
 export async function createClientAndLinkRelationshipAction(data: {
   parentClientId: string;
   firstName: string;
@@ -765,7 +773,7 @@ export async function createClientAndLinkRelationshipAction(data: {
   gender?: string;
   relationshipType: string;
   relationshipLabel?: string;
-}) {
+}): Promise<CreateLinkedClientResult> {
   await requireRole("super_admin");
 
   // Determine email
@@ -774,17 +782,23 @@ export async function createClientAndLinkRelationshipAction(data: {
     email = `minor_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@noemail.internal`;
   }
   if (!email) {
-    throw new Error("Email is required for non-minor clients.");
+    return { success: false, error: "Email is required for non-minor clients." };
   }
 
-  // Check for duplicates (skip placeholders)
+  // Check for duplicates (skip placeholders). An existing record is usually the
+  // person you meant to link — name them and hand back the id.
   if (!email.endsWith("@noemail.internal")) {
     const existing = await prisma.student.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, firstName: true, lastName: true },
     });
     if (existing) {
-      throw new Error("A client with this email already exists.");
+      const name = `${existing.firstName} ${existing.lastName}`.trim() || email;
+      return {
+        success: false,
+        error: `${email} already belongs to ${name}. Use "Link existing client" to attach them instead of creating a duplicate.`,
+        existingClientId: existing.id,
+      };
     }
   }
 
@@ -838,7 +852,7 @@ export async function createClientAndLinkRelationshipAction(data: {
   revalidatePath(`/admin/clients/${data.parentClientId}`);
   revalidatePath(`/admin/clients/${newClient.id}`);
   revalidatePath("/admin/clients");
-  return { clientId: newClient.id };
+  return { success: true, clientId: newClient.id };
 }
 
 // ────────────────────────────────────────────────────────────
