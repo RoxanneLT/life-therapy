@@ -176,6 +176,18 @@ export async function POST(request: Request) {
               `expected ${pr!.totalCents}, received ${data.amount} ${data.currency ?? ""} ` +
               `(short ${shortfallCents}). NOT marking paid.`,
           );
+          // Record what arrived ON THE ROW, not only in the audit trail. Without
+          // this the request read "pending, full amount owing" while the client had
+          // genuinely paid most of it — a discrepancy only a human reading audit
+          // entries could ever spot, and the reminder/overdue emails would chase the
+          // whole amount.
+          await prisma.paymentRequest.update({
+            where: { id: paymentRequestId },
+            data: {
+              paidAmountCents: data.amount,
+              paystackReference: data.reference,
+            },
+          });
           await recordAudit({
             action: "payment_shortfall",
             entityType: "payment_request",

@@ -276,10 +276,21 @@ export async function createInvoiceFromPaymentRequest(
     status: "paid",
   });
 
-  // Link the invoice back to the payment request and mark it paid
+  // Link the invoice back to the payment request and mark it paid.
+  //
+  // paidAmountCents is stamped on the FULL-payment path too, not just on the short
+  // payment the webhook rejects. If only shortfalls populated it, "null" would mean
+  // two different things — nothing received, or paid in full — and the column would
+  // be unreadable without cross-checking the status. It means one thing: what we
+  // actually received. `payment.amountCents` is 0 for admin-recorded settlements
+  // (the caller passes the PR's own total), so fall back to the request total.
   await prisma.paymentRequest.update({
     where: { id: paymentRequestId },
-    data: { invoiceId: invoice.id, status: "paid" },
+    data: {
+      invoiceId: invoice.id,
+      status: "paid",
+      paidAmountCents: payment.amountCents > 0 ? payment.amountCents : pr.totalCents,
+    },
   });
 
   return invoice;

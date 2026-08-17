@@ -1082,6 +1082,21 @@ model PaymentRequest {
   // Status
   status             String          @default("pending") // "pending" | "paid" | "overdue" | "cancelled"
 
+  /// What actually arrived, when it does not settle the request in full.
+  ///
+  /// A Paystack link carries the amount it was created with, so a client holding a
+  /// link issued before the request was amended pays the OLD amount. The webhook
+  /// refuses to mark such a request paid — but until this column existed it had
+  /// nowhere to put the money, and recorded the shortfall only in the audit log.
+  /// That is the drift: the row said "pending, R1500 owing" while R1000 had in fact
+  /// been received, and only a human reading audit entries could tell.
+  ///
+  /// Mirrors invoices.paidAmountCents deliberately, same name and shape. Null means
+  /// nothing has been received against this request. Added 2026-08-17 via the
+  /// Management API and mirrored here by hand — `prisma db pull` hangs on this
+  /// project's pooler, so the DB is the source of truth and this is the copy.
+  paidAmountCents    Int?
+
   // Due date
   dueDate            DateTime
 
