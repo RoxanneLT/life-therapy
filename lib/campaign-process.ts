@@ -311,10 +311,12 @@ async function processSingleCampaignContact(
     return "skipped";
   }
 
-  // Idempotency: check EmailLog
+  // Idempotency: check EmailLog. `status: "sent"` matters — sendEmail() also logs
+  // FAILURES, so without it one provider outage advanced the campaign past a step
+  // nobody received. See the same note in lib/drip-emails.ts.
   const templateKey = `campaign_${campaign.id}_${progress.currentStep}`;
   const alreadySent = await prisma.emailLog.findFirst({
-    where: { templateKey, to: student.email },
+    where: { templateKey, to: student.email, status: "sent" },
   });
 
   if (alreadySent) {

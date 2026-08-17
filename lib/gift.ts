@@ -65,7 +65,11 @@ export async function createGiftFromOrderItem(
       digitalProductId: item.digitalProductId,
       packageSelections: item.packageSelections || undefined,
       creditAmount,
-      status: giftDetails.deliveryDate ? "pending" : "delivered",
+      // Always "pending" — a gift is delivered when its email lands, not when the
+      // row is written. Stamping "delivered" here made the status a claim about the
+      // future: an immediate gift whose email then failed was already recorded as
+      // delivered and could never be retried. sendGiftEmail promotes it.
+      status: "pending",
     },
   });
 
@@ -127,7 +131,7 @@ export async function sendGiftEmail(giftId: string) {
     redeemUrl,
   });
 
-  await sendEmail({
+  const sent = await sendEmail({
     to: gift.recipientEmail,
     subject,
     html,
@@ -135,7 +139,18 @@ export async function sendGiftEmail(giftId: string) {
     metadata: { giftId },
   });
 
-  // Mark as delivered and record send time
+  // Only a delivered gift may be marked delivered.
+  //
+  // The result used to be discarded: sendEmail returns { success: false } rather
+  // than throwing, so a bounced or provider-rejected gift was still stamped
+  // "delivered", dropped out of the retry query forever, and was reported to the
+  // buyer as sent. Somebody paid for a gift the recipient never received, and
+  // nothing anywhere said so. Leaving it "pending" lets the delivery cron try again.
+  if (!sent.success) {
+    console.error(`Gift ${giftId}: recipient email FAILED — left pending for retry`);
+    throw new Error(`Gift email failed for ${giftId}`);
+  }
+
   await prisma.gift.update({
     where: { id: giftId },
     data: {
@@ -144,28 +159,35 @@ export async function sendGiftEmail(giftId: string) {
     },
   });
 
-  // Notify the buyer that their gift was delivered (non-blocking)
+  // Notify the buyer that their gift was delivered.
+  //
+  // AWAITED. This was a floating promise chain: on a serverless runtime the
+  // function can freeze the moment the handler returns, so the notification often
+  // died mid-flight and never sent. Awaiting costs one round trip; the .catch keeps
+  // a failed courtesy email from undoing a delivery that genuinely happened.
   const buyerStudent = await prisma.student.findUnique({
     where: { id: gift.buyerId },
     select: { email: true },
   });
   if (buyerStudent) {
-    renderEmail("gift_delivered_buyer", {
+    await renderEmail("gift_delivered_buyer", {
       buyerName,
       recipientName: gift.recipientName,
       itemTitle,
-    }).then((notification) =>
-      sendEmail({
-        to: buyerStudent.email,
-        subject: notification.subject,
-        html: notification.html,
-        templateKey: "gift_delivered_buyer",
-        studentId: gift.buyerId,
-        metadata: { giftId },
-      })
-    ).catch((err) =>
-      console.error("Failed to send gift delivery notification to buyer:", err)
-    );
+    })
+      .then((notification) =>
+        sendEmail({
+          to: buyerStudent.email,
+          subject: notification.subject,
+          html: notification.html,
+          templateKey: "gift_delivered_buyer",
+          studentId: gift.buyerId,
+          metadata: { giftId },
+        }),
+      )
+      .catch((err) =>
+        console.error("Failed to send gift delivery notification to buyer:", err),
+      );
   }
 }
 

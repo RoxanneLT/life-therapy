@@ -29,6 +29,10 @@ function getSASTToday(): Date {
 
 export async function processMonthlyBilling(): Promise<{
   billing: { generated: number } | null;
+  /** Requests that existed but had never been emailed, rescued by the sweep in 1b.
+   *  Reported separately from `billing` — a non-zero value here means a previous
+   *  run died partway through its send loop, which is worth seeing in the digest. */
+  sweptUnsent: { sent: number } | null;
   reminders: { sent: number } | null;
   dueToday: { sent: number } | null;
   overdue: { sent: number } | null;
@@ -39,10 +43,11 @@ export async function processMonthlyBilling(): Promise<{
 
   const result: {
     billing: { generated: number } | null;
+    sweptUnsent: { sent: number } | null;
     reminders: { sent: number } | null;
     dueToday: { sent: number } | null;
     overdue: { sent: number } | null;
-  } = { billing: null, reminders: null, dueToday: null, overdue: null };
+  } = { billing: null, sweptUnsent: null, reminders: null, dueToday: null, overdue: null };
 
   // 1. Is today the effective billing date?
   const billingDate = getEffectiveBillingDate(year, month);
@@ -63,6 +68,36 @@ export async function processMonthlyBilling(): Promise<{
       console.error("[monthly-billing] Failed to generate payment requests:", err);
       result.billing = { generated: 0 };
     }
+  }
+
+  // 1b. Sweep: any pending request that was CREATED but never emailed.
+  //
+  // Step 1 only runs on the billing date, and its send loop is not resumable — if
+  // the daily cron died partway through it (timeout, deploy, provider wobble), the
+  // PaymentRequests already existed but their emails never went out, and nothing
+  // ever tried again. The client's first contact was then a "reminder" for an
+  // invoice they had never received, or an overdue notice.
+  //
+  // `sentAt` is stamped by sendPaymentRequestEmail itself, so this sweep is
+  // self-limiting: it can only ever pick up requests that genuinely never sent, and
+  // it costs one indexed query on the days there are none.
+  const neverSent = await prisma.paymentRequest.findMany({
+    where: { status: "pending", sentAt: null },
+    select: { id: true },
+  });
+
+  let sweptSent = 0;
+  for (const req of neverSent) {
+    try {
+      await sendPaymentRequestEmail(req.id);
+      sweptSent++;
+      console.warn(`[monthly-billing] swept un-emailed payment request ${req.id}`);
+    } catch (err) {
+      console.error(`[monthly-billing] sweep failed for request ${req.id}:`, err);
+    }
+  }
+  if (sweptSent > 0) {
+    result.sweptUnsent = { sent: sweptSent };
   }
 
   // 2. Reminder check (2 business days before due for any unpaid request)

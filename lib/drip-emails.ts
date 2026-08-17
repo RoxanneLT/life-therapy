@@ -266,12 +266,19 @@ async function processSingleClient(
     }
   }
 
-  // Idempotency: check if already sent via EmailLog
+  // Idempotency: check if already sent via EmailLog.
+  //
+  // `status: "sent"` is load-bearing. sendEmail() logs FAILURES too (status
+  // "failed"), so without it a provider outage looked identical to a delivery:
+  // the step advanced, and because progress only moves forward the client never
+  // received that email — permanently, and silently. Only a successful send may
+  // count as sent.
   const templateKey = `drip_${currentPhase}_${currentStep}`;
   const alreadySent = await prisma.emailLog.findFirst({
     where: {
       templateKey,
       to: candidate.email,
+      status: "sent",
     },
   });
 

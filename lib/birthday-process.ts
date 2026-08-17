@@ -103,9 +103,12 @@ export async function processBirthdayEmails(): Promise<{
   const templateKey = `birthday_${currentYear}`;
 
   for (const student of birthdayStudents) {
-    // Idempotency: check if already sent this year
+    // Idempotency: check if already sent this year. `status: "sent"` matters —
+    // sendEmail() also logs FAILURES, and this key is per-YEAR: a failed send
+    // without the filter meant the client got no birthday email until the next
+    // birthday. See the same note in lib/drip-emails.ts.
     const alreadySent = await prisma.emailLog.findFirst({
-      where: { templateKey, to: student.email },
+      where: { templateKey, to: student.email, status: "sent" },
     });
 
     if (alreadySent) {

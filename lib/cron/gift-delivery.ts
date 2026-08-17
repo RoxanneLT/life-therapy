@@ -15,7 +15,15 @@ export async function processGiftDelivery(): Promise<{
   const pendingGifts = await prisma.gift.findMany({
     where: {
       status: "pending",
-      deliveryDate: { lte: now },
+      // Scheduled gifts that are due, OR immediate gifts (deliveryDate null) still
+      // sitting pending — which now means their send genuinely failed.
+      //
+      // `deliveryDate: { lte: now }` alone silently excluded every immediate gift,
+      // because NULL is not <= anything in SQL. Combined with sendGiftEmail marking
+      // "delivered" regardless of outcome, an immediate gift had two independent
+      // reasons never to be retried. Both are fixed; this is the half that lets the
+      // retry actually reach them.
+      OR: [{ deliveryDate: { lte: now } }, { deliveryDate: null }],
     },
   });
 
