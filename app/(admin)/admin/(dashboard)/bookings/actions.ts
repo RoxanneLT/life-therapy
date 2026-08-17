@@ -157,20 +157,49 @@ export async function deleteBooking(id: string) {
   redirect("/admin/bookings");
 }
 
+/**
+ * Refusals are RETURNED, not thrown — a thrown message is stripped in production
+ * and reaches the admin as "An error occurred in the Server Components render…".
+ */
 export async function rescheduleBooking(
   id: string,
   newDate: string,
   newStartTime: string,
   newEndTime: string,
-) {
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin", "editor");
 
   const booking = await prisma.booking.findUnique({ where: { id } });
-  if (!booking) throw new Error("Booking not found");
+  if (!booking) return { success: false, error: "That booking no longer exists." };
 
-  // Step 1: Create new calendar event FIRST — a temporary duplicate is better than losing both
   const config = getSessionTypeConfig(booking.sessionType);
   const dateObj = calendarDate(newDate);
+
+  // Check the slot SERVER-SIDE before touching anything.
+  //
+  // The only check was the slot list the picker fetched when it rendered, which
+  // is a snapshot: the admin can sit on the dialog while a client books that
+  // slot, or a holiday/override lands, and the reschedule proceeded regardless.
+  // The series path has always validated on the server; this one never did.
+  //
+  // `getAvailableSlots` folds all three questions — public holiday, availability
+  // override, existing booking — into one answer, which is why this reuses it
+  // rather than adding a third copy of the series path's inline conflict query.
+  // `skipMinNotice` because an admin rescheduling on the client's behalf is
+  // exactly the case the 24-hour notice rule is not meant to block.
+  const { slots } = await getAvailableSlots(newDate, config, { skipMinNotice: true });
+  const slotFree = slots.some((s) => s.start === newStartTime);
+  const movingToSameSlot =
+    saDateStr(booking.date) === newDate && booking.startTime === newStartTime;
+
+  if (!slotFree && !movingToSameSlot) {
+    return {
+      success: false,
+      error: `${newStartTime} on ${newDate} is not available — it may have been booked, blocked, or fall on a public holiday. Pick another time.`,
+    };
+  }
+
+  // Step 1: Create new calendar event FIRST — a temporary duplicate is better than losing both
   const calResult = await createCalendarEvent({
     subject: `${config.label} — ${booking.clientName}`,
     startDateTime: `${newDate}T${newStartTime}:00`,
@@ -204,8 +233,12 @@ export async function rescheduleBooking(
       : "New Outlook event could not be created — please add it manually.";
   }
 
-  // Update booking record
-  await prisma.booking.update({
+  // Update booking record. The check above is advisory — a Graph round trip sits
+  // between it and this write — so `bookings_active_slot_unique` is what actually
+  // settles a race, and P2002 means we lost it. Unhandled, that surfaced as a
+  // masked server-action error with no clue that the slot was simply taken.
+  try {
+    await prisma.booking.update({
     where: { id },
     data: {
       originalDate: booking.originalDate || booking.date,
@@ -219,7 +252,21 @@ export async function rescheduleBooking(
       graphEventId: calResult?.eventId || null,
       teamsMeetingUrl: calResult?.teamsMeetingUrl || booking.teamsMeetingUrl,
     },
-  });
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      // Undo the event we just created, or the diary keeps a session that has
+      // no booking behind it.
+      if (calResult?.eventId) {
+        await cancelCalendarEvent(calResult.eventId).catch(console.error);
+      }
+      return {
+        success: false,
+        error: `${newStartTime} on ${newDate} was taken while you were rescheduling. Nothing was changed — pick another time.`,
+      };
+    }
+    throw err;
+  }
 
   // Notify client
   const email = await renderEmail("booking_reschedule", {
@@ -243,10 +290,12 @@ export async function rescheduleBooking(
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${id}`);
-  const redirectUrl = calendarWarning
-    ? `/admin/bookings/${id}?calendarWarning=${encodeURIComponent(calendarWarning)}`
-    : `/admin/bookings/${id}`;
-  redirect(redirectUrl);
+  // A calendar warning still redirects — the reschedule DID happen and the page
+  // shows the warning. Only a refusal returns, so the dialog can say why.
+  if (calendarWarning) {
+    redirect(`/admin/bookings/${id}?calendarWarning=${encodeURIComponent(calendarWarning)}`);
+  }
+  return { success: true };
 }
 
 // ────────────────────────────────────────────────────────────

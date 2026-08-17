@@ -229,6 +229,32 @@ forfeited a lapsed credit either.
   renew the window (cancel-and-rebook would otherwise extend it for ever). Held honest by the
   `credits: a balance that gains credits gets an expiry` audit check.
 
+### Noted for later — pause the chase when payment is on its way
+
+Stean's, 18 Aug, and it comes straight out of a live near-miss: Joe paid on the
+17th, the payment could not be recorded until it reflected, and the weekly overdue
+re-chase would have emailed him again in the meantime. The system can only act on
+money it has been told about, so the gap is a way to say **"money is coming, hold
+off"** without either lying that it arrived or voiding the request.
+
+What it needs, roughly:
+
+- A pause marker on `payment_requests` — a nullable `chasePausedUntil DateTime?` is
+  the smallest thing that works, and it reads honestly: this is a hold, not a
+  payment. (Schema change: needs sign-off, additive, nullable.)
+- Every chase in `lib/cron/monthly-billing.ts` skips a request whose pause has not
+  expired. One condition, four call sites.
+- A default worth choosing deliberately — 7 days is enough for an EFT to clear
+  without a forgotten pause becoming a permanently unchased invoice, which is the
+  failure mode to avoid.
+- Admin UI: a "payment expected" action beside Record Payment on the Finance list,
+  and the paused state visible on the row — a silent hold is how an invoice gets
+  forgotten.
+- Show it in the cron digest, so a paused request is still something a human sees.
+
+Related, and probably the same piece of work: recording a partial payment already
+tells us money is moving, so a part-paid request arguably deserves the same hold.
+
 ### Waiting on Stean
 
 - [ ] **Joe de Wet's R3,580** — paid 18 Aug, record the payment once it reflects. The only

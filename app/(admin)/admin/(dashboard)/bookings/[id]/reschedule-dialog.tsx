@@ -12,6 +12,7 @@ import {
 import { CalendarClock } from "lucide-react";
 import { ReschedulePicker } from "@/components/booking/reschedule-picker";
 import { rescheduleBooking } from "../actions";
+import { toast } from "sonner";
 
 interface RescheduleDialogProps {
   readonly bookingId: string;
@@ -31,7 +32,20 @@ export function RescheduleDialog({
 
   function handleConfirm(date: string, startTime: string, endTime: string) {
     startTransition(async () => {
-      await rescheduleBooking(bookingId, date, startTime, endTime);
+      try {
+        // On success this redirects, which throws NEXT_REDIRECT — so anything
+        // that comes BACK is a refusal with a reason worth showing. Previously
+        // nothing here read the result or caught anything, so a taken slot was
+        // an unexplained failure with the dialog still sitting open.
+        const result = await rescheduleBooking(bookingId, date, startTime, endTime);
+        if (result && !result.success) {
+          toast.error(result.error ?? "Could not reschedule that booking.");
+        }
+      } catch (err) {
+        const digest = (err as { digest?: unknown })?.digest;
+        if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) throw err;
+        toast.error("Could not reschedule that booking — please try again.");
+      }
     });
   }
 
