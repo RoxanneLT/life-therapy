@@ -71,7 +71,11 @@ export function NewDripEmailForm({ phase, existingEmails }: NewDripEmailFormProp
             formData.set("bodyHtml", data.bodyHtml);
             formData.set("ctaText", data.ctaText);
             formData.set("ctaUrl", data.ctaUrl);
-            await createDripEmailAction(formData);
+            // On success this redirects, so anything that comes back is a refusal.
+            const created = await createDripEmailAction(formData);
+            if (created && !created.success) {
+              throw new Error(created.error ?? "Could not create this drip email.");
+            }
             return "Created!";
           },
         }}

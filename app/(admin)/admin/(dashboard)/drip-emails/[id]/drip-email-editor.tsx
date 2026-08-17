@@ -69,7 +69,11 @@ export function DripEmailEditor({
           formData.set("ctaText", data.ctaText);
           formData.set("ctaUrl", data.ctaUrl);
           formData.set("isActive", String(data.isActive));
-          await updateDripEmailAction(id, formData);
+          // A client-side throw keeps its message; only the server-action boundary
+          // strips one. That is why the action returns its refusal rather than
+          // throwing it, and why re-throwing here is safe.
+          const saved = await updateDripEmailAction(id, formData);
+          if (!saved.success) throw new Error(saved.error ?? "Could not save this drip email.");
           return "Saved successfully!";
         },
         onReset: async () => {

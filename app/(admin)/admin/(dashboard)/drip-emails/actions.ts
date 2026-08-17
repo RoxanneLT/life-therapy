@@ -34,7 +34,14 @@ function buildPreviewBody(
   return baseTemplate(renderedSubject, rendered, DEFAULT_BASE_URL, unsubscribeUrl);
 }
 
-export async function updateDripEmailAction(id: string, formData: FormData) {
+/**
+ * Refusals are RETURNED. A thrown message is stripped in production, so an empty
+ * subject and a database failure looked identical on an editing screen.
+ */
+export async function updateDripEmailAction(
+  id: string,
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin", "marketing");
 
   const subject = (formData.get("subject") as string).trim();
@@ -45,7 +52,7 @@ export async function updateDripEmailAction(id: string, formData: FormData) {
   const isActive = formData.get("isActive") === "true";
 
   if (!subject || !bodyHtml) {
-    throw new Error("Subject and body are required");
+    return { success: false, error: "A drip email needs both a subject and a body." };
   }
 
   await prisma.dripEmail.update({
@@ -55,6 +62,7 @@ export async function updateDripEmailAction(id: string, formData: FormData) {
 
   revalidatePath("/admin/drip-emails");
   revalidatePath(`/admin/drip-emails/${id}`);
+  return { success: true };
 }
 
 export async function resetDripEmailAction(id: string) {
@@ -147,7 +155,9 @@ export async function getDripEmailPreviewHtml(
   return buildPreviewBody(bodyHtml, subject, ctaText, ctaUrl);
 }
 
-export async function createDripEmailAction(formData: FormData) {
+export async function createDripEmailAction(
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin", "marketing");
 
   const type = formData.get("type") as DripEmailType;
@@ -160,7 +170,10 @@ export async function createDripEmailAction(formData: FormData) {
   const ctaUrl = (formData.get("ctaUrl") as string)?.trim() || null;
 
   if (!type || !subject || !bodyHtml || Number.isNaN(dayOffset)) {
-    throw new Error("Type, subject, body, and day offset are required");
+    return {
+      success: false,
+      error: "A drip email needs a type, a subject, a body and a day offset.",
+    };
   }
 
   const newStep = insertAfter + 1;

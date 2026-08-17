@@ -1627,10 +1627,8 @@ const KNOWN_DEFECTS = new Map([
   ["server-action-ux|app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → grantCreditsAction",
     "'Amount must be 1-20' — the dialog already bounds the input, so this fires only if that is bypassed"],
 
-  ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → createDripEmailAction",
-    "'Type, subject, body, and day offset are required' — form validation, mirrored client-side"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → updateDripEmailAction",
-    "'Subject and body are required' — as above"],
+
+
   ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → updateDripEmailDayOffsetAction",
     "'Day offset must be a non-negative number' — as above"],
 
