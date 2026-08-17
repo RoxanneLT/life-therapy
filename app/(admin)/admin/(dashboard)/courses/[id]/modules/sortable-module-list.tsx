@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { reorderModules, deleteModule } from "./actions";
+import { toast } from "sonner";
 
 interface Module {
   id: string;
@@ -148,9 +149,17 @@ export function SortableModuleList({
     setSaved(false);
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    // See the course list: the delete can now be refused when students have bought
+    // access to this module, so restore the row instead of silently diverging.
+    const previous = modules;
     setModules((prev) => prev.filter((m) => m.id !== id));
-    deleteModule(courseId, id);
+
+    const result = await deleteModule(courseId, id);
+    if (!result.success) {
+      setModules(previous);
+      toast.error(result.error ?? "That module could not be deleted.");
+    }
   }
 
   async function handleSave() {

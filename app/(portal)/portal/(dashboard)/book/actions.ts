@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
-import { createCalendarEvent } from "@/lib/graph";
+import { createCalendarEvent, cancelCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { formatPrice, escapeHtml } from "@/lib/utils";
@@ -221,9 +221,13 @@ export async function createPortalBooking(
     ? await resolveCouplesPartner(studentRecord.id, parsed.partnerName)
     : null;
 
-  // Create booking in DB
+  // Create booking in DB. The slot check above is advisory — a Graph call and a
+  // round trip sit between it and this insert — so the partial unique index
+  // `bookings_active_slot_unique` is what actually settles a race. P2002 = lost it.
   const bookingDate = calendarDate(parsed.date);
-  const booking = await prisma.booking.create({
+  let booking;
+  try {
+    booking = await prisma.booking.create({
     data: {
       sessionType: parsed.sessionType as SessionType,
       date: bookingDate,
@@ -248,7 +252,16 @@ export async function createPortalBooking(
       originalStartTime: parsed.startTime,
       studentId: studentRecord.id,
     },
-  });
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      if (graphResult?.eventId) {
+        await cancelCalendarEvent(graphResult.eventId).catch(console.error);
+      }
+      return { error: "Someone just booked that time. Please choose another slot." };
+    }
+    throw err;
+  }
 
   // Deduct the credit now that the booking it pays for exists.
   if (useCredit) {

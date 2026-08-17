@@ -301,6 +301,22 @@ model Booking {
   whatsappReminder24hSentAt     DateTime?   @map("whatsappReminder48hSentAt")
   whatsappReminderMorningSentAt DateTime?
 
+  // NOTE — one live index is NOT declared here, because Prisma cannot express a
+  // PARTIAL unique index:
+  //
+  //   CREATE UNIQUE INDEX bookings_active_slot_unique
+  //     ON bookings (date, "startTime")
+  //     WHERE status IN ('confirmed','pending');
+  //
+  // It is the only thing preventing a double-booking: availability is checked, then
+  // Graph is called, then the row is inserted, with no transaction around any of it,
+  // so two clients taking the last slot seconds apart both used to confirm. The
+  // predicate matters — cancelled and completed bookings must be free to share a
+  // slot with the booking that replaced them. A plain @@unique([date, startTime])
+  // would forbid that and is NOT an acceptable substitute.
+  //
+  // Applied 2026-08-17 via the Management API. Insert sites catch P2002 and tell the
+  // client the slot has just gone.
   @@index([date])
   @@index([status])
   @@index([clientEmail])
@@ -665,7 +681,11 @@ model Enrollment {
   studentId       String
   student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   courseId         String
-  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  // Restrict, not Cascade: deleting a course must never erase a paid enrolment.
+  // Applied to the live DB on 2026-08-17 (Management API) and mirrored here by hand —
+  // `prisma db pull` hangs against the pgbouncer pooler on this project, so the DB is
+  // the source of truth and this line is the copy. Verified with pg_get_constraintdef.
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
   source          EnrollmentSource @default(purchase)
   orderId         String?
   order           Order?           @relation(fields: [orderId], references: [id])
@@ -689,9 +709,11 @@ model ModuleAccess {
   studentId String
   student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   moduleId  String
-  module    Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  // Both Restrict — a paid module purchase outlives the content it points at.
+  // See the note on Enrollment.course: applied via the Management API, mirrored here.
+  module    Module           @relation(fields: [moduleId], references: [id], onDelete: Restrict)
   courseId   String
-  course    Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course    Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
   orderId   String?
   pricePaid Int              @default(0) // ZAR cents — for upgrade credit calculation
   source    EnrollmentSource @default(purchase)
@@ -724,7 +746,9 @@ model Certificate {
   studentId         String
   student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   courseId           String
-  course            Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  // Restrict — an earned certificate is a record of achievement, not course content.
+  // See the note on Enrollment.course.
+  course            Course   @relation(fields: [courseId], references: [id], onDelete: Restrict)
   certificateNumber String   @unique
   issuedAt          DateTime @default(now())
 

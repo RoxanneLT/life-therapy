@@ -22,10 +22,13 @@ import Link from "next/link";
 
 export default async function EditCoursePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ deleteError?: string }>;
 }) {
   const { id } = await params;
+  const { deleteError } = await searchParams;
   const course = await prisma.course.findUnique({
     where: { id },
   });
@@ -39,12 +42,23 @@ export default async function EditCoursePage({
 
   async function handleDelete() {
     "use server";
-    await deleteCourse(id);
+    // Only leave the page if the course actually went. A refusal (real enrolments or
+    // certificates attached) comes back as a message rather than redirecting to a
+    // list where the course is still sitting.
+    const result = await deleteCourse(id);
+    if (!result.success) {
+      redirect(`/admin/courses/${id}?deleteError=${encodeURIComponent(result.error ?? "Could not delete this course.")}`);
+    }
     redirect("/admin/courses");
   }
 
   return (
     <div className="space-y-6">
+      {deleteError && (
+        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {deleteError}
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold">Edit Course</h1>

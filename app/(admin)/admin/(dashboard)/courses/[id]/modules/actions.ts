@@ -49,12 +49,38 @@ export async function updateModule(
   redirect(`/admin/courses/${courseId}/modules`);
 }
 
-export async function deleteModule(courseId: string, moduleId: string) {
+/** Delete a module — REFUSED once someone has bought access to it.
+ *  module_access.moduleId is ON DELETE RESTRICT as of 2026-08-17; this check turns
+ *  the constraint violation into a sentence. See deleteCourse for the full note. */
+export async function deleteModule(
+  courseId: string,
+  moduleId: string,
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin", "editor");
-  await prisma.module.delete({ where: { id: moduleId } });
+
+  const purchases = await prisma.moduleAccess.count({ where: { moduleId } });
+  if (purchases > 0) {
+    return {
+      success: false,
+      error: `This module can't be deleted — ${purchases} student${purchases === 1 ? " has" : "s have"} bought access to it. Unpublish the course instead.`,
+    };
+  }
+
+  try {
+    await prisma.module.delete({ where: { id: moduleId } });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2003") {
+      return {
+        success: false,
+        error: "This module still has student records attached and can't be deleted.",
+      };
+    }
+    throw err;
+  }
 
   await recalculateCourseStats(courseId);
   revalidatePath(`/admin/courses/${courseId}/modules`);
+  return { success: true };
 }
 
 export async function reorderModules(

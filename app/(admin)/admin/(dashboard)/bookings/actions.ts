@@ -805,14 +805,22 @@ interface AdminCreateBookingData {
   couplesPartnerName?: string;
 }
 
-export async function adminCreateBookingAction(data: AdminCreateBookingData) {
+/** Refusals are RETURNED, not thrown — production strips a thrown message to React's
+ *  digest text, so "that slot has gone" reached Roxanne as unreadable boilerplate.
+ *  Converted here rather than deepening the debt while adding the P2002 branch. */
+export async function adminCreateBookingAction(
+  data: AdminCreateBookingData,
+): Promise<
+  | { success: true; bookingId: string; calendarWarning?: string }
+  | { success: false; error: string }
+> {
   await requireRole("super_admin", "editor");
 
   const student = await prisma.student.findUnique({
     where: { id: data.studentId },
     select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
   });
-  if (!student) throw new Error("Client not found");
+  if (!student) return { success: false, error: "Client not found." };
 
   const config = getSessionTypeConfig(data.sessionType);
   const isPostpaid = student.billingType === "postpaid";
@@ -822,13 +830,13 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
   const { slots } = await getAvailableSlots(data.date, config, { skipMinNotice: true });
   const slotAvailable = slots.some((s) => s.start === data.startTime);
   if (!slotAvailable) {
-    throw new Error("This time slot is no longer available. Please choose another.");
+    return { success: false, error: "This time slot is no longer available. Please choose another." };
   }
 
   // Credit check (skip for postpaid — session will be invoiced monthly)
   if (data.useCredit && !config.isFree && !isPostpaid) {
     const balance = await getBalance(student.id);
-    if (balance < 1) throw new Error("Client has insufficient session credits.");
+    if (balance < 1) return { success: false, error: "Client has insufficient session credits." };
   }
 
   // Determine price: free sessions = 0, credit-paid = 0 (already paid via credit purchase), postpaid/unpaid = session rate from settings
@@ -853,8 +861,11 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
     isOnlineMeeting: data.sessionMode !== "in_person",
   }).catch(() => null);
 
-  // Create booking record
-  const booking = await prisma.booking.create({
+  // Create booking record. `bookings_active_slot_unique` is the real arbiter of the
+  // slot — the availability check happened before the Graph call above.
+  let booking;
+  try {
+    booking = await prisma.booking.create({
     data: {
       sessionType: data.sessionType,
       sessionMode: data.sessionMode,
@@ -877,7 +888,19 @@ export async function adminCreateBookingAction(data: AdminCreateBookingData) {
       originalStartTime: data.startTime,
       studentId: student.id,
     },
-  });
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      if (calResult?.eventId) {
+        await cancelCalendarEvent(calResult.eventId).catch(console.error);
+      }
+      return {
+        success: false,
+        error: `That slot is already taken — ${data.date} at ${data.startTime} has an active booking. Pick another time.`,
+      };
+    }
+    throw err;
+  }
 
   // Deduct credit (skip for postpaid clients)
   if (data.useCredit && !config.isFree && !isPostpaid) {
@@ -1063,7 +1086,9 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     const bookingDate = calendarDate(dateStr);
     const confirmationToken = randomUUID();
 
-    const booking = await prisma.booking.create({
+    let booking;
+    try {
+      booking = await prisma.booking.create({
       data: {
         sessionType: data.sessionType,
         sessionMode: data.sessionMode,
@@ -1088,7 +1113,22 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         recurringSeriesId,
         recurringPattern: data.pattern,
       },
-    });
+      });
+    } catch (err) {
+      // The slot was taken between the availability sweep above and this insert —
+      // now caught by `bookings_active_slot_unique` rather than silently
+      // double-booking. Skip THIS date and carry on: aborting here would leave a
+      // half-built series, which is worse than a series with one gap the admin is
+      // told about. Feeds the same `skipped` channel the UI already reports.
+      if ((err as { code?: string })?.code === "P2002") {
+        skippedDates.push({ date: dateStr, reason: "Slot already booked" });
+        if (seriesEventId) {
+          await deleteRecurringEventOccurrences(seriesEventId, [dateStr]).catch(console.error);
+        }
+        continue;
+      }
+      throw err;
+    }
 
     // Deduct credit if available (skip for postpaid)
     if (data.useCredits && !config.isFree && !isPostpaid && creditsRemaining > 0) {

@@ -328,9 +328,13 @@ export function CreateBookingDialog({
             adminNotes: adminNotes.trim() || undefined,
             couplesPartnerName: effectivePartnerName,
           });
+          if (!result.success) {
+            setError(result.error);
+            return;
+          }
           handleSetOpen(false);
           resetForm();
-          if (result?.bookingId) router.push(`/admin/bookings/${result.bookingId}`);
+          if (result.bookingId) router.push(`/admin/bookings/${result.bookingId}`);
         } catch (err) {
           setError(err instanceof Error ? err.message : "Failed to create booking");
         }

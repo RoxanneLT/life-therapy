@@ -1255,8 +1255,8 @@ const KNOWN_DEFECTS = new Map([
   // win for a large regression surface — so it waits, recorded, rather than
   // shipping half-tested. Each entry is a debt: delete it when the action returns
   // its refusal instead of throwing.
-  ["server-action-ux|app/(admin)/admin/(dashboard)/bookings/actions.ts → adminCreateBookingAction",
-    "slot-taken and insufficient-credits refusals; admin books on a client's behalf, so a masked message costs a retry, not a booking"],
+  // adminCreateBookingAction: FIXED 2026-08-17 — converted while adding the P2002
+  // slot-clash branch, rather than adding a fourth masked throw to it.
   ["server-action-ux|app/(admin)/admin/(dashboard)/bookings/actions.ts → reinstateBookingAction",
     "'session is in the past and can't be reinstated' — a guard rail, hit rarely and only by admin"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → saveCampaignAction",

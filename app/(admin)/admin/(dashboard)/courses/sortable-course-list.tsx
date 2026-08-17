@@ -26,6 +26,7 @@ import { formatPrice } from "@/lib/utils";
 import { GripVertical, Pencil } from "lucide-react";
 import Link from "next/link";
 import { reorderCourses, deleteCourse } from "./actions";
+import { toast } from "sonner";
 
 interface Course {
   id: string;
@@ -132,9 +133,18 @@ export function SortableCourseList({ courses: initial }: { readonly courses: Cou
     setSaved(false);
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    // Optimistic removal, but the delete can now legitimately be REFUSED (a course
+    // with real enrolments or certificates). Restore the list and say why, rather
+    // than leaving the admin looking at a list the database disagrees with.
+    const previous = courses;
     setCourses((prev) => prev.filter((c) => c.id !== id));
-    deleteCourse(id);
+
+    const result = await deleteCourse(id);
+    if (!result.success) {
+      setCourses(previous);
+      toast.error(result.error ?? "That course could not be deleted.");
+    }
   }
 
   async function handleSave() {

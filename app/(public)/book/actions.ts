@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { bookingFormSchema } from "@/lib/validations";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
-import { createCalendarEvent } from "@/lib/graph";
+import { createCalendarEvent, cancelCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { formatPrice, escapeHtml } from "@/lib/utils";
@@ -362,9 +362,18 @@ export async function createBooking(formData: FormData): Promise<CreateBookingRe
 
   const confirmationToken = randomUUID();
 
-  // Create booking in DB
+  // Create booking in DB.
+  //
+  // The availability check above is advisory: between it and this insert sit a Graph
+  // API call and a network round trip, with no transaction around any of it, so two
+  // clients taking the last slot seconds apart both passed it. The partial unique
+  // index `bookings_active_slot_unique` (date, startTime) WHERE status IN
+  // ('confirmed','pending') is what actually decides — P2002 means the other client
+  // got there first.
   const bookingDate = calendarDate(parsed.date);
-  const booking = await prisma.booking.create({
+  let booking;
+  try {
+    booking = await prisma.booking.create({
     data: {
       sessionType: parsed.sessionType as SessionType,
       date: bookingDate,
@@ -384,7 +393,18 @@ export async function createBooking(formData: FormData): Promise<CreateBookingRe
       originalDate: bookingDate,
       originalStartTime: parsed.startTime,
     },
-  });
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      // Lost the race. The Graph event created moments ago now has no booking behind
+      // it, so remove it rather than leaving a phantom in Roxanne's diary.
+      if (graphResult?.eventId) {
+        await cancelCalendarEvent(graphResult.eventId).catch(console.error);
+      }
+      return { error: "Someone just booked that time. Please choose another slot." };
+    }
+    throw err;
+  }
 
   // Deduct the credit now that the booking it pays for exists.
   if (creditIntent.useCredit) {
