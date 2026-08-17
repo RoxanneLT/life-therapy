@@ -23,7 +23,10 @@
     "test:cron": "tsx --test lib/cron/with-cron-run.test.ts",
     "test:email": "tsx --test lib/email-render.test.ts",
     "test:region": "tsx --test lib/region.test.ts",
-    "test:env": "tsx --test lib/env.test.ts"
+    "test:env": "tsx --test lib/env.test.ts",
+    "secrets": "node scripts/sync-secrets.mjs status",
+    "secrets:pull": "node scripts/sync-secrets.mjs pull",
+    "secrets:push": "node scripts/sync-secrets.mjs push"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
