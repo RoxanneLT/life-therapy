@@ -105,6 +105,41 @@ export function withCronRun(jobName: string, handler: CronHandler): CronHandler 
 }
 
 /**
+ * Find cron runs that started and never finished — the invisible failure.
+ *
+ * A `cron_runs` row is written "running" at the start and updated at the end. If the
+ * function is KILLED instead of returning (the daily job has maxDuration = 120s and
+ * runs twelve sequential tasks), nothing updates it: the row sits "running" forever,
+ * the digest for that run is never sent, and silence is indistinguishable from a
+ * clean night. The truncation reports itself as nothing at all.
+ *
+ * Nobody can detect that from inside the run that died, so the NEXT run looks back.
+ * Anything still "running" well past the platform's own ceiling did not finish.
+ *
+ * Deliberately includes "daily" — unlike collectCronRunFailures below, which excludes
+ * it because that function is called BY the daily job while its own row is still
+ * legitimately open. Here a stale daily row is precisely what we are hunting.
+ */
+export async function collectStuckCronRuns(
+  olderThanMinutes = 30,
+): Promise<{ jobName: string; startedAt: Date; ageMinutes: number }[]> {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+
+  const stuck = await prisma.cronRun.findMany({
+    where: { status: "running", startedAt: { lt: cutoff } },
+    select: { jobName: true, startedAt: true },
+    orderBy: { startedAt: "desc" },
+    take: 20,
+  });
+
+  return stuck.map((r) => ({
+    jobName: r.jobName,
+    startedAt: r.startedAt,
+    ageMinutes: Math.round((Date.now() - r.startedAt.getTime()) / 60000),
+  }));
+}
+
+/**
  * Roll up the last N hours of cron_runs into per-job digest entries.
  * Only returns jobs that FAILED. Used by the daily orchestrator to
  * fold external cron failures into the digest.

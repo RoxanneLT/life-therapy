@@ -12,7 +12,11 @@ import { processBirthdayEmails } from "@/lib/birthday-process";
 import { checkBunnyBalance } from "@/lib/cron/bunny-balance-check";
 import { processPhoneNormalization } from "@/lib/cron/normalize-phones";
 import { sendCronDigest, type CronJobDetail } from "@/lib/cron/cron-digest";
-import { collectCronRunFailures, isCronAuthorised } from "@/lib/cron/with-cron-run";
+import {
+  collectCronRunFailures,
+  collectStuckCronRuns,
+  isCronAuthorised,
+} from "@/lib/cron/with-cron-run";
 import { missingRequiredEnv } from "@/lib/env";
 
 /**
@@ -161,6 +165,30 @@ export async function GET(request: NextRequest) {
     Object.assign(detail, externalFailures);
   } catch (err) {
     console.error("[daily-cron] collectCronRunFailures failed:", err);
+  }
+
+  // Runs that started and never finished — the failure mode nothing else can see.
+  //
+  // This route has twelve sequential tasks and maxDuration = 120s. If it is killed
+  // partway through, its own cron_runs row stays "running", the digest below is
+  // never sent, and the night looks clean because nothing arrived. Only a LATER run
+  // can notice, so each run reports the stragglers it finds. Excludes the row this
+  // run just opened, which is legitimately still running.
+  // The 30-minute cutoff already excludes the row this run opened seconds ago, so no
+  // self-filtering is needed — anything it returns genuinely never finished.
+  try {
+    const stuck = await collectStuckCronRuns(30);
+    if (stuck.length > 0) {
+      detail.stuckCronRuns = {
+        status: "failed",
+        failed: stuck.length,
+        error:
+          "started but never finished (killed mid-run, so its own digest never sent): " +
+          stuck.map((s) => `${s.jobName} ${s.ageMinutes}m ago`).join(", "),
+      };
+    }
+  } catch (err) {
+    console.error("[daily-cron] collectStuckCronRuns failed:", err);
   }
 
   // Send digest (failure-only — a clean run sends nothing)
