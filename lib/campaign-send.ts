@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { escapeTemplateVariables } from "@/lib/email-render";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate, normalizeEmailHtml } from "@/lib/email-templates";
@@ -180,14 +181,20 @@ export async function sendCampaign(campaignId: string): Promise<{
             firstName: recipient.firstName || "there",
             unsubscribeUrl,
           };
+          // Escaped before substitution. These placeholders carry client-supplied values —
+          // firstName reaches the database from the PUBLIC booking form and the
+          // unauthenticated newsletter signup — and this file has its OWN copy of
+          // replacePlaceholders, so the escaping added at renderEmail never covered it.
+          // Five copies of that function exist across lib/; #18 fixed exactly one.
+          const safeVariables = escapeTemplateVariables(variables);
 
           if (needsPasswordReset) {
             const resetUrl = await generatePasswordResetUrl(recipient);
             variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
           }
 
-          const bodyHtml = normalizeEmailHtml(replacePlaceholders(campaignBody, variables));
-          const subject = replacePlaceholders(campaignSubject, variables);
+          const bodyHtml = normalizeEmailHtml(replacePlaceholders(campaignBody, safeVariables));
+          const subject = replacePlaceholders(campaignSubject, safeVariables);
           const html = baseTemplate("", bodyHtml, DEFAULT_BASE_URL, unsubscribeUrl);
 
           return sendEmail({

@@ -1169,6 +1169,35 @@ check("email-safety: a marketing sender checks consent", () => {
   }
 });
 
+check("email-safety: every placeholder substituter escapes its variables", () => {
+  // There are FIVE copies of `replacePlaceholders` in lib/. #18 escaped one of
+  // them — the one inside email-render — and left campaigns, drip, campaign-send
+  // and birthday substituting client-supplied values straight into HTML. A
+  // `firstName` reaches the database from the public booking form and from the
+  // unauthenticated newsletter signup, so "admin-authored template" does not mean
+  // "admin-authored content".
+  //
+  // The lesson this encodes is the day's recurring one: the bug was never the
+  // missing idea, it was the site the idea had not reached. So the check is on
+  // the SHAPE — anything that substitutes placeholders must escape — rather than
+  // on the four files that happened to be wrong.
+  for (const f of walk(LIB)) {
+    if (isTest(f)) continue;
+    const relf = rel(f);
+    if (relf === "lib/email-render.ts") continue; // defines escapeTemplateVariables
+    const src = code(read(f));
+    if (!/function replacePlaceholders\s*\(/.test(src)) continue;
+    if (!/escapeTemplateVariables\s*\(/.test(src)) {
+      fail(
+        "email-safety",
+        relf,
+        "has its own replacePlaceholders but never escapes the variables it substitutes",
+        "pass the map through escapeTemplateVariables() from lib/email-render.ts first",
+      );
+    }
+  }
+});
+
 check("email-safety: only registered variables carry HTML into a template", () => {
   // Every value handed to renderEmail() is escaped except the names registered in
   // RAW_HTML_VARIABLES. That list is the entire injection surface, so a call site

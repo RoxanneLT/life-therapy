@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { escapeTemplateVariables } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { saToday } from "@/lib/dates";
@@ -140,13 +141,19 @@ export async function processBirthdayEmails(): Promise<{
       firstName,
       unsubscribeUrl,
     };
+    // Escaped before substitution. These placeholders carry client-supplied values —
+    // firstName reaches the database from the PUBLIC booking form and the
+    // unauthenticated newsletter signup — and this file has its OWN copy of
+    // replacePlaceholders, so the escaping added at renderEmail never covered it.
+    // Five copies of that function exist across lib/; #18 fixed exactly one.
+    const safeVariables = escapeTemplateVariables(variables);
 
-    const subject = replacePlaceholders(selectedEmail.subject, variables);
-    let bodyHtml = replacePlaceholders(selectedEmail.bodyHtml, variables);
+    const subject = replacePlaceholders(selectedEmail.subject, safeVariables);
+    let bodyHtml = replacePlaceholders(selectedEmail.bodyHtml, safeVariables);
 
     // Add CTA if defined
     if (selectedEmail.ctaText && selectedEmail.ctaUrl) {
-      let ctaUrl = replacePlaceholders(selectedEmail.ctaUrl, variables);
+      let ctaUrl = replacePlaceholders(selectedEmail.ctaUrl, safeVariables);
       if (ctaUrl.startsWith("/")) ctaUrl = `${DEFAULT_BASE_URL}${ctaUrl}`;
       bodyHtml += `<div style="text-align: center; margin: 28px 0;"><a href="${ctaUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">${selectedEmail.ctaText}</a></div>`;
     }
