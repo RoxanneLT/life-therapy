@@ -12,7 +12,7 @@ import { renderEmail } from "@/lib/email-render";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
 import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, type BillingContact } from "@/lib/billing";
-import type { InvoiceLineItem } from "@/lib/billing-types";
+import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
 import { saToday, calendarDate, addSaDays } from "@/lib/dates";
 import { initializeTransaction } from "@/lib/paystack";
@@ -1322,7 +1322,7 @@ async function createAdhocPaymentRequest(opts: {
       discountCents: totals.discountCents,
       vatAmountCents: totals.vatAmountCents,
       totalCents: totals.totalCents,
-      lineItems: lineItems as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
+      lineItems: parseLineItems(lineItems, "payment request line items") as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
       dueDate,
       status: "pending",
     },
@@ -1740,7 +1740,13 @@ export async function createManualPaymentRequestAction(data: {
       unitPriceCents: li.unitPriceCents,
       discountCents: li.discountCents ?? 0,
       discountPercent: 0,
-      totalCents: Math.round(li.unitPriceCents * li.quantity) - (li.discountCents ?? 0) * li.quantity,
+      // Floored at zero, and the discount is the WHOLE-LINE amount — not
+      // multiplied by quantity. Both were wrong here and only here: every
+      // booking-derived line already used Math.max(0, rate - discount), so a
+      // discount larger than the line wrote a NEGATIVE total that the PDF then
+      // printed verbatim, and the same field meant per-unit on this screen and
+      // whole-line everywhere else.
+      totalCents: Math.max(0, Math.round(li.unitPriceCents * li.quantity) - (li.discountCents ?? 0)),
     }));
 
     const pr = await prisma.paymentRequest.create({
@@ -1754,7 +1760,7 @@ export async function createManualPaymentRequestAction(data: {
         discountCents: totals.discountCents,
         vatAmountCents: totals.vatAmountCents,
         totalCents: totals.totalCents,
-        lineItems: lineItemsJson as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
+        lineItems: parseLineItems(lineItemsJson, "payment request line items") as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
         status: data.sendImmediately ? "pending" : "draft",
         dueDate: new Date(data.dueDate),
       },
@@ -1859,7 +1865,7 @@ export async function getPaymentRequestDetailsAction(
 
   if (!pr) return null;
 
-  const lineItems = (pr.lineItems as unknown as InvoiceLineItem[]).map((li) => ({
+  const lineItems = readLineItems(pr.lineItems).map((li) => ({
     description: li.description,
     subLine: li.subLine,
     quantity: li.quantity,
@@ -1934,7 +1940,13 @@ export async function updatePaymentRequestAction(data: {
       unitPriceCents: li.unitPriceCents,
       discountCents: li.discountCents ?? 0,
       discountPercent: 0,
-      totalCents: Math.round(li.unitPriceCents * li.quantity) - (li.discountCents ?? 0) * li.quantity,
+      // Floored at zero, and the discount is the WHOLE-LINE amount — not
+      // multiplied by quantity. Both were wrong here and only here: every
+      // booking-derived line already used Math.max(0, rate - discount), so a
+      // discount larger than the line wrote a NEGATIVE total that the PDF then
+      // printed verbatim, and the same field meant per-unit on this screen and
+      // whole-line everywhere else.
+      totalCents: Math.max(0, Math.round(li.unitPriceCents * li.quantity) - (li.discountCents ?? 0)),
     }));
 
     const amountChanged = totals.totalCents !== pr.totalCents;
@@ -1942,7 +1954,7 @@ export async function updatePaymentRequestAction(data: {
     await prisma.paymentRequest.update({
       where: { id: data.paymentRequestId },
       data: {
-        lineItems: lineItemsJson as unknown as Parameters<typeof prisma.paymentRequest.update>[0]["data"]["lineItems"],
+        lineItems: parseLineItems(lineItemsJson, "payment request line items") as unknown as Parameters<typeof prisma.paymentRequest.update>[0]["data"]["lineItems"],
         subtotalCents: totals.subtotalCents,
         discountCents: totals.discountCents,
         vatAmountCents: totals.vatAmountCents,

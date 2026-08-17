@@ -19,7 +19,7 @@ import {
   calculateDueDate,
   type BillingContact,
 } from "@/lib/billing";
-import type { InvoiceLineItem } from "@/lib/billing-types";
+import { parseLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
 
 // ─── Unbilled bookings query ─────────────────────────────────
@@ -231,7 +231,7 @@ async function createGroupPaymentRequest(
         discountCents: totals.discountCents,
         vatAmountCents: totals.vatAmountCents,
         totalCents: totals.totalCents,
-        lineItems: lineItems as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
+        lineItems: parseLineItems(lineItems, "monthly billing line items") as unknown as Parameters<typeof prisma.paymentRequest.create>[0]["data"]["lineItems"],
         dueDate,
         status: "pending",
       },

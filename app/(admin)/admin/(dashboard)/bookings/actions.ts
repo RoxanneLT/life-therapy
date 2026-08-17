@@ -20,6 +20,7 @@ import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 import { escapeHtml } from "@/lib/utils";
+import { parseLineItems, readLineItems } from "@/lib/billing-types";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   const { adminUser } = await requireRole("super_admin", "editor");
@@ -1837,7 +1838,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
         const { sendInvoiceEmail } = await import("@/lib/send-invoice");
 
         const dateStr = format(bookingDate, "d MMM yyyy");
-        const existingLines = (existingPR.lineItems as unknown as object[]) || [];
+        const existingLines = (readLineItems(existingPR.lineItems)) || [];
         const newLine = {
           description: config.label,
           subLine: `${dateStr}, ${data.startTime}–${data.endTime} (historical entry)`,
@@ -1868,7 +1869,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
         await prisma.paymentRequest.update({
           where: { id: existingPR.id },
           data: {
-            lineItems: updatedLines as Parameters<typeof prisma.paymentRequest.update>[0]["data"]["lineItems"],
+            lineItems: parseLineItems(updatedLines, "payment request line items") as unknown as Parameters<typeof prisma.paymentRequest.update>[0]["data"]["lineItems"],
             subtotalCents: totals.subtotalCents,
             discountCents: totals.discountCents,
             vatAmountCents: totals.vatAmountCents,

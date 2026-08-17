@@ -16,7 +16,7 @@ import { getSiteSettings } from "@/lib/settings";
 import { resolveBillingContact, calculateInvoiceTotals, vatApplies, resolveClientCurrency } from "@/lib/billing";
 import { getNextInvoiceNumber } from "@/lib/invoice-numbering";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
-import type { InvoiceLineItem } from "@/lib/billing-types";
+import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import type { Invoice } from "@/lib/generated/prisma/client";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -96,8 +96,15 @@ async function createInvoiceRecord(params: {
   const isVat = vatApplies(params.currency, settings.vatRegistered);
   const vatPercent = isVat ? settings.vatPercent : 0;
 
+  // The single gate for every invoice in the system — all three public creators
+  // funnel through here. `lineItems` is a Json column, so this is the only thing
+  // between a malformed object and a document a client reads: the PDF prints
+  // `totalCents` verbatim rather than re-deriving it, so a bad row is a wrong
+  // invoice, found weeks later by the person being billed.
+  const lineItems = parseLineItems(params.lineItems, "invoice line items");
+
   // Calculate totals
-  const lineCalcs = params.lineItems.map((li) => ({
+  const lineCalcs = lineItems.map((li) => ({
     unitPriceCents: li.unitPriceCents,
     quantity: li.quantity,
     lineDiscountPercent: li.discountPercent || undefined,
@@ -138,7 +145,7 @@ async function createInvoiceRecord(params: {
       vatPercent,
       vatAmountCents: totals.vatAmountCents,
       totalCents: totals.totalCents,
-      lineItems: params.lineItems as unknown as Parameters<typeof prisma.invoice.create>[0]["data"]["lineItems"],
+      lineItems: lineItems as unknown as Parameters<typeof prisma.invoice.create>[0]["data"]["lineItems"],
       status: params.status ?? "paid",
       paymentMethod: params.paymentMethod,
       paystackReference: params.paystackReference,
@@ -236,7 +243,9 @@ export async function createInvoiceFromPaymentRequest(
     include: { student: true, billingEntity: true },
   });
 
-  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  // Lenient on read: these rows may predate validation, and refusing to build an
+  // invoice from a historical request would strand the money rather than bill it.
+  const lineItems = readLineItems(pr.lineItems);
 
   // Resolve billing name/email from the payment request's linked entity or student
   let billingName = "Unknown";

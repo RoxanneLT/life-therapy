@@ -11,7 +11,7 @@ import { format } from "date-fns";
 import { saMonthStart } from "@/lib/dates";
 import { formatPrice } from "@/lib/utils";
 import { PayButton } from "./pay-button";
-import type { InvoiceLineItem } from "@/lib/billing-types";
+import { readLineItems } from "@/lib/billing-types";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -92,7 +92,7 @@ export default async function PortalInvoicesPage({
           </h2>
           <div className="space-y-3">
             {pendingRequests.map((pr) => {
-              const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+              const lineItems = readLineItems(pr.lineItems);
               const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 
               return (

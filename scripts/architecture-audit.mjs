@@ -907,6 +907,64 @@ check("money: never aggregate a cents column across currencies", () => {
   }
 });
 
+check("money: lineItems is validated before it is written", () => {
+  // `lineItems` is a Json column on invoices and payment_requests, so the type
+  // annotation at the call site is the only thing "checking" it — and a Json
+  // column accepts whatever it is handed. The numbers are never re-derived
+  // downstream: the PDF prints totalCents verbatim, so a malformed write becomes
+  // a wrong document in a client's hands weeks later.
+  //
+  // Same-file heuristic, honestly: it confirms the writing file also calls
+  // parseLineItems, not that the parsed value is the one that reached the
+  // column. That is enough to catch a NEW write site added without validation,
+  // which is the actual failure mode — this audit is textual, not a type-flow
+  // analyser, and pretending otherwise would be the more dangerous claim.
+  // Scan the CALL, not the file. The first draft asked "does this file mention
+  // lineItems and also write an invoice somewhere?", which flagged three files
+  // that only read them (the PDF builder, the email sender) plus the webhook,
+  // which hands its items to createInvoiceRecord — the one place that already
+  // validates. A check with three false positives out of four is one people
+  // learn to wave through.
+  for (const f of allSource()) {
+    if (rel(f) === "lib/billing-types.ts") continue; // defines the validators
+    const src = code(read(f));
+
+    for (const m of src.matchAll(/\b(?:invoice|paymentRequest)\.(?:create|update)\s*\(\s*\{/g)) {
+      let depth = 1;
+      let i = m.index + m[0].length;
+      while (i < src.length && depth > 0) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") depth--;
+        i++;
+      }
+      const call = src.slice(m.index, i);
+
+      // `lineItems: true` is a select, not a write.
+      if (!/lineItems\s*:\s*(?!true\b)/.test(call)) continue;
+      if (/parseLineItems\s*\(/.test(call)) continue;
+
+      // Or the value is a variable this file validated on the way in — the
+      // shape createInvoiceRecord uses, where one parse guards a call further
+      // down. Following the identifier keeps that legal without letting an
+      // unvalidated array through under a different name.
+      const bound = /lineItems\s*:\s*([A-Za-z_$][\w$]*)\b/.exec(call);
+      if (
+        bound &&
+        new RegExp(`(?:const|let)\\s+${bound[1]}\\s*=\\s*(?:await\\s+)?parseLineItems\\s*\\(`).test(src)
+      ) {
+        continue;
+      }
+
+      fail(
+        "money",
+        rel(f),
+        "writes lineItems to a Json column without parseLineItems() — nothing else checks the shape, and the PDF prints these numbers verbatim",
+        'wrap the array in parseLineItems(items, "<what it is>") from lib/billing-types.ts',
+      );
+    }
+  }
+});
+
 check("money: no ?? \"ZAR\" fallback on a currency", () => {
   // Defaulting a missing currency to ZAR FAILS OPEN: ZAR is the one value that
   // turns VAT on. createManualInvoice did `params.currency ?? "ZAR"` and none of

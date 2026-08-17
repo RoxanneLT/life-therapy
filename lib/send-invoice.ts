@@ -17,7 +17,7 @@ import { formatPrice } from "@/lib/utils";
 import { logQueryResult } from "@/lib/log-query-error";
 import { loadRequestAmounts } from "@/lib/billing";
 import { format } from "date-fns";
-import type { InvoiceLineItem } from "@/lib/billing-types";
+import { readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -198,7 +198,7 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
     where: { id: paymentRequestId },
   });
 
-  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const lineItems = readLineItems(pr.lineItems);
   const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 
   let billingName = "Client";
@@ -304,7 +304,7 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
 
   if (!to) return;
 
-  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const lineItems = readLineItems(pr.lineItems);
   const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
@@ -374,7 +374,7 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
 
   if (!to) return;
 
-  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const lineItems = readLineItems(pr.lineItems);
   const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
@@ -446,7 +446,7 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
 
   if (!to) return;
 
-  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const lineItems = readLineItems(pr.lineItems);
 
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));

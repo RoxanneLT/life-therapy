@@ -17,7 +17,7 @@ import { formatPrice } from "@/lib/utils";
 import { extractInitials } from "@/lib/invoice-numbering";
 import { loadRequestAmounts } from "@/lib/billing";
 import { format } from "date-fns";
-import type { InvoiceLineItem } from "@/lib/billing-types";
+import { readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import fs from "fs";
 import path from "path";
 
@@ -469,7 +469,7 @@ export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   });
 
   const settings = await getSiteSettings();
-  const lineItems = invoice.lineItems as unknown as InvoiceLineItem[];
+  const lineItems = readLineItems(invoice.lineItems);
   const currency = invoice.currency || "ZAR";
   const isVat = settings.vatRegistered && invoice.vatPercent > 0;
 
@@ -562,7 +562,7 @@ export async function generateProformaInvoicePDF(
   });
 
   const settings = await getSiteSettings();
-  const lineItems = pr.lineItems as unknown as InvoiceLineItem[];
+  const lineItems = readLineItems(pr.lineItems);
   const currency = pr.currency || "ZAR";
   const isVat = settings.vatRegistered && (settings.vatPercent ?? 0) > 0 && pr.vatAmountCents > 0;
 
