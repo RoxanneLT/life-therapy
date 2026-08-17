@@ -26,6 +26,48 @@ import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
 const DAY_BEFORE_MAX = 24; // start sending the day-before reminder once within 24h
 const IMMINENT_MAX = 3; // ~2h nudge: fire when within 3h (2h cron cadence guarantees catch)
 
+/** The three one-per-booking reminder stamps. */
+type ReminderField =
+  | "reminderSentAt"
+  | "whatsappReminder24hSentAt"
+  | "whatsappReminderMorningSentAt";
+
+/**
+ * Take ownership of one reminder before sending it.
+ *
+ * The old shape was read-then-send-then-stamp: the booking list was fetched with
+ * the stamp null, the email went out, and only afterwards was the column set. Two
+ * runs inside that gap both saw null and both sent — and there are two runners by
+ * design, the every-2h reminders cron and the daily safety-net pass, so the gap is
+ * not hypothetical. The client gets the same reminder twice.
+ *
+ * `updateMany` with the null in the WHERE makes the claim atomic: the database
+ * decides, and exactly one caller sees count === 1. Same approach the Paystack
+ * fulfilment fix used against redelivery.
+ */
+async function claimReminder(bookingId: string, field: ReminderField): Promise<boolean> {
+  const claimed = await prisma.booking.updateMany({
+    where: { id: bookingId, [field]: null },
+    data: { [field]: new Date() },
+  });
+  return claimed.count === 1;
+}
+
+/**
+ * Hand the claim back when the send did not happen.
+ *
+ * Claiming up front means a failed send would otherwise be recorded as sent and
+ * never retried — the trap #9 was about. Releasing restores that. The remaining
+ * window is a process killed between claim and release, which loses one reminder;
+ * that is the better failure than emailing a client twice, and it is the trade
+ * being made rather than an oversight.
+ */
+async function releaseReminder(bookingId: string, field: ReminderField): Promise<void> {
+  await prisma.booking
+    .updateMany({ where: { id: bookingId }, data: { [field]: null } })
+    .catch((err) => console.error(`[session-reminders] could not release ${field}:`, err));
+}
+
 export async function processSessionReminders(): Promise<{
   emailSent: number;
   wa24hSent: number;
@@ -73,7 +115,7 @@ export async function processSessionReminders(): Promise<{
       waSessionOn && !!booking.student?.smsOptIn && !!booking.student?.phone;
 
     // ── Day-before: email ──────────────────────────────────────
-    if (isDayBefore && booking.reminderSentAt === null) {
+    if (isDayBefore && booking.reminderSentAt === null && (await claimReminder(booking.id, "reminderSentAt"))) {
       try {
         const teamsButton = booking.teamsMeetingUrl
           ? `<div style="text-align: center; margin: 24px 0;"><a href="${booking.teamsMeetingUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Join Microsoft Teams Meeting</a></div>`
@@ -93,22 +135,20 @@ export async function processSessionReminders(): Promise<{
           metadata: { bookingId: booking.id },
         });
         if (result.success) {
-          await prisma.booking.update({
-            where: { id: booking.id },
-            data: { reminderSentAt: new Date() },
-          });
           emailSent++;
         } else {
+          await releaseReminder(booking.id, "reminderSentAt");
           failed++;
         }
       } catch (err) {
         console.error(`[session-reminders] email failed for ${booking.id}:`, err);
+        await releaseReminder(booking.id, "reminderSentAt");
         failed++;
       }
     }
 
     // ── Day-before: WhatsApp 24h ───────────────────────────────
-    if (isDayBefore && waReady && booking.whatsappReminder24hSentAt === null) {
+    if (isDayBefore && waReady && booking.whatsappReminder24hSentAt === null && (await claimReminder(booking.id, "whatsappReminder24hSentAt"))) {
       try {
         const result = await sendAndLogTemplate({
           studentId: booking.student!.id,
@@ -128,22 +168,20 @@ export async function processSessionReminders(): Promise<{
           metadata: { bookingId: booking.id },
         });
         if (result.success) {
-          await prisma.booking.update({
-            where: { id: booking.id },
-            data: { whatsappReminder24hSentAt: new Date() },
-          });
           wa24hSent++;
         } else {
+          await releaseReminder(booking.id, "whatsappReminder24hSentAt");
           failed++;
         }
       } catch (err) {
         console.error(`[session-reminders] WA 24h failed for ${booking.id}:`, err);
+        await releaseReminder(booking.id, "whatsappReminder24hSentAt");
         failed++;
       }
     }
 
     // ── Imminent: WhatsApp ~2h nudge ───────────────────────────
-    if (isImminent && waReady && booking.whatsappReminderMorningSentAt === null) {
+    if (isImminent && waReady && booking.whatsappReminderMorningSentAt === null && (await claimReminder(booking.id, "whatsappReminderMorningSentAt"))) {
       try {
         const result = await sendAndLogTemplate({
           studentId: booking.student!.id,
@@ -161,16 +199,14 @@ export async function processSessionReminders(): Promise<{
           metadata: { bookingId: booking.id },
         });
         if (result.success) {
-          await prisma.booking.update({
-            where: { id: booking.id },
-            data: { whatsappReminderMorningSentAt: new Date() },
-          });
           waImminentSent++;
         } else {
+          await releaseReminder(booking.id, "whatsappReminderMorningSentAt");
           failed++;
         }
       } catch (err) {
         console.error(`[session-reminders] WA imminent failed for ${booking.id}:`, err);
+        await releaseReminder(booking.id, "whatsappReminderMorningSentAt");
         failed++;
       }
     }
