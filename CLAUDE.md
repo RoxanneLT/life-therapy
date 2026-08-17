@@ -2,7 +2,15 @@
 
 ## START HERE — where the repo lives, and the first thing to do in a session
 
-**The repo is `C:\dev\life-therapy`. It is deliberately NOT in OneDrive.**
+**The repo lives OUTSIDE OneDrive. The exact path is per-machine.**
+
+| Machine | Path |
+|---|---|
+| Laptop | `C:\dev\life-therapy` (alongside `C:\dev\pleks`) |
+| Desktop | on the Windows Storage Space volume, not `C:` — Stean's preferred storage |
+
+Don't hardcode `C:\dev` into anything. The invariant is *not inside OneDrive*; the
+drive is a preference, and on the desktop the Storage Space is the right home.
 
 Stean works from more than one machine, so the instinct is to keep the project in
 OneDrive. Don't. On 2026-08-17 that combination cost a working day: `node_modules`
@@ -34,15 +42,22 @@ working folder, because the repo no longer arrives by sync. The one thing that D
 still arrive is the secrets folder — so the installer lives there:
 
 > **`~/OneDrive/dev-secrets/life-therapy/SETUP-NEW-PC.ps1`** — right-click → *Run
-> with PowerShell*. It clones to `C:\dev\life-therapy`, runs `npm ci`, copies the
-> secrets into place and runs `npm run check`. Safe to re-run (pulls if the repo
-> already exists). `README.txt` beside it explains the layout.
+> with PowerShell*. It **asks where to put the repo**, listing the machine's drives
+> and their free space, then clones, runs `npm ci`, copies the secrets into place
+> and runs `npm run check`. Safe to re-run (pulls if the repo already exists).
+> `README.txt` beside it explains the layout.
+>
+> Pass the path directly to skip the prompt — this is the desktop case:
+> `.\SETUP-NEW-PC.ps1 -RepoPath 'E:\dev\life-therapy'`
+>
+> It **refuses any path containing "onedrive"**, which is the mistake it exists to
+> prevent.
 
-Equivalent by hand:
+Equivalent by hand (substitute your own drive):
 
 ```bash
-git clone https://github.com/RoxanneLT/life-therapy.git C:\dev\life-therapy
-cd C:\dev\life-therapy
+git clone https://github.com/RoxanneLT/life-therapy.git <YOUR-PATH>\life-therapy
+cd <YOUR-PATH>\life-therapy
 npm ci                 # postinstall runs `prisma generate`
 npm run secrets:pull   # brings .env.local, .env, .claude/settings.local.json
 npm run check          # expect green: tsc + eslint + 26 audit checks + 139 tests
