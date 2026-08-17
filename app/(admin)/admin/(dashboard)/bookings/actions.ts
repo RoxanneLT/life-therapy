@@ -313,7 +313,16 @@ export async function rescheduleSeriesAction(
             endTime: { gte: newStartTime },
             status: { in: ["confirmed", "pending"] },
             id: { not: booking.id },
-            recurringSeriesId: { not: seriesId },
+            // "belongs to a DIFFERENT series, or to no series at all".
+            //
+            // Written explicitly rather than as `recurringSeriesId: { not: seriesId }`,
+            // because that leans on how a nullable !== is translated — and in SQL
+            // `col <> 'x'` is NULL, not true, for rows where col IS NULL. Read that
+            // way it hides every STANDALONE booking from the conflict check, which is
+            // most of the diary: the preview would report a clean slot and the
+            // reschedule would drop a whole series on top of another client. Too
+            // expensive to leave resting on a translation detail.
+            OR: [{ recurringSeriesId: null }, { recurringSeriesId: { not: seriesId } }],
           },
           select: { clientName: true, startTime: true },
         });
@@ -751,7 +760,9 @@ export async function checkSeriesConflictsAction(
     newDate.setUTCDate(newDate.getUTCDate() + diff);
     const newDateStr = newDate.toISOString().slice(0, 10);
 
-    // Check for existing bookings on that date/time (excluding this series)
+    // Check for existing bookings on that date/time (excluding this series).
+    // Same explicit OR as the preview above — a standalone booking has a NULL
+    // recurringSeriesId and must still count as a conflict.
     const existing = await prisma.booking.findFirst({
       where: {
         date: calendarDate(newDateStr),
@@ -759,7 +770,7 @@ export async function checkSeriesConflictsAction(
         endTime: { gte: newStartTime },
         status: { in: ["confirmed", "pending"] },
         id: { not: booking.id },
-        recurringSeriesId: { not: seriesId },
+        OR: [{ recurringSeriesId: null }, { recurringSeriesId: { not: seriesId } }],
       },
       select: { clientName: true, startTime: true },
     });

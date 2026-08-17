@@ -197,18 +197,30 @@ export async function POST(request: Request) {
     // Upgrade discount: buyer/recipient already owns short courses from this full course
     const upgradeDiscountCents = await calculateUpgradeDiscounts(student.id, resolved);
 
-    // Validate coupon if provided
-    let discountCents = upgradeDiscountCents;
+    // Validate coupon if provided.
+    //
+    // The coupon ADDS to the upgrade credit; it does not replace it. This used to be
+    // `discountCents = couponResult.coupon.discountCents`, which silently discarded
+    // everything the buyer had already paid for: an R850 course with R500 of owned
+    // modules, plus an R50 coupon, charged R800 instead of R300 — the coupon made
+    // the bill R450 WORSE than using no coupon at all. The customer re-bought
+    // content they owned, and the failure is invisible at checkout because the total
+    // still looks like a discounted price.
+    let couponDiscountCents = 0;
     let couponId: string | null = null;
     if (couponCode) {
       const courseIds = resolved.filter((r) => r.product.type === "course").map((r) => r.product.id);
       const packageIds = resolved.filter((r) => r.product.type === "package").map((r) => r.product.id);
       const couponResult = await validateCoupon(couponCode, { courseIds, packageIds }, subtotalCents, "ZAR");
       if (couponResult.valid) {
-        discountCents = couponResult.coupon.discountCents;
+        couponDiscountCents = couponResult.coupon.discountCents;
         couponId = couponResult.coupon.id;
       }
     }
+
+    // Never discount past free. Coupons are validated against the full subtotal, so a
+    // percentage coupon plus a large upgrade credit can exceed what is left owing.
+    const discountCents = Math.min(subtotalCents, upgradeDiscountCents + couponDiscountCents);
 
     const totalCents = Math.max(0, subtotalCents - discountCents);
 
