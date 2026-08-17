@@ -4,8 +4,8 @@
 the 2026-07-21 diagnostics report, plus moving the repo out of OneDrive after it
 corrupted `node_modules` and then the git object store.
 
-**State (end of 2026-08-18):** `npm run check` green — tsc + eslint + **33 audit checks
-+ 170 tests**. `next build` green. Working tree clean, everything pushed.
+**State (end of 2026-08-18):** `npm run check` green — tsc + eslint + **34 audit checks
++ 174 tests**. `next build` green. Working tree clean, everything pushed.
 
 The 2026-07-21 report is now fully worked: **all P0, all P1, and all 13 P2 items** are
 closed. What is left is listed under §4 and is mostly decisions and one verification,
@@ -253,6 +253,27 @@ forfeited a lapsed credit either.
   ask `creditExpiry()` in `lib/credits.ts`; a refund is the deliberate exception and does not
   renew the window (cancel-and-rebook would otherwise extend it for ever). Held honest by the
   `credits: a balance that gains credits gets an expiry` audit check.
+
+### Late pass, 18 Aug — what looking for the day's own patterns turned up
+
+Worth knowing that this pass found bugs by looking for the SHAPES rather than by
+reading a list. Both of the day's themes were still live somewhere:
+
+- **#18 was fixed in one of five places.** `replacePlaceholders` exists five times
+  in `lib/`. The fix covered the copy in email-render — everything rendered through
+  `renderEmail` — and left campaign-process, campaign-send, drip-emails and
+  birthday-process substituting client-supplied values into HTML raw. `firstName`
+  arrives from the public booking form and the unauthenticated newsletter endpoint,
+  so "admin-authored template" never meant admin-authored content. Fixed, plus a
+  check on the shape: anything defining its own substituter must escape.
+- **#23's race had a sibling.** Gift delivery was read-then-send-then-stamp with the
+  same two runners, so a paid-for gift could be emailed twice and the buyer notified
+  twice. Fixed with a claim on `emailSentAt`, with a 15-minute staleness window so a
+  killed run does not strand the gift.
+
+The moral, for whoever reads this next: when a bug is found, the useful question is
+not "is it fixed" but "how many other places have this shape". Three of the day's
+worst findings came from asking that.
 
 ### Known and NOT fixed — the campaign/drip double-send race
 
