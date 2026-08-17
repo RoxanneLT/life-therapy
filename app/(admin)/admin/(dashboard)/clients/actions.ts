@@ -11,6 +11,7 @@ import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 import { appBaseUrl } from "@/lib/region";
+import { calendarDate, saToday } from "@/lib/dates";
 
 // ────────────────────────────────────────────────────────────
 // Create new client
@@ -547,7 +548,10 @@ export async function checkFutureBookingsAction(clientId: string): Promise<numbe
     where: {
       studentId: clientId,
       status: { in: ["confirmed", "pending"] },
-      date: { gt: new Date() },
+      // This count is the warning shown before a client is deactivated, so it has
+      // to include TODAY. Against a `@db.Date` at UTC midnight, `gt: new Date()`
+      // silently skipped a session three hours away and the deactivation read clean.
+      date: { gte: calendarDate(saToday()) },
     },
   });
 }

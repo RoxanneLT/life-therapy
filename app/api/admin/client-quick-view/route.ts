@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { calendarDate, saToday } from "@/lib/dates";
 import { format } from "date-fns";
 
 export async function GET(request: NextRequest) {
@@ -27,12 +28,15 @@ export async function GET(request: NextRequest) {
 
   if (!student) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  // `setHours(0,0,0,0)` is LOCAL midnight — UTC on Vercel, SAST on a dev box. It
+  // happened to line up with the UTC-midnight `@db.Date` in production and was two
+  // hours out everywhere else, which is the worst kind of correct. The day the
+  // booking falls on is the question, so ask lib/dates.ts for it.
+  const todayStart = calendarDate(saToday());
 
   const [nextBooking, lastBooking] = await Promise.all([
     prisma.booking.findFirst({
-      where: { studentId: id, status: { in: ["confirmed", "pending"] }, date: { gte: now } },
+      where: { studentId: id, status: { in: ["confirmed", "pending"] }, date: { gte: todayStart } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
       select: { date: true, startTime: true },
     }),

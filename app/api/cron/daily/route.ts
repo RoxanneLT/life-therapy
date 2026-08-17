@@ -18,6 +18,7 @@ import {
   isCronAuthorised,
 } from "@/lib/cron/with-cron-run";
 import { missingRequiredEnv } from "@/lib/env";
+import { addSaDays, calendarDate, saToday } from "@/lib/dates";
 
 /**
  * Combined daily cron — runs at 08:00 SAST (06:00 UTC).
@@ -149,8 +150,11 @@ export async function GET(request: NextRequest) {
   await runTask(
     "staleSessionsCheck",
     async () => {
-      const cutoff = new Date();
-      cutoff.setHours(cutoff.getHours() - 48);
+      // A 48-hour grace against a DAY column was really a day threshold wearing
+      // hours: `date` is a `@db.Date` at UTC midnight, so "now minus 48h" resolved
+      // to "any day before yesterday" — and drifted with the hour the cron ran.
+      // Say the same thing in days, and it stops depending on the clock.
+      const cutoff = calendarDate(addSaDays(saToday(), -1));
       const count = await prisma.booking.count({
         where: { status: "confirmed", date: { lt: cutoff } },
       });

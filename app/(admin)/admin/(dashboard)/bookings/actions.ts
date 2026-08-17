@@ -258,8 +258,10 @@ export async function rescheduleSeriesAction(
 ): Promise<{ updated: number; skipped: { id: string; date: string; reason: string }[]; calendarWarning?: string }> {
   await requireRole("super_admin", "editor");
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // `setHours` is LOCAL midnight — UTC only because Vercel happens to run in UTC.
+  // On a dev box it is 22:00 UTC the previous day, which drags YESTERDAY's
+  // occurrence into a query for the series' future ones. The column is a day.
+  const today = calendarDate(saToday());
 
   // Get all future confirmed/pending bookings in this series
   const bookings = await prisma.booking.findMany({
@@ -599,8 +601,10 @@ export async function rebuildSeriesCalendarAction(seriesId: string): Promise<{
 export async function cancelSeriesAction(seriesId: string): Promise<{ cancelled: number; creditsRestored?: number; calendarWarning?: string }> {
   const { adminUser } = await requireRole("super_admin", "editor");
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // `setHours` is LOCAL midnight — UTC only because Vercel happens to run in UTC.
+  // On a dev box it is 22:00 UTC the previous day, which drags YESTERDAY's
+  // occurrence into a query for the series' future ones. The column is a day.
+  const today = calendarDate(saToday());
 
   // Find all future confirmed/pending bookings in this series
   const bookings = await prisma.booking.findMany({
@@ -729,8 +733,10 @@ export async function checkSeriesConflictsAction(
 ): Promise<{ date: string; conflict: string | null }[]> {
   await requireRole("super_admin", "editor");
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // `setHours` is LOCAL midnight — UTC only because Vercel happens to run in UTC.
+  // On a dev box it is 22:00 UTC the previous day, which drags YESTERDAY's
+  // occurrence into a query for the series' future ones. The column is a day.
+  const today = calendarDate(saToday());
 
   const bookings = await prisma.booking.findMany({
     where: {
@@ -1221,8 +1227,15 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 
 export async function markStaleSessionsCompletedAction() {
   await requireRole("super_admin", "editor");
+  // `date` is a `@db.Date` stored at UTC midnight, so comparing it against a real
+  // instant completes sessions that have not happened yet: from 02:00 SAST today's
+  // rows already read as `< now`, and this action would mark a 15:30 session
+  // "completed" at breakfast — straight into the next billing run.
+  //
+  // Stale means the same thing here as on the bookings list and its count
+  // (`bookings/page.tsx`): confirmed, and on a day BEFORE today.
   const result = await prisma.booking.updateMany({
-    where: { status: "confirmed", date: { lt: new Date() } },
+    where: { status: "confirmed", date: { lt: calendarDate(saToday()) } },
     data: { status: "completed" },
   });
   revalidatePath("/admin/bookings");
@@ -1236,7 +1249,11 @@ export async function markStaleSessionsCompletedAction() {
 
 export async function bulkDeleteCancelledFutureBookingsAction(studentId: string): Promise<{ deleted: number; skippedLateCancels: number }> {
   await requireRole("super_admin");
-  const now = new Date();
+  // Strictly AFTER today, deliberately: this path hard-deletes rows, and a booking
+  // cancelled for today stays put rather than being swept up by a bulk action. Same
+  // set as the `gt: new Date()` it replaces (a day column at UTC midnight is never
+  // > an instant later the same day) — but it no longer says so by accident.
+  const fromTomorrow = calendarDate(saToday());
 
   // Exclude late-cancel bookings — they may still need to be billed
   const toDelete = await prisma.booking.findMany({
@@ -1244,7 +1261,7 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
       studentId,
       status: "cancelled",
       isLateCancel: false,
-      date: { gt: now },
+      date: { gt: fromTomorrow },
       paymentRequestId: null,
       invoiceId: null,
     },
@@ -1256,7 +1273,7 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
       studentId,
       status: "cancelled",
       isLateCancel: true,
-      date: { gt: now },
+      date: { gt: fromTomorrow },
       paymentRequestId: null,
       invoiceId: null,
     },

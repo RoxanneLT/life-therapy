@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { calendarDate, saToday } from "@/lib/dates";
 import { differenceInDays, addMonths } from "date-fns";
 
 // ── Types ────────────────────────────────────────────────────
@@ -71,7 +72,10 @@ export async function getClientInsights(
         where: {
           studentId,
           status: { in: ["pending", "confirmed"] },
-          date: { gte: new Date() },
+          // A `@db.Date` at UTC midnight vs a live instant reads as past from 02:00
+          // SAST — so a client with a session later today counted as having none,
+          // and the "no upcoming sessions" flag fired on someone booked in an hour.
+          date: { gte: calendarDate(saToday()) },
         },
       }),
     ]);

@@ -6,6 +6,7 @@ import { PortalHeader } from "@/components/portal/portal-header";
 import { getOutstandingDocuments, getActiveDocument } from "@/lib/legal-documents";
 import { prisma } from "@/lib/prisma";
 import { DocumentUpdateModal } from "@/components/portal/document-update-modal";
+import { calendarDate, saToday } from "@/lib/dates";
 
 export default async function PortalDashboardLayout({
   children,
@@ -36,7 +37,10 @@ export default async function PortalDashboardLayout({
       where: {
         studentId: student.id,
         status: { in: ["pending", "confirmed"] },
-        date: { gte: new Date() },
+        // `date` is a `@db.Date` at UTC midnight. Compared against a live instant
+        // it reads as past from 02:00 SAST, so a client with a session at 15:00
+        // today saw "0 upcoming sessions" in their own portal from breakfast on.
+        date: { gte: calendarDate(saToday()) },
       },
     }),
     prisma.booking.findFirst({

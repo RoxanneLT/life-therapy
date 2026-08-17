@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { calendarDate, saDayStart, saDateStr } from "@/lib/dates";
+import { calendarDate, saDayStart, saDateStr, saToday } from "@/lib/dates";
 
 // Financial year runs March → February.
 // "year N" means Mar N – Feb N+1.
@@ -141,7 +141,10 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     prisma.booking.findMany({
       where: {
         status: { in: ["pending", "confirmed"] },
-        date: { gte: new Date(), lt: fyEnd },
+        // From TODAY, not from this instant: `date` is a `@db.Date` at UTC midnight,
+        // so a live instant drops today's sessions out of the projection from 02:00
+        // SAST — and they are exactly the ones about to be earned.
+        date: { gte: calendarDate(saToday()), lt: fyEnd },
         invoiceId: null,
         sessionType: { in: ["individual", "couples"] },
         priceCurrency: "ZAR", // same: never mix currencies into one bar

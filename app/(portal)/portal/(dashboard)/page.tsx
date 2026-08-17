@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { requirePasswordChanged } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
+import { calendarDate, saToday } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/portal/progress-bar";
 import {
@@ -25,8 +26,10 @@ import Link from "next/link";
 export default async function PortalDashboardPage() {
   const { student } = await requirePasswordChanged();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // The client's own "upcoming sessions" and "next session" hang off this. Local
+  // midnight (setHours) is UTC only because Vercel runs in UTC — the column is a
+  // day, so take the day from lib/dates.ts and today's session stays visible all day.
+  const today = calendarDate(saToday());
 
   const [
     upcomingBookingsCount,

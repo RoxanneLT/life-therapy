@@ -228,6 +228,85 @@ check("date-safety: saDayStart/saDayEnd are query bounds, never stored values", 
   }
 });
 
+/**
+ * A `@db.Date` column holds a DAY, stored at UTC midnight. `new Date()` is a
+ * MOMENT. Comparing the two in a Prisma `where` is not a rounding error — it
+ * silently redefines "today" as "already past", because today's row (00:00 UTC)
+ * sorts before any instant later than 02:00 SAST.
+ *
+ * Every symptom of this looked like a different bug. "Mark All Completed"
+ * completed sessions that had not happened yet and fed them into billing. The
+ * client portal told a client with a 15:00 session that they had none upcoming.
+ * The dashboard's Next Session card skipped to tomorrow before breakfast, so the
+ * two-hour "starting soon" highlight could never fire once. Six sites, one
+ * mistake, and not one of them was reachable by the existing date checks —
+ * they all scan for hand-rolled *construction*, and these were hand-rolled
+ * *comparison*.
+ *
+ * The day columns are exactly: bookings.date, bookings.originalDate,
+ * availability_overrides.date, students.dateOfBirth. dueDate/periodStart/
+ * periodEnd are real timestamps and belong nowhere near this check.
+ */
+const DAY_COLUMNS = "date|originalDate|dateOfBirth";
+
+// A day column bounded by an instant ON PURPOSE, with the reason. Not a silencer:
+// if the reason stops being true, the entry is the thing that has to change.
+const DAY_VS_INSTANT_OK = new Map([
+  [
+    "lib/calendar-reconcile.ts",
+    "the window is an instant on BOTH sides — the same `now` is handed to Graph's " +
+      "calendarView, so widening only the DB half would report this morning's " +
+      "finished sessions as missing from the calendar",
+  ],
+]);
+
+check("date-safety: a day column is never bounded by a live instant", () => {
+  for (const f of allSource()) {
+    const relf = rel(f);
+    const src = code(read(f));
+
+    // Identifiers holding a live instant: `const now = new Date()`.
+    const instants = new Set(
+      [...src.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(?:new Date\(\s*\)|Date\.now\(\s*\))/g)].map(
+        (m) => m[1],
+      ),
+    );
+    const isInstant = (expr) => {
+      const e = expr.trim();
+      return /^new Date\(\s*\)$/.test(e) || /^Date\.now\(\s*\)$/.test(e) || instants.has(e);
+    };
+
+    if (!DAY_VS_INSTANT_OK.has(relf)) {
+      for (const m of src.matchAll(new RegExp(`\\b(${DAY_COLUMNS})\\s*:\\s*\\{([^{}]*)\\}`, "g"))) {
+        for (const bound of m[2].split(",")) {
+          const idx = bound.indexOf(":");
+          if (idx === -1) continue;
+          if (!/^\s*(gt|gte|lt|lte|equals)\s*$/.test(bound.slice(0, idx))) continue;
+          if (!isInstant(bound.slice(idx + 1))) continue;
+          fail(
+            "date-safety",
+            relf,
+            `\`${m[1]}: {${bound.trim()}}\` compares a day column to a live instant — today reads as past from 02:00 SAST`,
+            "bound it with calendarDate(saToday()); decide which of TODAY's sessions are past in code, with bookingStartsAt()",
+          );
+        }
+      }
+    }
+
+    // `setHours(0,0,0,0)` is LOCAL midnight — UTC on Vercel, SAST on a dev box.
+    // It lines up with a `@db.Date` in production and is two hours out everywhere
+    // else, which is how it survived review in the client-quick-view route.
+    if (/\.setHours\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(src)) {
+      fail(
+        "date-safety",
+        relf,
+        "setHours(0,0,0,0) — local midnight, which is only UTC by accident of where it runs",
+        "use calendarDate(saToday()) for a day, saDayStart() for a bound over a timestamp column",
+      );
+    }
+  }
+});
+
 check("date-safety: no hardcoded +02:00 offset", () => {
   for (const f of allSource()) {
     // dates.ts owns the offset. dates.test.ts deliberately hardcodes it as a

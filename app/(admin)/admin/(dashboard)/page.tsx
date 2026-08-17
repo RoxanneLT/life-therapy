@@ -8,7 +8,7 @@ import { MarkAllCompletedButton } from "./mark-all-completed-button";
 import { formatByCurrency, cn } from "@/lib/utils";
 import Link from "next/link";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
-import { saToday, saDateStr, saDayStart, saMonthStart, saFormat, bookingStartsAt } from "@/lib/dates";
+import { saToday, saDateStr, saDayStart, saMonthStart, saFormat, bookingStartsAt, calendarDate } from "@/lib/dates";
 import { BookingsChart } from "@/components/admin/bookings-chart";
 import { RevenueChart } from "@/components/admin/revenue-chart";
 import { YearSelector } from "@/components/admin/year-selector";
@@ -77,7 +77,7 @@ export default async function AdminDashboard({
     pendingPayments,
     sessionsThisMonth,
     nextMonthSessions,
-    nextSession,
+    nextSessionCandidates,
     allStudentsWithDob,
     bookingsByMonth,
     revenueByMonth,
@@ -121,9 +121,16 @@ export default async function AdminDashboard({
         date: { gte: monthEnd, lt: saMonthStart(saYear, saMonth + 2) },
       },
     }),
-    prisma.booking.findFirst({
-      where: { status: "confirmed", date: { gte: now } },
+    // `date` is a `@db.Date` at UTC midnight, so `gte: now` excluded EVERY session
+    // today from 02:00 SAST — the card skipped to tomorrow while Roxanne still had
+    // three sessions to run, and the "starting soon" highlight below could never
+    // fire at all. The day is the only thing the column can filter on; which of
+    // today's sessions is still ahead is a question about start TIME, so that part
+    // is decided in code with bookingStartsAt(). 25 covers any real day's diary.
+    prisma.booking.findMany({
+      where: { status: "confirmed", date: { gte: calendarDate(today) } },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
+      take: 25,
       select: { id: true, clientName: true, date: true, startTime: true, endTime: true, teamsMeetingUrl: true, sessionType: true },
     }),
     prisma.student.findMany({
@@ -132,7 +139,13 @@ export default async function AdminDashboard({
     }),
     getBookingsByMonth(validYear),
     getRevenueByMonth(validYear),
-    prisma.booking.count({ where: { status: "confirmed", date: { lt: now } } }),
+    // Same definition of "stale" as the bookings list and the bulk-complete action:
+    // confirmed, on a day before today. `date` is a `@db.Date` at UTC midnight, so
+    // `lt: now` counted today's still-upcoming sessions from 02:00 SAST onward — the
+    // banner overstated the backlog and the button beside it acted on that overstatement.
+    prisma.booking.count({
+      where: { status: "confirmed", date: { lt: calendarDate(today) } },
+    }),
     prisma.calendarSyncLog.findFirst({
       where: { operation: "reconcile" },
       orderBy: { createdAt: "desc" },
@@ -152,6 +165,11 @@ export default async function AdminDashboard({
   const todayStart = saDayStart(today);
   const farFuture = saDayStart(`${saYear + 1}${today.slice(4)}`);
   const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, todayStart, farFuture).slice(0, 3);
+  // The first session that has not started yet — today's included.
+  const nextSession =
+    nextSessionCandidates.find(
+      (b) => bookingStartsAt({ date: b.date, startTime: b.startTime ?? "00:00" }) >= now,
+    ) ?? null;
   const isSessionSoon = nextSession ? isWithinTwoHours(nextSession, twoHoursFromNow) : false;
 
   const pendingCount = pendingPayments.reduce((n, g) => n + (g._count ?? 0), 0);

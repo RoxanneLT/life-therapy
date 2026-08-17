@@ -7,7 +7,7 @@ import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
 import { formatPhone } from "@/lib/phone";
 import type { Currency } from "@/lib/region";
-import { bookingStartsAt } from "@/lib/dates";
+import { bookingStartsAt, calendarDate, saToday } from "@/lib/dates";
 import { format } from "date-fns";
 import { updateBookingStatus, updateBookingNotes, updateSessionNotes, deleteBooking, togglePolicyOverrideAction } from "../actions";
 import {
@@ -87,7 +87,9 @@ export default async function BookingDetailPage({ params }: Props) {
         where: {
           recurringSeriesId: booking.recurringSeriesId,
           status: { in: ["confirmed", "pending"] },
-          date: { gte: new Date() },
+          // Days, not instants: `date` is a `@db.Date` at UTC midnight, so a live
+          // instant undercounts the series by today's occurrence from 02:00 SAST.
+          date: { gte: calendarDate(saToday()) },
         },
       })
     : 0;
