@@ -10,6 +10,7 @@ import { renderEmail } from "@/lib/email-render";
 import { findOrCreateStudent } from "@/lib/account-provisioning";
 import { escapeHtml } from "@/lib/utils";
 import { appBaseUrl } from "@/lib/region";
+import { creditExpiry } from "@/lib/credits";
 
 /**
  * Create a Gift record for a gift order item.
@@ -298,10 +299,17 @@ async function grantGiftEntitlements(
   }
 
   if (gift.creditAmount && gift.creditAmount > 0) {
+    // Gifted credits expire like any other — without this they were the one kind
+    // that never could, which is the opposite of what a recipient would expect
+    // from a present with a date on it.
+    const expiresAt = await creditExpiry();
     const balance = await prisma.sessionCreditBalance.upsert({
       where: { studentId },
-      create: { studentId, balance: gift.creditAmount },
-      update: { balance: { increment: gift.creditAmount } },
+      create: { studentId, balance: gift.creditAmount, expiresAt },
+      update: {
+        balance: { increment: gift.creditAmount },
+        ...(expiresAt ? { expiresAt, expiryWarning14: false, expiryWarning3: false } : {}),
+      },
     });
     await prisma.sessionCreditTransaction.create({
       data: {

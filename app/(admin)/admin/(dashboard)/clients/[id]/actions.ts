@@ -273,10 +273,19 @@ export async function grantCreditsAction(
   await requireRole("super_admin");
   if (amount < 1 || amount > 20) throw new Error("Amount must be 1-20");
 
+  // Credits granted from this button had no expiry date, while the same credits
+  // added by `addCredits` did — so whether a credit ever lapsed depended on which
+  // code path handed it over, which is not a rule anyone could have described.
+  const { creditExpiry } = await import("@/lib/credits");
+  const expiresAt = await creditExpiry();
+
   const balance = await prisma.sessionCreditBalance.upsert({
     where: { studentId },
-    create: { studentId, balance: amount },
-    update: { balance: { increment: amount } },
+    create: { studentId, balance: amount, expiresAt },
+    update: {
+      balance: { increment: amount },
+      ...(expiresAt ? { expiresAt, expiryWarning14: false, expiryWarning3: false } : {}),
+    },
   });
 
   await prisma.sessionCreditTransaction.create({

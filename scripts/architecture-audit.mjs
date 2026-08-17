@@ -1031,6 +1031,48 @@ check("email-safety: throwing sends in cron processors are guarded", () => {
   }
 });
 
+check("credits: a balance that gains credits gets an expiry", () => {
+  // Four paths handed out credits and exactly ONE stamped `expiresAt`. So
+  // whether a credit ever lapsed depended on how it arrived: bought in a package
+  // or received as a gift meant never, granted through lib/credits.ts meant 180
+  // days. The expiry window was switched on and applied to almost nothing.
+  //
+  // Any write that INCREASES a balance has to ask lib/credits.ts for the date.
+  // A row created at zero (a new client's empty balance) holds no credits and is
+  // deliberately not covered.
+  for (const f of allSource()) {
+    const relf = rel(f);
+    if (relf === "lib/credits.ts") continue; // defines creditExpiry()
+    const src = code(read(f));
+
+    for (const m of src.matchAll(/sessionCreditBalance\.(upsert|create)\s*\(\s*\{/g)) {
+      // Take the call's object literal by balanced braces from the match end.
+      let depth = 1;
+      let i = m.index + m[0].length;
+      while (i < src.length && depth > 0) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") depth--;
+        i++;
+      }
+      const call = src.slice(m.index, i);
+
+      // Does it hand over credits? An increment, or a create with a non-zero balance.
+      const grants =
+        /increment:/.test(call) || /balance:\s*(?!0\b)[A-Za-z_]/.test(call);
+      if (!grants) continue;
+
+      if (!/expiresAt/.test(call)) {
+        fail(
+          "credits",
+          relf,
+          "adds credits to a balance without stamping expiresAt — those credits can never lapse",
+          "await creditExpiry() from lib/credits.ts and set expiresAt on both the create and update branches",
+        );
+      }
+    }
+  }
+});
+
 check("email-safety: a marketing sender checks consent", () => {
   // POPIA s69: direct marketing needs consent. Campaigns, drip and birthday
   // senders all filtered on `consentGiven`; the dormant follow-up did not — so

@@ -89,8 +89,13 @@ export async function processDormantFollowUp(): Promise<{
     if (daysSince >= 90) {
       // 90-day re-engagement — dedup per client per calendar month
       const templateKey = `dormant_90d_${client.id}_${monthKey}`;
+      // `status: "sent"` — sendEmail logs FAILURES too, so matching the key alone
+      // treated a bounced provider call as a delivered email and suppressed the
+      // retry for the rest of the month. Same trap as the drip/campaign
+      // idempotency fix: a send is a send, an attempt is not.
       const alreadySent = await prisma.emailLog.findFirst({
-        where: { templateKey },
+        where: { templateKey, status: "sent" },
+        select: { id: true },
       });
       if (alreadySent) continue;
 
@@ -123,8 +128,10 @@ export async function processDormantFollowUp(): Promise<{
     } else if (daysSince >= 60) {
       // 60-day check-in — dedup per client per calendar month
       const templateKey = `dormant_60d_${client.id}_${monthKey}`;
+      // See the 90-day branch: only a delivered email suppresses the next attempt.
       const alreadySent = await prisma.emailLog.findFirst({
-        where: { templateKey },
+        where: { templateKey, status: "sent" },
+        select: { id: true },
       });
       if (alreadySent) continue;
 

@@ -222,6 +222,12 @@ forfeited a lapsed credit either.
 - Dedupe is keyed by the **expiry date**, not the month, so a later grant starts a genuinely
   new warning cycle; and it matches `status: "sent"`, so one outage cannot suppress a
   warning permanently.
+- **The window nearly applied to nothing.** Four paths hand out credits — package purchase,
+  gift redemption, admin grant, refund — and only `addCredits` stamped a date. Credits a
+  client BOUGHT could never lapse, while the same credits granted by hand did. All four now
+  ask `creditExpiry()` in `lib/credits.ts`; a refund is the deliberate exception and does not
+  renew the window (cancel-and-rebook would otherwise extend it for ever). Held honest by the
+  `credits: a balance that gains credits gets an expiry` audit check.
 
 ### Waiting on Stean
 

@@ -13,17 +13,35 @@ export async function getBalance(studentId: string): Promise<number> {
 /**
  * Add credits to a student's balance.
  */
+/**
+ * When credits added right now should lapse — or null when no window is set.
+ *
+ * THE one place that answers this. It used to live inline in `addCredits`, and
+ * every other path that hands out credits (a package purchase, a redeemed gift,
+ * an admin grant, a refund that creates the row) simply did not stamp a date. So
+ * the expiry window applied to one route in and to none of the others: credits
+ * someone BOUGHT never expired, while the same credits granted by hand did.
+ *
+ * Adding credits deliberately extends the whole balance — the client bought more
+ * time along with more sessions, and expiring the new ones on the old date would
+ * be a rule nobody could explain. A refund is the exception: it returns a credit
+ * that was already yours, so it must not buy a fresh window.
+ */
+export async function creditExpiry(): Promise<Date | null> {
+  const { getSiteSettings } = await import("@/lib/settings");
+  const settings = await getSiteSettings();
+  return settings.creditExpiryDays
+    ? new Date(Date.now() + settings.creditExpiryDays * 24 * 60 * 60 * 1000)
+    : null;
+}
+
 export async function addCredits(
   studentId: string,
   amount: number,
   description: string,
   orderId?: string
 ): Promise<number> {
-  const { getSiteSettings } = await import("@/lib/settings");
-  const settings = await getSiteSettings();
-  const expiresAt = settings.creditExpiryDays
-    ? new Date(Date.now() + settings.creditExpiryDays * 24 * 60 * 60 * 1000)
-    : null;
+  const expiresAt = await creditExpiry();
 
   const bal = await prisma.sessionCreditBalance.upsert({
     where: { studentId },
@@ -96,9 +114,15 @@ export async function refundCredit(
   bookingId: string,
   description: string
 ): Promise<number> {
+  // A refund returns a credit the client already held, so it does NOT extend the
+  // window on an existing balance — cancel-and-rebook would otherwise renew the
+  // expiry indefinitely. It only stamps a date when there is no row at all, since
+  // a balance created without one can never lapse.
+  const expiresAt = await creditExpiry();
+
   const bal = await prisma.sessionCreditBalance.upsert({
     where: { studentId },
-    create: { studentId, balance: 1 },
+    create: { studentId, balance: 1, expiresAt },
     update: { balance: { increment: 1 } },
   });
 

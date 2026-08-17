@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createGiftFromOrderItem, sendGiftEmail, type GiftDb } from "@/lib/gift";
 import { saToday, saDayStart, addSaDays } from "@/lib/dates";
+import { creditExpiry } from "@/lib/credits";
 
 /** Prisma client or transaction client — fulfilment runs entirely on the latter. */
 type Db = GiftDb;
@@ -144,10 +145,17 @@ async function processPackageItem(
 
   if (pkg.credits > 0) {
     const creditAmount = pkg.credits * item.quantity;
+    // PURCHASED credits were the ones with no expiry at all — the client pays,
+    // and the window that applies to a hand-granted credit did not apply to
+    // theirs. Same rule for everyone now.
+    const expiresAt = await creditExpiry();
     const balance = await db.sessionCreditBalance.upsert({
       where: { studentId },
-      create: { studentId, balance: creditAmount },
-      update: { balance: { increment: creditAmount } },
+      create: { studentId, balance: creditAmount, expiresAt },
+      update: {
+        balance: { increment: creditAmount },
+        ...(expiresAt ? { expiresAt, expiryWarning14: false, expiryWarning3: false } : {}),
+      },
     });
     await db.sessionCreditTransaction.create({
       data: { studentId, type: "purchase", amount: creditAmount, balanceAfter: balance.balance, description: `Purchased ${pkg.title}`, orderId },

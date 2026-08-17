@@ -180,14 +180,22 @@ export async function processBirthdayEmails(): Promise<{
     }
   }
 
-  // Update campaign counts
-  const sentCount = await prisma.emailLog.count({
-    where: { templateKey: { startsWith: `birthday_` }, metadata: { path: ["campaignId"], equals: campaign.id } },
-  });
+  // Update campaign counts. Attempts and DELIVERIES are different numbers, and
+  // this counted every attempt as a send — so a provider outage showed as a
+  // campaign that reached everyone. `sentCount` is what actually went out;
+  // `totalRecipients` is who it was tried on.
+  const scope = {
+    templateKey: { startsWith: `birthday_` },
+    metadata: { path: ["campaignId"], equals: campaign.id },
+  };
+  const [sentCount, totalRecipients] = await Promise.all([
+    prisma.emailLog.count({ where: { ...scope, status: "sent" } }),
+    prisma.emailLog.count({ where: scope }),
+  ]);
 
   await prisma.campaign.update({
     where: { id: campaign.id },
-    data: { sentCount, totalRecipients: sentCount },
+    data: { sentCount, totalRecipients },
   });
 
   return result;
