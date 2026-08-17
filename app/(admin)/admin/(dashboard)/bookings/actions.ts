@@ -871,6 +871,7 @@ interface AdminCreateBookingData {
   useCredit: boolean;
   adminNotes?: string;
   couplesPartnerName?: string;
+  couplesPartnerEmail?: string;
 }
 
 /** Refusals are RETURNED, not thrown — production strips a thrown message to React's
@@ -949,6 +950,7 @@ export async function adminCreateBookingAction(
       status: "confirmed",
       adminNotes: data.adminNotes || null,
       couplesPartnerName: data.couplesPartnerName || null,
+      couplesPartnerEmail: data.couplesPartnerEmail || null,
       graphEventId: calResult?.eventId || null,
       teamsMeetingUrl: calResult?.teamsMeetingUrl || null,
       confirmationToken,
@@ -1047,6 +1049,35 @@ export async function adminCreateBookingAction(
       metadata: { bookingId: booking.id },
     });
 
+    // The partner's own invite, when an email was given.
+    //
+    // The portal path has sent this since the columns existed; booking the same
+    // couples session from the admin side sent the partner nothing, because this
+    // form only ever collected a name. Half a feature is worse than none here —
+    // whether the second person hears about their session depended on which
+    // screen it was booked from.
+    if (data.sessionType === "couples" && data.couplesPartnerEmail) {
+      const partnerEmail = await renderEmail(
+        "couples_partner_invite",
+        {
+          partnerName: data.couplesPartnerName || "there",
+          clientName,
+          sessionType: config.label,
+          date: dateStr,
+          time: timeStr,
+          teamsSection,
+        },
+        baseUrl,
+      );
+      await sendEmail({
+        to: data.couplesPartnerEmail,
+        ...partnerEmail,
+        templateKey: "couples_partner_invite",
+        studentId: student.id,
+        metadata: { bookingId: booking.id, partnerInvite: true },
+      });
+    }
+
     await prisma.booking.update({
       where: { id: booking.id },
       data: { confirmationSentAt: new Date() },
@@ -1079,6 +1110,7 @@ interface AdminCreateRecurringData {
   useCredits: boolean;
   adminNotes?: string;
   couplesPartnerName?: string;
+  couplesPartnerEmail?: string;
 }
 
 export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurringData) {
@@ -1198,6 +1230,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         status: "confirmed",
         adminNotes: data.adminNotes || null,
         couplesPartnerName: data.couplesPartnerName || null,
+        couplesPartnerEmail: data.couplesPartnerEmail || null,
         graphEventId: seriesEventId,
         teamsMeetingUrl: seriesTeamsMeetingUrl,
         confirmationToken,
@@ -1819,6 +1852,7 @@ interface AdminCreateHistoricalData {
   endTime: string;
   adminNotes?: string;
   couplesPartnerName?: string;
+  couplesPartnerEmail?: string;
   billingResolution: BillingResolution;
   existingRequestId?: string; // required when billingResolution === "amend_request"
 }
@@ -1864,6 +1898,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
         ? `[Historical entry] ${data.adminNotes}`
         : "[Historical entry — added in hindsight]",
       couplesPartnerName: data.couplesPartnerName || null,
+      couplesPartnerEmail: data.couplesPartnerEmail || null,
       graphEventId: null,
       teamsMeetingUrl: null,
       confirmationToken,

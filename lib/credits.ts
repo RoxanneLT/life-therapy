@@ -98,17 +98,27 @@ export async function deductCredit(
    */
   db: CreditDb = prisma,
 ): Promise<number> {
-  const bal = await db.sessionCreditBalance.findUnique({
-    where: { studentId },
+  // Spend the credit CONDITIONALLY, in one statement.
+  //
+  // This was read-then-write: fetch the balance, check it was at least 1, then
+  // decrement. Two bookings landing together both read 1, both pass the check and
+  // both decrement — a balance of -1, or two sessions paid for with one credit.
+  // Wrapping it in a transaction does not help, which is the trap: at read
+  // committed isolation the second read still sees the pre-decrement value. The
+  // database has to do the deciding, and `balance: { gte: 1 }` in the WHERE is how
+  // it does — the same atomic-claim shape as the reminder and gift fixes.
+  const spent = await db.sessionCreditBalance.updateMany({
+    where: { studentId, balance: { gte: 1 } },
+    data: { balance: { decrement: 1 } },
   });
 
-  if (!bal || bal.balance < 1) {
+  if (spent.count !== 1) {
     throw new Error("Insufficient session credits");
   }
 
-  const updated = await db.sessionCreditBalance.update({
+  const after = await db.sessionCreditBalance.findUnique({
     where: { studentId },
-    data: { balance: { decrement: 1 } },
+    select: { balance: true },
   });
 
   await db.sessionCreditTransaction.create({
@@ -116,13 +126,15 @@ export async function deductCredit(
       studentId,
       type: "used",
       amount: 1,
-      balanceAfter: updated.balance,
+      // Read back rather than computed: under concurrency this is the balance as
+      // it stands now, which is the honest thing for a ledger line to record.
+      balanceAfter: after?.balance ?? 0,
       description,
       bookingId,
     },
   });
 
-  return updated.balance;
+  return after?.balance ?? 0;
 }
 
 /**

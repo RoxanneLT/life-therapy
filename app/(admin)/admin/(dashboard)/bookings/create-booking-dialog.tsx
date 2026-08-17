@@ -151,6 +151,7 @@ export function CreateBookingDialog({
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [selectedPartnerName, setSelectedPartnerName] = useState("");
   const [customPartnerName, setCustomPartnerName] = useState("");
+  const [partnerEmail, setPartnerEmail] = useState("");
 
   // Recurring options
   const [recurringPattern, setRecurringPattern] = useState<RecurringPattern>("weekly");
@@ -327,6 +328,7 @@ export function CreateBookingDialog({
             useCredit: useCredit && !config.isFree,
             adminNotes: adminNotes.trim() || undefined,
             couplesPartnerName: effectivePartnerName,
+            couplesPartnerEmail: partnerEmail.trim() || undefined,
           });
           if (!result.success) {
             setError(result.error);
@@ -389,6 +391,7 @@ export function CreateBookingDialog({
         endTime,
         adminNotes: adminNotes.trim() || undefined,
         couplesPartnerName: effectivePartnerName,
+        couplesPartnerEmail: partnerEmail.trim() || undefined,
         billingResolution: resolution,
         existingRequestId,
       });
@@ -439,6 +442,7 @@ export function CreateBookingDialog({
           useCredits: useCredit && !config.isFree,
           adminNotes: adminNotes.trim() || undefined,
           couplesPartnerName: effectivePartnerName,
+          couplesPartnerEmail: partnerEmail.trim() || undefined,
         });
         setRecurringResult(result);
       } catch (err) {
@@ -755,6 +759,14 @@ export function CreateBookingDialog({
                     placeholder="Partner's full name"
                   />
                 )}
+                {/* Optional, and it is what lets the partner be told about the
+                    session at all — without it only the client hears anything. */}
+                <Input
+                  type="email"
+                  value={partnerEmail}
+                  onChange={(e) => setPartnerEmail(e.target.value)}
+                  placeholder="Partner's email (optional — sends them the invite)"
+                />
                 <p className="text-xs text-muted-foreground">
                   {partners.length === 0
                     ? "No linked partners. Type the partner's name manually."
