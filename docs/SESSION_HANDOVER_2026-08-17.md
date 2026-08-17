@@ -186,20 +186,47 @@ Two bugs found while doing the above, in neither report:
       masked "password too short" is genuinely confusing).
 - [ ] **Desktop repo path** — write it into the machine table in `CLAUDE.md` once chosen.
 
-### Data / decisions waiting on Stean
+### Decided 2026-08-18 — no longer open
 
-- [ ] **Orphaned booking** `cmo0y71tg000004lb14zn9exn` — Isabella Pampe, 20 Apr, R895,
-      `studentId` NULL so it can never be billed. Exactly one student matches her email
-      (`isabellapampe@icloud.com`, inactive, **prepaid**). Relinking is unambiguous but
-      would drop a priced session into the unbilled pool — his call.
-- [ ] **Three overdue payment requests**: Roxanne Bouwer R1,790 (129 days — billed to
-      herself, looks like a test worth voiding), Cyle Davids R895 (40 days), Joe de Wet
-      R3,580 (9 days).
-- [ ] **Credential exposure.** `lt-src.tgz` (deleted today) was a full source archive
-      **containing `.env.local`**, sitting in a synced OneDrive folder since 21 July.
-      Deleting it does not undo where it synced. If it reached a device Stean does not
-      control, those keys should be rotated: Supabase service role, Paystack secret, MS
-      Graph client secret, Resend, `ENCRYPTION_KEY`.
+- **Isabella Pampe's orphaned booking**: she had paid for sessions cancelled at short
+  notice, so it became **1 session credit** on her profile (ledger `admin_grant`), and the
+  booking was relinked to her (price and status untouched).
+- **Overdue payment requests**: Roxanne's self-billed R1,790 test **voided**. Cyle had
+  already paid (his request was already settled). Joe paid on 18 Aug — his request is the
+  one still open, waiting for the money to reflect so it can be recorded.
+  - Voiding released 4 of Roxanne's March sessions back into the unbilled pool, which
+    would have re-billed her the same R1,790 next run (this is P2 #16 in the wild). Those
+    4 are now **cancelled** — record only, no client email, calendar left alone, because
+    the sessions are months past.
+- **Credential rotation**: Stean's call — **not rotating**. The exposure is understood
+  and accepted; the archive is deleted.
+- **Desktop repo path**: still deliberately blank. `SETUP-NEW-PC.ps1` asks at setup time.
+- **Credit expiry**: activated, 180 days. See below.
+
+### Credit expiry — activated 2026-08-18
+
+Most of this existed and had never run: `creditExpiryDays` was never set, so `addCredits`
+stamped no `expiresAt`, so the WhatsApp 14/3-day warnings had nothing to find. Nothing
+forfeited a lapsed credit either.
+
+- `creditExpiryDays = 180`. **Not retroactive** — `expiresAt` is stamped at grant time, so
+  only credits granted from now carry a date. Isabella's was backfilled by hand
+  (expires 2027-02-13); she was the only holder.
+- New DDL, live: `CreditTransactionType` gained an **`expired`** value (Management API,
+  mirrored into `schema.prisma` by hand). A lapsed credit is no longer recorded as `used`,
+  which would have counted it as a session attended in every report grouping by type.
+- `lib/cron/credit-expiry.ts` warns by **email** at 14 and 3 days and forfeits on the day,
+  wired into the daily cron. Email was added because the existing warnings are WhatsApp-only
+  and need `smsOptIn` plus a phone — Isabella has neither, so she would have lost a credit
+  she paid for with no notice at all.
+- Dedupe is keyed by the **expiry date**, not the month, so a later grant starts a genuinely
+  new warning cycle; and it matches `status: "sent"`, so one outage cannot suppress a
+  warning permanently.
+
+### Waiting on Stean
+
+- [ ] **Joe de Wet's R3,580** — paid 18 Aug, record the payment once it reflects. The only
+      open payment request.
 
 ### P2 — 11 items left
 

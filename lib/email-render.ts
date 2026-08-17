@@ -212,6 +212,20 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     relationshipLabel: "partner",
     signupUrl: "https://life-therapy.co.za/portal/login",
   },
+  credit_expiry_14d: {
+    firstName: "Jane",
+    creditCount: "3",
+    creditWord: "credits",
+    expiryDate: "14 March 2026",
+    bookUrl: "https://life-therapy.co.za/book",
+  },
+  credit_expiry_3d: {
+    firstName: "Jane",
+    creditCount: "1",
+    creditWord: "credit",
+    expiryDate: "3 March 2026",
+    bookUrl: "https://life-therapy.co.za/book",
+  },
   dormant_60d: {
     firstName: "Jane",
     daysSince: "62",
@@ -252,6 +266,8 @@ const TEMPLATE_TITLES: Record<string, string> = {
   relationship_invite_signup: "You've Been Invited to Life-Therapy",
   dormant_60d: "Checking In",
   dormant_90d: "We Miss You",
+  credit_expiry_14d: "Your Session Credits",
+  credit_expiry_3d: "Your Session Credits",
 };
 
 /**
@@ -821,6 +837,36 @@ export function renderFallback(
           </div>
           <p>Once you&rsquo;ve created your account, you&rsquo;ll be able to accept the link request from your settings.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
+    case "credit_expiry_14d":
+      return {
+        subject: `Your session ${variables.creditWord || "credits"} expire on ${variables.expiryDate || ""}`,
+        html: bt(
+          "Your Session Credits",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>A gentle heads-up: you have <strong>${variables.creditCount || ""} session ${variables.creditWord || "credits"}</strong> waiting for you, and they expire on <strong>${variables.expiryDate || ""}</strong>.</p>
+          <p>If you'd like to use ${variables.creditCount === "1" ? "it" : "them"}, you can pick a time that suits you:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.bookUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Book a Session</a>
+          </div>
+          <p>If the timing isn't right, just reply to this email and we'll sort something out together.</p>
+          <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
+    case "credit_expiry_3d":
+      return {
+        subject: `Your session ${variables.creditWord || "credits"} expire on ${variables.expiryDate || ""}`,
+        html: bt(
+          "Your Session Credits",
+          `<p>Hi ${variables.firstName || ""},</p>
+          <p>Your <strong>${variables.creditCount || ""} session ${variables.creditWord || "credits"}</strong> expire on <strong>${variables.expiryDate || ""}</strong> — just a few days away.</p>
+          <p>I didn't want ${variables.creditCount === "1" ? "it" : "them"} to slip by unnoticed:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <a href="${variables.bookUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Book a Session</a>
+          </div>
+          <p>If you can't find a suitable time before then, reply to this email and we'll work something out.</p>
+          <p style="margin-top: 24px;">With warmth,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
       };
     case "dormant_60d":

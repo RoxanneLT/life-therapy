@@ -428,6 +428,17 @@ enum CreditTransactionType {
   refund
   admin_grant
   gift_received
+
+  /// A credit that lapsed on its expiry date, forfeited by the nightly job.
+  ///
+  /// Its own value rather than a `used` row with a telling description: the
+  /// portal, the client's credit ledger and every report that groups by type
+  /// would otherwise count a lapsed credit as a session the client attended.
+  ///
+  /// Added 2026-08-18 via the Management API and mirrored here BY HAND — this
+  /// project's pooler hangs `prisma db pull`, so the DATABASE is the source of
+  /// truth and this block is the copy. See .claude/rules/schema-changes.md.
+  expired
 }
 
 enum GiftStatus {

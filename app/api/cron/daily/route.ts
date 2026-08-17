@@ -108,6 +108,18 @@ export async function GET(request: NextRequest) {
   // Safety net — canonicalise any stored phone numbers not already in E.164
   await runTask("phoneNormalization", () => processPhoneNormalization(), detail);
 
+  // Prepaid credit expiry — warns at 14 and 3 days, then forfeits on the day.
+  // Runs after the WhatsApp pass so both channels have warned before anything
+  // is taken away.
+  await runTask(
+    "creditExpiry",
+    async () => {
+      const { processCreditExpiry } = await import("@/lib/cron/credit-expiry");
+      return processCreditExpiry();
+    },
+    detail,
+  );
+
   // Dormant follow-up (dynamic import)
   await runTask(
     "dormantFollowUp",
