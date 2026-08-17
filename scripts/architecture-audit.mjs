@@ -1619,8 +1619,7 @@ const KNOWN_DEFECTS = new Map([
   // slot-clash branch, rather than adding a fourth masked throw to it.
   ["server-action-ux|app/(admin)/admin/(dashboard)/bookings/actions.ts → reinstateBookingAction",
     "'session is in the past and can't be reinstated' — a guard rail, hit rarely and only by admin"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → saveCampaignAction",
-    "'Campaign name is required' — form validation, also enforced client-side before submit"],
+
   ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → saveBirthdayCampaignAction",
     "'Campaign name is required' — as above"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → deleteCampaignAction",

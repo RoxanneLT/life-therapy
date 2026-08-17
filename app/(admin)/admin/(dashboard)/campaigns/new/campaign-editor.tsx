@@ -196,16 +196,23 @@ export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
         formData.set("bodyHtml", bodyHtml);
       }
 
-      const savedId = await saveCampaignAction(formData);
+      const result = await saveCampaignAction(formData);
+      if (!result.success) {
+        // The actual reason. This branch used to show a flat "Failed to save
+        // campaign." for every refusal, including ones the admin could have
+        // fixed in two seconds if anyone had told them.
+        toast.error(result.error);
+        return;
+      }
       toast.success("Draft saved.");
 
       // If this was a new campaign, update URL so subsequent saves are updates
       if (!campaignId) {
-        setCampaignId(savedId);
-        router.replace(`/admin/campaigns/${savedId}/edit`);
+        setCampaignId(result.id);
+        router.replace(`/admin/campaigns/${result.id}/edit`);
       }
     } catch (err: unknown) {
-      toast.error("Failed to save campaign.");
+      toast.error("Could not reach the server — please try again.");
       console.error(err);
     } finally {
       setSaving(false);

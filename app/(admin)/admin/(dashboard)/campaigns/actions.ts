@@ -99,12 +99,23 @@ async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilte
   return campaign.id;
 }
 
-export async function saveCampaignAction(formData: FormData): Promise<string> {
+/**
+ * Refusals are RETURNED, not thrown.
+ *
+ * Every reason this could refuse — no name, no email steps, or editing a campaign
+ * that has already been sent — was stripped to the Next.js digest boilerplate in
+ * production, and the editor then replaced even that with a flat "Failed to save
+ * campaign." So an admin who had simply left the name blank was told nothing at
+ * all, twice over.
+ */
+export async function saveCampaignAction(
+  formData: FormData,
+): Promise<{ success: true; id: string } | { success: false; error: string }> {
   await requireRole("super_admin", "marketing");
 
   const id = formData.get("id") as string | null;
   const name = (formData.get("name") as string)?.trim();
-  if (!name) throw new Error("Campaign name is required");
+  if (!name) return { success: false, error: "The campaign needs a name before it can be saved." };
 
   const filterSource = (formData.get("filterSource") as string) || undefined;
   const filterClientStatus = (formData.get("filterClientStatus") as string) || undefined;
@@ -114,10 +125,21 @@ export async function saveCampaignAction(formData: FormData): Promise<string> {
   const audienceFilters = audienceFiltersStr ? JSON.parse(audienceFiltersStr) as AudienceFilters : undefined;
   const filters: CampaignFilters = { name, filterSource, filterClientStatus, filterTags, audienceFilters };
 
-  if (formData.get("isMultiStep") === "true") {
-    return saveMultiStepCampaign(id, filters, formData);
-  } else {
-    return saveSingleEmailCampaign(id, filters, formData);
+  // The two savers and their helpers still throw their refusals — they are
+  // internal, and their messages are already written for a human. Catching here
+  // is what stops the boundary eating them.
+  try {
+    const savedId =
+      formData.get("isMultiStep") === "true"
+        ? await saveMultiStepCampaign(id, filters, formData)
+        : await saveSingleEmailCampaign(id, filters, formData);
+    return { success: true, id: savedId };
+  } catch (err) {
+    console.error("saveCampaignAction error:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Could not save the campaign.",
+    };
   }
 }
 
