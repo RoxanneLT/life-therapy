@@ -254,6 +254,29 @@ forfeited a lapsed credit either.
   renew the window (cancel-and-rebook would otherwise extend it for ever). Held honest by the
   `credits: a balance that gains credits gets an expiry` audit check.
 
+### Known and NOT fixed — the campaign/drip double-send race
+
+Every cron processor has **two runners**: its own scheduled cron and the daily route,
+which calls the same function as a safety net. That is what made #23 (session
+reminders) and the gift-delivery race real rather than theoretical — both are fixed
+with an atomic claim.
+
+`lib/campaign-process.ts` and `lib/drip-emails.ts` have the same shape and are NOT
+fixed. They dedupe by looking for an `emailLog` row with `status: "sent"` before
+sending, which is correct about *failures* (the #9 fix) but is still check-then-act:
+two runners both find no log, and both send. The recipient gets the same campaign
+step twice.
+
+It is left alone deliberately rather than half-fixed: the reminder and gift fixes work
+because each has a per-row column to claim (`reminderSentAt`, `emailSentAt`). A
+campaign step has no equivalent — the natural claim is a nullable `claimedAt` on
+`CampaignProgress`, which is a schema change and needs sign-off. The alternative
+(writing the emailLog row *before* sending and updating it after) touches `sendEmail`
+itself, which every send in the system goes through.
+
+Do not "fix" it by tightening the emailLog query. The gap is between the read and the
+send; no query closes that.
+
 ### Noted for later — pause the chase when payment is on its way
 
 Stean's, 18 Aug, and it comes straight out of a live near-miss: Joe paid on the

@@ -19,6 +19,7 @@ import {
   calculateDueDate,
 } from "./billing";
 import { isSAPublicHoliday, isBusinessDay, getNextBusinessDay } from "./sa-holidays";
+import { receivedCents, balanceCents } from "./billing";
 import { calendarDate, saDateStr } from "./dates";
 import { CURRENCIES } from "./region";
 import { formatPrice, formatByCurrency } from "./utils";
@@ -188,4 +189,34 @@ test("the effective billing date is the last BUSINESS day of the month", () => {
 test("a calendar-day due date landing on a weekend shifts to Monday", () => {
   // 13 Jul + 5 calendar days = Sat 18 Jul → must move to Mon 20 Jul.
   assert.equal(saDateStr(calculateDueDate(calendarDate("2026-07-13"), 5, "calendar")), "2026-07-20");
+});
+
+// ── What has arrived against a payment request ──────────────────────────────
+
+test(`received takes the larger of the two records, never the sum`, () => {
+  // The SAME money can be written in two places: `payment_requests.paidAmountCents`
+  // (Paystack short payments, and settlement) and `invoices.paidAmountCents` (the
+  // admin Record Payment flow). They are two records of one payment, not two
+  // payments — summing them would report a request as settled when it is short,
+  // which is the dangerous direction to be wrong in.
+  assert.equal(receivedCents({ paidAmountCents: 60000 }, { paidAmountCents: 60000 }), 60000);
+  assert.equal(receivedCents({ paidAmountCents: 60000 }, null), 60000);
+  assert.equal(receivedCents({ paidAmountCents: null }, { paidAmountCents: 60000 }), 60000);
+  assert.equal(receivedCents({ paidAmountCents: null }, null), 0);
+});
+
+test(`a legacy row with the amount only on the invoice still counts`, () => {
+  // Requests settled before payment_requests.paidAmountCents existed carry the
+  // figure on the invoice alone. Reading the request alone would call them unpaid
+  // and chase a client who has paid in full.
+  assert.equal(receivedCents({ paidAmountCents: null }, { paidAmountCents: 179000 }), 179000);
+});
+
+test(`the balance is what is still owed, and never negative`, () => {
+  assert.equal(balanceCents({ totalCents: 100000, paidAmountCents: 40000 }, null), 60000);
+  assert.equal(balanceCents({ totalCents: 100000, paidAmountCents: null }, null), 100000);
+  assert.equal(balanceCents({ totalCents: 100000, paidAmountCents: 100000 }, null), 0);
+  // An overpayment is a reconciliation question for a human, not a credit this
+  // function invents by returning a negative balance.
+  assert.equal(balanceCents({ totalCents: 100000, paidAmountCents: 150000 }, null), 0);
 });

@@ -30,12 +30,42 @@ export async function processGiftDelivery(): Promise<{
   let delivered = 0;
   let failed = 0;
 
+  // Claim each gift before sending it.
+  //
+  // This was read-then-send-then-stamp: the list is fetched with status "pending",
+  // the email goes out, and `sendGiftEmail` marks "delivered" only afterwards. Two
+  // runners inside that gap both send — and there ARE two, this processor has its
+  // own cron AND the daily route calls it. The recipient gets the same gift twice
+  // and the buyer gets two "delivered" notices, for something they paid for once.
+  //
+  // `emailSentAt` is the claim: it is only ever set by a send, so a pending gift
+  // with one set means somebody is mid-flight. A claim older than the window is
+  // treated as abandoned, so a run killed between claiming and sending does not
+  // strand the gift forever — the failure mode a naive claim introduces.
+  const STALE_CLAIM_MS = 15 * 60 * 1000;
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+
   for (const gift of pendingGifts) {
+    const claimed = await prisma.gift.updateMany({
+      where: {
+        id: gift.id,
+        status: "pending",
+        OR: [{ emailSentAt: null }, { emailSentAt: { lt: staleBefore } }],
+      },
+      data: { emailSentAt: new Date() },
+    });
+    if (claimed.count !== 1) continue; // another runner has it
+
     try {
       await sendGiftEmail(gift.id);
       delivered++;
     } catch (err) {
       console.error(`Failed to deliver gift ${gift.id}:`, err);
+      // Hand the claim back, or a failed send looks exactly like one in flight
+      // and waits out the stale window before anything retries it.
+      await prisma.gift
+        .updateMany({ where: { id: gift.id, status: "pending" }, data: { emailSentAt: null } })
+        .catch((e) => console.error(`Could not release gift claim ${gift.id}:`, e));
       failed++;
     }
   }
