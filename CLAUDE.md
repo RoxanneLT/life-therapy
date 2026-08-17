@@ -81,7 +81,11 @@ and move with `scripts/sync-secrets.mjs`:
 `LT_SECRETS_DIR` overrides the location if OneDrive sits elsewhere on a machine.
 
 > If you find yourself working in `C:\Users\stean\OneDrive\Websites\Life Therapy`,
-> stop. That is the retired copy, and its `.git` is damaged. Move to `C:\dev`.
+> stop. That is the retired copy, and its `.git` is damaged. Move to the real one.
+
+**Picking up mid-stream?** `docs/SESSION_HANDOVER_2026-08-17.md` is the current state:
+what was fixed, the three DDL changes already live in production, the open TODO list in
+priority order, and the claims that were reasoned rather than demonstrated.
 
 ---
 
