@@ -89,7 +89,18 @@ export async function sendCampaign(campaignId: string): Promise<{
     throw new Error("Multi-step campaigns must be scheduled, not sent directly. Use the Schedule action.");
   }
 
-  if (campaign.status !== "draft") {
+  // "sending" and "failed" are RESUMABLE, not terminal.
+  //
+  // At ~1.7s per recipient (BATCH_SIZE 2, BATCH_DELAY_MS 1200) a hundred-recipient
+  // list comfortably outlives any function timeout. When the run was killed, nothing
+  // ran the catch below, so the campaign sat in "sending" forever — and because this
+  // guard only admitted "draft", it could not be restarted at all. The only recovery
+  // was to force the status back to draft, which re-emailed everyone already reached.
+  //
+  // Resuming is safe now because the send loop skips recipients that already have a
+  // successful log row for THIS campaign. "sent" stays terminal: that campaign is
+  // finished, and re-running it would mail anyone who has since joined the audience.
+  if (!["draft", "sending", "failed"].includes(campaign.status)) {
     throw new Error(`Campaign is already ${campaign.status}`);
   }
 
@@ -100,6 +111,9 @@ export async function sendCampaign(campaignId: string): Promise<{
   // Narrowed after null check above
   const campaignSubject = campaign.subject;
   const campaignBody = campaign.bodyHtml;
+
+  /** Per-campaign checkpoint key in email_logs — the ledger the resume reads. */
+  const campaignTemplateKey = `campaign_broadcast_${campaignId}`;
 
   // Check if template uses passwordResetUrl
   const needsPasswordReset = campaignBody.includes("{{passwordResetUrl}}");
@@ -127,12 +141,36 @@ export async function sendCampaign(campaignId: string): Promise<{
       data: { totalRecipients: recipients.length },
     });
 
-    let sentCount = 0;
+    // Who has this campaign ALREADY reached?
+    //
+    // One indexed query, not one per recipient — the whole point is that this runs
+    // for lists long enough to be interrupted, so the resume must not itself cost N
+    // round trips. templateKey is campaign-specific (see the send below), so this
+    // set is exactly "already received THIS campaign", and status "sent" excludes
+    // failures, which must be retried rather than skipped.
+    const alreadySent = new Set(
+      (
+        await prisma.emailLog.findMany({
+          where: { templateKey: campaignTemplateKey, status: "sent" },
+          select: { to: true },
+        })
+      ).map((r) => r.to),
+    );
+
+    // A resume must not reset the tally to zero — those people really were emailed.
+    let sentCount = alreadySent.size;
     let failedCount = 0;
 
+    const pending = recipients.filter((r) => !alreadySent.has(r.email));
+    if (alreadySent.size > 0) {
+      console.warn(
+        `[campaign ${campaignId}] resuming: ${alreadySent.size} already sent, ${pending.length} to go`,
+      );
+    }
+
     // Process in batches
-    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-      const batch = recipients.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+      const batch = pending.slice(i, i + BATCH_SIZE);
 
       const results = await Promise.allSettled(
         batch.map(async (recipient) => {
@@ -156,7 +194,11 @@ export async function sendCampaign(campaignId: string): Promise<{
             to: recipient.email,
             subject,
             html,
-            templateKey: "campaign_broadcast",
+            // Campaign-SPECIFIC key. The shared "campaign_broadcast" could not tell
+            // which campaign a recipient had received, so it was useless as a
+            // checkpoint; this makes email_logs a per-campaign ledger, which is what
+            // the resume above reads. (templateKey is indexed.)
+            templateKey: campaignTemplateKey,
             metadata: { campaignId, studentId: recipient.id },
           });
         })
@@ -177,7 +219,7 @@ export async function sendCampaign(campaignId: string): Promise<{
       });
 
       // Delay between batches (skip delay after the last batch)
-      if (i + BATCH_SIZE < recipients.length) {
+      if (i + BATCH_SIZE < pending.length) {
         await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
       }
     }
