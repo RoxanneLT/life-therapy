@@ -60,7 +60,20 @@ async function resolveCouplesPartner(
 
 /** Send booking confirmation + admin notification emails */
 async function sendPortalBookingEmails(opts: {
-  booking: { id: string; date: Date; startTime: string; endTime: string; priceZarCents: number; priceCurrency: string | null; teamsMeetingUrl: string | null };
+  booking: {
+    id: string;
+    date: Date;
+    startTime: string;
+    endTime: string;
+    priceZarCents: number;
+    priceCurrency: string | null;
+    teamsMeetingUrl: string | null;
+    // For the partner's invite on a couples booking.
+    sessionType: string;
+    studentId: string | null;
+    couplesPartnerName: string | null;
+    couplesPartnerEmail: string | null;
+  };
   clientName: string;
   clientEmail: string;
   clientPhone: string | null;
@@ -120,9 +133,46 @@ async function sendPortalBookingEmails(opts: {
     teamsLink,
   }, baseUrl);
 
+  // The partner's own invite.
+  //
+  // The couples form has always asked for their email "so they can receive the
+  // session invite" and then nothing sent one — first because there was nowhere to
+  // store it, and after 18 Aug because storing it was only half the promise.
+  //
+  // They get the Teams link deliberately: they are attending the same session, and
+  // an invite without the way in is not an invite. It carries no portal link, no
+  // account and nothing about billing — none of that is theirs.
+  const partnerEmail = booking.couplesPartnerEmail;
+  const partnerInvite =
+    partnerEmail && booking.sessionType === "couples"
+      ? await renderEmail(
+          "couples_partner_invite",
+          {
+            partnerName: booking.couplesPartnerName || "there",
+            clientName,
+            sessionType: sessionLabel,
+            date: dateStr,
+            time: timeStr,
+            teamsSection,
+          },
+          baseUrl,
+        )
+      : null;
+
   await Promise.allSettled([
     sendEmail({ to: clientEmail, ...confirmEmail, templateKey: "booking_confirmation", metadata: { bookingId: booking.id } }),
     sendEmail({ to: notifyAddress, ...notifyEmail, templateKey: "booking_notification", metadata: { bookingId: booking.id } }),
+    ...(partnerInvite && partnerEmail
+      ? [
+          sendEmail({
+            to: partnerEmail,
+            ...partnerInvite,
+            templateKey: "couples_partner_invite",
+            studentId: booking.studentId ?? undefined,
+            metadata: { bookingId: booking.id, partnerInvite: true },
+          }),
+        ]
+      : []),
   ]);
 
   await prisma.booking.update({

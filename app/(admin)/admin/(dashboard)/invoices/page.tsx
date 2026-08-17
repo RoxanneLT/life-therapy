@@ -400,6 +400,13 @@ export default async function InvoicesPage({
                         <Badge variant="secondary" className={isDue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}>
                           {pr.dueDate ? formatDate(pr.dueDate) : "—"}
                         </Badge>
+                        {/* A hold must be visible on the row. A silent pause is how
+                            a paused invoice quietly becomes a forgotten one. */}
+                        {pr.chasePausedUntil && pr.chasePausedUntil > now && (
+                          <div className="mt-1 text-xs text-amber-600">
+                            Chase held to {formatDate(pr.chasePausedUntil)}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <PaymentRequestActions
@@ -409,6 +416,7 @@ export default async function InvoicesPage({
                           billingEmail={pr.student?.billingEmail ?? pr.student?.email ?? pr.billingEntity?.email ?? ""}
                           totalCents={pr.totalCents}
                           paidCents={prPaidAmounts.get(pr.id) ?? 0}
+                          pausedUntil={pr.chasePausedUntil?.toISOString() ?? null}
                           currency={pr.currency}
                         />
                       </TableCell>

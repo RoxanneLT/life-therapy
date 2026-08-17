@@ -289,6 +289,23 @@ async function processSingleClient(
     return "skipped";
   }
 
+  // Claim this step before sending. Same reasoning as campaign-process: the
+  // emailLog check is right about failures but still check-then-act, and there are
+  // two runners (this processor's own cron and the daily route). A candidate with
+  // no progress row yet has nothing to claim — that is the first-ever send, where
+  // `advanceProgress` creates the row, so the race window does not exist for it.
+  if (candidate.progressId) {
+    const STALE_CLAIM_MS = 15 * 60 * 1000;
+    const claimed = await prisma.dripProgress.updateMany({
+      where: {
+        id: candidate.progressId,
+        OR: [{ claimedAt: null }, { claimedAt: { lt: new Date(Date.now() - STALE_CLAIM_MS) } }],
+      },
+      data: { claimedAt: new Date() },
+    });
+    if (claimed.count !== 1) return "skipped"; // another runner has this step
+  }
+
   // Auto-pause cold clients: check last 5 tracked emails
   const isCold = await checkClientEngagement(candidate.studentId);
   if (isCold) {
@@ -372,10 +389,21 @@ async function processSingleClient(
     },
   });
 
+  // Release the claim either way: on failure so the retry is not held off until the
+  // stale window passes, on success because the step has moved on.
+  const releaseClaim = async () => {
+    if (!candidate.progressId) return;
+    await prisma.dripProgress
+      .update({ where: { id: candidate.progressId }, data: { claimedAt: null } })
+      .catch((err) => console.error(`[drip] could not release claim ${candidate.progressId}:`, err));
+  };
+
   if (!emailResult.success) {
+    await releaseClaim();
     return "failed";
   }
 
+  await releaseClaim();
   // Advance progress
   await advanceProgress(candidate, phaseCounts);
   return "sent";

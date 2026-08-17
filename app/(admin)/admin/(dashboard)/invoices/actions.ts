@@ -262,6 +262,78 @@ export async function markPaymentRequestPaidFromListAction(
 }
 
 // ────────────────────────────────────────────────────────────
+// Payment Requests — hold the chase while money is in flight
+// ────────────────────────────────────────────────────────────
+
+/** Default hold: long enough for an EFT to clear, short enough that a forgotten
+ *  pause does not quietly become a permanently unchased invoice. */
+const CHASE_PAUSE_DAYS = 7;
+
+/**
+ * "Payment expected" — stop chasing for a week without pretending money arrived.
+ *
+ * The overdue notice repeats weekly now. That is right for an invoice nobody has
+ * answered and wrong for one paid yesterday by EFT that cannot be recorded until
+ * it reflects: the client gets chased for money they have already sent, which is
+ * the single worst thing an automated chaser can do. Recording a payment that has
+ * not cleared would be worse — it would report income that is not there — and
+ * voiding the request loses the debt entirely. So: a hold, stated as a hold.
+ */
+export async function pauseChaseAction(paymentRequestId: string, days = CHASE_PAUSE_DAYS) {
+  const { adminUser } = await requireRole("super_admin", "editor");
+
+  const pr = await prisma.paymentRequest.findUnique({
+    where: { id: paymentRequestId },
+    select: { status: true, chasePausedUntil: true, studentId: true, totalCents: true },
+  });
+  if (!pr) return { success: false, error: "That payment request no longer exists." };
+  if (pr.status === "paid" || pr.status === "cancelled") {
+    return { success: false, error: `This request is already ${pr.status} — nothing is chasing it.` };
+  }
+
+  const until = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+  await prisma.paymentRequest.update({
+    where: { id: paymentRequestId },
+    data: { chasePausedUntil: until },
+  });
+
+  await recordAudit({
+    action: "chase_paused",
+    entityType: "payment_request",
+    entityId: paymentRequestId,
+    actorEmail: adminUser.email,
+    before: { chasePausedUntil: pr.chasePausedUntil?.toISOString() ?? null },
+    after: { chasePausedUntil: until.toISOString() },
+    metadata: { studentId: pr.studentId, days, totalCents: pr.totalCents },
+  });
+
+  revalidatePath("/admin/invoices");
+  return { success: true, until: until.toISOString() };
+}
+
+/** Resume chasing — for when the expected payment did not turn up. */
+export async function resumeChaseAction(paymentRequestId: string) {
+  const { adminUser } = await requireRole("super_admin", "editor");
+
+  await prisma.paymentRequest.update({
+    where: { id: paymentRequestId },
+    data: { chasePausedUntil: null },
+  });
+
+  await recordAudit({
+    action: "chase_resumed",
+    entityType: "payment_request",
+    entityId: paymentRequestId,
+    actorEmail: adminUser.email,
+    after: { chasePausedUntil: null },
+  });
+
+  revalidatePath("/admin/invoices");
+  return { success: true };
+}
+
+// ────────────────────────────────────────────────────────────
 // Payment Requests — Resend email
 // ────────────────────────────────────────────────────────────
 

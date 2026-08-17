@@ -26,8 +26,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MoreHorizontal, CheckCircle, Send, Eye } from "lucide-react";
-import { markPaymentRequestPaidFromListAction, resendPaymentRequestEmailAction } from "./actions";
+import { MoreHorizontal, CheckCircle, Send, Eye, PauseCircle, PlayCircle } from "lucide-react";
+import {
+  markPaymentRequestPaidFromListAction,
+  resendPaymentRequestEmailAction,
+  pauseChaseAction,
+  resumeChaseAction,
+} from "./actions";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
@@ -41,6 +46,8 @@ interface PaymentRequestActionsProps {
   readonly totalCents: number;
   readonly paidCents: number;
   readonly currency: string;
+  /** ISO timestamp while chasing is deliberately held, else null. */
+  readonly pausedUntil?: string | null;
 }
 
 export function PaymentRequestActions({
@@ -51,6 +58,7 @@ export function PaymentRequestActions({
   totalCents,
   paidCents,
   currency,
+  pausedUntil,
 }: PaymentRequestActionsProps) {
   const remainingCents = totalCents - paidCents;
   const [isPending, startTransition] = useTransition();
@@ -79,6 +87,23 @@ export function PaymentRequestActions({
       } catch {
         toast.error("Failed to record payment");
       }
+    });
+  }
+
+  function handlePauseChase() {
+    startTransition(async () => {
+      const res = await pauseChaseAction(requestId);
+      if (!res.success) { toast.error(res.error ?? "Could not hold the chase"); return; }
+      toast.success(`Chasing held for 7 days for ${clientName}`, {
+        description: "Record the payment when it reflects, or resume chasing.",
+      });
+    });
+  }
+
+  function handleResumeChase() {
+    startTransition(async () => {
+      await resumeChaseAction(requestId);
+      toast.success(`Chasing resumed for ${clientName}`);
     });
   }
 
@@ -117,6 +142,20 @@ export function PaymentRequestActions({
             <Send className="mr-2 h-4 w-4" />
             Resend Email
           </DropdownMenuItem>
+          {/* The honest middle ground between "paid" and "still chasing": money is
+              coming but cannot be recorded yet. Without this the weekly overdue
+              notice emails someone whose EFT is still clearing. */}
+          {pausedUntil ? (
+            <DropdownMenuItem onClick={handleResumeChase}>
+              <PlayCircle className="mr-2 h-4 w-4 text-amber-600" />
+              Resume chasing
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={handlePauseChase}>
+              <PauseCircle className="mr-2 h-4 w-4 text-amber-600" />
+              Payment expected — hold 7 days
+            </DropdownMenuItem>
+          )}
           {studentId && (
             <>
               <DropdownMenuSeparator />

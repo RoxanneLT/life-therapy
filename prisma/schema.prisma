@@ -1120,6 +1120,18 @@ model PaymentRequest {
   /// project's pooler, so the DB is the source of truth and this is the copy.
   paidAmountCents    Int?
 
+  /// Hold the chase while money is genuinely on its way.
+  ///
+  /// The overdue notice repeats weekly now, which is right for an invoice nobody
+  /// has answered and wrong for one paid yesterday by EFT that cannot be recorded
+  /// until it reflects. This lets an admin say "money is coming, wait" without
+  /// pretending it arrived or voiding the request. Null means chase normally.
+  ///
+  /// Added 2026-08-18 via the Management API and mirrored here BY HAND — this
+  /// project's pooler hangs `prisma db pull`, so the DATABASE is the source of
+  /// truth and this is the copy.
+  chasePausedUntil   DateTime?
+
   // Due date
   dueDate            DateTime
 
@@ -1428,6 +1440,17 @@ model CampaignProgress {
   lastSentAt  DateTime?
   completedAt DateTime?
   isPaused    Boolean   @default(false)
+
+  /// Atomic claim for one step send: set before the email goes out, cleared if it
+  /// fails.
+  ///
+  /// Every cron processor has TWO runners — its own schedule and the daily route
+  /// calling it as a safety net — so a check-then-send dedupe is a live race and
+  /// the recipient gets the same step twice. Session reminders and gifts each had
+  /// an existing column to claim; this one had to be added.
+  ///
+  /// Added 2026-08-18 via the Management API and mirrored here by hand.
+  claimedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1468,6 +1491,9 @@ model DripProgress {
   lastSentAt   DateTime?
   completedAt  DateTime?
   isPaused     Boolean       @default(false)
+  /// Atomic claim for one step send — see CampaignProgress.claimedAt for why.
+  /// Added 2026-08-18 via the Management API, mirrored here by hand.
+  claimedAt    DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

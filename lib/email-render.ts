@@ -212,6 +212,15 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     relationshipLabel: "partner",
     signupUrl: "https://life-therapy.co.za/portal/login",
   },
+  couples_partner_invite: {
+    partnerName: "Sarah",
+    clientName: "Jane Doe",
+    sessionType: "Couples Therapy",
+    date: "Monday, 10 March 2025",
+    time: "10:00 – 11:00 (SAST)",
+    teamsSection:
+      '<div style="background: #f0f7f4; border-radius: 6px; padding: 16px; margin: 16px 0;"><p style="margin: 0 0 8px; font-weight: 600; color: #333;">Join your session:</p><a href="https://teams.microsoft.com/l/meetup-join/example" style="color: #8BA889; font-weight: 600; word-break: break-all;">https://teams.microsoft.com/l/meetup-join/example</a></div>',
+  },
   credit_expiry_14d: {
     firstName: "Jane",
     creditCount: "3",
@@ -266,6 +275,7 @@ const TEMPLATE_TITLES: Record<string, string> = {
   relationship_invite_signup: "You've Been Invited to Life-Therapy",
   dormant_60d: "Checking In",
   dormant_90d: "We Miss You",
+  couples_partner_invite: "Your Session Details",
   credit_expiry_14d: "Your Session Credits",
   credit_expiry_3d: "Your Session Credits",
 };
@@ -836,6 +846,24 @@ export function renderFallback(
             <a href="${variables.signupUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Sign Up</a>
           </div>
           <p>Once you&rsquo;ve created your account, you&rsquo;ll be able to accept the link request from your settings.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
+    case "couples_partner_invite":
+      return {
+        subject: `Your couples session — ${variables.date || ""}`,
+        html: bt(
+          "Your Session Details",
+          `<p>Hi ${variables.partnerName || "there"},</p>
+          <p><strong>${variables.clientName || ""}</strong> has booked a ${variables.sessionType || "couples session"} for the two of you, and asked that you receive the details.</p>
+          <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Date:</strong> ${variables.date || ""}</p>
+            <p style="margin: 4px 0;"><strong>Time:</strong> ${variables.time || ""}</p>
+          </div>
+          ${variables.teamsSection || ""}
+          <p>You do not need an account or anything prepared — just come as you are.</p>
+          <p>If this is a surprise, or the time does not work for you, please reply to this
+          email or speak to ${variables.clientName || "them"} and we will find another slot.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
       };

@@ -326,6 +326,26 @@ async function processSingleCampaignContact(
     return "skipped";
   }
 
+  // Claim this step before sending it.
+  //
+  // The emailLog check above is right about FAILURES (#9) but is still
+  // check-then-act: two runners both find no log and both send. There are two by
+  // design — this processor has its own cron AND the daily route calls it — so the
+  // recipient gets the same campaign step twice.
+  //
+  // `updateMany` with the null in the WHERE makes the database the arbiter: exactly
+  // one caller sees count === 1. A claim older than the window counts as abandoned,
+  // so a run killed mid-send does not freeze this student's campaign for ever.
+  const STALE_CLAIM_MS = 15 * 60 * 1000;
+  const claimed = await prisma.campaignProgress.updateMany({
+    where: {
+      id: progress.id,
+      OR: [{ claimedAt: null }, { claimedAt: { lt: new Date(Date.now() - STALE_CLAIM_MS) } }],
+    },
+    data: { claimedAt: new Date() },
+  });
+  if (claimed.count !== 1) return "skipped"; // another runner has this step
+
   // Build and send
   const unsubscribeUrl = student.unsubscribeToken
     ? `${DEFAULT_BASE_URL}/api/unsubscribe?token=${student.unsubscribeToken}`
@@ -378,9 +398,19 @@ async function processSingleCampaignContact(
   });
 
   if (!emailResult.success) {
+    // Hand the claim back, or a failed send looks exactly like one in flight and
+    // waits out the stale window before anything retries it.
+    await prisma.campaignProgress
+      .update({ where: { id: progress.id }, data: { claimedAt: null } })
+      .catch((err) => console.error(`[campaign] could not release claim ${progress.id}:`, err));
     return "failed";
   }
 
+  // Advancing the step is what makes the claim spent — the next run is looking at
+  // a different step, so the claim is cleared rather than left to expire.
+  await prisma.campaignProgress
+    .update({ where: { id: progress.id }, data: { claimedAt: null } })
+    .catch((err) => console.error(`[campaign] could not clear claim ${progress.id}:`, err));
   await advanceCampaignProgress(progress, totalSteps);
   return "sent";
 }

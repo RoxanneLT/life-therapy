@@ -64,6 +64,10 @@ undo them.
 | Partial unique index | `bookings_active_slot_unique` on `bookings (date, "startTime") WHERE status IN ('confirmed','pending')` | via Management API |
 | FK `CASCADE` → `RESTRICT` | `enrollments.courseId`, `certificates.courseId`, `module_access.courseId`, `module_access.moduleId` | via Management API |
 | New column | `payment_requests."paidAmountCents" integer NULL` | via Management API |
+| Enum value | `CreditTransactionType` + `expired` | 18 Aug, Management API |
+| New columns | `bookings."couplesPartnerEmail"`, `bookings."couplesPartnerPhone"` | 18 Aug, Management API |
+| New column | `payment_requests."chasePausedUntil" timestamptz NULL` | 18 Aug, Management API |
+| New columns | `campaign_progress."claimedAt"`, `drip_progress."claimedAt"` | 18 Aug, Management API |
 
 Notes:
 
@@ -275,15 +279,15 @@ The moral, for whoever reads this next: when a bug is found, the useful question
 not "is it fixed" but "how many other places have this shape". Three of the day's
 worst findings came from asking that.
 
-### Known and NOT fixed — the campaign/drip double-send race
+### DONE 18 Aug — the campaign/drip double-send race
 
 Every cron processor has **two runners**: its own scheduled cron and the daily route,
 which calls the same function as a safety net. That is what made #23 (session
 reminders) and the gift-delivery race real rather than theoretical — both are fixed
 with an atomic claim.
 
-`lib/campaign-process.ts` and `lib/drip-emails.ts` have the same shape and are NOT
-fixed. They dedupe by looking for an `emailLog` row with `status: "sent"` before
+`lib/campaign-process.ts` and `lib/drip-emails.ts` had the same shape and are now
+FIXED (claimedAt columns added with sign-off). They dedupe by looking for an `emailLog` row with `status: "sent"` before
 sending, which is correct about *failures* (the #9 fix) but is still check-then-act:
 two runners both find no log, and both send. The recipient gets the same campaign
 step twice.
@@ -298,7 +302,7 @@ itself, which every send in the system goes through.
 Do not "fix" it by tightening the emailLog query. The gap is between the read and the
 send; no query closes that.
 
-### Noted for later — pause the chase when payment is on its way
+### DONE 18 Aug — pause the chase when payment is on its way
 
 Stean's, 18 Aug, and it comes straight out of a live near-miss: Joe paid on the
 17th, the payment could not be recorded until it reflected, and the weekly overdue

@@ -36,6 +36,8 @@ export async function processMonthlyBilling(): Promise<{
   reminders: { sent: number } | null;
   dueToday: { sent: number } | null;
   overdue: { sent: number } | null;
+  /** Requests where chasing is deliberately held because payment is expected. */
+  chaseHeld?: { count: number };
 }> {
   const today = getSASTToday();
   const year = today.getFullYear();
@@ -47,6 +49,7 @@ export async function processMonthlyBilling(): Promise<{
     reminders: { sent: number } | null;
     dueToday: { sent: number } | null;
     overdue: { sent: number } | null;
+    chaseHeld?: { count: number };
   } = { billing: null, sweptUnsent: null, reminders: null, dueToday: null, overdue: null };
 
   // 1. Is today the effective billing date? Deliberately still an EQUALITY — the
@@ -129,6 +132,10 @@ export async function processMonthlyBilling(): Promise<{
   // The window stays bounded so the wording still matches the moment: a reminder
   // is only a reminder until the money is actually due.
   for (const req of unpaidRequests) {
+    // Held: money is on its way and cannot be recorded yet. Chasing someone who
+    // has already paid is the failure this exists to prevent.
+    if (req.chasePausedUntil && req.chasePausedUntil > new Date()) continue;
+
     const reminderDate = getReminderDate(req.dueDate);
     if (saDateStr(today) >= saDateStr(reminderDate) && saDateStr(today) < saDateStr(req.dueDate)) {
       try {
@@ -153,6 +160,10 @@ export async function processMonthlyBilling(): Promise<{
 
   let dueTodaySent = 0;
   for (const req of dueTodayRequests) {
+    // Held: money is on its way and cannot be recorded yet. Chasing someone who
+    // has already paid is the failure this exists to prevent.
+    if (req.chasePausedUntil && req.chasePausedUntil > new Date()) continue;
+
     // From the due date until the overdue notice takes over. "Due today" a day
     // late still reads true enough; a week late does not, and by then the
     // overdue notice is the honest one to send.
@@ -193,6 +204,10 @@ export async function processMonthlyBilling(): Promise<{
 
   let overdueSent = 0;
   for (const req of stillUnpaid) {
+    // Held: money is on its way and cannot be recorded yet. Chasing someone who
+    // has already paid is the failure this exists to prevent.
+    if (req.chasePausedUntil && req.chasePausedUntil > new Date()) continue;
+
     const overdueDate = getOverdueDate(req.dueDate);
     if (saDateStr(today) < saDateStr(overdueDate)) continue;
 
@@ -226,6 +241,13 @@ export async function processMonthlyBilling(): Promise<{
   if (overdueSent > 0) {
     result.overdue = { sent: overdueSent };
   }
+
+  // A hold must never be silent — that is how a paused invoice becomes a forgotten
+  // one. Reported so it appears in the nightly digest for as long as it is held.
+  const held = await prisma.paymentRequest.count({
+    where: { status: { in: ["pending", "overdue"] }, chasePausedUntil: { gt: new Date() } },
+  });
+  if (held > 0) result.chaseHeld = { count: held };
 
   return result;
 }
