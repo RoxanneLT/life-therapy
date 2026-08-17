@@ -96,7 +96,11 @@ export type AuthEventAction =
   | "login_success"
   | "login_failure"
   | "password_reset_requested"
-  | "password_changed";
+  | "password_changed"
+  // The second factor is the half that stops a stolen password, and it left no
+  // trace at all — a run of failed codes against an account was invisible.
+  | "mfa_success"
+  | "mfa_failure";
 
 /**
  * Record an authentication event (login, reset request, password change) to the

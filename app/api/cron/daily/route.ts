@@ -108,6 +108,18 @@ export async function GET(request: NextRequest) {
   // Safety net — canonicalise any stored phone numbers not already in E.164
   await runTask("phoneNormalization", () => processPhoneNormalization(), detail);
 
+  // Spent rate-limit counters. They hold a hashed identifier and mean nothing
+  // once their window closes, so keeping them is retaining personal data for no
+  // reason — the part that matters, not the row count (the table is tiny).
+  await runTask(
+    "rateLimitPrune",
+    async () => {
+      const { pruneExpiredRateLimits } = await import("@/lib/rate-limit-db");
+      return pruneExpiredRateLimits();
+    },
+    detail,
+  );
+
   // Prepaid credit expiry — warns at 14 and 3 days, then forfeits on the day.
   // Runs after the WhatsApp pass so both channels have warned before anything
   // is taken away.

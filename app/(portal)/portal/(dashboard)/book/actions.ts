@@ -216,10 +216,19 @@ export async function createPortalBooking(
 
   const confirmationToken = randomUUID();
 
-  // Couples partner name (from linked partner or form input)
-  const couplesPartnerName = parsed.sessionType === "couples"
+  // Couples partner details (from linked partner or form input).
+  //
+  // The email and phone were validated by the schema above and then dropped on
+  // the floor — the form asks for them so the partner "can receive the session
+  // invite", and nothing downstream ever had them. Stored now (columns added
+  // 2026-08-18); actually sending that invite is a separate piece of work, but
+  // the details are no longer thrown away in the meantime.
+  const isCouples = parsed.sessionType === "couples";
+  const couplesPartnerName = isCouples
     ? await resolveCouplesPartner(studentRecord.id, parsed.partnerName)
     : null;
+  const couplesPartnerEmail = isCouples ? parsed.partnerEmail?.trim() || null : null;
+  const couplesPartnerPhone = isCouples ? parsed.partnerPhone?.trim() || null : null;
 
   // Create booking in DB. The slot check above is advisory — a Graph call and a
   // round trip sit between it and this insert — so the partial unique index
@@ -244,6 +253,8 @@ export async function createPortalBooking(
       clientPhone: studentRecord.phone || null,
       clientNotes: parsed.clientNotes || null,
       couplesPartnerName,
+      couplesPartnerEmail,
+      couplesPartnerPhone,
       status: "confirmed",
       graphEventId: graphResult?.eventId || null,
       teamsMeetingUrl: graphResult?.teamsMeetingUrl || null,

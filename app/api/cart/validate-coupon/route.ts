@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { validateCoupon } from "@/lib/cart";
-import { checkAndRecord } from "@/lib/rate-limit-db";
+import { checkAndRecord, limitKey } from "@/lib/rate-limit-db";
 
 /**
  * POST /api/cart/validate-coupon
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     const ip =
       (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    if (await checkAndRecord(`coupon:ip:${ip}`, 20, 60 * 60 * 1000)) {
+    if (await checkAndRecord(limitKey("coupon", "ip", ip), 20, 60 * 60 * 1000)) {
       return NextResponse.json(
         { valid: false, error: "Too many attempts. Please try again later." },
         { status: 429 },

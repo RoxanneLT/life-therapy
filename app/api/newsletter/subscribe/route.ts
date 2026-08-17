@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { rateLimitNewsletter } from "@/lib/rate-limit";
+import { rateLimitNewsletterDb } from "@/lib/rate-limit-db";
 import { upsertContact } from "@/lib/contacts";
 
 export async function POST(request: NextRequest) {
   try {
+    // Durable, not in-memory. This endpoint looks like a mailing-list signup and
+    // reads like one, but `upsertContact` writes a real `students` row — the
+    // write just lives one file away, which is also why the audit's high-value
+    // check never saw it. The in-memory limiter keeps its counter inside a single
+    // warm lambda, so the real ceiling was 3 × instances and reset on every cold
+    // start: no limit at all on something that creates client records.
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
-    const { success } = rateLimitNewsletter(ip);
-    if (!success) {
+    if (await rateLimitNewsletterDb(ip)) {
       return NextResponse.json(
         { error: "Too many requests. Please try again later." },
         { status: 429 }

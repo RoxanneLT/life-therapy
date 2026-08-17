@@ -17,6 +17,25 @@ export function hashIdentifier(value: string): string {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex").slice(0, 32);
 }
 
+/**
+ * The bucket key for a rate-limited attempt. Use this rather than building a
+ * template literal per call site.
+ *
+ * `rate_limits.key` is the PRIMARY KEY, so whatever goes in it is stored in
+ * plaintext and readable by anyone with database access. Half the call sites
+ * hashed the identifier and half interpolated it raw, which left rows like
+ * `login:ip:165.0.85.107` and `pwreset:ip:41.123.46.150` sitting in the table —
+ * a log of who tried to sign in and from where, in a table nobody thinks of as
+ * holding personal data, next to an audit trail that HMACs its IPs precisely so
+ * they cannot be read back.
+ *
+ * There is no case for the raw value: the key only ever needs to be equal to
+ * itself.
+ */
+export function limitKey(scope: string, kind: "ip" | "email" | "user", value: string): string {
+  return `${scope}:${kind}:${hashIdentifier(value)}`;
+}
+
 /** True when the key has reached its limit inside the current (unexpired) window. */
 export async function isRateLimitedDb(key: string, limit: number): Promise<boolean> {
   const row = await prisma.rateLimit.findUnique({ where: { key } });
@@ -50,12 +69,31 @@ const HOUR_MS = 60 * 60 * 1000;
 
 /** Public booking creation: 10/hr/IP, durable. Takes a real slot in a real diary. */
 export async function rateLimitBookingDb(ip: string): Promise<boolean> {
-  return checkAndRecord(`booking:ip:${hashIdentifier(ip)}`, 10, HOUR_MS);
+  return checkAndRecord(limitKey("booking", "ip", ip), 10, HOUR_MS);
 }
 
 /** Portal self-registration: 5/hr/IP, durable. */
 export async function rateLimitRegisterDb(ip: string): Promise<boolean> {
-  return checkAndRecord(`register:ip:${hashIdentifier(ip)}`, 5, HOUR_MS);
+  return checkAndRecord(limitKey("register", "ip", ip), 5, HOUR_MS);
+}
+
+/** Newsletter signup: 3/hr/IP. It upserts a real student row — see the route. */
+export async function rateLimitNewsletterDb(ip: string): Promise<boolean> {
+  return checkAndRecord(limitKey("newsletter", "ip", ip), 3, HOUR_MS);
+}
+
+/**
+ * Drop rate-limit rows whose window has closed.
+ *
+ * They are spent counters with no meaning once expired, and every one of them
+ * carries an identifier. Keeping them is retaining personal data to no purpose,
+ * which is the part POPIA minds — not the row count.
+ */
+export async function pruneExpiredRateLimits(): Promise<{ pruned: number }> {
+  const res = await prisma.rateLimit.deleteMany({
+    where: { windowEnd: { lt: new Date() } },
+  });
+  return { pruned: res.count };
 }
 
 /** Count one hit — opens a fresh window if none/expired, otherwise increments. */

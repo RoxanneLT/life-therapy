@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { recordAuthEvent } from "@/lib/audit";
-import { isRateLimitedDb, recordHitDb, clearRateLimitDb, hashIdentifier } from "@/lib/rate-limit-db";
+import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
 import { appBaseUrl } from "@/lib/region";
 
 const RESET_WINDOW_MS = 15 * 60 * 1000;
@@ -37,8 +37,8 @@ export async function requestPasswordResetAction(
   // Throttle reset requests (anti reset-bombing): 5 per IP and 3 per target email
   // per 15 min. Counted before any account lookup, so it can't be used to enumerate.
   const reqIp = clientIp(await headers()) ?? "unknown";
-  const ipKey = `pwreset:ip:${reqIp}`;
-  const emailKey = `pwreset:email:${hashIdentifier(email)}`;
+  const ipKey = limitKey("pwreset", "ip", reqIp);
+  const emailKey = limitKey("pwreset", "email", email);
   if ((await isRateLimitedDb(ipKey, 5)) || (await isRateLimitedDb(emailKey, 3))) {
     return { error: "Too many reset requests. Please wait a few minutes and try again." };
   }
@@ -238,8 +238,8 @@ export async function updatePasswordAction(
   });
   // They proved account control via the email link — clear any login lockout
   // (both the IP and this account's email bucket) so they can sign in immediately.
-  if (ip) await clearRateLimitDb(`login:ip:${ip}`);
-  if (user?.email) await clearRateLimitDb(`login:email:${hashIdentifier(user.email)}`);
+  if (ip) await clearRateLimitDb(limitKey("login", "ip", ip));
+  if (user?.email) await clearRateLimitDb(limitKey("login", "email", user.email));
 
   return { success: true };
 }

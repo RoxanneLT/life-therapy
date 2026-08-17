@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { isRateLimitedDb, recordHitDb, clearRateLimitDb, hashIdentifier } from "@/lib/rate-limit-db";
+import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
 import { recordAuthEvent } from "@/lib/audit";
 
 const IP_LIMIT = 5; // failed attempts per IP before lockout
@@ -40,8 +40,8 @@ export async function passwordSignInAction(
     h.get("x-real-ip") ||
     "unknown";
   const userAgent = h.get("user-agent") ?? undefined;
-  const ipKey = `login:ip:${ip}`;
-  const emailKey = `login:email:${hashIdentifier(cleanEmail)}`;
+  const ipKey = limitKey("login", "ip", ip);
+  const emailKey = limitKey("login", "email", cleanEmail);
 
   if ((await isRateLimitedDb(ipKey, IP_LIMIT)) || (await isRateLimitedDb(emailKey, EMAIL_LIMIT))) {
     await recordAuthEvent({ action: "login_failure", email: cleanEmail, ip, userAgent, reason: "rate_limited" });

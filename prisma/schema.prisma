@@ -294,6 +294,18 @@ model Booking {
   paymentRequest         PaymentRequest? @relation(fields: [paymentRequestId], references: [id], onDelete: SetNull)
   billingNote            String?         // "(no-show)" | "(rescheduled)" | "(cancelled)" | null
   couplesPartnerName     String?         // Partner name for couples sessions
+  /// Partner contact details for a couples session.
+  ///
+  /// The portal booking form has always asked for these two, validated them, and
+  /// then thrown them away — there was nowhere to put them. The form tells the
+  /// client their partner will be sent the session invite, so the promise was
+  /// made and silently broken at the point of storage.
+  ///
+  /// Added 2026-08-18 via the Management API and mirrored here BY HAND — this
+  /// project's pooler hangs `prisma db pull`, so the DATABASE is the source of
+  /// truth and this is the copy. See .claude/rules/schema-changes.md.
+  couplesPartnerEmail    String?
+  couplesPartnerPhone    String?
   // Admin policy override — allows client to reschedule/cancel outside normal windows
   policyOverride     Boolean   @default(false)
 

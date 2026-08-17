@@ -1261,17 +1261,50 @@ check("dual-domain: no hardcoded life-therapy domain in a client-facing path", (
 // already on the durable one.
 // ═══════════════════════════════════════════════════════════════════════════
 
+check("abuse: an MFA/OTP verify is rate-limited", () => {
+  // The password path had a limiter; the second factor had none. A six-digit
+  // code with a ~30-90s validity is only as strong as the number of guesses that
+  // fit in the window, so an unlimited verify endpoint is the weakest link in an
+  // account protected by 2FA — and the existing `server-action-auth` check
+  // structurally cannot see it, because that one only inspects functions that
+  // touch prisma.*.create/update, and verifying a code touches Supabase.
+  const VERIFY = /\.mfa\.(?:verify|challengeAndVerify)\s*\(/;
+  const GUARD = /isRateLimitedDb|checkAndRecord|rate-limit-db/;
+  for (const f of walk(APP)) {
+    if (isTest(f)) continue;
+    const raw = read(f);
+    if (!VERIFY.test(code(raw))) continue;
+    if (!GUARD.test(raw)) {
+      fail(
+        "abuse",
+        rel(f),
+        "verifies an MFA/OTP code with no durable rate limit",
+        "guard with isRateLimitedDb/recordHitDb keyed on the user id — see app/(public)/login/mfa/actions.ts",
+      );
+    }
+  }
+});
+
 check("abuse: high-value public writes use the DURABLE limiter", () => {
   // The in-memory limiter is fine for read-ish endpoints (slot lookups,
   // newsletter). It is not fine for anything that creates a booking or a student.
   const IN_MEMORY = /\brateLimit(?:Booking|Register|Newsletter|Api)?\s*\(/;
-  const HIGH_VALUE = /prisma\.(?:booking|student)\.(?:create|upsert)/;
+  // `upsertContact` is here because the check reads ONE FILE AT A TIME, and the
+  // newsletter route's `prisma.student.upsert` lives inside lib/contacts.ts. The
+  // route therefore looked read-only to this regex, was allowlisted as
+  // "low-value", and kept the in-memory limiter on an endpoint that creates
+  // client records. A write behind a helper is still a write.
+  const HIGH_VALUE = /prisma\.(?:booking|student)\.(?:create|upsert)|\bupsertContact\s*\(/;
   const ALLOW = new Set([
     "lib/rate-limit.ts", // the module itself
-    // Read-only / low-value: bounding scrapers is all these need.
+    // Genuinely read-only: no row is created, so bounding scrapers is all these
+    // need. Verified per site rather than assumed from the path.
     "app/api/booking/available-slots/route.ts",
     "app/api/booking/available-dates/route.ts",
-    "app/api/newsletter/subscribe/route.ts",
+    // NOTE: app/api/newsletter/subscribe/route.ts used to sit here on the
+    // grounds that it was "low-value". It calls upsertContact, which writes a
+    // students row. Migrated to the durable limiter 2026-08-18 and removed from
+    // this list — the entry was the reason nobody looked.
   ]);
   for (const f of [...walk(APP)].filter((p) => !isTest(p))) {
     if (ALLOW.has(rel(f))) continue;

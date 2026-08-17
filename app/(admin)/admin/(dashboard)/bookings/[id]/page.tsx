@@ -340,6 +340,29 @@ export default async function BookingDetailPage({ params }: Props) {
                 </div>
               </>
             )}
+            {/* Couples partner. The name was stored but never displayed anywhere,
+                and the contact details were not stored at all — so for a couples
+                session the second person was invisible to the practice. */}
+            {booking.couplesPartnerName && (
+              <>
+                <Separator />
+                <div>
+                  <span className="text-muted-foreground">Partner</span>
+                  <p className="mt-1 text-sm font-medium">{booking.couplesPartnerName}</p>
+                  {booking.couplesPartnerEmail && (
+                    <a
+                      href={`mailto:${booking.couplesPartnerEmail}`}
+                      className="text-sm text-brand-600 hover:underline"
+                    >
+                      {booking.couplesPartnerEmail}
+                    </a>
+                  )}
+                  {booking.couplesPartnerPhone && (
+                    <p className="text-sm">{formatPhone(booking.couplesPartnerPhone)}</p>
+                  )}
+                </div>
+              </>
+            )}
             <Separator />
             <div className="flex justify-between">
               <span className="text-muted-foreground">Booked</span>
