@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { prisma } from "@/lib/prisma";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 /**
  * Verify a TOTP code on the SERVER so the AAL2 session is written to cookies
@@ -49,9 +50,8 @@ export async function verifyMfaAction(
     redirect("/admin");
   }
 
-  const dest =
-    redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("/admin")
-      ? redirectTo
-      : "/portal";
-  redirect(dest);
+  // `startsWith("/")` alone admits "//evil.com", which a browser reads as
+  // protocol-relative and follows off-origin. safeNextPath is the shared guard.
+  const safe = safeNextPath(redirectTo, "/portal");
+  redirect(safe.startsWith("/admin") ? "/portal" : safe);
 }

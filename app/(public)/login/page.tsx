@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { safeNextPath } from "@/lib/safe-redirect";
 import Link from "next/link";
 import Image from "next/image";
 import { createBrowserClient } from "@/lib/supabase";
@@ -26,11 +27,11 @@ async function redirectByRole(router: ReturnType<typeof useRouter>, redirectTo?:
     return true;
   }
   if (role === "student") {
-    // Honour ?redirect= for students, but only to safe same-site paths
-    const dest = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("/admin")
-      ? redirectTo
-      : "/portal";
-    router.replace(dest);
+    // Honour ?redirect= for students, but only to safe same-site paths.
+    // The router is likely to refuse a cross-origin target anyway, but "likely"
+    // is not a guard, and this is the same input the other two sites take.
+    const safe = safeNextPath(redirectTo, "/portal");
+    router.replace(safe.startsWith("/admin") ? "/portal" : safe);
     return true;
   }
   return false;

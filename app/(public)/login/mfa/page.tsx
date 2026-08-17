@@ -16,6 +16,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase";
 import { verifyMfaAction } from "./actions";
+import { safeNextPath } from "@/lib/safe-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,11 +49,10 @@ export default function MfaChallengePage() {
     if (role === "admin") {
       globalThis.location.assign("/admin");
     } else if (role === "student") {
-      const dest =
-        redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("/admin")
-          ? redirectTo
-          : "/portal";
-      globalThis.location.assign(dest);
+      // location.assign is not origin-restricted, so "//evil.com" would navigate
+      // straight off-site. Same shared guard as the server action.
+      const safe = safeNextPath(redirectTo, "/portal");
+      globalThis.location.assign(safe.startsWith("/admin") ? "/portal" : safe);
     } else {
       globalThis.location.assign("/login");
     }

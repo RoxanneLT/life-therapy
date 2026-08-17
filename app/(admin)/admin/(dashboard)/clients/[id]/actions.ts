@@ -11,7 +11,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
-import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, type BillingContact } from "@/lib/billing";
+import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, type BillingContact } from "@/lib/billing";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
 import { saToday, calendarDate, addSaDays } from "@/lib/dates";
@@ -1079,7 +1079,7 @@ export async function voidInvoiceAction(invoiceId: string, studentId: string) {
 
   const before = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { status: true },
+    select: { status: true, paidAmountCents: true },
   });
 
   await prisma.invoice.update({
@@ -1087,11 +1087,29 @@ export async function voidInvoiceAction(invoiceId: string, studentId: string) {
     data: { status: "cancelled" },
   });
 
-  // Unlink any bookings from this invoice so they can be re-invoiced
-  await prisma.booking.updateMany({
-    where: { invoiceId },
-    data: { invoiceId: null, paymentRequestId: null },
-  });
+  // Unlink the bookings ONLY when no money arrived against this invoice.
+  //
+  // Releasing them is right for a genuinely unpaid invoice — the sessions go back
+  // to the unbilled pool and get billed properly next run. It is wrong the moment
+  // any money has been received: the pool's only membership test is
+  // `paymentRequestId: null AND invoiceId: null`, and nothing downstream knows the
+  // session was ever paid for, so the next monthly run bills it again at full
+  // price. Left linked, they simply cannot be re-billed.
+  //
+  // The status string is not the test. A short payment leaves an invoice at
+  // "payment_requested" with real money on it, which is exactly the case the
+  // "don't void a paid invoice" button guard cannot see.
+  const moneyReceived =
+    (before?.paidAmountCents ?? 0) > 0 || before?.status === "paid" || before?.status === "credited";
+
+  let released = 0;
+  if (!moneyReceived) {
+    const res = await prisma.booking.updateMany({
+      where: { invoiceId },
+      data: { invoiceId: null, paymentRequestId: null },
+    });
+    released = res.count;
+  }
 
   await recordAudit({
     action: "invoice_voided",
@@ -1100,7 +1118,12 @@ export async function voidInvoiceAction(invoiceId: string, studentId: string) {
     actorEmail: adminUser.email,
     before: { status: before?.status ?? null },
     after: { status: "cancelled" },
-    metadata: { studentId },
+    metadata: {
+      studentId,
+      paidAmountCents: before?.paidAmountCents ?? 0,
+      bookingsReleased: released,
+      bookingsKeptLinked: moneyReceived,
+    },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -1492,7 +1515,7 @@ export async function voidPaymentRequestAction(paymentRequestId: string, student
 
   const before = await prisma.paymentRequest.findUnique({
     where: { id: paymentRequestId },
-    select: { status: true },
+    select: { status: true, paidAmountCents: true, invoiceId: true },
   });
 
   await prisma.paymentRequest.update({
@@ -1500,11 +1523,32 @@ export async function voidPaymentRequestAction(paymentRequestId: string, student
     data: { status: "cancelled" },
   });
 
-  // Unlink bookings so they become unbilled again
-  await prisma.booking.updateMany({
-    where: { paymentRequestId },
-    data: { paymentRequestId: null },
-  });
+  // Unlink the bookings ONLY when nothing has been received against the request.
+  //
+  // A short payment leaves the request at "pending" or "partial" with real money
+  // on it, so the UI's `status !== "paid"` guard — the only guard in the whole
+  // path — lets it through. Releasing those bookings puts them back in a pool
+  // whose only membership test is `paymentRequestId: null`, and the next monthly
+  // run bills them again at full price. That happened on 18 Aug: voiding one
+  // request released 4 sessions worth the same R1,790 it had just cancelled.
+  const received = receivedCents(
+    { paidAmountCents: before?.paidAmountCents ?? null },
+    before?.invoiceId
+      ? await prisma.invoice.findUnique({
+          where: { id: before.invoiceId },
+          select: { paidAmountCents: true },
+        })
+      : null,
+  );
+
+  let released = 0;
+  if (received === 0) {
+    const res = await prisma.booking.updateMany({
+      where: { paymentRequestId },
+      data: { paymentRequestId: null },
+    });
+    released = res.count;
+  }
 
   await recordAudit({
     action: "invoice_voided",
@@ -1513,7 +1557,12 @@ export async function voidPaymentRequestAction(paymentRequestId: string, student
     actorEmail: adminUser.email,
     before: { status: before?.status ?? null },
     after: { status: "cancelled" },
-    metadata: { studentId },
+    metadata: {
+      studentId,
+      receivedCents: received,
+      bookingsReleased: released,
+      bookingsKeptLinked: received > 0,
+    },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);

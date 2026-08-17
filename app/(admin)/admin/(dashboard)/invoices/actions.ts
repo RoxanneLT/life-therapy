@@ -63,7 +63,7 @@ export async function voidInvoiceFromListAction(invoiceId: string) {
 
   const prevInvoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    select: { status: true },
+    select: { status: true, paidAmountCents: true },
   });
 
   const invoice = await prisma.invoice.update({
@@ -72,10 +72,23 @@ export async function voidInvoiceFromListAction(invoiceId: string) {
     select: { studentId: true },
   });
 
-  await prisma.booking.updateMany({
-    where: { invoiceId },
-    data: { invoiceId: null, paymentRequestId: null },
-  });
+  // Only release the bookings if no money arrived — see voidInvoiceAction for
+  // the full reasoning. The list view hides Void on a "paid" invoice, but a
+  // partly-paid one is not "paid", and that is the case that re-bills a client
+  // for a session they have already put money towards.
+  const moneyReceived =
+    (prevInvoice?.paidAmountCents ?? 0) > 0 ||
+    prevInvoice?.status === "paid" ||
+    prevInvoice?.status === "credited";
+
+  let released = 0;
+  if (!moneyReceived) {
+    const res = await prisma.booking.updateMany({
+      where: { invoiceId },
+      data: { invoiceId: null, paymentRequestId: null },
+    });
+    released = res.count;
+  }
 
   await recordAudit({
     action: "invoice_voided",
@@ -84,7 +97,13 @@ export async function voidInvoiceFromListAction(invoiceId: string) {
     actorEmail: adminUser.email,
     before: { status: prevInvoice?.status ?? null },
     after: { status: "cancelled" },
-    metadata: { studentId: invoice.studentId, source: "invoice_list" },
+    metadata: {
+      studentId: invoice.studentId,
+      source: "invoice_list",
+      paidAmountCents: prevInvoice?.paidAmountCents ?? 0,
+      bookingsReleased: released,
+      bookingsKeptLinked: moneyReceived,
+    },
   });
 
   revalidatePath("/admin/invoices");
@@ -412,13 +431,39 @@ export async function exportInvoicesCsvAction(
 // ────────────────────────────────────────────────────────────
 
 export async function excludeFromBillingAction(bookingId: string) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
+
+  // Read the price BEFORE destroying it. This action sets priceZarCents to 0,
+  // and without the old value in the trail there is no way to answer "what was
+  // this session worth?" afterwards — the exclusion becomes unrecoverable and
+  // indistinguishable from a session that was always free. The currency goes
+  // with it: an amount without one means nothing here.
+  const before = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { priceZarCents: true, priceCurrency: true, billingNote: true, studentId: true },
+  });
 
   await prisma.booking.update({
     where: { id: bookingId },
     data: {
       billingNote: "(excluded from billing — admin override)",
       priceZarCents: 0,
+    },
+  });
+
+  await recordAudit({
+    action: "booking_excluded_from_billing",
+    entityType: "booking",
+    entityId: bookingId,
+    actorEmail: adminUser.email,
+    before: {
+      priceZarCents: before?.priceZarCents ?? null,
+      billingNote: before?.billingNote ?? null,
+    },
+    after: { priceZarCents: 0, billingNote: "(excluded from billing — admin override)" },
+    metadata: {
+      studentId: before?.studentId ?? null,
+      currency: before?.priceCurrency ?? null,
     },
   });
 

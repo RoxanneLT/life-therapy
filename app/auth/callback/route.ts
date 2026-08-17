@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { safeRedirectUrl } from "@/lib/safe-redirect";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = searchParams.get("next") ?? "/portal";
+  // NOT `${origin}${next}`. That concatenated an attacker's string onto our
+  // origin and parsed the result afterwards, so `next=@evil.com` produced a URL
+  // whose host was evil.com — from a link that genuinely started with ours, and
+  // with a token the attacker can mint through the ordinary reset flow.
+  const destination = safeRedirectUrl(searchParams.get("next"), origin, "/portal");
 
   const supabase = await createSupabaseServerClient();
 
@@ -14,7 +19,7 @@ export async function GET(request: Request) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(destination);
     }
     console.error("[auth/callback] Code exchange failed:", error.message);
   }
@@ -26,7 +31,7 @@ export async function GET(request: Request) {
       type: type as "recovery" | "email" | "signup",
     });
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(destination);
     }
     console.error("[auth/callback] Token verification failed:", error.message);
   }
