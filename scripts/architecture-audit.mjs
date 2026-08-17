@@ -1031,6 +1031,98 @@ check("email-safety: throwing sends in cron processors are guarded", () => {
   }
 });
 
+check("email-safety: a marketing sender checks consent", () => {
+  // POPIA s69: direct marketing needs consent. Campaigns, drip and birthday
+  // senders all filtered on `consentGiven`; the dormant follow-up did not — so
+  // the one channel that emails people BECAUSE they went quiet was the one that
+  // never asked whether they had agreed to be contacted.
+  //
+  // Matched on the marketing template keys rather than on filenames, so a new
+  // processor that sends one of these has to answer the same question.
+  //
+  // Scanned on RAW source, not code(): a template key only ever appears INSIDE a
+  // string literal, and code() blanks those — the first draft of this check
+  // therefore passed with the consent filter deleted. Same way the +02:00 check
+  // silently never fired. A check that cannot fail is worse than no check.
+  // The two halves need OPPOSITE reads, and getting that wrong made this check
+  // unfailable twice over. The consent test must run on comment-stripped code:
+  // the fix's own comment explains `consentGiven`, so a raw-source match stayed
+  // green with the filter itself deleted — the check was reading the explanation
+  // instead of the code.
+  const MARKETING_KEYS = /["'`](dormant_\d+d|birthday|campaign_\w+|drip_\w+)["'`]/;
+  for (const f of walk(LIB)) {
+    if (isTest(f)) continue;
+    const raw = read(f);
+    const src = code(raw);
+    if (!MARKETING_KEYS.test(raw)) continue;
+    // Only files that pick their own recipients — a helper handed a student id
+    // is not the place the decision belongs.
+    if (!/prisma\.student\.find/.test(src)) continue;
+    if (!/consentGiven/.test(src)) {
+      fail(
+        "email-safety",
+        rel(f),
+        "selects recipients for a marketing send without checking consentGiven",
+        "add `consentGiven: true` to the recipient query, as campaign/drip/birthday do",
+      );
+    }
+  }
+});
+
+check("email-safety: only registered variables carry HTML into a template", () => {
+  // Every value handed to renderEmail() is escaped except the names registered in
+  // RAW_HTML_VARIABLES. That list is the entire injection surface, so a call site
+  // that passes markup under an unregistered name is either (a) about to have its
+  // markup escaped and rendered as visible tags, or (b) a new bypass nobody
+  // decided on. Both want a human.
+  //
+  // The bug this defends: `clientName` from the PUBLIC booking form went into the
+  // confirmation email and the admin notification unescaped — anyone could have
+  // had a link of their choosing delivered from the practice's own domain, over
+  // its DKIM signature.
+  const renderSrc = read(join(LIB, "email-render.ts"));
+  const listMatch = /const RAW_HTML_VARIABLES = new Set\(\[([\s\S]*?)\]\)/.exec(renderSrc);
+  if (!listMatch) {
+    fail(
+      "email-safety",
+      "lib/email-render.ts",
+      "RAW_HTML_VARIABLES is gone — either escaping was removed, or the allowlist was renamed",
+      "restore the registry; it is what the audit reads to tell a block from a value",
+    );
+    return;
+  }
+  const registered = new Set([...listMatch[1].matchAll(/"(\w+)"/g)].map((m) => m[1]));
+
+  for (const f of allSource()) {
+    if (rel(f) === "lib/email-render.ts") continue;
+    const src = read(f); // RAW: the markup only ever lives inside a string literal
+    let i = 0;
+    while ((i = src.indexOf("renderEmail(", i)) !== -1) {
+      let depth = 0;
+      let j = i + "renderEmail(".length - 1;
+      const start = j;
+      do {
+        if (src[j] === "(") depth++;
+        else if (src[j] === ")") depth--;
+        j++;
+      } while (depth > 0 && j < src.length);
+      const call = src.slice(start, j);
+      i = j;
+
+      // `key: <something containing a tag>` — template literal or quoted string.
+      for (const m of call.matchAll(/(\w+):\s*(?:`[^`]*<[a-zA-Z/][^`]*`|"[^"]*<[a-zA-Z/][^"]*")/g)) {
+        if (registered.has(m[1])) continue;
+        fail(
+          "email-safety",
+          `${rel(f)} → ${m[1]}`,
+          `passes HTML to renderEmail under an unregistered name — it will be escaped and shown as tags`,
+          "add it to RAW_HTML_VARIABLES in lib/email-render.ts (with the reason), and escape whatever the block interpolates",
+        );
+      }
+    }
+  }
+});
+
 check("email-safety: every rendered template key has a hardcoded fallback", () => {
   // renderEmail() prefers the DB template and falls back to renderFallback()'s
   // switch. Four keys had NO case and fell to `default:` — subject

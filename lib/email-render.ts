@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSiteSettings } from "@/lib/settings";
+import { escapeHtml } from "@/lib/utils";
 import { baseTemplate } from "@/lib/email-templates";
 import * as fallback from "@/lib/email-templates";
 
@@ -267,6 +268,55 @@ function replacePlaceholders(
 }
 
 /**
+ * The variables whose values ARE markup, built by the call site.
+ *
+ * Everything else is escaped before it reaches a template — see `escapeTemplateVariables()`.
+ * This list is the entire bypass, so each entry has to be a block the caller
+ * assembles as HTML, and the caller owns escaping whatever it interpolates into
+ * that block. Adding a name here is granting it the ability to inject.
+ *
+ * Kept honest by the `email-safety: only registered variables carry HTML` audit
+ * check, which fails if a call site passes markup under any other name.
+ */
+const RAW_HTML_VARIABLES = new Set([
+  "bankingDetails",   // send-invoice.ts — EFT details table
+  "sessionSummary",   // send-invoice.ts — line-item table, incl. the balance rows
+  "orderItemsTable",  // paystack webhook — order line rows
+  "clientDetails",    // bookings/actions.ts — admin notification block
+  "creditsInfo",      // clients/actions.ts — "you have N credits" with <strong>
+  "dateList",         // bookings/actions.ts — <ul> of series dates
+  "skippedNote",      // bookings/actions.ts — <p> naming skipped dates
+  "teamsLink",        // bookings/actions.ts — admin's <a> to the meeting
+  "teamsSection",     // book actions — client's "join your session" panel
+  "teamsButton",      // cron/session-reminders.ts — the "join" button in a reminder
+  "priceSection",     // book actions — <p> with the fee, or "" when free
+  "discountRow",      // paystack webhook — a <tr> inside the order totals table
+  "messageBlock",     // gift.ts — the buyer's note (escaped at the call site)
+]);
+
+/**
+ * Escape every variable that is not a registered HTML block.
+ *
+ * `clientName` comes from the PUBLIC booking form — unauthenticated, no login,
+ * anyone. It was interpolated straight into the confirmation email and into the
+ * admin's notification, so a "name" of `<a href="http://evil">Click here</a>`
+ * was delivered as working markup from the practice's own domain and DKIM
+ * signature. That is a phishing email Roxanne sends on the attacker's behalf.
+ *
+ * Both render paths need it: the DB template substitutes `{{clientName}}` and
+ * the hardcoded fallback interpolates `${variables.clientName}`. Escaping inside
+ * replacePlaceholders would have covered only the first, and left the fallback —
+ * the path used whenever a template is missing or inactive — wide open.
+ */
+export function escapeTemplateVariables(variables: Record<string, string>): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(variables)) {
+    safe[key] = RAW_HTML_VARIABLES.has(key) ? value : escapeHtml(value ?? "");
+  }
+  return safe;
+}
+
+/**
  * Render an email using DB template (if active) or fallback to hardcoded function.
  * Call sites pass pre-computed HTML for dynamic sections as variable values.
  */
@@ -297,8 +347,11 @@ export async function renderEmail(
     });
 
     if (template?.isActive) {
+      // The SUBJECT is plain text — a mail client renders it literally, so
+      // escaping there would show a client called "Jane & John" as "Jane &amp;
+      // John" in every inbox. The body is HTML and gets the escaped values.
       const subject = replacePlaceholders(template.subject, variables);
-      const bodyHtml = replacePlaceholders(template.bodyHtml, variables);
+      const bodyHtml = replacePlaceholders(template.bodyHtml, escapeTemplateVariables(variables));
       const title = TEMPLATE_TITLES[key] || template.name;
       const html = baseTemplate(title, bodyHtml, baseUrl, unsubscribeUrl, contactEmail, contactPhone);
       return { subject, html };
@@ -307,8 +360,12 @@ export async function renderEmail(
     // DB not available or template table doesn't exist yet — fall through to fallback
   }
 
-  // Fallback: use hardcoded templates
-  return renderFallback(key, variables, baseUrl, unsubscribeUrl, contactEmail, contactPhone);
+  // Fallback: use hardcoded templates. Rendered twice on purpose — these are pure
+  // string builders, and it is the only way to keep an unescaped subject beside an
+  // escaped body without threading two variable maps through every case.
+  const escaped = renderFallback(key, escapeTemplateVariables(variables), baseUrl, unsubscribeUrl, contactEmail, contactPhone);
+  const rawSubject = renderFallback(key, variables, baseUrl, unsubscribeUrl, contactEmail, contactPhone);
+  return { subject: rawSubject.subject, html: escaped.html };
 }
 
 /**
@@ -331,9 +388,14 @@ export async function previewEmail(
     // DB unavailable — fall through with hardcoded defaults
   }
 
+  // The preview escapes exactly as a real send does — a preview that renders
+  // markup the live email would show as text is a preview of a different email,
+  // and this one is what the admin checks a template against before saving it.
+  const safeVars = escapeTemplateVariables(sampleVars);
+
   if (overrides?.subject && overrides?.bodyHtml) {
     const subject = replacePlaceholders(overrides.subject, sampleVars);
-    const bodyHtml = replacePlaceholders(overrides.bodyHtml, sampleVars);
+    const bodyHtml = replacePlaceholders(overrides.bodyHtml, safeVars);
     const title = TEMPLATE_TITLES[key] || key;
     const html = baseTemplate(title, bodyHtml, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
     return { subject, html };
@@ -345,14 +407,16 @@ export async function previewEmail(
 
   if (template) {
     const subject = replacePlaceholders(template.subject, sampleVars);
-    const bodyHtml = replacePlaceholders(template.bodyHtml, sampleVars);
+    const bodyHtml = replacePlaceholders(template.bodyHtml, safeVars);
     const title = TEMPLATE_TITLES[key] || template.name;
     const html = baseTemplate(title, bodyHtml, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
     return { subject, html };
   }
 
   // Fallback
-  return renderFallback(key, sampleVars, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
+  const escaped = renderFallback(key, safeVars, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
+  const rawSubject = renderFallback(key, sampleVars, DEFAULT_BASE_URL, undefined, contactEmail, contactPhone);
+  return { subject: rawSubject.subject, html: escaped.html };
 }
 
 /**

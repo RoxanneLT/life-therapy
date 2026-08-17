@@ -8,7 +8,8 @@
  *
  * Tracking: uses emailLog templateKey to prevent duplicate sends.
  * Only targets clients with clientStatus "active" who have had
- * at least one completed session (not new leads).
+ * at least one completed session (not new leads), and who have
+ * consented to marketing — see the query below.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -40,6 +41,16 @@ export async function processDormantFollowUp(): Promise<{
   const activeClients = await prisma.student.findMany({
     where: {
       clientStatus: "active",
+      // POPIA s69: direct marketing needs consent, and a re-engagement nudge is
+      // direct marketing however gently it is worded. Every other sender —
+      // campaigns, drip, birthday — already filters on this; this one did not, so
+      // the single channel that emails people precisely BECAUSE they went quiet
+      // was the one ignoring whether they had agreed to be contacted.
+      //
+      // `consentGiven` defaults to false, so this is a real narrowing: of the 14
+      // clients currently in the dormant pool, 10 have consented and 4 will stop
+      // receiving these. That is the point of the field.
+      consentGiven: true,
       emailOptOut: false,
       emailPaused: false,
       bookings: { some: { status: "completed" } },

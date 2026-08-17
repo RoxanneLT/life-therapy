@@ -20,7 +20,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderFallback } from "./email-render";
+import { renderFallback, escapeTemplateVariables, getSampleData } from "./email-render";
+import defaults from "./email-template-defaults";
 
 /** A fallback is "broken" if it fell through to the default: arm. */
 function assertRendered(key: string, r: { subject: string; html: string }) {
@@ -113,4 +114,61 @@ test("a missing variable renders blank, never the literal 'undefined'", () => {
   const r = renderFallback("booking_cancellation", {});
   assertRendered("booking_cancellation", r);
   assert.ok(!/undefined/.test(r.html), "no variable may render as the string 'undefined'");
+});
+
+// ── Escaping: the unauthenticated booking form reaches these templates ──────
+
+test("a client-supplied name cannot deliver markup", () => {
+  // The public booking form is unauthenticated. `clientName` went straight into
+  // the confirmation email AND the practice's notification, so anyone could have
+  // a link of their choosing delivered from life-therapy.co.za, over its DKIM
+  // signature. That is a phishing email the practice sends for the attacker.
+  const evil = '<a href="https://evil.example">Click here to reschedule</a>';
+  const safe = escapeTemplateVariables({ clientName: evil });
+
+  assert.ok(!safe.clientName.includes("<a "), "the tag must not survive");
+  assert.equal(
+    safe.clientName,
+    "&lt;a href=&quot;https://evil.example&quot;&gt;Click here to reschedule&lt;/a&gt;",
+  );
+
+  // ...and it must still be escaped once it has been through a template.
+  const r = renderFallback("booking_confirmation", {
+    ...safe,
+    sessionType: "Individual Therapy",
+    date: "Monday, 10 March 2025",
+    time: "10:00 – 11:00 (SAST)",
+    duration: "60",
+  });
+  assert.ok(!/<a href="https:\/\/evil\.example"/.test(r.html), "no live link in the body");
+  assert.ok(r.html.includes("&lt;a href="), "the name renders as visible text");
+});
+
+test("a registered HTML block passes through untouched", () => {
+  // The bypass has to keep working, or every invoice loses its line-item table.
+  const table = '<table><tr><td>Individual Session</td><td>R850.00</td></tr></table>';
+  const safe = escapeTemplateVariables({ sessionSummary: table, billingName: "Jane & John" });
+
+  assert.equal(safe.sessionSummary, table, "a registered block is not escaped");
+  assert.equal(safe.billingName, "Jane &amp; John", "everything else is");
+});
+
+test("every sample value that carries markup is a registered raw variable", () => {
+  // This is the check that keeps the registry honest as templates grow: a new
+  // HTML block added at a call site and NOT registered would be escaped and
+  // arrive in the client's inbox as visible tags. Two variables (teamsButton,
+  // discountRow) were missing from the first draft of the registry and were
+  // caught exactly this way.
+  for (const key of Object.keys(defaults)) {
+    const sample = getSampleData(key);
+    const escaped = escapeTemplateVariables(sample);
+    for (const [name, value] of Object.entries(sample)) {
+      if (!/<[a-zA-Z/]/.test(value)) continue;
+      assert.equal(
+        escaped[name],
+        value,
+        `${key}.${name} carries HTML but is not in RAW_HTML_VARIABLES — it would render as tags`,
+      );
+    }
+  }
 });

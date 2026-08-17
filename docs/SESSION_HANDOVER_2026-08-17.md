@@ -201,15 +201,19 @@ Two bugs found while doing the above, in neither report:
       control, those keys should be rotated: Supabase service role, Paystack secret, MS
       Graph client secret, Resend, `ENCRYPTION_KEY`.
 
-### P2 — 13 items, untouched
+### P2 — 11 items left
 
-From the report; `#18` and `#21` are worth pulling forward:
+`#18` and `#21` were pulled forward and are done (2026-08-18):
 
-- **#18 HTML injection into transactional emails** via client-supplied names
-  (`lib/email-render.ts:260-266`) — unauthenticated booking form, so phishing markup can
-  be delivered from the trusted domain. Escape at `replacePlaceholders`.
-- **#21 dormant follow-up skips `consentGiven`** (`lib/cron/dormant-follow-up.ts:40-46`) —
-  the only marketing sender that does not check it. POPIA-relevant.
+- [x] **#18 HTML injection into transactional emails.** The report said to escape at
+      `replacePlaceholders`; that would have fixed only the DB-template path and left the
+      hardcoded fallback — the path used whenever a template is missing or inactive —
+      wide open. Escaping happens at `renderEmail` instead, where both paths meet, with
+      `RAW_HTML_VARIABLES` as the single registered bypass. Subjects stay unescaped (they
+      are plain text). One admin-notification block was also interpolating a client's name
+      raw; its twin on the public path had escaped since it was written.
+- [x] **#21 dormant follow-up now checks `consentGiven`.** 4 of the 14 clients in the
+      dormant pool had not consented and will no longer receive it.
 - Others: 16 void-paid-invoice re-queues bookings · 17 `excludeFromBillingAction` has no
   audit · 19 recurring series creation is a long non-atomic loop · 20 invoice `lineItems`
   is unvalidated Json at 13+ sites · 22 MFA TOTP has no app-level rate limit · 23 reminder

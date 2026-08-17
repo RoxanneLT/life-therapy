@@ -19,6 +19,7 @@ import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/pr
 import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
+import { escapeHtml } from "@/lib/utils";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
   const { adminUser } = await requireRole("super_admin", "editor");
@@ -978,7 +979,14 @@ export async function adminCreateBookingAction(
       date: dateStr,
       time: timeStr,
       duration: String(config.durationMinutes),
-      clientDetails: `<p style="margin: 4px 0;"><strong>Client:</strong> ${clientName}</p><p style="margin: 4px 0;"><strong>Email:</strong> ${student.email}</p>` + (student.phone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${student.phone}</p>` : ""),
+      // A registered HTML block escapes its own interpolations — the escaping at
+      // renderEmail deliberately cannot reach inside one. The same block built on
+      // the public booking path has escaped since it was written; this copy did
+      // not, and it is the email that lands in Roxanne's inbox.
+      clientDetails:
+        `<p style="margin: 4px 0;"><strong>Client:</strong> ${escapeHtml(clientName)}</p>` +
+        `<p style="margin: 4px 0;"><strong>Email:</strong> ${escapeHtml(student.email)}</p>` +
+        (student.phone ? `<p style="margin: 4px 0;"><strong>Phone:</strong> ${escapeHtml(student.phone)}</p>` : ""),
       teamsLink: adminTeamsLink,
     }, baseUrl);
 
