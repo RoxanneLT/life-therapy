@@ -20,7 +20,7 @@ import {
   sendDueTodayNotice,
   sendOverdueNotice,
 } from "@/lib/send-invoice";
-import { saToday, calendarDate, isSameSaDay } from "@/lib/dates";
+import { saToday, calendarDate, saDateStr, isSameSaDay } from "@/lib/dates";
 
 /** Start of today's SAST calendar day, as a deterministic UTC-midnight Date. */
 function getSASTToday(): Date {
@@ -49,7 +49,9 @@ export async function processMonthlyBilling(): Promise<{
     overdue: { sent: number } | null;
   } = { billing: null, sweptUnsent: null, reminders: null, dueToday: null, overdue: null };
 
-  // 1. Is today the effective billing date?
+  // 1. Is today the effective billing date? Deliberately still an EQUALITY — the
+  //    chases below became thresholds so a missed day recovers, but GENERATING
+  //    requests must happen on exactly one day or every later run bills again.
   const billingDate = getEffectiveBillingDate(year, month);
   if (isSameSaDay(today, billingDate)) {
     try {
@@ -109,9 +111,23 @@ export async function processMonthlyBilling(): Promise<{
   });
 
   let remindersSent = 0;
+  // A THRESHOLD, not an equality.
+  //
+  // Every chase used `isSameSaDay(today, <its day>)`, so each one had exactly one
+  // day in which it could ever fire. Miss that day — a run that dies early, a
+  // request created after its own reminder date, a deploy at the wrong hour — and
+  // that client is never chased again, because the send is also one-shot. The
+  // sweep added for the never-emailed case doesn't cover this: those requests
+  // WERE emailed, they just went quiet afterwards.
+  //
+  // That is not theoretical. As of 18 Aug not one due-today or overdue notice had
+  // ever been sent, to anyone, while requests sat 40 days unpaid.
+  //
+  // The window stays bounded so the wording still matches the moment: a reminder
+  // is only a reminder until the money is actually due.
   for (const req of unpaidRequests) {
     const reminderDate = getReminderDate(req.dueDate);
-    if (isSameSaDay(today, reminderDate)) {
+    if (saDateStr(today) >= saDateStr(reminderDate) && saDateStr(today) < saDateStr(req.dueDate)) {
       try {
         await sendPaymentReminder(req.id);
         remindersSent++;
@@ -134,7 +150,13 @@ export async function processMonthlyBilling(): Promise<{
 
   let dueTodaySent = 0;
   for (const req of dueTodayRequests) {
-    if (isSameSaDay(today, req.dueDate)) {
+    // From the due date until the overdue notice takes over. "Due today" a day
+    // late still reads true enough; a week late does not, and by then the
+    // overdue notice is the honest one to send.
+    if (
+      saDateStr(today) >= saDateStr(req.dueDate) &&
+      saDateStr(today) < saDateStr(getOverdueDate(req.dueDate))
+    ) {
       try {
         await sendDueTodayNotice(req.id);
         dueTodaySent++;
@@ -158,7 +180,10 @@ export async function processMonthlyBilling(): Promise<{
   let overdueSent = 0;
   for (const req of stillUnpaid) {
     const overdueDate = getOverdueDate(req.dueDate);
-    if (isSameSaDay(today, overdueDate)) {
+    // Open-ended on purpose: this is the one that must not be missable. Still
+    // one-shot via `overdueSentAt`, so a request that slipped past its day gets
+    // chased on the next run rather than never.
+    if (saDateStr(today) >= saDateStr(overdueDate)) {
       try {
         await sendOverdueNotice(req.id);
         overdueSent++;

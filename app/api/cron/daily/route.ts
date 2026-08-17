@@ -187,10 +187,20 @@ export async function GET(request: NextRequest) {
     detail,
   );
 
-  // Fold in external cron failures from the last 24h
+  // Failures of OTHER jobs in the last 24h. Kept in their own object rather than
+  // merged into `detail`, because `detail` is what this run's own status is
+  // computed from — and merging meant this job was marked "failed" for NOTICING
+  // someone else's failure.
+  //
+  // That is not a cosmetic distinction. reconcile_calendar has been failing for
+  // weeks, so 29 of the last 31 daily runs read "failed" while doing their work
+  // perfectly. When almost every night is red, red stops carrying information,
+  // and the genuine outage underneath it goes unread. A monitor that cries wolf
+  // is worse than no monitor: it manufactures the belief that someone is
+  // watching.
+  const observed: Record<string, CronJobDetail> = {};
   try {
-    const externalFailures = await collectCronRunFailures(24);
-    Object.assign(detail, externalFailures);
+    Object.assign(observed, await collectCronRunFailures(24));
   } catch (err) {
     console.error("[daily-cron] collectCronRunFailures failed:", err);
   }
@@ -207,7 +217,8 @@ export async function GET(request: NextRequest) {
   try {
     const stuck = await collectStuckCronRuns(30);
     if (stuck.length > 0) {
-      detail.stuckCronRuns = {
+      // Also an observation about other runs, not a failure of this one.
+      observed.stuckCronRuns = {
         status: "failed",
         failed: stuck.length,
         error:
@@ -219,12 +230,16 @@ export async function GET(request: NextRequest) {
     console.error("[daily-cron] collectStuckCronRuns failed:", err);
   }
 
-  // Send digest (failure-only — a clean run sends nothing)
-  const digest = await sendCronDigest(startedAt.toISOString(), detail);
+  // The digest still reports BOTH — someone needs to hear about a job that has
+  // failed 144 times, whoever's fault it is. Only the run's own status is split.
+  const digest = await sendCronDigest(startedAt.toISOString(), { ...detail, ...observed });
 
   // Update cron_runs entry
   if (cronRunId) {
     try {
+      // This run's own work only. `observed` is deliberately excluded: a night
+      // where every task here succeeded is a night this job completed, and
+      // saying otherwise is what made the status column meaningless.
       const hasFailures = Object.values(detail).some(
         (d) => d.status === "failed" || d.status === "error" || (d.failed ?? 0) > 0,
       );
@@ -234,7 +249,7 @@ export async function GET(request: NextRequest) {
           finishedAt: new Date(),
           status: hasFailures ? "failed" : "completed",
           rowsProcessed: Object.keys(detail).length,
-          metadata: detail as unknown as Prisma.InputJsonValue,
+          metadata: { ...detail, observedElsewhere: observed } as unknown as Prisma.InputJsonValue,
         },
       });
     } catch {
@@ -251,5 +266,5 @@ export async function GET(request: NextRequest) {
     /* best effort */
   }
 
-  return NextResponse.json({ ok: true, ran_at: startedAt.toISOString(), detail, digest });
+  return NextResponse.json({ ok: true, ran_at: startedAt.toISOString(), detail, observedElsewhere: observed, digest });
 }
