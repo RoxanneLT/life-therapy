@@ -14,7 +14,7 @@ import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
 import { randomUUID } from "node:crypto";
-import { generateRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
+import { expandRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
 import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
@@ -1036,7 +1036,13 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
   const isPostpaid = student.billingType === "postpaid";
   const settings = await getSiteSettings();
   const clientName = `${student.firstName} ${student.lastName}`.trim();
-  const dates = generateRecurringDatesUntil(data.startDate, data.pattern, data.endDate);
+  // Holidays come back named rather than silently missing, so they reach the
+  // admin's "skipped" list and the client's summary email like any other gap.
+  const { dates, holidays } = expandRecurringDatesUntil(
+    data.startDate,
+    data.pattern,
+    data.endDate,
+  );
 
   // Check credits (skip for postpaid — sessions will be invoiced monthly)
   let creditsRemaining = 0;
@@ -1053,7 +1059,10 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 
   const recurringSeriesId = randomUUID();
   const createdDates: string[] = [];
-  const skippedDates: { date: string; reason: string }[] = [];
+  const skippedDates: { date: string; reason: string }[] = holidays.map((date) => ({
+    date,
+    reason: "Public holiday",
+  }));
   let creditsUsed = 0;
 
   // ── Step 1: Check which dates are available ──────────────────────
@@ -1090,12 +1099,6 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 
     seriesEventId = calResult?.seriesEventId || null;
     seriesTeamsMeetingUrl = calResult?.teamsMeetingUrl || null;
-
-    // Delete Graph occurrences for skipped dates (holidays, conflicts)
-    if (seriesEventId && skippedDates.length > 0) {
-      const skippedDateStrings = skippedDates.map(s => s.date);
-      await deleteRecurringEventOccurrences(seriesEventId, skippedDateStrings);
-    }
   }
 
   // ── Step 3: Create booking records (no individual calendar calls) ──
@@ -1161,6 +1164,39 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     createdDates.push(dateStr);
   }
 
+  // ── Step 4: Prune Graph occurrences with no booking behind them ──
+  //
+  // Graph is handed a plain weekly/bi-weekly pattern and expands EVERY interval
+  // in the range. Our bookings skip public holidays, and skip any date whose slot
+  // was gone — so every one of those leaves an occurrence in the client's calendar
+  // with nothing behind it. They get an invite for Christmas Day and arrive for it.
+  //
+  // Pruning against what was actually CREATED, rather than against a list of
+  // reasons to skip, is the same approach `rebuildSeriesCalendarAction` takes: it
+  // cannot miss a category, including the P2002 losses above that are only known
+  // once the inserts have run.
+  let calendarWarning: string | undefined;
+  if (seriesEventId && createdDates.length > 0) {
+    if (data.pattern === "weekly" || data.pattern === "bimonthly") {
+      const booked = new Set(createdDates);
+      const surplus = weeklyOccurrenceDates(
+        createdDates[0],
+        createdDates[createdDates.length - 1],
+        data.pattern === "bimonthly" ? 2 : 1,
+      ).filter((d) => !booked.has(d));
+      if (surplus.length > 0) {
+        const res = await deleteRecurringEventOccurrences(seriesEventId, surplus);
+        if (res.failed.length > 0) {
+          calendarWarning = `${res.failed.length} calendar occurrence(s) with no session behind them could not be removed — check Outlook for: ${res.failed.join(", ")}.`;
+        }
+      }
+    } else if (skippedDates.length > 0) {
+      // Monthly recurrence is not expanded here — same limitation the rebuild
+      // action states rather than pretending to have handled it.
+      calendarWarning = "Monthly series: skipped dates may still show in Outlook — run a calendar Check.";
+    }
+  }
+
   // Send single summary email
   if (createdDates.length > 0) {
     try {
@@ -1178,9 +1214,20 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         })
         .join("");
 
+      // Name the reason. "Unavailability" over a public holiday reads as though
+      // the practice was fully booked on Christmas Day, and the dates the client
+      // is NOT expected on are the ones worth being precise about.
+      const skippedHolidays = skippedDates.filter((s) => s.reason === "Public holiday").length;
+      const skippedOther = skippedDates.length - skippedHolidays;
+      const skippedReason = [
+        skippedHolidays > 0 ? `${skippedHolidays} public holiday${skippedHolidays !== 1 ? "s" : ""}` : null,
+        skippedOther > 0 ? `${skippedOther} date${skippedOther !== 1 ? "s" : ""} where the time was unavailable` : null,
+      ]
+        .filter(Boolean)
+        .join(" and ");
       const skippedHtml =
         skippedDates.length > 0
-          ? `<p style="margin-top: 16px; color: #6b7280;">Note: ${skippedDates.length} date(s) were skipped due to unavailability.</p>`
+          ? `<p style="margin-top: 16px; color: #6b7280;">Note: we skipped ${skippedReason} — there is no session on those days.</p>`
           : "";
 
       const email = await renderEmail(
@@ -1217,7 +1264,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     seriesId: recurringSeriesId,
     calendarWarning: availableDates.length > 0 && !seriesEventId
       ? "Recurring calendar event could not be created — please add it manually in Outlook."
-      : undefined,
+      : calendarWarning,
   };
 }
 

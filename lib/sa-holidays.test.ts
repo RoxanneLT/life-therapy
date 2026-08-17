@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 import {
   getSAPublicHolidays,
   isSAPublicHoliday,
+  isSAPublicHolidayOn,
   isBusinessDay,
   isWeekend,
   getNextBusinessDay,
@@ -170,4 +171,29 @@ test(`[${TZ}] the answer does not depend on the server's timezone`, () => {
   assert.equal(saDateStr(reconciliation), "2026-12-16");
   assert.equal(isSAPublicHoliday(reconciliation), true);
   assert.equal(reconciliation.toISOString(), "2026-12-16T00:00:00.000Z");
+});
+
+// ── The string form: one list, two doors ────────────────────────────────────
+
+test(`[${TZ}] isSAPublicHolidayOn agrees with the Date form, proclamations included`, () => {
+  // There used to be a SECOND holiday module answering this string question, and
+  // it had no idea about s2A proclamations. So 27 Dec 2022 was a holiday to the
+  // reschedule guard and an ordinary working day to recurring-series generation.
+  assert.equal(isSAPublicHolidayOn("2022-12-27"), true);
+  assert.equal(isSAPublicHoliday(d("2022-12-27")), true);
+
+  // And the two forms must not disagree anywhere in a year of ordinary dates.
+  for (const day of days(2026)) {
+    assert.equal(isSAPublicHolidayOn(day), true, `${day} should be a holiday`);
+  }
+  assert.equal(isSAPublicHolidayOn("2026-12-25"), true);
+  assert.equal(isSAPublicHolidayOn("2026-12-24"), false);
+});
+
+test(`[${TZ}] isSAPublicHolidayOn fails closed on a malformed date`, () => {
+  // Returning "not a holiday" for junk is the answer that books a session on
+  // Christmas Day. Throw instead — same contract as lib/dates.ts.
+  assert.throws(() => isSAPublicHolidayOn("25/12/2026"));
+  assert.throws(() => isSAPublicHolidayOn(""));
+  assert.throws(() => isSAPublicHolidayOn("2026-12-25T00:00:00Z"));
 });

@@ -9,6 +9,7 @@ import { type SessionTypeConfig } from "@/lib/booking-config";
 import { addDays, eachDayOfInterval } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { saToday, saInstant, saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
+import { isSAPublicHolidayOn } from "@/lib/sa-holidays";
 
 export interface TimeSlot {
   start: string; // "09:00"
@@ -107,22 +108,33 @@ export async function getAvailableSlots(
   });
   if (override?.isBlocked) return { slots: [], freeBusyFailed: false };
 
+  // 3. Public holidays are closed — unless an override deliberately opens the day.
+  //
+  // Recurring series have skipped holidays since they were built; single bookings
+  // never checked, so Christmas Day was offered on the public booking form and a
+  // client could book it. The same day, two answers, decided by which form they
+  // happened to use. An explicit AvailabilityOverride is the escape hatch, exactly
+  // as it is for a normally-closed weekday — Roxanne can still choose to work one.
+  if (isSAPublicHolidayOn(dateStr) && !override) {
+    return { slots: [], freeBusyFailed: false };
+  }
+
   const openTime = override?.startTime || dayHours.open;
   const closeTime = override?.endTime || dayHours.close;
 
-  // 3. Generate candidate slots with buffer between sessions
+  // 4. Generate candidate slots with buffer between sessions
   const slotDuration = sessionConfig.durationMinutes;
   const buffer = settings.bookingBufferMinutes ?? 15;
   const candidates = generateSlots(openTime, closeTime, slotDuration, buffer);
 
   if (candidates.length === 0) return { slots: [], freeBusyFailed: false };
 
-  // 4. Get Exchange calendar busy times (proper UTC boundaries for SAST day)
+  // 5. Get Exchange calendar busy times (proper UTC boundaries for SAST day)
   const dayStartUtc = saDayStart(dateStr);
   const dayEndUtc = saDayEnd(dateStr);
   const { slots: busyTimes, failed: freeBusyFailed } = await getFreeBusy(dayStartUtc, dayEndUtc);
 
-  // 5. Get existing bookings from our DB (resilience layer)
+  // 6. Get existing bookings from our DB (resilience layer)
   const existingBookings = await prisma.booking.findMany({
     where: {
       date: dateUtc,
@@ -131,7 +143,7 @@ export async function getAvailableSlots(
     select: { startTime: true, endTime: true },
   });
 
-  // 6. Build blocked time ranges (Exchange busy times + DB bookings, with buffer)
+  // 7. Build blocked time ranges (Exchange busy times + DB bookings, with buffer)
   const blockedRanges = [
     ...busyTimes.map((busy) => {
       const start = parseTime(isoToTimeString(busy.start));
@@ -144,7 +156,7 @@ export async function getAvailableSlots(
     })),
   ];
 
-  // 7. Filter out unavailable slots
+  // 8. Filter out unavailable slots
   const nowMs = Date.now();
   const minNoticeMs = (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
 
@@ -200,6 +212,8 @@ export async function getAvailableDates(options?: { includeToday?: boolean; maxD
     if (override?.isBlocked) return false;
     // Closed day without override = unavailable
     if (dayHours.closed && !override) return false;
+    // A public holiday is a closed day — same override escape hatch (see getAvailableSlots).
+    if (isSAPublicHolidayOn(dateStr) && !override) return false;
     // Open day with custom override hours, or regular open day
     return true;
   });

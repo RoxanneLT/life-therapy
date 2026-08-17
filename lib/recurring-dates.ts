@@ -1,5 +1,5 @@
 import { addWeeks, addMonths } from "date-fns";
-import { isSAPublicHoliday } from "@/lib/sa-public-holidays";
+import { isSAPublicHolidayOn } from "@/lib/sa-holidays";
 import { calendarDate } from "@/lib/dates";
 
 export type RecurringPattern = "weekly" | "bimonthly" | "monthly";
@@ -95,23 +95,32 @@ export function generateRecurringDates(
 }
 
 /**
- * Generate recurring dates from a start date up to (and including) an end date.
- * Skips South African public holidays.
- * Returns an array of ISO date strings ("2026-03-01").
+ * Every date the pattern lands on between `startDate` and `endDate` (inclusive),
+ * split into the ones that can be booked and the public holidays that cannot.
+ *
+ * The holidays are RETURNED rather than quietly dropped. Dropping them lost two
+ * things at once: the admin was never told why a 12-week series produced 11
+ * bookings, and — because the Outlook series is one recurring event that Graph
+ * expands on its own pattern — the holiday kept its occurrence in the client's
+ * calendar with no booking behind it. They arrive for a session that does not
+ * exist, on a public holiday.
  */
-export function generateRecurringDatesUntil(
+export function expandRecurringDatesUntil(
   startDate: string,
   pattern: RecurringPattern,
   endDate: string,
-): string[] {
+): { dates: string[]; holidays: string[] } {
   const dates: string[] = [];
+  const holidays: string[] = [];
   const start = calendarDate(startDate);
   const end = calendarDate(endDate);
   let current = start;
 
   while (current <= end) {
     const iso = current.toISOString().split("T")[0];
-    if (!isSAPublicHoliday(iso)) {
+    if (isSAPublicHolidayOn(iso)) {
+      holidays.push(iso);
+    } else {
       dates.push(iso);
     }
     switch (pattern) {
@@ -127,5 +136,17 @@ export function generateRecurringDatesUntil(
     }
   }
 
-  return dates;
+  return { dates, holidays };
+}
+
+/**
+ * Bookable recurring dates only — public holidays removed.
+ * Callers that need to know WHAT was removed want expandRecurringDatesUntil().
+ */
+export function generateRecurringDatesUntil(
+  startDate: string,
+  pattern: RecurringPattern,
+  endDate: string,
+): string[] {
+  return expandRecurringDatesUntil(startDate, pattern, endDate).dates;
 }

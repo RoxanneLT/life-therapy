@@ -1,10 +1,13 @@
 /**
  * South African public holidays and business day utilities.
  *
- * Fixed holidays + Easter-dependent dynamic holidays.
+ * THE holiday list — the only one. Fixed holidays + Easter-dependent dynamic
+ * holidays + the s2A proclamations no algorithm can derive.
  * If a holiday falls on Sunday, the following Monday is observed.
  * Covers 2024–2035 for Easter dates.
  */
+
+import { isSaDateStr } from "@/lib/dates";
 
 // Easter Sunday dates (Gregorian) — computed via the Anonymous Gregorian algorithm.
 // Pre-computed for speed; extend as needed.
@@ -158,6 +161,25 @@ export function isWeekend(date: Date): boolean {
 /** Checks if the date is a SA public holiday */
 export function isSAPublicHoliday(date: Date): boolean {
   return getHolidaySet(date.getUTCFullYear()).has(dateKey(date));
+}
+
+/**
+ * The same question asked of a calendar-date string ("2026-12-25").
+ *
+ * This exists so there is ONE holiday list. There used to be two:
+ * `lib/sa-public-holidays.ts` answered the string form and knew nothing about
+ * the s2A proclamations above, so a proclaimed holiday was refused by the
+ * reschedule guard and accepted by recurring-series generation — the same day,
+ * two answers, depending on which door you came through.
+ *
+ * Fails closed on malformed input rather than reporting "not a holiday", which
+ * is the answer that quietly books a session on Christmas Day.
+ */
+export function isSAPublicHolidayOn(dateStr: string): boolean {
+  if (!isSaDateStr(dateStr)) {
+    throw new Error(`isSAPublicHolidayOn: not a calendar date string: ${dateStr}`);
+  }
+  return getHolidaySet(Number(dateStr.slice(0, 4))).has(dateStr);
 }
 
 /** True if the date is a Mon–Fri working day and not a public holiday */

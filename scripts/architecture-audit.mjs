@@ -109,7 +109,11 @@ const DATE_ALLOWLIST = new Set([
   "lib/dates.test.ts",
   "lib/graph.ts", // Prefer: outlook.timezone header — returns SAST strings
   "lib/calendar-reconcile.ts", // same
-  "lib/sa-public-holidays.ts", // derives from Date.UTC(...)
+  // NOTE: lib/sa-public-holidays.ts used to sit here. It was a SECOND holiday list
+  // answering the same question in string form, without the s2A proclamations — so
+  // a proclaimed holiday was refused by the reschedule guard and accepted by series
+  // generation. Deleted; `isSAPublicHolidayOn` on lib/sa-holidays.ts replaced it,
+  // and that file needs no exemption — its Date.UTC(...) construction is correct.
   // NOTE: lib/sa-holidays.ts and lib/billing.ts used to sit here, excused as
   // "self-consistent local-getter arithmetic". They were consistent with each
   // other and wrong with everything else — the dueDate/overdue off-by-one came
@@ -326,6 +330,29 @@ check("date-safety: no hardcoded +02:00 offset", () => {
         "use saInstant()/bookingStartsAt() — the offset lives in lib/dates.ts alone",
       );
     }
+  }
+});
+
+check("date-safety: one public-holiday list", () => {
+  // There were two, and they disagreed. `lib/sa-holidays.ts` carries the s2A
+  // presidential proclamations — election days, the Christmas-on-a-Sunday gap —
+  // which no algorithm can derive; the second copy did not. So the reschedule
+  // guard refused a proclaimed holiday while recurring-series generation booked
+  // straight through it, and business-day billing arithmetic used a third answer
+  // depending on the import. A holiday list is exactly the kind of thing that
+  // looks harmless to duplicate and then drifts silently for a year.
+  const decls = allSource().filter((f) =>
+    /export function isSAPublicHoliday(?:On)?\s*\(/.test(read(f)),
+  );
+  const owner = "lib/sa-holidays.ts";
+  const strays = decls.map(rel).filter((f) => f !== owner);
+  if (strays.length > 0 || !decls.map(rel).includes(owner)) {
+    fail(
+      "date-safety",
+      strays.join(", ") || "(none)",
+      `the public-holiday answer must come from ${owner} alone; found: ${decls.map(rel).join(", ") || "(none)"}`,
+      "import isSAPublicHoliday (Date) or isSAPublicHolidayOn (date string) from lib/sa-holidays.ts",
+    );
   }
 });
 

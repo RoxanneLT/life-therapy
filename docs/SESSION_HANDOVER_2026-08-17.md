@@ -155,23 +155,31 @@ Two bugs found while doing the above, in neither report:
 
 ## 4. TODO — in the order I would do it
 
-### Next up: P1 date edges (the last P1 group)
+### Done 2026-08-18 (the last P1 group, and the partial-payment follow-up)
 
-- [ ] **#12 — "Mark All Completed" completes today's FUTURE sessions.** `date: { lt: new Date() }`
-      against a UTC-midnight `@db.Date`: from 00:00 UTC, today's 15:30 session qualifies.
-      Use `calendarDate(saToday())` as `bookings/page.tsx:165` already does.
-      **Do this before month-end** — wrongly completed sessions feed straight into billing.
-- [ ] **#13 — public holidays bookable for singles but not series**, and series creation
-      leaves holiday "ghost" occurrences in Outlook that the client will show up to.
-      `lib/availability.ts` has no `isSAPublicHoliday` check; `lib/recurring-dates.ts:114`
-      does. The rebuild action prunes ghosts, creation does not.
+- [x] **#12 — day columns compared to a live instant.** Fixed, plus five sibling sites the
+      new audit check found that the original grep did not. See the commit for the full
+      classification; the client-visible ones were the portal's "upcoming sessions" count
+      and the dashboard's Next Session card, both of which dropped today's sessions from
+      02:00 SAST. New check: `date-safety: a day column is never bounded by a live instant`.
+- [x] **#13 — public holidays.** Singles were bookable on them (availability never checked);
+      series generation did check, using a SECOND holiday list that knew nothing about the
+      s2A proclamations. One list now (`lib/sa-holidays.ts`), `lib/sa-public-holidays.ts`
+      deleted, and a `date-safety: one public-holiday list` check to keep it that way.
+      Ghost occurrences at series creation now prune against what was actually created, the
+      way the rebuild action already did. **0 of 375 future bookings sat on a holiday**, so
+      nothing needed cleaning up by hand.
+- [x] **Partial payments are acted on.** Emails, WhatsApp, the pro-forma PDF and the admin
+      UI all quote the balance. The received amount rides inside `sessionSummary` rather
+      than a new `{{variable}}`, so DB-edited templates show it too — a new placeholder
+      would have rendered only in the hardcoded fallback.
+- [x] **Client profile saves show what was saved** (reported live, not from the report). No
+      component under `clients/[id]` called `router.refresh()`, so every save looked
+      discarded until you left and came back. **Diagnosed from code, not demonstrated
+      against a running app** — worth confirming in the UI.
 
-### Follow-ups created by today's work
+### Still open
 
-- [ ] **Partial payments are recorded but not acted on.** `paidAmountCents` now exists on
-      `payment_requests`, but reminder/overdue emails still chase the full `totalCents`,
-      and the admin UI does not show that money arrived. Small, but touches client-facing
-      email copy — worth Stean seeing the wording.
 - [ ] **20 admin actions still throw masked messages**, recorded in `KNOWN_DEFECTS` in
       `scripts/architecture-audit.mjs` with a reason each. The list may only shrink; one
       was retired today. `users/actions.ts → changePassword` is worth doing early (a
