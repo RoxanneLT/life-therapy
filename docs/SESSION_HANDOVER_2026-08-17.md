@@ -4,9 +4,27 @@
 the 2026-07-21 diagnostics report, plus moving the repo out of OneDrive after it
 corrupted `node_modules` and then the git object store.
 
-**State:** `origin/master` = `aee515f`. 15 commits ahead of where the day started
-(`e3f5aa1`). `npm run check` green (tsc + eslint + 26 audit checks + 139 tests).
-`next build` green. Working tree clean, nothing unpushed.
+**State (end of 2026-08-18):** `npm run check` green — tsc + eslint + **33 audit checks
++ 170 tests**. `next build` green. Working tree clean, everything pushed.
+
+The 2026-07-21 report is now fully worked: **all P0, all P1, and all 13 P2 items** are
+closed. What is left is listed under §4 and is mostly decisions and one verification,
+not code.
+
+Three themes ran through the day and are worth knowing before touching anything:
+
+1. **A word carrying more than one fact.** `failed` meant "this job broke", "this job
+   found drift" and "this job noticed ANOTHER job's failure" — so 29 of 31 nights read
+   red, and the genuine problem underneath was unreadable. Split into `failed` and
+   `observed`. I misread it three times myself before spotting it, which is the point.
+2. **Defences applied to half their sites.** Escaping existed but only on the public
+   booking path; expiry stamping existed but only on one of four credit-granting paths;
+   a durable rate limiter existed but the endpoint that writes client records used the
+   in-memory one. The bug was never the missing idea, it was the missing site.
+3. **Checks that could not fail.** Two new audit checks shipped green and useless on
+   first attempt (one scanned comment-stripped source for a string literal; one matched
+   the word `consentGiven` in its own explanatory comment). Both were caught by planting
+   a violation. Do not trust a green check you have not seen fail.
 
 ---
 
@@ -180,11 +198,18 @@ Two bugs found while doing the above, in neither report:
 
 ### Still open
 
-- [ ] **20 admin actions still throw masked messages**, recorded in `KNOWN_DEFECTS` in
+- [ ] **19 admin actions still throw masked messages**, recorded in `KNOWN_DEFECTS` in
       `scripts/architecture-audit.mjs` with a reason each. The list may only shrink; one
       was retired today. `users/actions.ts → changePassword` is worth doing early (a
       masked "password too short" is genuinely confusing).
 - [ ] **Desktop repo path** — write it into the machine table in `CLAUDE.md` once chosen.
+- [ ] **The partner invite is not sent.** `couplesPartnerEmail`/`Phone` are now stored and
+      shown on the booking page, but nothing emails the partner. The portal form still
+      says they will receive the invite — so the promise is now only half kept. Needs an
+      email template and a decision about whether the partner gets the Teams link.
+- [ ] **Verify the client-profile save fix in a running app.** Every component under
+      `clients/[id]` now calls `router.refresh()` after a mutation. Diagnosed from code,
+      NOT demonstrated — it is the one change from 18 Aug I would want clicked through.
 
 ### Decided 2026-08-18 — no longer open
 
@@ -258,11 +283,32 @@ tells us money is moving, so a part-paid request arguably deserves the same hold
 ### Waiting on Stean
 
 - [ ] **Joe de Wet's R3,580** — paid 18 Aug, record the payment once it reflects. The only
-      open payment request.
+      open payment request. **Time-sensitive:** the overdue chase now repeats weekly, and
+      his last notice was 11 Aug, so an unrecorded payment means he is chased again for
+      money he has already sent.
+- [ ] **Mia Pretorius' series has no calendar events.** 25 bi-weekly sessions,
+      20 Aug 2026 → 22 Jul 2027, **next one 20 August**. The bookings all carry a
+      `graphEventId`, so this is not a missing id — the event it points at no longer
+      exists in Outlook. Fix is the **Rebuild series calendar** button on any booking in
+      the series; it creates ONE recurring event and repoints all 25.
+      Do NOT "just add 25 events": the codebase holds one-event-per-series, and the
+      cancel/reschedule paths call `deleteRecurringEventOccurrences` on the series master.
+      Rebuilding sends Mia a fresh invite, so it is her-visible.
+- [ ] **One orphaned Outlook event** — Cheslon Faroa, 10 Sep 13:00. That booking was
+      cancelled on 13 Aug but the occurrence was never removed from the calendar (the
+      cancel path warns when that fails, and the warning was missed). Safe to delete;
+      the reconciler marks it `deletable`.
 
-### P2 — 11 items left
+### Calendar drift — probed 2026-08-18
 
-`#18` and `#21` were pulled forward and are done (2026-08-18):
+Now that the noise is gone, here is what the reconciler actually reports: 375 bookings
+checked, 350 matched, **0 mismatched, 0 duplicates, 0 on-holiday, 0 errors**. The entire
+"drift on most days" was the two items above — one broken series and one stale
+occurrence. It is a much smaller problem than 144 red runs suggested.
+
+### P2 — all 13 done (2026-08-18)
+
+`#18` and `#21` were pulled forward first:
 
 - [x] **#18 HTML injection into transactional emails.** The report said to escape at
       `replacePlaceholders`; that would have fixed only the DB-template path and left the
@@ -273,13 +319,40 @@ tells us money is moving, so a part-paid request arguably deserves the same hold
       raw; its twin on the public path had escaped since it was written.
 - [x] **#21 dormant follow-up now checks `consentGiven`.** 4 of the 14 clients in the
       dormant pool had not consented and will no longer receive it.
-- Others: 16 void-paid-invoice re-queues bookings · 17 `excludeFromBillingAction` has no
-  audit · 19 recurring series creation is a long non-atomic loop · 20 invoice `lineItems`
-  is unvalidated Json at 13+ sites · 22 MFA TOTP has no app-level rate limit · 23 reminder
-  double-send race · 24 open redirects (auth callback `next`, click tracker) · 25 in-memory
-  rate limiter still on newsletter + availability · 26 unbounded log tables · 27 couples
-  partner fields silently dropped · 28 admin `rescheduleBooking` does no server-side
-  conflict validation.
+The remaining eleven were done the same day. Each commit carries the reasoning; the
+short version, and the parts where the report's description turned out to be wrong:
+
+- [x] **#16** — the reported "void a PAID invoice" is blocked by a hidden button. The real
+      hole was **partly-paid** requests: a short payment leaves the status `pending`, so the
+      one guard in the path could not see it, and voiding released the sessions to be
+      re-billed at full price. Hit live on 18 Aug. Now judged on money received, server-side.
+- [x] **#17** — audit added, capturing the price AND currency before they are zeroed.
+- [x] **#19** — the booking and the credit that pays for it now commit together. Per date,
+      not per series: a whole-series transaction would undo the deliberate "skip a taken
+      slot and carry on" behaviour.
+- [x] **#20** — zod at every write, lenient read (historical rows must still render). Found
+      a live money bug: manual PR entry had no zero floor, so a discount larger than the
+      line wrote a NEGATIVE total that the PDF printed verbatim.
+- [x] **#22** — MFA had no rate limit and no audit trail. 5/15min on the user id + an IP
+      bucket, cleared on success.
+- [x] **#23** — reminders were read-then-send-then-stamp with TWO runners (the 2-hourly cron
+      and the daily safety net). Atomic claim now; a failed send hands the claim back.
+- [x] **#24** — both sites exploitable, and worse than described: the auth callback
+      CONCATENATED `${origin}${next}`, so `next=@evil.com` gave host evil.com — no leading
+      slash needed, so a `startsWith("/")` fix would not have worked. The click tracker was
+      an open redirector (`!allowedHost && protocol !== "https:"` let every https URL
+      through). One `safeNextPath` now, with the bypass strings as test fixtures.
+- [x] **#25** — the newsletter route's limiter was in-memory (per-lambda, resets on cold
+      start) on an endpoint that writes a students row via `upsertContact`. The write being
+      one file away is why the audit's own check never saw it.
+- [x] **#26** — NOT a size problem: the largest log table is 1.5 MB. The finding was
+      `rate_limits` storing **raw IPs in plaintext** as the primary key. All keys hashed
+      now, the 20 stale rows deleted, and the daily cron prunes spent counters.
+- [x] **#27** — only the PORTAL flow dropped anything, and it dropped it because there was
+      nowhere to put it. Two nullable columns added; the form now keeps what it asks for.
+- [x] **#28** — the DB index already stopped the double-booking, so this was a UX bug: the
+      admin saw a masked error instead of "that slot is taken". Server-side check via
+      `getAvailableSlots` (not a third copy of the series conflict query) + P2002 handling.
 
 ---
 

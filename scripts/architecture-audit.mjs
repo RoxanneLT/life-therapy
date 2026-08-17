@@ -1598,8 +1598,7 @@ const KNOWN_DEFECTS = new Map([
     "'Campaign ID is required' — an internal invariant phrased as a sentence; unreachable from the UI"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → grantCreditsAction",
     "'Amount must be 1-20' — the dialog already bounds the input, so this fires only if that is bypassed"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → regeneratePaymentLinkAction",
-    "'Cannot regenerate link for a <status> payment request' — billing-adjacent; convert first when this list is worked"],
+
   ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → createDripEmailAction",
     "'Type, subject, body, and day offset are required' — form validation, mirrored client-side"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → updateDripEmailAction",

@@ -888,17 +888,23 @@ function PaymentRequestsSection({
   function handleRegenerateLink(prId: string) {
     startTransition(async () => {
       try {
-        const { paymentUrl } = await regeneratePaymentLinkAction(prId, clientId);
+        const result = await regeneratePaymentLinkAction(prId, clientId);
+        if (!result.success) {
+          // The server's actual reason — previously this branch showed the
+          // stripped Next.js boilerplate for every one of them.
+          toast.error(result.error);
+          return;
+        }
         toast.success("Payment link regenerated", {
           description: "New Paystack link created",
           action: {
             label: "Copy",
-            onClick: () => { void navigator.clipboard.writeText(paymentUrl); },
+            onClick: () => { void navigator.clipboard.writeText(result.paymentUrl); },
           },
         });
         onSuccess?.();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to regenerate link");
+      } catch {
+        toast.error("Could not reach the server — please try again.");
       }
     });
   }

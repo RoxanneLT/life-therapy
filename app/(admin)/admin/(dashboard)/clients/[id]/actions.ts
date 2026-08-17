@@ -1147,18 +1147,27 @@ export async function resendInvoiceAction(invoiceId: string) {
 
 const APP_URL = appBaseUrl();
 
+/**
+ * Refusals are RETURNED. Every reason this can decline — the request is already
+ * paid, there is no billing email, Paystack said no — reached the admin as the
+ * stripped "An error occurred in the Server Components render…", on a button
+ * whose whole purpose is to produce a link to send someone.
+ */
 export async function regeneratePaymentLinkAction(
   paymentRequestId: string,
   studentId: string,
-) {
+): Promise<{ success: true; paymentUrl: string } | { success: false; error: string }> {
   await requireRole("super_admin");
 
   const pr = await prisma.paymentRequest.findUnique({
     where: { id: paymentRequestId },
   });
-  if (!pr) throw new Error("Payment request not found");
+  if (!pr) return { success: false, error: "That payment request no longer exists." };
   if (pr.status !== "pending" && pr.status !== "overdue") {
-    throw new Error(`Cannot regenerate link for a ${pr.status} payment request`);
+    return {
+      success: false,
+      error: `This request is ${pr.status} — a payment link is only useful while it is still owing.`,
+    };
   }
 
   // Resolve email — handle both student and corporate billing entity
@@ -1176,7 +1185,12 @@ export async function regeneratePaymentLinkAction(
     email = student?.billingEmail || student?.email || "";
   }
 
-  if (!email) throw new Error("No billing email found");
+  if (!email) {
+    return {
+      success: false,
+      error: "No billing email on this client — add one before generating a payment link.",
+    };
+  }
 
   const reference = `pr-${pr.id.slice(-8)}-${Date.now()}`;
   const result = await initializeTransaction({
@@ -1197,7 +1211,7 @@ export async function regeneratePaymentLinkAction(
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
-  return { paymentUrl: result.authorization_url };
+  return { success: true, paymentUrl: result.authorization_url };
 }
 
 // ────────────────────────────────────────────────────────────
