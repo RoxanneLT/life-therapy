@@ -15,6 +15,7 @@ import { getSiteSettings } from "@/lib/settings";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { formatPrice } from "@/lib/utils";
 import { extractInitials } from "@/lib/invoice-numbering";
+import { loadRequestAmounts } from "@/lib/billing";
 import { format } from "date-fns";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 import fs from "fs";
@@ -581,6 +582,8 @@ export async function generateProformaInvoicePDF(
 
   const prReference = `PR-${pr.billingMonth}-${pr.id.slice(-4).toUpperCase()}`;
 
+  const { received: proformaReceived } = await loadRequestAmounts(pr);
+
   const metaRows: [string, string][] = [
     ["Reference:", prReference],
     ["Date:", format(new Date(), "dd/MM/yyyy")],
@@ -609,8 +612,11 @@ export async function generateProformaInvoicePDF(
     vatPercent,
     vatAmountCents: pr.vatAmountCents,
     totalCents: pr.totalCents,
-    paidCents: 0,
-    amountDueCents: pr.totalCents,
+    // The document already has Paid and Amount Due rows; they were pinned to
+    // 0/total, so a re-attached pro-forma contradicted the email it arrived with
+    // and demanded money the client had already sent.
+    paidCents: proformaReceived,
+    amountDueCents: pr.totalCents - proformaReceived,
     couponCode: null,
     showUnpaidWatermark: true,
     payNowUrl: pr.paymentUrl ?? null,

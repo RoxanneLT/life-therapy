@@ -257,6 +257,93 @@ export function calculateInvoiceTotals(
   return { subtotalCents, discountCents, vatAmountCents, totalCents };
 }
 
+// ─── Money received against a payment request ────────────────
+
+/**
+ * What has actually arrived against a payment request, in the request's own
+ * currency, and what is therefore still owed.
+ *
+ * Two rows can carry this number: `payment_requests.paidAmountCents` (written by
+ * the Paystack webhook when a payment lands short, and by settlement) and
+ * `invoices.paidAmountCents` on the invoice the request is linked to (written by
+ * the admin "Record Payment" flow). They are two records of the SAME money, not
+ * two payments — so this takes the larger, never the sum. Adding them would
+ * double-count every ordinary settlement, which is the more dangerous error: it
+ * reads as "paid in full" on a request that is still short.
+ *
+ * The write side keeps both in step — `markPaymentRequestPaidFromListAction`
+ * accumulates and stamps the running total on both rows — so in practice they
+ * agree and `Math.max` is just the null-safe way to ask. Legacy rows from before
+ * `payment_requests.paidAmountCents` existed carry the amount on the invoice
+ * alone, which is exactly the case the max still covers.
+ */
+export function receivedCents(
+  pr: { paidAmountCents: number | null },
+  invoice?: { paidAmountCents: number | null } | null,
+): number {
+  return Math.max(pr.paidAmountCents ?? 0, invoice?.paidAmountCents ?? 0);
+}
+
+/**
+ * What is still owed on a payment request. Never negative — an overpayment is a
+ * reconciliation question for a human, not a credit this function invents.
+ */
+export function balanceCents(
+  pr: { totalCents: number; paidAmountCents: number | null },
+  invoice?: { paidAmountCents: number | null } | null,
+): number {
+  return Math.max(0, pr.totalCents - receivedCents(pr, invoice));
+}
+
+/**
+ * Load one request's received/outstanding pair, resolving its linked invoice.
+ *
+ * Every client-facing amount for a payment request goes through this: the four
+ * payment emails, the WhatsApp chases and the pro-forma PDF. They must agree —
+ * an email quoting a balance with a PDF attached demanding the full total is
+ * worse than either alone.
+ */
+export async function loadRequestAmounts(pr: {
+  totalCents: number;
+  paidAmountCents: number | null;
+  invoiceId: string | null;
+}): Promise<{ received: number; balance: number }> {
+  const invoice = pr.invoiceId
+    ? await prisma.invoice.findUnique({
+        where: { id: pr.invoiceId },
+        select: { paidAmountCents: true },
+      })
+    : null;
+
+  return { received: receivedCents(pr, invoice), balance: balanceCents(pr, invoice) };
+}
+
+/**
+ * The received-amount map for a batch of requests, resolving each one's linked
+ * invoice in a single query. For lists and cron sweeps — one round trip, not one
+ * per row.
+ */
+export async function receivedByRequest(
+  requests: { id: string; invoiceId: string | null; paidAmountCents: number | null }[],
+): Promise<Map<string, number>> {
+  const invoiceIds = requests.map((r) => r.invoiceId).filter((id): id is string => !!id);
+
+  const invoices = invoiceIds.length
+    ? await prisma.invoice.findMany({
+        where: { id: { in: invoiceIds } },
+        select: { id: true, paidAmountCents: true },
+      })
+    : [];
+  const byInvoiceId = new Map(invoices.map((i) => [i.id, i]));
+
+  return new Map(
+    requests.map((r) => [
+      r.id,
+      receivedCents(r, r.invoiceId ? byInvoiceId.get(r.invoiceId) : null),
+    ]),
+  );
+}
+
 // ─── Rate lookup ─────────────────────────────────────────────
 
 export type SessionRateKey = "individual" | "couples" | "free_consultation";

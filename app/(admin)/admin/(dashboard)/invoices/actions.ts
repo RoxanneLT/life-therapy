@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
 import { saDateStr, saDayStart, addSaDays } from "@/lib/dates";
-import { resolveClientCurrencies } from "@/lib/billing";
+import { resolveClientCurrencies, receivedCents } from "@/lib/billing";
 
 // ────────────────────────────────────────────────────────────
 // Mark invoice as paid (from invoice list page)
@@ -122,6 +122,17 @@ export async function markPaymentRequestPaidFromListAction(
     where: { id: paymentRequestId },
   });
 
+  // Check if an invoice already exists for this PR (from a prior partial payment)
+  const existingInvoice = await prisma.invoice.findFirst({
+    where: { paymentRequestId },
+  });
+
+  // Money that arrived BEFORE this payment. A Paystack short payment records
+  // itself on the request and creates no invoice at all, so reading the invoice
+  // alone lost it: a R1000 request that took R600 by card and R400 by EFT stayed
+  // "pending, R600 short" forever, and no tax invoice was ever sent.
+  const alreadyReceived = receivedCents(pr, existingInvoice);
+
   const auditPayment = (fullyPaid: boolean) =>
     recordAudit({
       action: "payment_recorded",
@@ -130,17 +141,21 @@ export async function markPaymentRequestPaidFromListAction(
       actorEmail: adminUser.email,
       before: { status: "pending" },
       after: { status: fullyPaid ? "paid" : "partial", paymentMethod: method, reference: reference ?? null },
-      metadata: { studentId: pr.studentId, amountCents, source: "invoice_list" },
+      metadata: {
+        studentId: pr.studentId,
+        amountCents,
+        // What this payment brings the request to, so a part-paid request can be
+        // reconstructed from the trail without replaying every entry.
+        paidToDateCents: alreadyReceived + amountCents,
+        totalCents: pr.totalCents,
+        currency: pr.currency,
+        source: "invoice_list",
+      },
     });
-
-  // Check if an invoice already exists for this PR (from a prior partial payment)
-  const existingInvoice = await prisma.invoice.findFirst({
-    where: { paymentRequestId },
-  });
 
   if (existingInvoice) {
     // Update existing invoice with additional payment
-    const newPaidAmount = (existingInvoice.paidAmountCents ?? 0) + amountCents;
+    const newPaidAmount = alreadyReceived + amountCents;
     const isFullyPaid = newPaidAmount >= pr.totalCents;
 
     await prisma.invoice.update({
@@ -154,12 +169,15 @@ export async function markPaymentRequestPaidFromListAction(
       },
     });
 
-    if (isFullyPaid) {
-      await prisma.paymentRequest.update({
-        where: { id: paymentRequestId },
-        data: { status: "paid" },
-      });
-    }
+    // The running total belongs on the request too, not only on the invoice —
+    // it is what the reminder/overdue emails and the pro-forma read.
+    await prisma.paymentRequest.update({
+      where: { id: paymentRequestId },
+      data: {
+        paidAmountCents: newPaidAmount,
+        ...(isFullyPaid ? { status: "paid" } : {}),
+      },
+    });
 
     await generateAndStoreInvoicePDF(existingInvoice.id).catch(console.error);
     // Only send email on full payment
@@ -181,25 +199,44 @@ export async function markPaymentRequestPaidFromListAction(
     amountCents,
   });
 
-  const isPartial = amountCents < pr.totalCents;
+  // Settlement is judged on everything received, not on this payment alone —
+  // otherwise the EFT that finishes off a Paystack short payment reads as another
+  // partial and the request never closes.
+  const newPaidAmount = alreadyReceived + amountCents;
+  const isPartial = newPaidAmount < pr.totalCents;
 
-  // Partial payment: keep PR pending, invoice shows partial paid amount
+  // Partial payment: keep PR pending, invoice shows what has been received so far
   if (isPartial) {
     await prisma.paymentRequest.update({
       where: { id: paymentRequestId },
-      data: { status: "pending" },
+      data: { status: "pending", paidAmountCents: newPaidAmount },
     });
     await prisma.invoice.update({
       where: { id: invoice.id },
       data: {
         status: "payment_requested",
-        paidAmountCents: amountCents,
+        paidAmountCents: newPaidAmount,
       },
+    });
+  } else if (newPaidAmount > amountCents) {
+    // Settled, but earlier money made up part of it — record the true total on
+    // both rows so the invoice does not understate what was paid for it.
+    await prisma.paymentRequest.update({
+      where: { id: paymentRequestId },
+      data: { paidAmountCents: newPaidAmount },
+    });
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: { paidAmountCents: newPaidAmount },
     });
   }
 
   await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
-  await sendInvoiceEmail(invoice.id).catch(console.error);
+  // Only on settlement, matching the branch above: a tax invoice emailed for a
+  // request that is still short tells the client they are square when they are not.
+  if (!isPartial) {
+    await sendInvoiceEmail(invoice.id).catch(console.error);
+  }
 
   await auditPayment(!isPartial);
   revalidatePath("/admin/invoices");

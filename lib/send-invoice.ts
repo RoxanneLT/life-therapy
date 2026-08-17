@@ -15,6 +15,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { formatPrice } from "@/lib/utils";
 import { logQueryResult } from "@/lib/log-query-error";
+import { loadRequestAmounts } from "@/lib/billing";
 import { format } from "date-fns";
 import type { InvoiceLineItem } from "@/lib/billing-types";
 
@@ -29,7 +30,12 @@ function fmtDate(d: Date | string | null | undefined): string {
   return format(new Date(d), "d MMMM yyyy");
 }
 
-function buildSessionSummaryHtml(lineItems: InvoiceLineItem[], currency = "ZAR"): string {
+function buildSessionSummaryHtml(
+  lineItems: InvoiceLineItem[],
+  currency = "ZAR",
+  received = 0,
+  balance = 0,
+): string {
   const rows = lineItems
     .map(
       (item) =>
@@ -40,8 +46,31 @@ function buildSessionSummaryHtml(lineItems: InvoiceLineItem[], currency = "ZAR")
     )
     .join("");
 
-  return `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">${rows}</table>`;
+  // Money already received is shown INSIDE the summary table rather than as a new
+  // template variable, deliberately: `sessionSummary` is rendered by every payment
+  // template in both layers, DB-stored and hardcoded. A new `{{amountPaid}}`
+  // placeholder would render only in the hardcoded fallbacks — an admin-edited DB
+  // template would silently drop it and keep billing the client for money they had
+  // already paid, which is the exact failure this change exists to end.
+  const paidRows =
+    received > 0
+      ? `<tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb; color: #15803d;">Payment received — thank you</td>
+          <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #e5e7eb; color: #15803d;">−${fmt(received, currency)}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; font-weight: 700;">Balance still due</td>
+          <td style="text-align: right; padding: 8px 0; font-weight: 700;">${fmt(balance, currency)}</td>
+        </tr>`
+      : "";
+
+  return `<table style="width: 100%; border-collapse: collapse; margin: 12px 0;">${rows}${paidRows}</table>`;
 }
+
+// Every payment email quotes the amount owing NOW, not the amount originally
+// billed. Chasing the full total after a client has part-paid is how a genuine
+// payment turns into an argument.
+const requestAmounts = loadRequestAmounts;
 
 /**
  * Generate pro-forma PDF for a payment request and return as a buffer.
@@ -200,11 +229,15 @@ export async function sendPaymentRequestEmail(paymentRequestId: string): Promise
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
+  // A request can be re-sent after money has already arrived against it, so even
+  // the opening email quotes what is owing now.
+  const { received, balance } = await requestAmounts(pr);
+
   const { subject, html } = await renderEmail("payment_request", {
     billingName,
     month: monthLabel,
-    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
-    total: fmt(pr.totalCents, pr.currency),
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency, received, balance),
+    total: fmt(balance, pr.currency),
     dueDate: fmtDate(pr.dueDate),
     bankingDetails: await getBankingDetailsHtml(),
     paymentReference: buildPaymentReference(pr.billingMonth, billingName),
@@ -277,11 +310,13 @@ export async function sendPaymentReminder(paymentRequestId: string): Promise<voi
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
+  const { received, balance } = await requestAmounts(pr);
+
   const { subject, html } = await renderEmail("payment_request_reminder", {
     billingName,
     month: monthLabel,
-    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
-    total: fmt(pr.totalCents, pr.currency),
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency, received, balance),
+    total: fmt(balance, pr.currency),
     dueDate: fmtDate(pr.dueDate),
     bankingDetails: await getBankingDetailsHtml(),
     paymentReference: buildPaymentReference(pr.billingMonth, billingName),
@@ -345,11 +380,13 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
+  const { received, balance } = await requestAmounts(pr);
+
   const { subject, html } = await renderEmail("payment_request_due_today", {
     billingName,
     month: monthLabel,
-    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
-    total: fmt(pr.totalCents, pr.currency),
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency, received, balance),
+    total: fmt(balance, pr.currency),
     bankingDetails: await getBankingDetailsHtml(),
     paymentReference: buildPaymentReference(pr.billingMonth, billingName),
   });
@@ -414,11 +451,13 @@ export async function sendOverdueNotice(paymentRequestId: string): Promise<void>
   const pdfBuffer = await tryGenerateProformaPDF(paymentRequestId);
   const pdfFilename = buildProformaFilename(billingName, new Date(pr.periodEnd));
 
+  const { received, balance } = await requestAmounts(pr);
+
   const { subject, html } = await renderEmail("payment_request_overdue", {
     billingName,
     month: monthLabel,
-    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency),
-    total: fmt(pr.totalCents, pr.currency),
+    sessionSummary: buildSessionSummaryHtml(lineItems, pr.currency, received, balance),
+    total: fmt(balance, pr.currency),
     bankingDetails: await getBankingDetailsHtml(),
     paymentReference: buildPaymentReference(pr.billingMonth, billingName),
   });

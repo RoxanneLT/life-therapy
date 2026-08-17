@@ -29,6 +29,7 @@ import {
 import { MoreHorizontal, CheckCircle, Send, Eye } from "lucide-react";
 import { markPaymentRequestPaidFromListAction, resendPaymentRequestEmailAction } from "./actions";
 import { toast } from "sonner";
+import { formatPrice } from "@/lib/utils";
 import Link from "next/link";
 import { EditPaymentRequestDialog } from "../clients/[id]/tabs/payment-request-dialogs";
 
@@ -67,10 +68,11 @@ export function PaymentRequestActions({
     startTransition(async () => {
       try {
         await markPaymentRequestPaidFromListAction(requestId, method, amountCents, reference || undefined);
-        const isPartial = amountCents < totalCents;
+        // Settled or not is judged on everything received, matching the action.
+        const isPartial = paidCents + amountCents < totalCents;
         toast.success(
           isPartial
-            ? `Partial payment of R${(amountCents / 100).toFixed(2)} recorded for ${clientName}`
+            ? `Partial payment of ${formatPrice(amountCents, currency)} recorded for ${clientName}`
             : `Payment recorded for ${clientName}`
         );
         setShowPayDialog(false);
@@ -135,13 +137,13 @@ export function PaymentRequestActions({
             <DialogTitle>Record Payment</DialogTitle>
             <DialogDescription>
               {paidCents > 0
-                ? `Total: R${(totalCents / 100).toFixed(2)} · Paid: R${(paidCents / 100).toFixed(2)} · Remaining: R${(remainingCents / 100).toFixed(2)}`
-                : `Total due: R${(totalCents / 100).toFixed(2)}`} — {clientName}
+                ? `Total: ${formatPrice(totalCents, currency)} · Paid: ${formatPrice(paidCents, currency)} · Remaining: ${formatPrice(remainingCents, currency)}`
+                : `Total due: ${formatPrice(totalCents, currency)}`} — {clientName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Amount Received (R)</Label>
+              <Label>Amount Received</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -149,11 +151,20 @@ export function PaymentRequestActions({
                 value={amountRands}
                 onChange={(e) => setAmountRands(e.target.value)}
               />
-              {Number.parseFloat(amountRands) < totalCents / 100 && Number.parseFloat(amountRands) > 0 && (
-                <p className="text-xs text-amber-600">
-                  Partial payment — R{((totalCents / 100) - Number.parseFloat(amountRands)).toFixed(2)} remaining. Request stays pending.
-                </p>
-              )}
+              {/* Measured against what is still OUTSTANDING, not the face value:
+                  with money already received, a payment smaller than the total can
+                  still settle the request. */}
+              {Number.parseFloat(amountRands) > 0 &&
+                Number.parseFloat(amountRands) < remainingCents / 100 && (
+                  <p className="text-xs text-amber-600">
+                    Partial payment —{" "}
+                    {formatPrice(
+                      remainingCents - Math.round(Number.parseFloat(amountRands) * 100),
+                      currency,
+                    )}{" "}
+                    still outstanding. Request stays pending.
+                  </p>
+                )}
             </div>
             <div className="space-y-2">
               <Label>Payment Method</Label>

@@ -25,7 +25,7 @@ import { formatBillingMonth, formatPrice, formatByCurrency } from "@/lib/utils";
 import Link from "next/link";
 
 import { INVOICE_STATUS_BADGE, INVOICE_STATUS_LABEL } from "@/lib/status-styles";
-import { getBillingPeriod } from "@/lib/billing";
+import { getBillingPeriod, receivedByRequest } from "@/lib/billing";
 import { UpcomingBillingSection, type UpcomingBooking } from "./upcoming-billing-section";
 
 const STATUS_TABS = ["all", "upcoming", "payment_requested", "paid", "overdue", "cancelled"] as const;
@@ -252,22 +252,13 @@ export default async function InvoicesPage({
   countMap.all = totalCount;
   countMap.upcoming = upcomingCount;
 
-  // Look up partial payments on pending PRs
-  const prPaidAmounts = new Map<string, number>();
-  if (pendingRequests.length > 0) {
-    const prIds = pendingRequests.filter(pr => pr.invoiceId).map(pr => pr.invoiceId!);
-    if (prIds.length > 0) {
-      const partialInvoices = await prisma.invoice.findMany({
-        where: { id: { in: prIds } },
-        select: { id: true, paidAmountCents: true, paymentRequestId: true },
-      });
-      for (const inv of partialInvoices) {
-        if (inv.paymentRequestId && inv.paidAmountCents) {
-          prPaidAmounts.set(inv.paymentRequestId, inv.paidAmountCents);
-        }
-      }
-    }
-  }
+  // Money already received against each pending request.
+  //
+  // This used to read the linked invoice alone, which made a Paystack SHORT
+  // PAYMENT invisible here: that path records the money on the request and
+  // creates no invoice, so the row showed the full amount outstanding with
+  // nothing to say most of it had arrived.
+  const prPaidAmounts = await receivedByRequest(pendingRequests);
 
   // Summary card calculations — based on last billing cycle
   // Paid invoices come from Invoice table; outstanding ones are still PaymentRequests
@@ -280,9 +271,13 @@ export default async function InvoicesPage({
   if (lastCycleBillingMonth) {
     const prTotal = await prisma.paymentRequest.aggregate({
       where: { status: "pending", billingMonth: lastCycleBillingMonth, currency: "ZAR" },
-      _sum: { totalCents: true },
+      _sum: { totalCents: true, paidAmountCents: true },
     });
-    lastCycleOutstanding = prTotal._sum.totalCents ?? 0;
+    // Outstanding means still owing. A request that took a part payment is not
+    // outstanding for its whole face value, and reporting it as such overstates
+    // the cycle's debt by exactly the money that has already arrived.
+    lastCycleOutstanding =
+      (prTotal._sum.totalCents ?? 0) - (prTotal._sum.paidAmountCents ?? 0);
   }
   // Total billed that cycle = paid invoices + still-outstanding PRs
   const lastCycleTotal = lastCyclePaid + lastCycleOutstanding;
@@ -429,7 +424,14 @@ export default async function InvoicesPage({
                 {pendingRequests.length} pending request{pendingRequests.length !== 1 ? "s" : ""}
               </span>
               <span className="font-mono text-sm font-bold">
-                Total: {formatByCurrency(pendingRequests.map((pr) => ({ currency: pr.currency, cents: pr.totalCents })))}
+                {/* Still outstanding, not billed: with a part-paid request in the
+                    list, the sum of totals is money that is no longer all owing. */}
+                Total: {formatByCurrency(
+                  pendingRequests.map((pr) => ({
+                    currency: pr.currency,
+                    cents: pr.totalCents - (prPaidAmounts.get(pr.id) ?? 0),
+                  })),
+                )}
               </span>
             </div>
           </div>

@@ -18,6 +18,7 @@ import {
   getEffectiveBillingDate,
   getReminderDate,
   getOverdueDate,
+  loadRequestAmounts,
 } from "@/lib/billing";
 import { saToday, calendarDate, isSameSaDay } from "@/lib/dates";
 import { addDays, format } from "date-fns";
@@ -72,6 +73,9 @@ async function processBillingReminders(
 
       const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
       const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
+      // The balance, not the original total — a WhatsApp that asks a client for
+      // money they already paid is the one they screenshot.
+      const { balance } = await loadRequestAmounts(pr);
       const result = await sendAndLogTemplate({
         studentId: contact.studentId,
         phone: contact.phone,
@@ -81,7 +85,7 @@ async function processBillingReminders(
           parameters: [
             { type: "text", text: contact.firstName },
             { type: "text", text: monthLabel },
-            { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
+            { type: "text", text: formatPrice(balance, pr.currency) },
             { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
             { type: "text", text: pr.paymentUrl || portalUrl },
           ],
@@ -117,6 +121,7 @@ async function processBillingReminders(
     if (!contact) continue;
 
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
+    const { balance } = await loadRequestAmounts(pr);
     const result = await sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
@@ -125,7 +130,7 @@ async function processBillingReminders(
         type: "body",
         parameters: [
           { type: "text", text: contact.firstName },
-          { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
+          { type: "text", text: formatPrice(balance, pr.currency) },
           { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],
@@ -159,6 +164,7 @@ async function processBillingReminders(
     if (!contact) continue;
 
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
+    const { balance } = await loadRequestAmounts(pr);
     const result = await sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
@@ -167,7 +173,7 @@ async function processBillingReminders(
         type: "body",
         parameters: [
           { type: "text", text: contact.firstName },
-          { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
+          { type: "text", text: formatPrice(balance, pr.currency) },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],
       }],
@@ -202,6 +208,7 @@ async function processBillingReminders(
 
     const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
+    const { balance } = await loadRequestAmounts(pr);
     const result = await sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
@@ -210,7 +217,7 @@ async function processBillingReminders(
         type: "body",
         parameters: [
           { type: "text", text: contact.firstName },
-          { type: "text", text: formatPrice(pr.totalCents, pr.currency) },
+          { type: "text", text: formatPrice(balance, pr.currency) },
           { type: "text", text: monthLabel },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],

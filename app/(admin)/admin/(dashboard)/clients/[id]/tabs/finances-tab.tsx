@@ -101,6 +101,10 @@ interface PaymentRequestData {
   dueDate: string | null;
   createdAt: string;
   proformaPdfUrl: string | null;
+  /// What has arrived against this request — null when nothing has. A short
+  /// Paystack payment lands here and creates no invoice, so a row showing only
+  /// `totalCents` was the whole story the admin got.
+  paidAmountCents: number | null;
 }
 
 interface BookingData {
@@ -945,6 +949,12 @@ function PaymentRequestsSection({
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-medium">
                           {formatPrice(pr.totalCents, pr.currency)}
+                          {(pr.paidAmountCents ?? 0) > 0 && pr.status !== "paid" && (
+                            <div className="text-xs font-normal text-amber-600">
+                              Paid {formatPrice(pr.paidAmountCents!, pr.currency)} · Due{" "}
+                              {formatPrice(pr.totalCents - pr.paidAmountCents!, pr.currency)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-2.5">
                           <Badge className={PR_STATUS_BADGE[pr.status] ?? ""}>

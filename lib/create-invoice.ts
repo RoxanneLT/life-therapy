@@ -284,12 +284,20 @@ export async function createInvoiceFromPaymentRequest(
   // be unreadable without cross-checking the status. It means one thing: what we
   // actually received. `payment.amountCents` is 0 for admin-recorded settlements
   // (the caller passes the PR's own total), so fall back to the request total.
+  //
+  // Never below what the row already records: a request that took R600 short via
+  // Paystack and is settled later must not read as though only the settling
+  // payment ever arrived. Callers that know the true running total (the admin
+  // Record Payment flow, which adds this payment to what came before) write it
+  // again straight after — this floor is for everyone else.
+  const settledCents = payment.amountCents > 0 ? payment.amountCents : pr.totalCents;
+
   await prisma.paymentRequest.update({
     where: { id: paymentRequestId },
     data: {
       invoiceId: invoice.id,
       status: "paid",
-      paidAmountCents: payment.amountCents > 0 ? payment.amountCents : pr.totalCents,
+      paidAmountCents: Math.max(pr.paidAmountCents ?? 0, settledCents),
     },
   });
 
