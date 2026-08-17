@@ -7,10 +7,14 @@
 | Machine | Path |
 |---|---|
 | Laptop | `C:\dev\life-therapy` (alongside `C:\dev\pleks`) |
-| Desktop | on the Windows Storage Space volume, not `C:` — Stean's preferred storage |
+| Desktop | **not yet decided** — it has C/D/E/F; the working volume is a Windows Storage Space (RAID-10), and one of the others is OneDrive. Deliberately left blank rather than guessed. |
 
-Don't hardcode `C:\dev` into anything. The invariant is *not inside OneDrive*; the
-drive is a preference, and on the desktop the Storage Space is the right home.
+Don't hardcode `C:\dev` into anything, and don't guess the desktop's drive. The
+invariant is *not inside OneDrive*; the drive is a per-machine preference.
+
+Nothing is blocked by the unknown: `SETUP-NEW-PC.ps1` lists the machine's drives
+with their free space and asks. **When the desktop is first set up, write the chosen
+path into the table above** so the next session doesn't have to ask again.
 
 Stean works from more than one machine, so the instinct is to keep the project in
 OneDrive. Don't. On 2026-08-17 that combination cost a working day: `node_modules`
