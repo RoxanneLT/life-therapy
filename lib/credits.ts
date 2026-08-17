@@ -1,6 +1,15 @@
 import { prisma } from "./prisma";
 
 /**
+ * A Prisma client OR a transaction handle. Same shape as `GiftDb` in lib/gift.ts,
+ * for the same reason: work that must commit together has to share a handle.
+ */
+export type CreditDb = Omit<
+  typeof prisma,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
+>;
+
+/**
  * Get a student's current credit balance.
  */
 export async function getBalance(studentId: string): Promise<number> {
@@ -76,9 +85,20 @@ export async function addCredits(
 export async function deductCredit(
   studentId: string,
   bookingId: string,
-  description: string
+  description: string,
+  /**
+   * Transaction handle, so the deduction can commit or roll back WITH the
+   * booking it pays for. Defaults to the global client for the single-booking
+   * paths, which have nothing to tie themselves to.
+   *
+   * Without this, a recurring series that died between creating a booking and
+   * deducting its credit left a confirmed session nobody was charged for — the
+   * same free-session shape as the postpaid credit bug, arriving by a different
+   * road.
+   */
+  db: CreditDb = prisma,
 ): Promise<number> {
-  const bal = await prisma.sessionCreditBalance.findUnique({
+  const bal = await db.sessionCreditBalance.findUnique({
     where: { studentId },
   });
 
@@ -86,12 +106,12 @@ export async function deductCredit(
     throw new Error("Insufficient session credits");
   }
 
-  const updated = await prisma.sessionCreditBalance.update({
+  const updated = await db.sessionCreditBalance.update({
     where: { studentId },
     data: { balance: { decrement: 1 } },
   });
 
-  await prisma.sessionCreditTransaction.create({
+  await db.sessionCreditTransaction.create({
     data: {
       studentId,
       type: "used",

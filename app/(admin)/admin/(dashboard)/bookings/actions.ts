@@ -1164,9 +1164,25 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     const bookingDate = calendarDate(dateStr);
     const confirmationToken = randomUUID();
 
-    let booking;
+    // The booking and the credit that pays for it commit TOGETHER.
+    //
+    // They were two sequential writes: create the session, then deduct. A crash,
+    // timeout or deploy between them left a confirmed session nobody was charged
+    // for — and this loop runs up to 52 times inside a 120-second budget, so
+    // "between them" is a window that comes round once per date. It is the same
+    // free-session shape as the postpaid credit bug, reached by a different road.
+    //
+    // Per DATE, not per series: a whole-series transaction would undo the
+    // deliberate decision below to skip a taken slot and carry on, and would hold
+    // a write transaction open across dozens of rows and a Graph round trip.
+    const useCreditForThisDate =
+      data.useCredits && !config.isFree && !isPostpaid && creditsRemaining > 0;
+
     try {
-      booking = await prisma.booking.create({
+      // The created row is not needed afterwards — the credit deduction that used
+      // to consume it now happens inside this transaction.
+      await prisma.$transaction(async (tx) => {
+        const created = await tx.booking.create({
       data: {
         sessionType: data.sessionType,
         sessionMode: data.sessionMode,
@@ -1191,6 +1207,18 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         recurringSeriesId,
         recurringPattern: data.pattern,
       },
+        });
+
+        if (useCreditForThisDate) {
+          await deductCredit(
+            student.id,
+            created.id,
+            `${config.label} — ${format(bookingDate, "d MMM yyyy")}`,
+            tx,
+          );
+        }
+
+        return created;
       });
     } catch (err) {
       // The slot was taken between the availability sweep above and this insert —
@@ -1198,23 +1226,30 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
       // double-booking. Skip THIS date and carry on: aborting here would leave a
       // half-built series, which is worse than a series with one gap the admin is
       // told about. Feeds the same `skipped` channel the UI already reports.
-      if ((err as { code?: string })?.code === "P2002") {
-        skippedDates.push({ date: dateStr, reason: "Slot already booked" });
-        if (seriesEventId) {
-          await deleteRecurringEventOccurrences(seriesEventId, [dateStr]).catch(console.error);
-        }
-        continue;
+      const isTakenSlot = (err as { code?: string })?.code === "P2002";
+      if (!isTakenSlot) {
+        // Anything else — a lost connection, a credit deduction that failed
+        // because the balance moved under us — used to abort the whole action
+        // mid-loop, leaving the dates created so far, a Graph series covering
+        // all of them, and no report of where it stopped. The admin saw an
+        // error and had to work out by hand what existed.
+        //
+        // The transaction above means this date left nothing behind, so the
+        // honest thing is to skip it, tell them which one, and finish the rest.
+        console.error(`[recurring] ${dateStr} failed:`, err);
       }
-      throw err;
+      skippedDates.push({
+        date: dateStr,
+        reason: isTakenSlot ? "Slot already booked" : "Could not be created",
+      });
+      if (seriesEventId) {
+        await deleteRecurringEventOccurrences(seriesEventId, [dateStr]).catch(console.error);
+      }
+      continue;
     }
 
-    // Deduct credit if available (skip for postpaid)
-    if (data.useCredits && !config.isFree && !isPostpaid && creditsRemaining > 0) {
-      await deductCredit(
-        student.id,
-        booking.id,
-        `${config.label} — ${format(bookingDate, "d MMM yyyy")}`,
-      );
+    // Counters only — the deduction itself committed with the booking above.
+    if (useCreditForThisDate) {
       creditsRemaining--;
       creditsUsed++;
     }
