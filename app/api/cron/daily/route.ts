@@ -158,8 +158,10 @@ export async function GET(request: NextRequest) {
         missing: r.missing.length,
         duplicates: r.duplicates.length,
         protectedWrongDay: r.orphaned.filter((o) => !o.deletable).length,
-        // Surface all drift so it shows up in the digest
-        failed:
+        // Surfaced as OBSERVED, not failed — drift is what this job is looking
+        // for, so finding some is it working. Reported as `failed` it marked the
+        // whole nightly run red on any day with drift, which is most days.
+        observed:
           r.mismatched.length +
           r.missing.length +
           r.orphaned.length +

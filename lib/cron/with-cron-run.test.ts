@@ -11,6 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCronAuthorised } from "./with-cron-run";
+import { isIssue } from "./cron-digest";
 
 // isCronAuthorised reads process.env at CALL time, not module load, so setting it
 // here is enough — and it's what lets the fail-closed test below delete it safely.
@@ -65,4 +66,26 @@ test("an unset CRON_SECRET fails CLOSED, not open", () => {
   } finally {
     process.env.CRON_SECRET = saved;
   }
+});
+
+// ── What counts as a failure, and what merely counts ────────────────────────
+
+test("a job that NOTICED something has not failed", () => {
+  // The distinction this encodes: `failed` is work a job tried and could not do;
+  // `observed` is something it looked for and found. reconcile_calendar returned
+  // its drift count as `failed`, so 144 of its 181 runs read "failed" while doing
+  // exactly its job — and a status that is red almost every day cannot tell you
+  // about the day that matters.
+  assert.equal(isIssue({ status: "ok", observed: 12 }), true, "drift still reaches the digest");
+  assert.equal(isIssue({ status: "ok", failed: 0, observed: 12 }), true);
+
+  // ...but it is not the job failing, which is what the run status records.
+  assert.equal(isIssue({ status: "ok" }), false);
+  assert.equal(isIssue({ status: "ok", observed: 0 }), false);
+});
+
+test("a job that could not do its work still fails", () => {
+  assert.equal(isIssue({ status: "ok", failed: 3 }), true);
+  assert.equal(isIssue({ status: "error", error: "boom" }), true);
+  assert.equal(isIssue({ status: "partial" }), true);
 });

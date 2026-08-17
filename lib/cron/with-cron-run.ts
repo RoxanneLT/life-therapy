@@ -63,6 +63,11 @@ export function withCronRun(jobName: string, handler: CronHandler): CronHandler 
         .clone()
         .json()
         .catch(() => ({}))) as Record<string, unknown>;
+      // `failed` only — work this job tried and could not do. A job that merely
+      // NOTICED something (calendar drift, another job's failure) reports it as
+      // `observed`, which belongs in the digest but is not this run failing.
+      // Conflating the two is how 144 of one job's 181 runs read "failed" while
+      // working perfectly, and a red status stopped carrying information.
       const failed = typeof body.failed === "number" ? body.failed : 0;
       if (!response.ok || body.ok === false || failed > 0) {
         status = "failed";

@@ -5,17 +5,31 @@ import { envOr } from "@/lib/env";
 export interface CronJobDetail {
   status: string; // "ok" | "failed" | "error" | "partial" | "skipped"
   sent?: number;
+  /** Work this job TRIED and could not do. Its own failure. */
   failed?: number;
+  /**
+   * Something this job NOTICED and is reporting — calendar drift, mostly.
+   *
+   * Separate from `failed` because they are different facts and were sharing a
+   * word. The reconcile job returned its drift count as `failed`, so every day
+   * with any drift marked the job — and the daily run that called it — as having
+   * failed. 144 of its 181 runs read "failed" while working perfectly, which is
+   * how the status column stopped meaning anything and a real problem could hide
+   * in plain sight. Drift still raises an issue in this digest; it just no longer
+   * claims the job broke.
+   */
+  observed?: number;
   error?: string;
   durationMs?: number;
 }
 
-function isIssue(d: CronJobDetail): boolean {
+export function isIssue(d: CronJobDetail): boolean {
   return (
     d.status === "failed" ||
     d.status === "error" ||
     d.status === "partial" ||
-    (d.failed ?? 0) > 0
+    (d.failed ?? 0) > 0 ||
+    (d.observed ?? 0) > 0
   );
 }
 
@@ -40,6 +54,11 @@ export async function sendCronDigest(
     .map(([name, d]) => {
       if ((d.failed ?? 0) > 0 && d.status !== "error" && d.status !== "failed") {
         return `  ⚠ ${name}: ${d.failed} item(s) failed (${d.sent ?? 0} ok)`;
+      }
+      // Named as what it is. "reconcile: 12 failed" reads as a broken job;
+      // "12 item(s) need review" reads as work waiting for a person.
+      if ((d.observed ?? 0) > 0 && d.status !== "error" && d.status !== "failed") {
+        return `  ⚠ ${name}: ${d.observed} item(s) need review`;
       }
       return `  ✗ ${name}: ${d.status}${d.error ? ` — ${d.error}` : ""}`;
     })

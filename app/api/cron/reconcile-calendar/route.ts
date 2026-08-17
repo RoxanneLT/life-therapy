@@ -48,8 +48,15 @@ async function handler() {
     await sendDriftAlert(result, protectedWrongDay).catch(console.error);
   }
 
-  // `failed` lets withCronRun mark this run as failed when there is drift
-  return Response.json({ ok: true, failed: driftCount, ...result });
+  // Drift is REPORTED, not failed.
+  //
+  // This returned the drift count as `failed`, so withCronRun stamped the run —
+  // and the daily run that folds these in — as failed on any day the calendar had
+  // drift. 144 of 181 runs read "failed" while the job did exactly what it exists
+  // to do. A status that is almost always red tells you nothing on the day it
+  // matters, which is the same way the July incident stayed invisible for twelve
+  // days. The drift alert above is the signal; this number is for the digest.
+  return Response.json({ ok: true, observed: driftCount, ...result });
 }
 
 async function sendDriftAlert(
