@@ -101,18 +101,30 @@ export async function deleteUser(id: string) {
   revalidatePath("/admin/users");
 }
 
-export async function changePassword(formData: FormData) {
+/**
+ * Refusals are RETURNED, not thrown.
+ *
+ * Next.js strips a thrown server-action message in production and replaces it
+ * with "An error occurred in the Server Components render…". Every reason this
+ * can refuse — too short, mismatched, or Supabase's own complaint (a password
+ * found in a breach list, say) — reached the admin as that one sentence, on a
+ * form where the actual reason is the only useful information. Catching it does
+ * not help: `err.message` IS the boilerplate.
+ */
+export async function changePassword(
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
   const { user } = await requireRole("super_admin", "editor", "marketing");
 
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
   if (!newPassword || newPassword.length < 8) {
-    throw new Error("Password must be at least 8 characters");
+    return { success: false, error: "Password must be at least 8 characters." };
   }
 
   if (newPassword !== confirmPassword) {
-    throw new Error("Passwords do not match");
+    return { success: false, error: "The two passwords do not match." };
   }
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
@@ -120,10 +132,13 @@ export async function changePassword(formData: FormData) {
   });
 
   if (error) {
-    throw new Error(error.message);
+    // Supabase's message is the useful part here — it is the only place a
+    // rejected password says WHY it was rejected.
+    return { success: false, error: error.message };
   }
 
   revalidatePath("/admin/users");
+  return { success: true };
 }
 
 /**

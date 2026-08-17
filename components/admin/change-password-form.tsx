@@ -28,12 +28,20 @@ export function ChangePasswordForm() {
       const formData = new FormData();
       formData.set("newPassword", newPassword);
       formData.set("confirmPassword", confirmPassword);
-      await changePassword(formData);
+      const result = await changePassword(formData);
+      if (!result.success) {
+        // The server's reason, shown as-is. The checks above catch the two
+        // obvious cases before the round trip; this is for the ones only
+        // Supabase knows about.
+        toast.error(result.error ?? "Failed to change password");
+        return;
+      }
       toast.success("Password changed successfully");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to change password");
+    } catch {
+      // A thrown error now means the request itself failed, not a refusal.
+      toast.error("Could not reach the server — please try again.");
     } finally {
       setSaving(false);
     }

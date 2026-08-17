@@ -1533,8 +1533,9 @@ const KNOWN_DEFECTS = new Map([
     "as above"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → deleteUser",
     "as above"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → changePassword",
-    "as above — note this one is worth converting early, since a masked 'password too short' is genuinely confusing"],
+  // RETIRED 2026-08-18: users/actions.ts → changePassword now returns its refusals.
+  // Kept as a comment, not an entry: the audit fails if a KNOWN_DEFECTS line stops
+  // firing, so a fixed bug must leave the list rather than linger as a tombstone.
 ]);
 
 // ── Report ──────────────────────────────────────────────────────────────────
