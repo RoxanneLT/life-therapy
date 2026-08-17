@@ -1,5 +1,71 @@
 # CLAUDE.md — Life-Therapy Platform
 
+## START HERE — where the repo lives, and the first thing to do in a session
+
+**The repo is `C:\dev\life-therapy`. It is deliberately NOT in OneDrive.**
+
+Stean works from more than one machine, so the instinct is to keep the project in
+OneDrive. Don't. On 2026-08-17 that combination cost a working day: `node_modules`
+became a field of unreadable cloud placeholders (`npm` itself could not run), and
+then **118 git objects went unreadable** — `git fsck`, `git rev-list` and `git push`
+all failed with `mmap failed: Invalid argument`, so finished work could not be
+shipped at all. Thousands of tiny files, placeholder hydration, and two machines
+writing pack files independently are what break it. Syncing the *code* was never the
+problem; syncing the *repo internals* was.
+
+**Git syncs the code. OneDrive syncs only what git ignores.**
+
+### First moves in any session, before touching code
+
+```bash
+git status          # never assume this machine is current
+git fetch && git log --oneline HEAD..origin/master   # what landed elsewhere?
+git pull            # another machine may have pushed
+npm run secrets     # are .env.local etc. in sync with OneDrive?
+```
+
+`git status` first is not a formality here. A second machine may have pushed, and
+this is a codebase where a stale local copy silently reintroduces fixed bugs.
+
+### Setting up a machine that has never had the repo
+
+There is a bootstrap problem, and it is already solved: a fresh machine has no
+working folder, because the repo no longer arrives by sync. The one thing that DOES
+still arrive is the secrets folder — so the installer lives there:
+
+> **`~/OneDrive/dev-secrets/life-therapy/SETUP-NEW-PC.ps1`** — right-click → *Run
+> with PowerShell*. It clones to `C:\dev\life-therapy`, runs `npm ci`, copies the
+> secrets into place and runs `npm run check`. Safe to re-run (pulls if the repo
+> already exists). `README.txt` beside it explains the layout.
+
+Equivalent by hand:
+
+```bash
+git clone https://github.com/RoxanneLT/life-therapy.git C:\dev\life-therapy
+cd C:\dev\life-therapy
+npm ci                 # postinstall runs `prisma generate`
+npm run secrets:pull   # brings .env.local, .env, .claude/settings.local.json
+npm run check          # expect green: tsc + eslint + 26 audit checks + 139 tests
+```
+
+### The secrets channel
+
+Git deliberately does not carry `.env.local`, `.env` or
+`.claude/settings.local.json`. Those live in `~/OneDrive/dev-secrets/life-therapy`
+and move with `scripts/sync-secrets.mjs`:
+
+- `npm run secrets` — status only, changes nothing
+- `npm run secrets:pull` — OneDrive → this working copy (after a clone, or when the
+  other machine changed a key)
+- `npm run secrets:push` — this working copy → OneDrive (after YOU change one)
+
+`LT_SECRETS_DIR` overrides the location if OneDrive sits elsewhere on a machine.
+
+> If you find yourself working in `C:\Users\stean\OneDrive\Websites\Life Therapy`,
+> stop. That is the retired copy, and its `.git` is damaged. Move to `C:\dev`.
+
+---
+
 ## Project Overview
 
 Life-Therapy is an online counselling and life coaching platform built with **Next.js 14+ (App Router)**, **Prisma** (PostgreSQL), **Supabase Auth**, **Paystack** payments, and deployed on **Vercel**. The admin manages clients, bookings, billing, courses, digital products, and email communications. Clients access a portal for bookings, session history, course content, and invoices.
