@@ -3,7 +3,11 @@
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { cancelCalendarEvent, createCalendarEvent } from "@/lib/graph";
+import {
+  cancelCalendarEvent,
+  createCalendarEvent,
+  deleteRecurringEventOccurrences,
+} from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getSessionTypeConfig } from "@/lib/booking-config";
@@ -11,8 +15,35 @@ import { getAvailableSlots } from "@/lib/availability";
 import { evaluateCancel, evaluateReschedule } from "@/lib/booking-policy";
 import { refundCredit, forfeitCredit } from "@/lib/credits";
 import { format } from "date-fns";
-import { calendarDate } from "@/lib/dates";
+import { calendarDate, saDateStr } from "@/lib/dates";
 import { getBaseUrlForCurrency } from "@/lib/region";
+
+/**
+ * Remove THIS session from the calendar, never the series it belongs to.
+ *
+ * `graphEventId` on a series booking is the recurring master id, shared by every
+ * booking in the series — so deleting by that id removes all of them. Mirrors the
+ * admin branch in app/(admin)/admin/(dashboard)/bookings/actions.ts.
+ *
+ * Never throws: a calendar failure must not abort a cancellation the client has
+ * already been told is allowed. The 4-hourly reconcile picks up any stragglers.
+ */
+async function removeOccurrenceFromCalendar(booking: {
+  graphEventId: string | null;
+  recurringSeriesId: string | null;
+  date: Date;
+}): Promise<void> {
+  if (!booking.graphEventId) return;
+  try {
+    if (booking.recurringSeriesId) {
+      await deleteRecurringEventOccurrences(booking.graphEventId, [saDateStr(booking.date)]);
+    } else {
+      await cancelCalendarEvent(booking.graphEventId);
+    }
+  } catch (err) {
+    console.error("Portal: failed to remove calendar occurrence", err);
+  }
+}
 
 /**
  * Refusals are RETURNED, never thrown — these messages are read by CLIENTS.
@@ -41,16 +72,44 @@ export async function portalCancelBookingAction(
   const result = evaluateCancel(booking);
   if (!result.allowed) return { success: false, error: result.reason };
 
-  // Cancel calendar event
-  if (booking.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId);
-  }
+  // Cancel the calendar event — ONE occurrence when this booking belongs to a series.
+  //
+  // For a series booking, graphEventId is the recurring MASTER id shared by every
+  // booking in the series. cancelCalendarEvent() on that id deletes the whole thing:
+  // a client cancelling one session of a twenty-session series wiped the entire series
+  // from Roxanne's calendar and their own. The admin paths have always branched here
+  // (bookings/actions.ts:55); the portal never did, so the worst version of this was
+  // the one reachable by clients.
+  await removeOccurrenceFromCalendar(booking);
 
   const isLate = result.type === "late" || result.type === "anti_abuse";
-  const creditRefunded = result.type === "normal";
   const billingNote = isLate ? "(late cancel)" : "(cancelled)";
 
-  // Update booking
+  // Credits move ONLY if a credit actually paid for this booking.
+  //
+  // The old test was `!isFree && !isPostpaid`, which infers rather than checks — and
+  // it MINTED credits: a client who booked without spending one (a postpaid session,
+  // an invoiced session, a booking made before they had credits) could cancel with
+  // 24 hours' notice and be handed +1, repeatably. Ask the ledger instead, exactly as
+  // cancelSeriesAction and the admin late-cancel do: a `used` transaction against this
+  // booking is the only proof a credit was spent.
+  //
+  // It is also strictly more correct than the flag it replaces — a POSTPAID client
+  // holding gifted credits does spend one, and previously got neither refund nor
+  // forfeit.
+  const config = getSessionTypeConfig(booking.sessionType);
+  const creditUsed = booking.studentId
+    ? await prisma.sessionCreditTransaction.findFirst({
+        where: { bookingId, type: "used" },
+        select: { id: true },
+      })
+    : null;
+
+  // Only a credit that was actually spent can actually come back. Recorded on the
+  // booking as well, so the row no longer claims `creditRefunded: true` for a session
+  // no credit ever paid for — reporting and the admin UI both read that flag.
+  const creditRefunded = result.type === "normal" && !!creditUsed;
+
   await prisma.booking.update({
     where: { id: bookingId },
     data: {
@@ -64,11 +123,8 @@ export async function portalCancelBookingAction(
     },
   });
 
-  // Handle credits (skip for free consultations and postpaid clients)
-  const config = getSessionTypeConfig(booking.sessionType);
-  const isPostpaid = student.billingType === "postpaid";
-  if (!config.isFree && booking.studentId && !isPostpaid) {
-    if (creditRefunded) {
+  if (creditUsed && booking.studentId) {
+    if (result.type === "normal") {
       await refundCredit(
         booking.studentId,
         bookingId,
@@ -133,10 +189,11 @@ export async function portalRescheduleBookingAction(
     return { success: false, error: "That time slot has just been taken. Please choose another." };
   }
 
-  // Cancel old calendar event
-  if (booking.graphEventId) {
-    await cancelCalendarEvent(booking.graphEventId);
-  }
+  // Drop only the OLD occurrence — for a series booking this id is the recurring
+  // master, so an unconditional delete moved one session and destroyed the other
+  // nineteen. The replacement below is a standalone event, which is the same shape
+  // the admin reschedule produces.
+  await removeOccurrenceFromCalendar(booking);
 
   // Create new calendar event
   const dateObj = calendarDate(newDate);

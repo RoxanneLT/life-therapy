@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+/** The Prisma client, or a transaction client from `$transaction` — both expose the
+ *  model methods these helpers use. */
+export type GiftDb = Omit<
+  typeof prisma,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends"
+>;
 import { renderEmail } from "@/lib/email-render";
 import { findOrCreateStudent } from "@/lib/account-provisioning";
 import { escapeHtml } from "@/lib/utils";
@@ -26,19 +32,26 @@ export async function createGiftFromOrderItem(
     recipientEmail: string;
     message?: string | null;
     deliveryDate?: Date | null;
-  }
+  },
+  /**
+   * DB handle. Order fulfilment passes its TRANSACTION client so the gift row commits
+   * or rolls back with the rest of the order — a gift written outside the transaction
+   * survives a rollback and is then duplicated by the retry (gift.create is not
+   * idempotent).
+   */
+  db: GiftDb = prisma,
 ) {
   // Determine credit amount if it's a package with credits
   let creditAmount: number | null = null;
   if (item.hybridPackageId) {
-    const pkg = await prisma.hybridPackage.findUnique({
+    const pkg = await db.hybridPackage.findUnique({
       where: { id: item.hybridPackageId },
       select: { credits: true },
     });
     if (pkg && pkg.credits > 0) creditAmount = pkg.credits;
   }
 
-  const gift = await prisma.gift.create({
+  const gift = await db.gift.create({
     data: {
       orderId,
       buyerId,
@@ -57,16 +70,15 @@ export async function createGiftFromOrderItem(
   });
 
   // Link gift to order item
-  await prisma.orderItem.update({
+  await db.orderItem.update({
     where: { id: item.id },
     data: { giftId: gift.id },
   });
 
-  // If no scheduled delivery date, send immediately
-  if (!giftDetails.deliveryDate) {
-    await sendGiftEmail(gift.id);
-  }
-
+  // The email is NOT sent here. This runs inside the order transaction, and sending
+  // from there would either hold the transaction open across a network call or
+  // deliver a gift the rollback then erased. The caller sends after commit; a gift
+  // with no deliveryDate is stamped "delivered" and is due immediately.
   return gift;
 }
 
