@@ -26,8 +26,20 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+#
+# These do NOT travel with the repo, by design. They are carried between machines
+# through OneDrive instead — see scripts/sync-secrets.mjs (`npm run secrets`).
+# The repo itself deliberately lives outside OneDrive: syncing .git and
+# node_modules corrupted both (118 unreadable git objects, 2026-08-17).
 .env
 .env*.local
+
+# Per-machine Claude Code permissions — local to one machine, never shared.
+# This was previously caught only by a GLOBAL gitignore
+# (~/.config/git/ignore), which does not exist on a fresh machine or a fresh
+# clone: `git add -A` there would have committed it. Declared here so the
+# protection travels with the repo rather than with one laptop.
+.claude/settings.local.json
 
 # vercel
 .vercel
