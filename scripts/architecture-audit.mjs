@@ -1625,7 +1625,11 @@ const KNOWN_DEFECTS = new Map([
   ["server-action-ux|app/(admin)/admin/(dashboard)/campaigns/actions.ts → deleteCampaignAction",
     "'Campaign ID is required' — an internal invariant phrased as a sentence; unreachable from the UI"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → grantCreditsAction",
-    "'Amount must be 1-20' — the dialog already bounds the input, so this fires only if that is bypassed"],
+    "'Amount must be 1-20' — UNREACHABLE BECAUSE the Grant Credits dialog disables its " +
+    "button outside 1-20 and the input is bounded. That is a property of the UI, not of " +
+    "this action: if the dialog ever stops bounding the input, this refusal becomes " +
+    "reachable and masked, and it needs converting. Left rather than converted because " +
+    "changing it today alters nothing anyone can experience."],
 
 
 
@@ -1642,12 +1646,16 @@ const KNOWN_DEFECTS = new Map([
     "form validation on an admin-only editor"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/testimonials/actions.ts → deleteTestimonial",
     "form validation on an admin-only editor"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → inviteUser",
-    "admin-user management; super_admin only, and the messages are validation not policy"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → updateUser",
-    "as above"],
+
+
   ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → deleteUser",
-    "as above"],
+    "'You cannot delete your own account' — UNREACHABLE BECAUSE users/[id]/page.tsx wraps " +
+    "the delete button in {!isSelf && ...}. Again a property of the UI: remove that guard " +
+    "(say, to let a super admin delete anyone) and this refusal is reachable and masked. " +
+    "Its siblings inviteUser/updateUser were converted on 2026-08-18; this one was not, " +
+    "because it is a bare <form action> inside an AlertDialog, so surfacing a message means " +
+    "rebuilding a DESTRUCTIVE path as a client component with useActionState — real risk on " +
+    "an admin-deletion flow, to display a sentence nobody can currently trigger."],
   // RETIRED 2026-08-18: users/actions.ts → changePassword now returns its refusals.
   // Kept as a comment, not an entry: the audit fails if a KNOWN_DEFECTS line stops
   // firing, so a fixed bug must leave the list rather than linger as a tombstone.

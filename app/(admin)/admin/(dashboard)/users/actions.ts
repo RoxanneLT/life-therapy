@@ -14,7 +14,16 @@ import { appBaseUrl } from "@/lib/region";
 
 const BASE_URL = appBaseUrl();
 
-export async function inviteUser(formData: FormData) {
+/**
+ * Refusals are RETURNED; the success path still redirects.
+ *
+ * Supabase's own message is the valuable one here — "a user with this email
+ * already exists" is the single most likely refusal, and the only one that tells
+ * the admin what to do next. Thrown, it reached them as the digest boilerplate.
+ */
+export async function inviteUser(
+  formData: FormData,
+): Promise<{ success: false; error: string } | void> {
   await requireRole("super_admin");
 
   const name = formData.get("name") as string;
@@ -22,7 +31,7 @@ export async function inviteUser(formData: FormData) {
   const role = formData.get("role") as AdminRole;
 
   if (!email || !role) {
-    throw new Error("Email and role are required");
+    return { success: false, error: "An email address and a role are both required." };
   }
 
   // Create user in Supabase Auth with a random temp password
@@ -34,7 +43,9 @@ export async function inviteUser(formData: FormData) {
   });
 
   if (authError) {
-    throw new Error(authError.message);
+    // Supabase's wording, unedited — it is more specific than anything I would
+    // write here, and it is the reason the invite failed.
+    return { success: false, error: authError.message };
   }
 
   // Create admin_users record
@@ -57,16 +68,23 @@ export async function inviteUser(formData: FormData) {
   redirect("/admin/settings/team");
 }
 
-export async function updateUser(id: string, formData: FormData) {
+export async function updateUser(
+  id: string,
+  formData: FormData,
+): Promise<{ success: false; error: string } | void> {
   const { adminUser: currentAdmin } = await requireRole("super_admin");
 
   const name = formData.get("name") as string;
   const role = formData.get("role") as AdminRole;
 
   // Don't let a super admin demote themselves out of access — another super
-  // admin must do it.
+  // admin must do it. RETURNED, not thrown: this is a rule the admin needs
+  // explained, and it is the refusal they are most likely to hit here.
   if (currentAdmin.id === id && role !== "super_admin") {
-    throw new Error("You can't change your own role. Ask another super admin to do it.");
+    return {
+      success: false,
+      error: "You can't change your own role — ask another super admin to do it.",
+    };
   }
 
   await prisma.adminUser.update({

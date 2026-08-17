@@ -22,7 +22,9 @@ interface UserFormProps {
     email: string;
     role: AdminRole;
   };
-  readonly onSubmit: (formData: FormData) => Promise<void>;
+  readonly onSubmit: (
+    formData: FormData,
+  ) => Promise<{ success: false; error: string } | void>;
   /** Lock the role selector — used when editing your own account (no self-demotion). */
   readonly lockRole?: boolean;
 }
@@ -43,7 +45,13 @@ export function UserForm({ initialData, onSubmit, lockRole }: UserFormProps) {
       formData.set("name", name);
       formData.set("email", email);
       formData.set("role", role);
-      await onSubmit(formData);
+      // A refusal comes BACK; success redirects and never returns. The catch
+      // below still has to let NEXT_REDIRECT through — see its note.
+      const result = await onSubmit(formData);
+      if (result && !result.success) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(isEditing ? "User updated" : "User invited successfully");
     } catch (err) {
       // The save action calls redirect(), which throws a NEXT_REDIRECT error that

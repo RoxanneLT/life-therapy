@@ -48,7 +48,9 @@ export default async function EditUserPage({ params }: Props) {
 
   async function handleUpdate(formData: FormData) {
     "use server";
-    await updateUser(id, formData);
+    // RETURN the refusal — swallowing it here would undo the whole point of the
+    // action returning one.
+    return updateUser(id, formData);
   }
 
   async function handleDelete() {
