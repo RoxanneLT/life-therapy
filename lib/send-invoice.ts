@@ -416,12 +416,19 @@ export async function sendDueTodayNotice(paymentRequestId: string): Promise<void
  * Re-attaches pro-forma so the client always has the document when chasing payment.
  * Updates overdueSentAt and sets status to "overdue".
  */
-export async function sendOverdueNotice(paymentRequestId: string): Promise<void> {
+export async function sendOverdueNotice(
+  paymentRequestId: string,
+  options?: { repeat?: boolean },
+): Promise<void> {
   const pr = await prisma.paymentRequest.findUniqueOrThrow({
     where: { id: paymentRequestId },
   });
 
-  if (pr.overdueSentAt) return;
+  // `overdueSentAt` means "when we last said this was overdue", not "we have
+  // said it once and are done". The one-shot reading is why a client who
+  // ignored a single notice was never contacted again — the caller decides the
+  // cadence, this guard only stops an accidental same-day double-send.
+  if (pr.overdueSentAt && !options?.repeat) return;
 
   const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
 

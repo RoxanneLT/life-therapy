@@ -20,7 +20,7 @@ import {
   sendDueTodayNotice,
   sendOverdueNotice,
 } from "@/lib/send-invoice";
-import { saToday, calendarDate, saDateStr, isSameSaDay } from "@/lib/dates";
+import { saToday, calendarDate, saDateStr, isSameSaDay, diffSaDays } from "@/lib/dates";
 
 /** Start of today's SAST calendar day, as a deterministic UTC-midnight Date. */
 function getSASTToday(): Date {
@@ -120,8 +120,11 @@ export async function processMonthlyBilling(): Promise<{
   // sweep added for the never-emailed case doesn't cover this: those requests
   // WERE emailed, they just went quiet afterwards.
   //
-  // That is not theoretical. As of 18 Aug not one due-today or overdue notice had
-  // ever been sent, to anyone, while requests sat 40 days unpaid.
+  // (An earlier version of this comment claimed no due-today or overdue notice
+  // had ever been sent. That was wrong — they fire, and the records show the full
+  // four-step sequence on real requests. The genuine defect is the one fixed in
+  // step 4 below: chasing STOPS after the first overdue notice. Correcting it
+  // here because a wrong comment outlives the person who wrote it.)
   //
   // The window stays bounded so the wording still matches the moment: a reminder
   // is only a reminder until the money is actually due.
@@ -169,27 +172,55 @@ export async function processMonthlyBilling(): Promise<{
     result.dueToday = { sent: dueTodaySent };
   }
 
-  // 4. Overdue check (1 business day after due for any still-unpaid request)
+  // 4. Overdue — the first notice, and then a weekly nudge while it stays unpaid.
+  //
+  // Two things ended chasing dead after one email. `sendOverdueNotice` sets
+  // status to "overdue", and every query here filtered `status: "pending"` — so
+  // the moment a request was chased it became invisible to all further chasing.
+  // Cyle Davids was contacted on 8 July and never again; the money arrived on
+  // 17 August, forty days later, after a human noticed.
+  //
+  // So: include the requests already marked overdue, and re-send weekly. Capped,
+  // because an unlimited chaser is how a practice ends up hounding someone who
+  // is having a hard month — after four notices it stops and stays in the
+  // digest for a person to deal with.
   const stillUnpaid = await prisma.paymentRequest.findMany({
-    where: {
-      status: "pending",
-      overdueSentAt: null,
-    },
+    where: { status: { in: ["pending", "overdue"] } },
   });
+
+  const REPEAT_EVERY_DAYS = 7;
+  const MAX_NOTICES = 4;
 
   let overdueSent = 0;
   for (const req of stillUnpaid) {
     const overdueDate = getOverdueDate(req.dueDate);
-    // Open-ended on purpose: this is the one that must not be missable. Still
-    // one-shot via `overdueSentAt`, so a request that slipped past its day gets
-    // chased on the next run rather than never.
-    if (saDateStr(today) >= saDateStr(overdueDate)) {
-      try {
+    if (saDateStr(today) < saDateStr(overdueDate)) continue;
+
+    try {
+      if (!req.overdueSentAt) {
+        // First notice. Open-ended on the day so a missed run recovers.
         await sendOverdueNotice(req.id);
         overdueSent++;
-      } catch (err) {
-        console.error(`[monthly-billing] Failed to send overdue notice for request ${req.id}:`, err);
+        continue;
       }
+
+      if (diffSaDays(req.overdueSentAt, today) < REPEAT_EVERY_DAYS) continue;
+
+      // How many have already gone out, counted from what was actually
+      // DELIVERED — a failed send must not consume one of the four.
+      const alreadySent = await prisma.emailLog.count({
+        where: {
+          templateKey: "payment_request_overdue",
+          status: "sent",
+          metadata: { path: ["paymentRequestId"], equals: req.id },
+        },
+      });
+      if (alreadySent >= MAX_NOTICES) continue;
+
+      await sendOverdueNotice(req.id, { repeat: true });
+      overdueSent++;
+    } catch (err) {
+      console.error(`[monthly-billing] Failed to send overdue notice for request ${req.id}:`, err);
     }
   }
   if (overdueSent > 0) {
