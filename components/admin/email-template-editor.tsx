@@ -78,14 +78,21 @@ export function EmailTemplateEditor({
           formData.set("subject", data.subject);
           formData.set("bodyHtml", data.bodyHtml);
           formData.set("isActive", String(data.isActive));
-          await updateTemplateAction(templateKey, formData);
+          // Throwing HERE is fine and deliberate: a client-side throw keeps its
+          // message. It is only across the server-action boundary that Next.js
+          // replaces it with the digest boilerplate, which is why these actions
+          // return their refusals instead of throwing them.
+          const saved = await updateTemplateAction(templateKey, formData);
+          if (!saved.success) throw new Error(saved.error ?? "Could not save the template.");
           return "Saved successfully!";
         },
         onReset: async () => {
-          await resetTemplateAction(templateKey);
+          const reset = await resetTemplateAction(templateKey);
+          if (!reset.success) throw new Error(reset.error ?? "Could not reset the template.");
         },
         onSendTest: async () => {
           const result = await sendTestEmailAction(templateKey);
+          if (!result.success) throw new Error(result.error ?? "Could not send the test email.");
           return `Test email sent to ${result.sentTo}`;
         },
         onPreview: async (data: EmailEditorData) => {

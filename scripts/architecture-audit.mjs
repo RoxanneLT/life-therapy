@@ -1634,8 +1634,7 @@ const KNOWN_DEFECTS = new Map([
     "'Subject and body are required' — as above"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/drip-emails/actions.ts → updateDripEmailDayOffsetAction",
     "'Day offset must be a non-negative number' — as above"],
-  ["server-action-ux|app/(admin)/admin/(dashboard)/email-templates/actions.ts → updateTemplateAction",
-    "'Subject and body are required' — as above"],
+
   ["server-action-ux|app/(admin)/admin/(dashboard)/gifts/actions.ts → resendGiftEmailAction",
     "'Gift ID required' — an internal invariant phrased as a sentence; unreachable from the UI"],
   ["server-action-ux|app/(admin)/admin/(dashboard)/legal-documents/actions.ts → publishDocumentVersionAction",

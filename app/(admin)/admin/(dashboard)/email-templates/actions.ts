@@ -6,7 +6,16 @@ import { revalidatePath } from "next/cache";
 import { previewEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 
-export async function updateTemplateAction(key: string, formData: FormData) {
+/**
+ * Refusals are RETURNED. A thrown message is stripped in production, and every
+ * refusal in this file carries the only useful information: which field is empty,
+ * which template has no default, or the mail provider s own reason for rejecting
+ * a test send.
+ */
+export async function updateTemplateAction(
+  key: string,
+  formData: FormData,
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin");
 
   const subject = (formData.get("subject") as string).trim();
@@ -14,7 +23,7 @@ export async function updateTemplateAction(key: string, formData: FormData) {
   const isActive = formData.get("isActive") === "true";
 
   if (!subject || !bodyHtml) {
-    throw new Error("Subject and body are required");
+    return { success: false, error: "A template needs both a subject and a body." };
   }
 
   await prisma.emailTemplate.update({
@@ -24,9 +33,12 @@ export async function updateTemplateAction(key: string, formData: FormData) {
 
   revalidatePath("/admin/email-templates");
   revalidatePath(`/admin/email-templates/${key}`);
+  return { success: true };
 }
 
-export async function resetTemplateAction(key: string) {
+export async function resetTemplateAction(
+  key: string,
+): Promise<{ success: boolean; error?: string }> {
   await requireRole("super_admin");
 
   // Fetch the seed defaults from the migration — we store the original in the DB
@@ -35,7 +47,10 @@ export async function resetTemplateAction(key: string) {
   const templateDefault = defaults[key];
 
   if (!templateDefault) {
-    throw new Error(`No default found for template: ${key}`);
+    return {
+      success: false,
+      error: `There is no built-in default for "${key}" to reset to — this template exists only in the database.`,
+    };
   }
 
   await prisma.emailTemplate.update({
@@ -50,14 +65,20 @@ export async function resetTemplateAction(key: string) {
 
   revalidatePath("/admin/email-templates");
   revalidatePath(`/admin/email-templates/${key}`);
+  return { success: true };
 }
 
-export async function sendTestEmailAction(key: string) {
+export async function sendTestEmailAction(
+  key: string,
+): Promise<{ success: boolean; sentTo?: string; error?: string }> {
   await requireRole("super_admin");
 
   const { adminUser } = await getAuthenticatedAdmin();
   if (!adminUser?.email) {
-    throw new Error("Could not determine admin email address");
+    return {
+      success: false,
+      error: "Your admin account has no email address, so there is nowhere to send the test.",
+    };
   }
 
   const { subject, html } = await previewEmail(key);
@@ -69,7 +90,12 @@ export async function sendTestEmailAction(key: string) {
   });
 
   if (!result.success) {
-    throw new Error(result.error || "Failed to send test email");
+    // The provider's own reason — the only thing that says WHY a test send
+    // failed, and previously the one thing the admin could not see.
+    return {
+      success: false,
+      error: result.error || "The mail provider rejected the test send.",
+    };
   }
 
   return { success: true, sentTo: adminUser.email };
