@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
 import { useClientFinances } from "../use-client-data";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -237,10 +239,15 @@ function GrantCreditsDialog({ clientId }: { clientId: string }) {
   const [amount, setAmount] = useState(1);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
+  const queryClient = useQueryClient();
 
   function handleGrant() {
     startTransition(async () => {
       await grantCreditsAction(clientId, amount, reason);
+      // The credit balance and its ledger come from the React Query cache, which
+      // `revalidatePath` cannot reach. Untouched, the tab shows the old balance
+      // for the full stale window — long enough to grant the credits twice.
+      void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.finances(clientId) });
       setOpen(false);
       setAmount(1);
       setReason("");
@@ -303,6 +310,7 @@ function EnrolCourseDialog({ clientId }: { clientId: string }) {
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (open) {
@@ -324,6 +332,8 @@ function EnrolCourseDialog({ clientId }: { clientId: string }) {
     if (!selectedCourseId) return;
     startTransition(async () => {
       await enrolInCourseAction(clientId, selectedCourseId);
+      // Enrolments are served from the same cached payload as the credits.
+      void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.finances(clientId) });
       setOpen(false);
       setSelectedCourseId("");
     });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatPhone } from "@/lib/phone";
 import {
   Dialog,
@@ -69,6 +70,7 @@ export function ConvertDialog({
   const open = externalOpen ?? internalOpen;
   const setOpen = onExternalOpenChange ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const [packages, setPackages] = useState<PackageOption[]>([]);
   const [loadingPkgs, setLoadingPkgs] = useState(false);
 
@@ -117,6 +119,9 @@ export function ConvertDialog({
           feelings: feelings.length > 0 ? feelings : undefined,
           symptoms: symptoms.length > 0 ? symptoms : undefined,
         });
+        // Conversion rewrites status, credits and intake — all server props on
+        // this page. Refresh, or the profile still reads "potential" afterwards.
+        router.refresh();
         setOpen(false);
       } catch (err) {
         setError(

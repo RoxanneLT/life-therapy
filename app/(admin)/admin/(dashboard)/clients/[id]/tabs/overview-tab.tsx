@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useClientInsights } from "../use-client-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ export function OverviewTab({ client }: OverviewTabProps) {
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState((client.adminNotes as string) || "");
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const bookingsCount =
     (client._count as Record<string, number>)?.bookings ?? 0;
@@ -89,6 +91,9 @@ export function OverviewTab({ client }: OverviewTabProps) {
   function handleSaveNotes() {
     startTransition(async () => {
       await updateAdminNotesAction(client.id as string, notes);
+      // `notes` is local state seeded from the prop: the save shows on screen but
+      // is undone the next time this tab mounts, which reads the page's stale copy.
+      router.refresh();
       setEditingNotes(false);
     });
   }

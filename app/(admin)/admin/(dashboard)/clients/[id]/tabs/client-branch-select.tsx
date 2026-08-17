@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -48,6 +49,7 @@ export function ClientBranchSelect({
   const [value, setValue] = useState<string>(current || NONE);
   const [isPending, startTransition] = useTransition();
   const [sending, setSending] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     getBranchOptionsAction()
@@ -61,6 +63,9 @@ export function ClientBranchSelect({
     startTransition(async () => {
       try {
         await updateClientBranchAction(studentId, v === NONE ? null : v);
+        // `value` seeds from the `current` prop, so without a refresh the change
+        // reverts on the next mount of this tab — a save that undoes itself.
+        router.refresh();
         toast.success("Office branch updated.");
       } catch {
         toast.error("Could not update the branch.");

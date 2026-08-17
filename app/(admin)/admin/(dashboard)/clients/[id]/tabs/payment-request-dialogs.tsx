@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useTransition, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { CLIENT_QUERY_KEYS } from "@/lib/admin/query-keys";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -257,6 +259,7 @@ export function CreatePaymentRequestDialog({
 }: CreatePaymentRequestDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const queryClient = useQueryClient();
 
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
   const [discountPct, setDiscountPct] = useState(standingDiscountPercent);
@@ -335,6 +338,10 @@ export function CreatePaymentRequestDialog({
             ? `Payment request sent to ${billingEmail}`
             : "Payment request saved as draft",
         );
+        // The Finances tab lists payment requests from the React Query cache, which
+        // no server-side revalidation reaches — without this the request just made
+        // is missing from the list it was made in.
+        void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.finances(clientId) });
         setOpen(false);
       } else {
         toast.error(result.error ?? "Failed to create payment request");
@@ -498,6 +505,7 @@ export function EditPaymentRequestDialog({
 }: EditPaymentRequestDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const queryClient = useQueryClient();
 
   const [lines, setLines] = useState<LineItem[]>([emptyLine()]);
   const [discountPct, setDiscountPct] = useState(0);
@@ -586,6 +594,7 @@ export function EditPaymentRequestDialog({
 
       if (result.success) {
         toast.success(resend ? `Payment request resent to ${billingEmail}` : "Payment request updated");
+        void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.finances(clientId) });
         setOpen(false);
         setConfirmResend(false);
       } else {

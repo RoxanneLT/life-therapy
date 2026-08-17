@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ export function StatusSelect({
   onOpenConvertDialog?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [showTandCWarning, setShowTandCWarning] = useState(false);
   const [showDeactivateWarning, setShowDeactivateWarning] = useState(false);
@@ -83,6 +85,10 @@ export function StatusSelect({
     startTransition(async () => {
       try {
         await updateClientStatusAction(clientId, value);
+        // The select renders `currentStatus`, a server prop. revalidatePath marks
+        // the route stale but leaves the mounted page alone, so without this the
+        // dropdown snapped back to the old status on a save that had succeeded.
+        router.refresh();
       } catch (err) {
         alert(err instanceof Error ? err.message : "Failed to update status");
       }

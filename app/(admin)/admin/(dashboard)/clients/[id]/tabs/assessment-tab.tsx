@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,10 +48,15 @@ export function AssessmentTab({ client }: AssessmentTabProps) {
 
 function EmptyState({ clientId }: { clientId: string }) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function handleCreate() {
     startTransition(async () => {
       await createIntakeAction(clientId);
+      // The intake arrives as a server prop. Without a refresh the tab kept
+      // showing "No assessment recorded yet" over an assessment that now exists,
+      // and a second click created nothing while looking like it had failed.
+      router.refresh();
     });
   }
 
@@ -86,6 +92,7 @@ function AssessmentForm({
   const [otherFeelings, setOtherFeelings] = useState(intake.otherFeelings || "");
   const [otherSymptoms, setOtherSymptoms] = useState(intake.otherSymptoms || "");
   const [adminNotes, setAdminNotes] = useState(intake.adminNotes || "");
+  const router = useRouter();
 
   function handleSave() {
     startTransition(async () => {
@@ -98,6 +105,10 @@ function AssessmentForm({
         otherSymptoms: otherSymptoms.trim() || undefined,
         adminNotes: adminNotes.trim() || undefined,
       });
+      // These fields seed local state from the prop, so the saved values survive
+      // on screen but are lost the moment the tab remounts — leave and come back
+      // and the form shows what was there before the save.
+      router.refresh();
     });
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatPhone } from "@/lib/phone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ function UpdateEmailDialog({ clientId, currentEmail }: Readonly<{ clientId: stri
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +71,9 @@ function UpdateEmailDialog({ clientId, currentEmail }: Readonly<{ clientId: stri
     startTransition(async () => {
       const result = await updateClientEmailAction(clientId, newEmail);
       if (result.success) {
+        // The address shown beside this dialog is a server prop — refresh, or the
+        // page keeps displaying the old one after a successful change.
+        router.refresh();
         setSuccess(true);
         setTimeout(() => { setOpen(false); setSuccess(false); setNewEmail(""); }, 2000);
       } else {
@@ -133,6 +138,7 @@ export function PersonalTab({ client }: PersonalTabProps) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const dateOfBirth = client.dateOfBirth
     ? format(new Date(client.dateOfBirth as string), "yyyy-MM-dd")
@@ -151,6 +157,12 @@ export function PersonalTab({ client }: PersonalTabProps) {
         setError(result.error ?? "Failed to save this client's details.");
         return;
       }
+      // `client` is a prop from the server component, and the action's
+      // revalidatePath only marks the route stale — it does not re-render the page
+      // already on screen. Without this the form closed onto the values the page
+      // was rendered with, so a save looked like it had been thrown away, and the
+      // admin only saw it had worked by leaving the client and coming back.
+      router.refresh();
       setEditing(false);
     });
   }
