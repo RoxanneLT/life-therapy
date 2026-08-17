@@ -1,5 +1,18 @@
 "use client";
 
+/* eslint-disable @next/next/no-location-assign-relative-destination --
+ * Every navigation in this file is a HARD navigation on purpose, for the reason
+ * documented on routeByRole below: the browser must send the freshest cookies and
+ * the server must re-evaluate auth from scratch, with no RSC cache racing the
+ * cookie write. router.push/redirect keep the client router alive and reintroduce
+ * exactly that race — on the 2FA gate, where being wrong means either locking an
+ * admin out or letting an unverified session through.
+ *
+ * The rule arrived with the @next/eslint-plugin-next bump in #18-#21 and is right
+ * about the general case; these sites are the exception, so they are disabled with
+ * the reason rather than "fixed" into a bug.
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { createBrowserClient } from "@/lib/supabase";
 import { verifyMfaAction } from "./actions";

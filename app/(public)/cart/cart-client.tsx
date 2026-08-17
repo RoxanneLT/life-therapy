@@ -127,6 +127,11 @@ export function CartPageClient() {
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 401) {
+          // Hard navigation, deliberately: checkout just told us the session is
+          // dead, so the client router's cached auth state is stale too. A full
+          // load rebuilds it and lets the server decide. (Rule arrived with the
+          // eslint-plugin-next bump in #18-#21; correct in general, not here.)
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
           globalThis.location.href = "/portal/login?redirect=/cart";
           return;
         }
