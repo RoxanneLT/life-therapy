@@ -6,12 +6,69 @@
  * regardless of any allow rule, which stalls long sessions on trivial greps. A PreToolUse hook
  * decides BEFORE the permission system: "allow" skips the prompt; "ask"/"deny" force the gate.
  *
- * Posture: allow everything EXCEPT the named gates below. deny/ask rules in settings.json still
- * take precedence over a hook "allow", so this is belt-and-braces with the rule list.
+ * Posture: allow everything EXCEPT the named gates below.
+ *
+ * MEASURED 2026-08-18, and it corrects what this comment used to claim: a hook "allow" does NOT
+ * leave settings.json free to intervene. `Bash(curl*)` sits in permissions.ask, and a bare curl —
+ * which this hook allows, since its rule only matches the Management API URL — ran with no prompt
+ * at all. The hook short-circuits the permission system entirely. These are NOT belt-and-braces
+ * while the hook is alive.
+ *
+ * That does not break the @twin design below; it explains it. A twin is DORMANT BY DESIGN while
+ * this file runs, and matters only in the one scenario it exists for — this hook dead, its script
+ * path broken, its failure reported as a non-blocking status nobody reads. Then settings is all
+ * there is.
+ *
+ * Consequence for testing: a twin cannot be probed while the hook is alive, because the hook
+ * answers first. Verifying one means disabling this hook and re-running the command — which is
+ * also a faithful rehearsal of the only situation the twin covers.
  *
  * The push gate is not a nicety — the standing rule on this project is that Stéan walks and
  * visually checks the work before it goes out. Claude never pushes on its own initiative.
  */
+/**
+ * Blank out heredoc BODIES before gating. A body is data on stdin, not a command
+ * position — `git commit -F - <<'EOF' … EOF` legitimately carries prose that names
+ * gated commands.
+ *
+ * The scar at CMD below records this being fixed once, for the INLINE case. It was
+ * not enough: `\n` is one of the separators CMD treats as a command boundary, so a
+ * commit message that merely wraps such that "prisma migrate" lands at the start of
+ * a line reads as a command. That denied this very file's commit describing the
+ * rule — the same bug, in the same gate, through the door the first fix left open.
+ *
+ * THE HOLE TO AVOID: a heredoc fed to a SHELL is executed. `bash <<'EOF' … EOF`
+ * runs its body. So the body is stripped only when the command receiving it is not
+ * an interpreter — otherwise the gate would blind itself to the one heredoc that is
+ * genuinely a command.
+ *
+ * Linear-time by construction: one forward scan, no nested quantifiers, and the
+ * terminator pattern is built from a matched identifier, never from free text.
+ */
+function stripHeredocBodies(s) {
+  const OPEN = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/g;
+  const INTERPRETER = /(?:^|[;&|\n]\s*)\s*(?:sudo\s+)?(?:ba|z|k|da)?sh\b|(?:^|[;&|\n]\s*)\s*eval\b/;
+  let out = "";
+  let last = 0;
+  let m;
+  while ((m = OPEN.exec(s)) !== null) {
+    // Is the command that OWNS this heredoc a shell? Look back to the last separator.
+    const lineStart = Math.max(0, s.lastIndexOf("\n", m.index), s.lastIndexOf(";", m.index));
+    if (INTERPRETER.test("\n" + s.slice(lineStart, m.index))) continue;
+
+    const bodyStart = s.indexOf("\n", m.index + m[0].length);
+    if (bodyStart === -1) break;
+    const rest = s.slice(bodyStart + 1);
+    const end = new RegExp(`^[ \\t]*${m[2]}[ \\t]*$`, "m").exec(rest);
+    const bodyEnd = end ? bodyStart + 1 + end.index + end[0].length : s.length;
+
+    out += s.slice(last, m.index + m[0].length) + "\n<<heredoc body stripped>>\n";
+    last = bodyEnd;
+    OPEN.lastIndex = bodyEnd;
+  }
+  return out + s.slice(last);
+}
+
 const chunks = [];
 process.stdin.on("data", (c) => chunks.push(c));
 process.stdin.on("end", () => {
@@ -19,7 +76,7 @@ process.stdin.on("end", () => {
   let reason = "bash-gate: default allow";
   try {
     const input = JSON.parse(Buffer.concat(chunks).toString("utf8").replace(/^﻿/, ""));
-    const cmd = input?.tool_input?.command || "";
+    const cmd = stripHeredocBodies(input?.tool_input?.command || "");
 
     // Every pattern here must be linear-time. This hook runs on EVERY Bash call, so a regex
     // that backtracks would hang the session rather than merely mis-gate a command.

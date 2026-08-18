@@ -1714,8 +1714,12 @@ check("hooks: every incident-class gate has a settings twin", () => {
 
   // Raw source: the twins are declared in COMMENTS, so code() would erase them.
   // The same trap that kept the +02:00 check green for months.
+  // Anchored to a DEDICATED comment line. The first version matched `@twin` anywhere
+  // and swallowed a sentence of prose about the markers — "the @twin design below…" —
+  // reported as a twin settings.json did not carry. A check matching its own
+  // explanatory comment, in the check written to demonstrate that failure.
   const src = read(hookPath);
-  const twins = [...src.matchAll(/@twin\s+(.+)/g)].map((m) => m[1].trim());
+  const twins = [...src.matchAll(/^\s*\/\/\s*@twin\s+(.+?)\s*$/gm)].map((m) => m[1]);
 
   if (twins.length === 0) {
     fail(

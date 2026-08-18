@@ -2,48 +2,83 @@
 
 <!-- CANARY-HTML-7Q4X -->
 
-## PENDING EXPERIMENT — do this first, from context only. Delete this section when answered.
+## PENDING EXPERIMENT — Q4 only. Q1–Q3 and Q5 answered 2026-08-18; findings below.
 
-`/memory` errors on this machine, so you are the instrument. **Do not open any file
-first** — reading one contaminates the result.
+**Do not open any file before answering.** Reading one contaminates the result.
 
-1. **Reproduce lines 1–6 of this file verbatim**, exactly as they reached you, blank
-   lines included. Do not summarise, do not say what is or isn't there — transcribe.
-2. **List every project-instruction file in your context**, each with its first heading.
-3. **Then** read `prisma/schema.prisma`, and say whether a new instruction file appeared
-   in your context afterwards.
-4. **In a second fresh session**, WRITE a new file at `scripts/_e1b-probe.mjs` (one
-   line, any content) without reading anything first. Did the rule file appear?
-   Then delete it.
+**Q4 — does a path-scoped rule fire on WRITE, or only on READ?** In a **fresh session**,
+WRITE a new file at `scripts/_e1b-probe.mjs` (one line, any content) **without reading
+anything first**. Did `.claude/rules/schema-changes.md` appear in context? Then delete
+the probe file and record the answer here.
 
-   It must be a **new file via Write**, not an Edit: the Edit tool refuses to touch a
-   file this session hasn't Read, so "edit without reading" is unreachable by
-   construction. Write on a new path is the only edit-class operation that can reach
-   a matching path with no prior read — which is also the exact shape of the reckless
-   session this question is about.
-5. While you are there: spawn any subagent (`census` will do) and have it report whether
-   CLAUDE.md is in *its* context.
+It must be a **new file via Write**, not an Edit: the Edit tool refuses to touch a file
+this session hasn't Read, so "edit without reading" is unreachable by construction. Write
+on a new path is the only edit-class operation that can reach a matching path with no
+prior read — which is also the exact shape of the reckless session this question is about.
+`scripts/**` is in the rule's `paths:` list, so the path does match.
 
-Transcribe rather than report, because a negative self-report is weak evidence: "I don't
-see a token" cannot distinguish *stripped* from *present-but-overlooked*. If lines 1–2
-and 4–6 come back and line 3 does not, that is positive evidence on both sides of the
-boundary — demonstrated, not inferred. Same reason (2) enumerates instead of confirming.
+**Why Q4 is load-bearing.** The rule is now *known* to fire on Read (Q3). If it fires on
+Read but **not** on Write, a scoped rule reaches the session that looks before it writes
+and misses the one that doesn't — protection present exactly when it is least needed.
+That would be reason to keep incident-class content out of scoped rules entirely. Until
+Q4 answers, `.claude/rules/schema-changes.md` keeps its frontmatter only because
+`bash-gate.js:43` denies `prisma migrate` unconditionally; the prose can leave context
+because the protection doesn't.
 
-Q3–Q4 are what still matter. Path-scoping is already shown to *suppress* loading (this
-file's rules file was in context at launch on 2026-08-18 with no frontmatter, and absent
-once it had some — a clean A/B across two sessions, one variable). What is unproven is
-whether the trigger ever *fires*, and on which verb.
+While you are there, note whether `<!-- CANARY-HTML-7Q4X -->` on line 3 reached you. It
+is kept deliberately as a standing check on the Q1 finding; delete it with this section.
 
-**Q4 is the load-bearing one.** If the rule fires on Read but not on Edit, a rule scoped
-to `prisma/**` reaches the session that looks before it writes and misses the one that
-doesn't — protection that is present exactly when it is least needed. That would be a
-reason to keep incident-class content out of scoped rules entirely, whatever else is
-true. Until Q4 answers, `.claude/rules/schema-changes.md` keeps its frontmatter only
-because `bash-gate.js:43` denies `prisma migrate` unconditionally; the prose can leave
-context because the protection doesn't.
+### Findings so far (2026-08-18)
 
-**Revert in one pass:** delete this section AND the HTML comment on line 3, then decide
-the frontmatter per Q3/Q4.
+- **Q1 — block-level HTML comments are stripped from CLAUDE.md before it reaches context.**
+  Line 3 (`<!-- CANARY-HTML-7Q4X -->`) and its trailing blank line were absent; lines 1–2
+  and everything from line 5 arrived intact and closed over the gap. **But inline HTML
+  comments survive** — every `<!-- @enforced … -->` tag reached context, because each sits
+  at the end of a line of prose rather than alone on its own line. *Consequence: never
+  reformat an `@enforced` tag onto its own line — it would silently vanish from context
+  while still looking present in the file.*
+- **Q2 — exactly one project-instruction file is loaded at launch:** `CLAUDE.md`. No
+  `.claude/rules/*` file is present until something triggers it.
+- **Q3 — YES, the scoped-rule trigger fires on Read.** Reading `prisma/schema.prisma`
+  (matching `paths: ["prisma/**", "scripts/**"]`) injected the full text of
+  `.claude/rules/schema-changes.md` into context on the next turn. Path-scoping therefore
+  *defers* loading rather than merely suppressing it. The frontmatter itself is stripped
+  from the injected copy.
+- **Q4 — NO, the trigger does not fire on Write.** A fresh session wrote a new file at
+  `scripts/_e1b-probe.mjs` with no prior read. `scripts/**` **is** in the rule's `paths:`
+  list, so the path matched — and the rule did not arrive. That session enumerated what
+  *did* arrive (two tool-schema/MCP reminders, nothing else), so this is an enumeration
+  rather than a bare negative.
+
+  **This is the bad answer, and it decides the general rule.** A scoped rule reaches the
+  session that reads before it writes and misses the one that doesn't — protection
+  present exactly when it is least needed. So: *never scope incident-class prose.* The
+  frontmatter stays on `schema-changes.md` only because `bash-gate.js` denies
+  `prisma migrate` unconditionally; the prose may leave context because the protection
+  does not. A rule file with no such twin must not be scoped.
+
+  (Plausible mechanism, worth knowing but not relied on: Read *delivers file content*
+  and the rule rides along with it; Write delivers none.)
+
+- **Q5 — subagents DO receive CLAUDE.md. Two runs disagreed; the disagreement is the
+  lesson.** One `census` reported no CLAUDE.md. Another reported the full file, named the
+  delivery wrapper (`Contents of …(project instructions, checked into the codebase)`), and
+  transcribed lines 1–6 — including freshly-edited text it could not have known otherwise.
+
+  The protocol's own rule settles it: **a bare negative cannot distinguish absent from
+  overlooked; transcription can.** The positive-with-proof wins, and the first run is a
+  subagent misreporting its own context — which is exactly the failure the transcribe-
+  don't-report protocol was written to catch, arriving inside that protocol.
+
+  **Consequence for the doctrine below:** the claim that prose "is not read at all by a
+  subagent" is **wrong as stated**. It is *present* and *unlikely to be attended to* by an
+  agent handed a narrow task. The conclusion survives — incident-class rules still belong
+  in hooks and checks — but for a weaker reason, and the sentence at line ~457 is corrected
+  accordingly. A false mechanism argued for a true conclusion, which is the kind of support
+  that collapses the day someone checks it.
+
+**Revert in one pass:** delete this section AND the canary on line 3, then decide the
+frontmatter per Q4.
 
 ## START HERE — where the repo lives, and the first thing to do in a session
 
@@ -445,8 +480,10 @@ suite grows a scar for every wound.
 | Annoyance — a style slip, a re-run | `CLAUDE.md`. Prose is advisory, and that is fine here |
 | **Incident** — wrong money, a client emailed, data unrecoverable | A **check**, or a hook |
 
-Prose is read attentively on day one and skimmed by the twentieth session — and it is not read at
-all by a subagent that was handed a narrow task. Anything incident-class has to be mechanical, or
+Prose is read attentively on day one and skimmed by the twentieth session — and skimmed hardest by
+a subagent handed a narrow task. (It *is* delivered to subagents: measured 2026-08-18, after a
+first probe wrongly reported otherwise. Present, not absent — and unlikely to be attended to,
+which is a weaker claim reaching the same place.) Anything incident-class has to be mechanical, or
 it is being enforced by whoever happens to be paying attention.
 
 The two layers catch different things, so use both. A **hook** fires at write time and refuses;
@@ -531,8 +568,15 @@ changes, it just must not be silent. A `SELECT` through the same endpoint stays 
 The `bash-gate.js` PreToolUse hook exists because allow-rules can't cover commands containing `$()`
 or heredocs — Claude Code decomposes those and prompts anyway, which stalls a long session on a
 trivial grep. The hook decides *before* the permission system: allow by default, gate the named
-dangerous shapes. `deny`/`ask` rules in `settings.json` still override a hook `allow`, so the two are
-belt-and-braces.
+dangerous shapes.
+
+**It is not belt-and-braces with `settings.json`, and this file claimed otherwise until it was
+measured.** A hook `allow` short-circuits the permission system: `Bash(curl*)` is in
+`permissions.ask`, and a bare curl ran with no prompt. So every `settings.json` Bash rule is
+dormant while the hook is alive. That is the whole point of the `@twin` markers in `bash-gate.js` —
+the twin covers the one case where this hook is *dead*, which is the failure that reports a
+non-blocking status nobody reads. Reconciled by `hooks: every incident-class gate has a settings
+twin`. <!-- @enforced audit:hooks-every-incident-class-gate-has-a-settings-twin -->
 
 ### Rules (`.claude/rules/`)
 

@@ -204,6 +204,87 @@ Applied:  life-therapy → n/a: no generated-artefact pair here. The nearest
           pleks        → open item
 ```
 
+### L-010 · A hook "allow" short-circuits the permission system
+
+```
+Date:     2026-08-18
+Origin:   life-therapy
+Cost:     none — an untested belief, written into two files as fact for a day
+Class:    defence-in-depth
+General:  A PreToolUse hook that returns "allow" does not merely decline to gate —
+          it ANSWERS, and the settings-level rules are never consulted. Both the
+          hook's own header and the project instructions claimed the two layers
+          were belt-and-braces. Measured: a command matching an `ask` rule, which
+          the hook allowed, ran with no prompt.
+          The design survives, but its description was inverted. A settings twin
+          is DORMANT BY DESIGN while the hook lives, and covers exactly one
+          scenario: the hook dead (L-006). That is not a weaker guarantee — it is
+          the guarantee, correctly stated.
+          Testing corollary: a twin cannot be probed while the hook is alive,
+          because the hook answers first. Verifying one means disabling the hook
+          and re-running — which is also a faithful rehearsal of the only
+          situation the twin exists for. A probe run WITHOUT disabling it proves
+          nothing and looks like a result (L-007).
+Applied:  life-therapy → both claims corrected; twin-verification procedure
+                         recorded in bash-gate.js (2026-08-18)
+          pleks        → open item
+```
+
+### L-011 · Path-scoped rules fire on Read, not on Write
+
+```
+Date:     2026-08-18
+Origin:   life-therapy (E1b)
+Cost:     none — measured before any incident-class prose was scoped
+Class:    load-model
+General:  A rule file scoped by `paths:` is deferred, not suppressed: reading a
+          matching file injects it. But WRITING a new file at a matching path
+          does not. Measured both directions in fresh sessions, same glob.
+          So a scoped rule reaches the session that reads before it writes and
+          misses the one that doesn't — protection present exactly when it is
+          least needed.
+          RULE: never scope incident-class prose. Scope it only where a rung-1/2
+          control holds the incident-class content regardless (L-005), or accept
+          that the careless session will not see it.
+          Plausible mechanism, not relied on: Read delivers file content and the
+          rule rides along; Write delivers none.
+Applied:  life-therapy → schema-changes.md stays scoped, because bash-gate denies
+                         prisma migrate unconditionally (2026-08-18)
+          pleks        → open item — 18 rule files, all scoped, 931 lines. Each
+                         needs the L-005 pass before this is safe.
+```
+
+### L-012 · A subagent misreported its own context
+
+```
+Date:     2026-08-18
+Origin:   life-therapy (E3)
+Cost:     a false finding written into the instruction file, cited as support for
+          a doctrine, and caught only because a second run disagreed
+Class:    unfalsifiable-control
+General:  Two probes of the same question returned opposite answers. One reported
+          "no CLAUDE.md in my context." The other reported it present, named the
+          delivery wrapper, and TRANSCRIBED the first six lines — including
+          freshly-edited text it could not otherwise have known.
+          The positive-with-proof wins, on the protocol's own rule: a bare
+          negative cannot distinguish absent from overlooked. The first probe was
+          an agent misreporting its own context — the exact failure the
+          transcribe-don't-report protocol was written to catch, occurring inside
+          that protocol.
+          Two general forms:
+            · An agent is not a reliable narrator of its own context. Ask it to
+              TRANSCRIBE, and treat a negative as unresolved rather than as a no.
+            · Run any self-observation probe TWICE. A single run is one witness,
+              and this one would have shipped a false fact.
+          Substantively: subagents DO receive project instructions. The doctrine
+          that leaned on their absence still holds — a narrow-task agent skims —
+          but a false mechanism was arguing for a true conclusion, which is the
+          kind of support that collapses the day someone checks it.
+Applied:  life-therapy → finding corrected in CLAUDE.md, and the doctrine reworded
+                         from "absent" to "present but unattended" (2026-08-18)
+          pleks        → open item
+```
+
 ### L-006 · A hook is a single point of failure, and it degrades silently
 
 ```
