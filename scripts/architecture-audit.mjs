@@ -333,50 +333,6 @@ check("date-safety: no hardcoded +02:00 offset", () => {
   }
 });
 
-check("allowlists: every exemption is still load-bearing", () => {
-  // The inverted probe.
-  //
-  // Every check here is proven by planting a violation and watching it fail. The
-  // SUPPRESSORS have never been tested at all — DATE_ALLOWLIST asserts that four
-  // files need exempting, and nothing has ever confirmed any of them still does.
-  //
-  // A stale exemption is worse than a missing one. It reads as a considered
-  // decision, it is quoted in the comment above it, and it silently covers
-  // whatever gets written into that file next. KNOWN_DEFECTS already fails when
-  // an entry stops firing, precisely so a fixed bug cannot linger as a tombstone;
-  // an allowlist deserves the same rule and did not have it.
-  for (const relf of DATE_ALLOWLIST) {
-    const abs = join(ROOT, relf);
-    if (!existsSync(abs)) {
-      fail(
-        "allowlists",
-        relf,
-        "DATE_ALLOWLIST exempts a file that no longer exists",
-        "delete the entry — an exemption outliving its file will silently cover a future file at that path",
-      );
-      continue;
-    }
-    // Would this file actually be flagged without its exemption? Run the same two
-    // detections the date checks use.
-    const src = code(read(abs));
-    const raw = read(abs);
-    const wouldFlag =
-      newDateCalls(src).some((c) => c.args.length >= 3) ||
-      /new Date\(\)\s*\.toISOString\(\)\s*\.(slice|substring)\(/.test(src) ||
-      /\.toISOString\(\)\s*\.(slice|substring|split)\(/.test(src) ||
-      /\+02:?00/.test(raw);
-
-    if (!wouldFlag) {
-      fail(
-        "allowlists",
-        relf,
-        "DATE_ALLOWLIST exempts a file that no longer does anything needing exemption",
-        "delete the entry — it is now covering whatever gets written here next, under a reason that has stopped being true",
-      );
-    }
-  }
-});
-
 check("date-safety: one public-holiday list", () => {
   // There were two, and they disagreed. `lib/sa-holidays.ts` carries the s2A
   // presidential proclamations — election days, the Christmas-on-a-Sunday gap —
@@ -1704,6 +1660,89 @@ const KNOWN_DEFECTS = new Map([
   // Kept as a comment, not an entry: the audit fails if a KNOWN_DEFECTS line stops
   // firing, so a fixed bug must leave the list rather than linger as a tombstone.
 ]);
+
+check("allowlists: every exemption is still load-bearing", () => {
+  // The inverted probe.
+  //
+  // Every check here is proven by planting a violation and watching it fail. The
+  // SUPPRESSORS have never been tested at all — DATE_ALLOWLIST asserts that four
+  // files need exempting, and nothing has ever confirmed any of them still does.
+  //
+  // A stale exemption is worse than a missing one. It reads as a considered
+  // decision, it is quoted in the comment above it, and it silently covers
+  // whatever gets written into that file next. KNOWN_DEFECTS already fails when
+  // an entry stops firing, precisely so a fixed bug cannot linger as a tombstone;
+  // an allowlist deserves the same rule and did not have it.
+  for (const relf of DATE_ALLOWLIST) {
+    const abs = join(ROOT, relf);
+    if (!existsSync(abs)) {
+      fail(
+        "allowlists",
+        relf,
+        "DATE_ALLOWLIST exempts a file that no longer exists",
+        "delete the entry — an exemption outliving its file will silently cover a future file at that path",
+      );
+      continue;
+    }
+    // Would this file actually be flagged without its exemption? Run the same two
+    // detections the date checks use.
+    const src = code(read(abs));
+    const raw = read(abs);
+    const wouldFlag =
+      newDateCalls(src).some((c) => c.args.length >= 3) ||
+      /new Date\(\)\s*\.toISOString\(\)\s*\.(slice|substring)\(/.test(src) ||
+      /\.toISOString\(\)\s*\.(slice|substring|split)\(/.test(src) ||
+      /\+02:?00/.test(raw);
+
+    if (!wouldFlag) {
+      fail(
+        "allowlists",
+        relf,
+        "DATE_ALLOWLIST exempts a file that no longer does anything needing exemption",
+        "delete the entry — it is now covering whatever gets written here next, under a reason that has stopped being true",
+      );
+    }
+  }
+
+  // ZAR_BY_CONSTRUCTION — same question of the money check's exemptions. These
+  // are the higher-stakes ones: an exemption here covers a `formatPrice()` with no
+  // currency, which is how an international client is quoted in Rands.
+  for (const relf of ZAR_BY_CONSTRUCTION) {
+    const abs = join(ROOT, relf);
+    if (!existsSync(abs)) {
+      fail("allowlists", relf, "ZAR_BY_CONSTRUCTION exempts a file that no longer exists", "delete the entry");
+      continue;
+    }
+    if (!callArity(code(read(abs)), "formatPrice").some((c) => c.args === 1)) {
+      fail(
+        "allowlists",
+        relf,
+        "ZAR_BY_CONSTRUCTION exempts a file with no bare formatPrice() left — the exemption is now blanket cover for the next one written here",
+        "delete the entry",
+      );
+    }
+  }
+
+  // REVALIDATE_EXCEPTIONS is keyed by ACTION NAME, so it rots differently: a
+  // renamed or deleted action leaves an entry that matches nothing, and a name
+  // that comes back later — reasonably, for a different action — inherits an
+  // exemption written for something else entirely.
+  const allActionSrc = allSource()
+    .filter((f) => /actions\.ts$/.test(f))
+    .map((f) => code(read(f)))
+    .join("\n");
+  for (const [action, reason] of REVALIDATE_EXCEPTIONS) {
+    if (!new RegExp(String.raw`function\s+${action}\b`).test(allActionSrc)) {
+      fail(
+        "allowlists",
+        `REVALIDATE_EXCEPTIONS → ${action}`,
+        `exempts an action that no longer exists ("${reason.slice(0, 60)}…")`,
+        "delete the entry — if the name returns for a different action it silently inherits this exemption",
+      );
+    }
+  }
+});
+
 
 // ── Report ──────────────────────────────────────────────────────────────────
 
