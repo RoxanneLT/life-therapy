@@ -363,37 +363,28 @@ Rules:
   the client bundle, which only works on a literal member-access. Routing it through a function leaves
   `undefined` in the browser. These are client-safe by definition.
 
-## Environment Variables (key ones)
+## Environment variables
 
-```
-NEXT_PUBLIC_SUPABASE_URL          — Supabase project URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY     — Supabase anon/public key
-SUPABASE_SERVICE_ROLE_KEY         — Supabase admin key (server-only)
-PAYSTACK_SECRET_KEY               — Paystack API key
-NEXT_PUBLIC_APP_URL               — Primary domain (https://life-therapy.co.za)
-NEXT_PUBLIC_BASE_URL              — Same as APP_URL (used in some email templates)
-MS_GRAPH_TENANT_ID                — Microsoft 365 tenant
-MS_GRAPH_CLIENT_ID                — Azure AD app registration
-MS_GRAPH_CLIENT_SECRET            — Azure AD secret
-MS_GRAPH_USER_EMAIL               — Roxanne's Microsoft 365 email (calendar owner)
-RESEND_API_KEY                    — Email delivery via Resend
-SUPABASE_ACCESS_TOKEN             — Supabase Management API (schema changes; see .claude/rules/)
-CRON_SECRET                       — cron auth. ONE reader: lib/cron/with-cron-run.ts. Headers only.
-AUDIT_IP_HMAC_KEY                 — keys the IP hash in the audit trail (any long random string)
-```
+**The list lives in `lib/env.ts`** — `REQUIRED_IN_PROD` and `OPTIONAL`, each entry carrying
+why it is in that group. A table here drifted and omitted two required vars (`cc8cbb9`).
 
-> **`AUDIT_IP_HMAC_KEY` is new.** Without it, `recordAuthEvent` still records the event but omits the
-> IP hash entirely, and logs an error. It refuses to write an unkeyed hash: IPv4 is only 2^32 values,
-> so an IP "hashed" with a key anyone can read is reversible by brute force in minutes — a column that
+What does not live in code:
+
+> **`CRON_SECRET` is headers-only.** The query-string path (`?secret=`) was removed: it put a
+> live credential into Vercel access logs and browser history. Trigger a job by hand with a
+> header: `curl -H "x-cron-secret: $CRON_SECRET" https://life-therapy.co.za/api/cron/daily`
+>
+> **`AUDIT_IP_HMAC_KEY` refuses to write an unkeyed hash.** Without it `recordAuthEvent` still
+> records the event, omits the IP hash, and logs an error. IPv4 is only 2^32 values, so an IP
+> "hashed" with a key anyone can read is reversible by brute force in minutes — a column that
 > looks protected and isn't is worse than storing the raw IP.
 >
-> **`CRON_SECRET` is headers-only.** The query-string path (`?secret=`) was removed: it put a live
-> credential into Vercel access logs and browser history. Trigger a job by hand with a header:
-> `curl -H "x-cron-secret: $CRON_SECRET" https://life-therapy.co.za/api/cron/daily`
-
-> The Graph vars are `MS_GRAPH_*`, **not** `GRAPH_*`. This was mis-documented and cost a debugging
-> session. The real values live in `.env.local`; `.env` holds a `johndoe@localhost` placeholder
-> `DATABASE_URL`, so one-off scripts need `npx tsx --env-file=.env.local`.
+> **Local runs need `.env.local` explicitly.** `.env` holds a `johndoe@localhost` placeholder
+> `DATABASE_URL`, and ESM hoists imports above `dotenv.config()`, so a one-off script must be
+> run as `npx tsx --env-file=.env.local <script>`.
+>
+> **The Graph vars are `MS_GRAPH_*`, not `GRAPH_*`** — mis-documented once, and it cost a
+> debugging session.
 
 ---
 
