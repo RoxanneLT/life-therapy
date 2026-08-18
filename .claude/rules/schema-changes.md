@@ -1,3 +1,9 @@
+---
+paths:
+  - "prisma/**"
+  - "scripts/**"
+---
+
 # Rule — schema changes: Management API, never `prisma migrate`
 
 ## The short version

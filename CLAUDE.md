@@ -1,5 +1,43 @@
 # CLAUDE.md — Life-Therapy Platform
 
+<!-- CANARY-HTML-7Q4X -->
+
+## PENDING EXPERIMENT — do this first, from context only. Delete this section when answered.
+
+`/memory` errors on this machine, so you are the instrument. **Do not open any file
+first** — reading one contaminates the result.
+
+1. **Reproduce lines 1–6 of this file verbatim**, exactly as they reached you, blank
+   lines included. Do not summarise, do not say what is or isn't there — transcribe.
+2. **List every project-instruction file in your context**, each with its first heading.
+3. **Then** read `prisma/schema.prisma`, and say whether a new instruction file appeared
+   in your context afterwards.
+4. **In a second fresh session**, go straight to an *edit* of a `prisma/**` or
+   `scripts/**` file without reading one first. Did the rule file appear?
+5. While you are there: spawn any subagent (`census` will do) and have it report whether
+   CLAUDE.md is in *its* context.
+
+Transcribe rather than report, because a negative self-report is weak evidence: "I don't
+see a token" cannot distinguish *stripped* from *present-but-overlooked*. If lines 1–2
+and 4–6 come back and line 3 does not, that is positive evidence on both sides of the
+boundary — demonstrated, not inferred. Same reason (2) enumerates instead of confirming.
+
+Q3–Q4 are what still matter. Path-scoping is already shown to *suppress* loading (this
+file's rules file was in context at launch on 2026-08-18 with no frontmatter, and absent
+once it had some — a clean A/B across two sessions, one variable). What is unproven is
+whether the trigger ever *fires*, and on which verb.
+
+**Q4 is the load-bearing one.** If the rule fires on Read but not on Edit, a rule scoped
+to `prisma/**` reaches the session that looks before it writes and misses the one that
+doesn't — protection that is present exactly when it is least needed. That would be a
+reason to keep incident-class content out of scoped rules entirely, whatever else is
+true. Until Q4 answers, `.claude/rules/schema-changes.md` keeps its frontmatter only
+because `bash-gate.js:43` denies `prisma migrate` unconditionally; the prose can leave
+context because the protection doesn't.
+
+**Revert in one pass:** delete this section AND the HTML comment on line 3, then decide
+the frontmatter per Q3/Q4.
+
 ## START HERE — where the repo lives, and the first thing to do in a session
 
 **The repo lives OUTSIDE OneDrive. The exact path is per-machine.**
