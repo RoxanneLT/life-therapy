@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   updateCommPrefAction,
   pauseDripAction,
@@ -330,6 +331,21 @@ function DripSection({
 }) {
   const [isPending, startTransition] = useTransition();
 
+  // These three used to be `await someAction(clientId); onSuccess?.()` — no toast,
+  // no catch. On success the row simply refreshed, and on failure nothing happened
+  // at all: the button un-disabled and the drip stayed exactly as it was. Silence
+  // reads as success, which is how a cancelled session sat live in Outlook for five
+  // days behind a dialog that closed without a word (226faa7).
+  async function run(action: () => Promise<unknown>, ok: string) {
+    try {
+      await action();
+      toast.success(ok);
+      onSuccess?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "That didn't work — nothing was changed.");
+    }
+  }
+
   if (!drip) {
     return (
       <section>
@@ -385,7 +401,7 @@ function DripSection({
                     size="sm"
                     disabled={isPending}
                     onClick={() =>
-                      startTransition(async () => { await resumeDripAction(clientId); onSuccess?.(); })
+                      startTransition(async () => { await run(() => resumeDripAction(clientId), "Drip sequence resumed."); })
                     }
                   >
                     <Play className="mr-1 h-3.5 w-3.5" />
@@ -397,7 +413,7 @@ function DripSection({
                     size="sm"
                     disabled={isPending}
                     onClick={() =>
-                      startTransition(async () => { await pauseDripAction(clientId); onSuccess?.(); })
+                      startTransition(async () => { await run(() => pauseDripAction(clientId), "Drip sequence paused."); })
                     }
                   >
                     <Pause className="mr-1 h-3.5 w-3.5" />
@@ -431,7 +447,7 @@ function DripSection({
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => startTransition(async () => { await resetDripAction(clientId); onSuccess?.(); })}
+                      onClick={() => startTransition(async () => { await run(() => resetDripAction(clientId), "Drip sequence reset."); })}
                       disabled={isPending}
                     >
                       Yes, Reset Sequence
