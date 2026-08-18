@@ -46,7 +46,22 @@ General:  Controls fail silently and look identical to working ones from outside
           matched its own explanatory comment and so always passed.
           Plant a violation, confirm the control FAILS, remove it, keep the probe.
           A control is not shipped until it has been observed failing.
-Applied:  life-therapy → probes on all 37 audit checks (2026-08-18)
+
+          Negative-fixture shapes worth keeping, each one a real first-run false
+          positive or a real unfalsifiable check:
+            1. scanning preprocessed source for a string literal
+            2. a pattern matching its own explanatory comment
+            3. a regex spanning a statement boundary into unrelated code
+            4. an extension alternation truncating .json → .js, .tsx → .ts
+            5. an identifier wrapped across a line and read as missing
+            6. a code snippet that merely resembles a control id
+            7. NEAR-MISS BY NORMALISATION — a hand-written id that slugifies
+               close to a real one but not to it. Observed: a tag written
+               `...-no-hardcoded-offset` against a control whose real name
+               normalises to `...-no-hardcoded-02-00-offset`. Eleven characters
+               of drift in a tag whose entire job is not drifting; found only
+               because someone happened to run the comparison by hand.
+Applied:  life-therapy → probes on all 38 audit checks (2026-08-18)
           pleks        → open item
 ```
 
@@ -71,6 +86,12 @@ General:  HTML comments in an instruction file do not reach the model. Two
           Second-order: visible budget is then spent only on unenforceable rules
           and shrinks each time one is mechanised — the size ceiling stops being
           a constraint and becomes a price on not mechanising.
+          Which changes the metric. Total line count is the wrong number to
+          watch: it moves for scaffolding, scars and orientation, none of which
+          the ratchet is trying to reduce. Report N UNENFORCEABLE RULES and the
+          delta since the last pass. That number should only ever go down, and
+          each decrement is a rule that acquired a net.
+          Baseline, life-therapy 2026-08-18: 8 unenforceable of 19.
 Applied:  life-therapy → A1 format split (2026-08-18)
           pleks        → open item
 ```
@@ -133,11 +154,28 @@ General:  L-005 leans on hooks surviving context loss. They survive context loss
           at all (rm -rf on root, ad-hoc SQL against production) and one degraded
           from deny to ask (prisma migrate). None of that is visible from a green
           run.
-          Corollary: every incident-class hook rule carries a settings-level twin
-          at the same or stronger verdict, and the comparison is a set difference,
-          not a judgement call. This is the probe that a hook-based control needs
-          and that L-002's planted-violation discipline cannot supply, because the
-          failure is the hook not running at all.
-Applied:  life-therapy → open item, this session
-          pleks        → open item
+          Corollary: every incident-class hook rule carries a settings-level twin,
+          and the comparison is a set difference, not a judgement call. This is the
+          probe a hook-based control needs and that L-002's planted-violation
+          discipline cannot supply, because the failure is the hook not running.
+
+          The pairing is ASYMMETRIC, and "equal-or-stronger verdict" is wrong
+          wherever the settings language is coarser than the hook's:
+
+            hook     → precise pattern, DENY   (the smart layer)
+            settings → coarse pattern, ASK     (the dumb, unkillable layer)
+
+          A coarse deny in the dumb layer false-positives forever and cannot be
+          taught better — a naive pattern once denied an innocent commit whose
+          heredoc merely mentioned the gated command. A coarse ask puts a human in
+          the loop exactly when the smart layer is gone, and costs only an
+          occasional prompt while it is alive. Ask is the floor; absent is the
+          violation. If a twin prompts too often, NARROW it — never delete it.
+Applied:  life-therapy → @twin markers + audit check `hooks: every incident-class
+                         gate has a settings twin` (2026-08-18). Closed both live
+                         gaps: rm -rf on root/home, and ad-hoc production SQL
+                         (twinned coarsely at `Bash(curl*)`, since settings cannot
+                         match a URL mid-command and curl's two documented uses
+                         here both deserve a prompt anyway).
+          pleks        → open item, gated on the envelope hooks shipping first
 ```

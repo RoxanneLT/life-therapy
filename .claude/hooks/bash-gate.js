@@ -31,23 +31,51 @@ process.stdin.on("end", () => {
     const CMD = String.raw`(?:^|[;&|\n]\s*|\$\(\s*)\s*(?:npx\s+|pnpm\s+|yarn\s+|npm\s+run\s+)?`;
     const cmdRe = (body) => new RegExp(CMD + body);
 
+    // Each incident-class rule names its settings.json TWIN. The twin exists for one
+    // scenario only: this hook is dead. A hook whose script path breaks reports a
+    // non-blocking status nobody reads, and every rule held here alone degrades without
+    // failing — deny silently becomes ask, ask silently becomes allow.
+    //
+    // The pairing is deliberately ASYMMETRIC, and equal-or-stronger would be wrong.
+    // settings.json speaks in prefix-globs; this file speaks in separator-aware regex.
+    // A coarse DENY in the dumb layer false-positives forever and cannot be taught
+    // better — see the heredoc scar at the top of this file. A coarse ASK puts a human
+    // in the loop exactly when the smart layer is gone, and costs only an occasional
+    // prompt while it is alive. Ask is the floor. Absent is the violation.
+    //
+    // Reconciled by `hooks: every incident-class gate has a settings twin`. If a twin
+    // prompts too often, NARROW its pattern — never delete it.
     const DENY = [
+      // @twin Bash(git push --force*)
       [cmdRe(String.raw`git\s+push\s+[^\n]*(?:--force|-f\b)`), "force push is denied"],
+      // @twin Bash(git reset --hard*)
       [cmdRe(String.raw`git\s+reset\s+--hard`), "hard reset is denied"],
+      // @twin Bash(rm -rf /*)
+      // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir
+      // cleanup. The dangerous shapes are the rooted ones; the quoted and trailing-space
+      // variants stay this layer's job.
       [/rm\s+-[rf]{1,2}\s+["']?[/~]["']?(\s|$)/, "rm -rf on root/home is denied"],
       // Prisma's migration engine has never worked against this Supabase instance: DATABASE_URL is
       // the pgbouncer pooler (:6543), and migrate needs a direct connection for its shadow DB and
       // advisory locks. Denied rather than gated, so nobody burns a session rediscovering it.
       // Schema changes go through the Supabase Management API — see .claude/rules/schema-changes.md.
+      // @twin Bash(npx prisma migrate*)
       [
         cmdRe(String.raw`prisma\s+(?:migrate|db\s+push)`),
         "prisma migrate/db push does NOT work on this project — apply DDL via the Supabase Management API, then `npx prisma db pull && npx prisma generate` (see .claude/rules/schema-changes.md)",
       ],
     ];
     const ASK = [
+      // @twin Bash(git push*)
       [cmdRe(String.raw`git\s+push\b`), "pushing to origin requires approval — the user walks the work first"],
       // The Management API is the working path for DDL — but it hits PRODUCTION.
+      // @twin Bash(curl*)
+      // The twin is coarser than it looks necessary, on purpose: settings.json cannot
+      // match a URL mid-command, so the only reliable floor is the tool that carries it.
+      // curl is rare here and its two documented uses (this, and triggering a cron by
+      // hand with a live CRON_SECRET) both deserve a prompt anyway.
       [/api\.supabase\.com\/\S*\/database\/query/, "this runs SQL against production — approve the statement"],
+      // @twin Bash(vercel*)
       [/\bvercel\b/, "deploying requires approval"],
     ];
 

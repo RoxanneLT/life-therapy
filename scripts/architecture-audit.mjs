@@ -1672,6 +1672,86 @@ check("calendar: removal shape is not inferred from recurringSeriesId", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 8. HOOKS — the layer that survives context loss, but not itself
+//
+// A hook reaches every context unconditionally: subagents, narrow tasks,
+// sessions where a path-scoped rule file never loaded. That is what makes it
+// safe to move prose out of the always-loaded instruction file at all —
+// without it, cutting prose would be cutting protection.
+//
+// But a hook has one failure nobody sees. Rename its script, break its path,
+// and Claude Code reports a non-blocking status that scrolls past. Every rule
+// held there ALONE then degrades without failing: deny becomes ask, ask
+// becomes allow. Nothing goes red. Measured here on 2026-08-18: of five gates,
+// two had no settings-level twin at all (rm -rf on root, ad-hoc production SQL)
+// and one degraded deny→ask.
+//
+// So each incident-class gate names a twin in settings.json, and this check is
+// the set difference. Deliberately NOT equal-or-stronger: settings speaks in
+// prefix-globs, the hook in separator-aware regex, and a coarse deny in the
+// dumb layer false-positives forever (see the heredoc scar in bash-gate.js).
+// Ask is the floor; absent is the violation.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check("hooks: every incident-class gate has a settings twin", () => {
+  const hookPath = join(ROOT, ".claude/hooks/bash-gate.js");
+  const settingsPath = join(ROOT, ".claude/settings.json");
+  if (!existsSync(hookPath) || !existsSync(settingsPath)) {
+    fail(
+      "hooks",
+      ".claude/",
+      "bash-gate.js or settings.json is missing",
+      "the gate cannot be reconciled — restore the file or remove this check",
+    );
+    return;
+  }
+
+  const settings = JSON.parse(read(settingsPath));
+  const gated = new Set([
+    ...(settings.permissions?.deny ?? []),
+    ...(settings.permissions?.ask ?? []),
+  ]);
+
+  // Raw source: the twins are declared in COMMENTS, so code() would erase them.
+  // The same trap that kept the +02:00 check green for months.
+  const src = read(hookPath);
+  const twins = [...src.matchAll(/@twin\s+(.+)/g)].map((m) => m[1].trim());
+
+  if (twins.length === 0) {
+    fail(
+      "hooks",
+      ".claude/hooks/bash-gate.js",
+      "declares no @twin at all — either the markers were dropped or this check is scanning the wrong file",
+      "every DENY/ASK entry carries a `// @twin <settings pattern>` line",
+    );
+    return;
+  }
+
+  for (const twin of twins) {
+    if (!gated.has(twin)) {
+      fail(
+        "hooks",
+        ".claude/settings.json",
+        `bash-gate declares a twin \`${twin}\` that settings.json does not carry`,
+        "add it to permissions.ask — the twin only matters when the hook is dead, so ask is the floor",
+      );
+    }
+  }
+
+  // The reverse direction: a gate with no twin declared at all. Counts the rule
+  // entries structurally rather than trusting the marker count.
+  const ruleLines = [...src.matchAll(/^\s*\[\s*(?:cmdRe|\/)/gm)].length;
+  if (twins.length < ruleLines) {
+    fail(
+      "hooks",
+      ".claude/hooks/bash-gate.js",
+      `${ruleLines} gate rules but only ${twins.length} @twin declarations`,
+      "every gate names its settings twin, or is annotated as deliberately hook-only",
+    );
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KNOWN DEFECTS — the ratchet.
 //
 // These are REAL bugs, read and classified, not false positives. They are listed
