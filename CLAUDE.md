@@ -12,8 +12,15 @@ first** — reading one contaminates the result.
 2. **List every project-instruction file in your context**, each with its first heading.
 3. **Then** read `prisma/schema.prisma`, and say whether a new instruction file appeared
    in your context afterwards.
-4. **In a second fresh session**, go straight to an *edit* of a `prisma/**` or
-   `scripts/**` file without reading one first. Did the rule file appear?
+4. **In a second fresh session**, WRITE a new file at `scripts/_e1b-probe.mjs` (one
+   line, any content) without reading anything first. Did the rule file appear?
+   Then delete it.
+
+   It must be a **new file via Write**, not an Edit: the Edit tool refuses to touch a
+   file this session hasn't Read, so "edit without reading" is unreachable by
+   construction. Write on a new path is the only edit-class operation that can reach
+   a matching path with no prior read — which is also the exact shape of the reckless
+   session this question is about.
 5. While you are there: spawn any subagent (`census` will do) and have it report whether
    CLAUDE.md is in *its* context.
 
