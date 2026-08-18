@@ -1818,6 +1818,207 @@ check("hooks: every incident-class gate has a settings twin", () => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. THE RULES THAT USED TO BE HELD BY ATTENTION ALONE
+//
+// Each of these was an UNENFORCEABLE bullet in CLAUDE.md — a rule with no net,
+// held only by whoever was paying attention. Each is now mechanised as far as it
+// honestly can be, which for two of them means "the exceptions are a decision
+// log" rather than "the pattern is banned".
+//
+// Every allowlist entry below asserts its own premise: if the site it exempts
+// stops existing, the entry fails rather than silently covering whatever is
+// written into that file next.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Models whose rows are irreplaceable: money, sessions, and people. Deleting one
+ * destroys a record of something that actually happened.
+ *
+ * NOT listed: CMS and catalogue models (pages, courses, modules, lectures,
+ * quizzes, coupons, campaigns, testimonials, packages, digital products, drip
+ * emails, availability overrides, billing presets). Removing those is ordinary
+ * admin work — treating them the same would make this check noise, and noise is
+ * how a scanner gets waved through.
+ */
+const PROTECTED_MODELS = [
+  "booking", "student", "invoice", "paymentRequest", "sessionCreditBalance",
+  "sessionCreditTransaction", "auditLog", "authEvent", "order", "orderItem", "adminUser",
+];
+
+/** Deliberate hard deletes. Each is a decision, with the reason it was made. */
+const HARD_DELETE_ALLOWED = [
+  {
+    file: "app/(admin)/admin/(dashboard)/bookings/actions.ts",
+    model: "booking",
+    why: "the admin Delete Booking action. A booking created in error has no soft-delete state that " +
+         "makes sense — a cancelled booking is a real event that happened, a mistyped one is not. " +
+         "Audited before the row goes (booking_deleted), which is the substitute for keeping it.",
+  },
+  {
+    file: "app/(admin)/admin/(dashboard)/users/actions.ts",
+    model: "adminUser",
+    why: "removing an admin's access. The AuthEvent trail survives the row, so the history of what " +
+         "they did is not lost with them.",
+  },
+];
+
+check("data-safety: an irreplaceable record is never hard-deleted", () => {
+  const seen = new Set();
+  for (const file of allSource().filter((f) => f.endsWith(".ts"))) {
+    const src = code(read(file));
+    for (const m of src.matchAll(/prisma\.(\w+)\.delete(?:Many)?\(/g)) {
+      if (!PROTECTED_MODELS.includes(m[1])) continue;
+      const relf = rel(file);
+      const allowed = HARD_DELETE_ALLOWED.find((a) => a.file === relf && a.model === m[1]);
+      if (allowed) {
+        seen.add(`${allowed.file}|${allowed.model}`);
+        continue;
+      }
+      fail(
+        "data-safety",
+        `${relf}:${src.slice(0, m.index).split("\n").length}`,
+        `hard-deletes \`${m[1]}\`, an irreplaceable record`,
+        "soft-delete instead (status flag, isActive:false, archivedAt) — or add a HARD_DELETE_ALLOWED entry saying why this one is different",
+      );
+    }
+  }
+  for (const a of HARD_DELETE_ALLOWED) {
+    if (!seen.has(`${a.file}|${a.model}`)) {
+      fail(
+        "data-safety",
+        a.file,
+        `HARD_DELETE_ALLOWED exempts \`${a.model}\` here, but no such delete exists any more`,
+        "remove the entry — a stale exemption reads as a considered decision and covers whatever is written next",
+      );
+    }
+  }
+});
+
+/**
+ * The audit-worthy list, verbatim from CLAUDE.md: billing type changes, booking
+ * cancellations, payment recording, invoice voiding, client status changes,
+ * discount changes. Nothing can infer that list — it is a business judgement — so
+ * it is written down, and this check holds the codebase to it.
+ */
+const AUDIT_WORTHY = /^(void|cancel|recordPayment|changeBillingType|excludeFromBilling|applyDiscount|setDiscount|deactivate|archive)\w*/;
+
+/**
+ * Audit-worthy by NAME but not by nature, or audited by a delegate. Each entry says
+ * which, because they are different claims and only one of them can go stale quietly.
+ */
+const AUDIT_EXEMPT = [
+  {
+    fn: "cancelBookingFromBillingAction",
+    why: "a thin wrapper that calls updateBookingStatus(id, 'cancelled'), which records " +
+         "booking_status_cancelled. Auditing here too would write the row twice.",
+  },
+  {
+    fn: "cancelScheduleAction",
+    why: "cancels a campaign SEND SCHEDULE, not a client or money record — outside the " +
+         "audit-worthy list, which is about billing, bookings and client status.",
+  },
+  {
+    fn: "cancelInviteAction",
+    why: "a CLIENT withdrawing a partner invitation from their own portal. Outside the list " +
+         "for the same reason: no money, no booking, no status change to their account. The " +
+         "audit trail is for admin actions on a client's record, not a client's on their own.",
+  },
+];
+
+check("audit-trail: an audit-worthy action records one", () => {
+  const seen = new Set();
+  for (const file of allSource().filter((f) => f.endsWith("actions.ts"))) {
+    const src = read(file);
+    for (const part of src.split(/\n(?=export async function )/)) {
+      const fn = /export async function (\w+)/.exec(part)?.[1];
+      if (!fn || !AUDIT_WORTHY.test(fn)) continue;
+
+      const delegated = AUDIT_EXEMPT.find((d) => d.fn === fn);
+      if (delegated) {
+        seen.add(fn);
+        continue;
+      }
+      // code(), so a mention of recordAudit in a comment cannot stand in for calling it.
+      if (/recordAudit\s*\(/.test(code(part))) continue;
+
+      fail(
+        "audit-trail",
+        `${rel(file)} → ${fn}`,
+        "is audit-worthy by name but records no audit entry",
+        "call recordAudit() — or add an AUDIT_EXEMPT entry naming why this one is outside the list, or where its entry is written",
+      );
+    }
+  }
+  for (const d of AUDIT_EXEMPT) {
+    if (!seen.has(d.fn)) {
+      fail(
+        "audit-trail",
+        "scripts/architecture-audit.mjs",
+        `AUDIT_EXEMPT names \`${d.fn}\`, which no longer exists`,
+        "remove the entry",
+      );
+    }
+  }
+});
+
+/**
+ * Side effects that leave the building: an email, a PDF, a payment link. The rule
+ * is that these happen when the user clicks Send — not when they click Save.
+ */
+const REACHES_OUTSIDE =
+  /\bsendEmail\s*\(|\bsendInvoiceEmail\s*\(|\bsendPaymentRequestEmail\s*\(|\bgenerateAndStoreInvoicePDF\s*\(|\binitializeTransaction\s*\(/;
+
+const SAVE_SIDE_EFFECT_ALLOWED = [
+  {
+    fn: "updateBookingStatus",
+    why: "the send is gated on status === 'cancelled'. Cancelling a session and telling the client " +
+         "are one act, not a save that quietly emails — the client learning about it later, from " +
+         "an empty calendar, is the worse outcome.",
+  },
+  {
+    fn: "updatePaymentRequestAction",
+    why: "regenerates the Paystack link because the AMOUNT changed. Leaving the old link live would " +
+         "let a client pay a figure the request no longer says. It creates a link; it does not send one.",
+  },
+];
+
+check("side-effects: a save action does not reach the outside world", () => {
+  const seen = new Set();
+  for (const file of allSource().filter((f) => f.endsWith("actions.ts"))) {
+    const src = read(file);
+    for (const part of src.split(/\n(?=export async function )/)) {
+      const fn = /export async function (\w+)/.exec(part)?.[1];
+      if (!fn || !/^(save|update|edit)[A-Z]/.test(fn)) continue;
+
+      const allowed = SAVE_SIDE_EFFECT_ALLOWED.find((a) => a.fn === fn);
+      const m = code(part).match(REACHES_OUTSIDE);
+      if (allowed) {
+        if (m) seen.add(fn);
+        continue;
+      }
+      if (!m) continue;
+
+      fail(
+        "side-effects",
+        `${rel(file)} → ${fn}`,
+        `a save-named action calls ${m[0].trim()} — an email, PDF or payment link fired by "Save"`,
+        'move it behind an explicit Send action, or add a SAVE_SIDE_EFFECT_ALLOWED entry saying why saving and sending are one act here',
+      );
+    }
+  }
+  for (const a of SAVE_SIDE_EFFECT_ALLOWED) {
+    if (!seen.has(a.fn)) {
+      fail(
+        "side-effects",
+        "scripts/architecture-audit.mjs",
+        `SAVE_SIDE_EFFECT_ALLOWED exempts \`${a.fn}\`, which no longer has a side effect`,
+        "remove the entry",
+      );
+    }
+  }
+});
+
 check("confirm-dialogs: a confirm action is not nested inside the dialog it closes", () => {
   // Radix's AlertDialogAction closes the dialog on click, which unmounts
   // AlertDialogContent. A <form> rendered inside that content is unmounted with
