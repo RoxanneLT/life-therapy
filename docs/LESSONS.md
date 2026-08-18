@@ -225,8 +225,24 @@ General:  A PreToolUse hook that returns "allow" does not merely decline to gate
           and re-running — which is also a faithful rehearsal of the only
           situation the twin exists for. A probe run WITHOUT disabling it proves
           nothing and looks like a result (L-007).
-Applied:  life-therapy → both claims corrected; twin-verification procedure
-                         recorded in bash-gate.js (2026-08-18)
+
+          A dormant control cannot announce its own rot. "Re-probe after any edit"
+          is undetectable as an instruction, because nothing notices the edit — so
+          the probe record BINDS to what it probed: a hash of the twin pattern and
+          the rule it covers, recorded beside it. Any edit to either breaks the
+          hash and the check names it. The manual probe stays manual; only its
+          STALENESS becomes mechanical. That is the allowlist rule — every entry
+          asserts its own premise — applied to a probe record.
+
+          Report unprobed twins as a count rather than failing the build. An
+          unprobed twin is unverified, not broken, and blocking on it only gets
+          the records written without the probe being run.
+Applied:  life-therapy → both claims corrected; procedure recorded in
+                         bash-gate.js; hash-binding implemented and probed both
+                         directions — a correct record passes, an edited rule
+                         fails with the old and new hashes. 7 of 7 twins
+                         currently unprobed, which is honest and visible
+                         (2026-08-18)
           pleks        → open item
 ```
 

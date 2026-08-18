@@ -14,6 +14,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
@@ -1719,7 +1720,69 @@ check("hooks: every incident-class gate has a settings twin", () => {
   // reported as a twin settings.json did not carry. A check matching its own
   // explanatory comment, in the check written to demonstrate that failure.
   const src = read(hookPath);
-  const twins = [...src.matchAll(/^\s*\/\/\s*@twin\s+(.+?)\s*$/gm)].map((m) => m[1]);
+  const lines = src.split("\n");
+  const twins = [];
+  let unprobed = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const t = /^\s*\/\/\s*@twin\s+(.+?)\s*$/.exec(lines[i]);
+    if (!t) continue;
+    twins.push(t[1]);
+
+    // The rule body this twin covers: the code lines following it, to the end of the
+    // array entry. Hashed together with the twin pattern so the probe record binds to
+    // WHAT IT PROBED — "re-probe on any edit" is undetectable otherwise, because
+    // nothing notices the edit. A dormant twin (see the hook header) cannot announce
+    // its own rot in normal operation, so this is the only thing that will.
+    const body = [];
+    for (let j = i + 1; j < Math.min(i + 14, lines.length); j++) {
+      const line = lines[j].trim();
+      if (line.startsWith("//")) continue;
+      body.push(line);
+      if (line.endsWith("],")) break;
+    }
+    const sha = createHash("sha1").update(t[1] + "\n" + body.join("\n")).digest("hex").slice(0, 6);
+
+    // The probe record sits in the comment block belonging to this twin.
+    const block = lines.slice(i + 1, i + 6).join("\n");
+    const probed = /@probed\s+(never|(\d{4}-\d{2}-\d{2})\s+hook-disabled:\s*\S+)/.exec(block);
+
+    if (!probed) {
+      fail(
+        "hooks",
+        `${rel(hookPath)}:${i + 1}`,
+        `twin \`${t[1]}\` has no @probed record`,
+        "add `// @probed never — …`, or probe it with the hook disabled and record the date + sha",
+      );
+      continue;
+    }
+    if (probed[1] === "never") {
+      unprobed++;
+      continue;
+    }
+
+    const recorded = /@probed-sha\s+([0-9a-f]{6})/.exec(block);
+    if (!recorded) {
+      fail(
+        "hooks",
+        `${rel(hookPath)}:${i + 1}`,
+        `twin \`${t[1]}\` claims a probe but records no sha, so nothing detects a later edit`,
+        `add \`// @probed-sha ${sha}\``,
+      );
+    } else if (recorded[1] !== sha) {
+      fail(
+        "hooks",
+        `${rel(hookPath)}:${i + 1}`,
+        `twin \`${t[1]}\` was edited since its last interception probe (recorded ${recorded[1]}, now ${sha})`,
+        "re-probe with the hook disabled, then update the date and sha",
+      );
+    }
+  }
+
+  // Reported, not failed. An unprobed twin is an unverified control, not a broken one,
+  // and blocking the build on it would just get the records written without the probe.
+  // Same shape as the unenforceable count: visible, and it should only fall.
+  if (unprobed) console.log(`      ↳ ${unprobed} of ${twins.length} twins unprobed`);
 
   if (twins.length === 0) {
     fail(
