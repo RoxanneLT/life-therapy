@@ -333,6 +333,50 @@ check("date-safety: no hardcoded +02:00 offset", () => {
   }
 });
 
+check("allowlists: every exemption is still load-bearing", () => {
+  // The inverted probe.
+  //
+  // Every check here is proven by planting a violation and watching it fail. The
+  // SUPPRESSORS have never been tested at all — DATE_ALLOWLIST asserts that four
+  // files need exempting, and nothing has ever confirmed any of them still does.
+  //
+  // A stale exemption is worse than a missing one. It reads as a considered
+  // decision, it is quoted in the comment above it, and it silently covers
+  // whatever gets written into that file next. KNOWN_DEFECTS already fails when
+  // an entry stops firing, precisely so a fixed bug cannot linger as a tombstone;
+  // an allowlist deserves the same rule and did not have it.
+  for (const relf of DATE_ALLOWLIST) {
+    const abs = join(ROOT, relf);
+    if (!existsSync(abs)) {
+      fail(
+        "allowlists",
+        relf,
+        "DATE_ALLOWLIST exempts a file that no longer exists",
+        "delete the entry — an exemption outliving its file will silently cover a future file at that path",
+      );
+      continue;
+    }
+    // Would this file actually be flagged without its exemption? Run the same two
+    // detections the date checks use.
+    const src = code(read(abs));
+    const raw = read(abs);
+    const wouldFlag =
+      newDateCalls(src).some((c) => c.args.length >= 3) ||
+      /new Date\(\)\s*\.toISOString\(\)\s*\.(slice|substring)\(/.test(src) ||
+      /\.toISOString\(\)\s*\.(slice|substring|split)\(/.test(src) ||
+      /\+02:?00/.test(raw);
+
+    if (!wouldFlag) {
+      fail(
+        "allowlists",
+        relf,
+        "DATE_ALLOWLIST exempts a file that no longer does anything needing exemption",
+        "delete the entry — it is now covering whatever gets written here next, under a reason that has stopped being true",
+      );
+    }
+  }
+});
+
 check("date-safety: one public-holiday list", () => {
   // There were two, and they disagreed. `lib/sa-holidays.ts` carries the s2A
   // presidential proclamations — election days, the Christmas-on-a-Sunday gap —

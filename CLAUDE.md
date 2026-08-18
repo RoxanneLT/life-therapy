@@ -417,6 +417,13 @@ Two rules keep it trustworthy:
   cries wolf is one people learn to wave through — which is worse than no scanner, because it reports
   a reassuring green. Both allowlists (`ZAR_BY_CONSTRUCTION`, `REVALIDATE_EXCEPTIONS`) carry a
   *reason* per entry: they are decision logs, not silencers.
+- **A false positive is resolved by an allowlist ENTRY, not by closing the finding.** Otherwise it
+  returns next month, gets re-investigated by someone with less context, and eventually gets
+  "fixed" — which is how a deliberate asymmetry becomes a bug.
+- **Exemptions are probed too.** Every check is proven by planting a violation; `allowlists: every
+  exemption is still load-bearing` proves the reverse, failing when an entry no longer suppresses
+  anything. A stale exemption is worse than a missing one: it reads as a considered decision and
+  silently covers whatever is written into that file next.
 - **Prove the probe fires.** A check that cannot fail is worthless. Plant a violation, confirm the
   check catches it, remove it. The `+02:00` check silently never fired until a planted probe exposed
   that it was scanning comment-stripped source, where string literals — the only place an offset ever
