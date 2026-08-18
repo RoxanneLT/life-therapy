@@ -515,19 +515,34 @@ function CancelDialog({
   const isLateCancel = hoursUntilBooking < 24 && hoursUntilBooking > -2;
   const showLateFeeOption = isLateCancel && priceZarCents > 0;
 
+  // A calendar removal that failed has to SAY so. Silence here is what let a
+  // cancelled session sit live in Outlook for five days: the dialog closed, the row
+  // went grey, and nothing anywhere suggested the meeting was still on.
   function handleCancel(refund: boolean) {
     startTransition(async () => {
-      await adminCancelBookingAction(bookingId, clientId, refund);
-      setOpen(false);
-      onSuccess?.();
+      try {
+        const res = await adminCancelBookingAction(bookingId, clientId, refund);
+        if (res.calendarWarning) toast.warning(res.calendarWarning);
+        else toast.success("Session cancelled.");
+        setOpen(false);
+        onSuccess?.();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not cancel the session");
+      }
     });
   }
 
   function handleLateFeeCancel() {
     startTransition(async () => {
-      await adminLateCancelWithFeeAction(bookingId, clientId);
-      setOpen(false);
-      onSuccess?.();
+      try {
+        const res = await adminLateCancelWithFeeAction(bookingId, clientId);
+        if (res.calendarWarning) toast.warning(res.calendarWarning);
+        else toast.success("Session cancelled — late-cancellation fee invoiced.");
+        setOpen(false);
+        onSuccess?.();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not cancel the session");
+      }
     });
   }
 

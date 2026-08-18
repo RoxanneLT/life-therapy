@@ -13,6 +13,7 @@ import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
 import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, type BillingContact } from "@/lib/billing";
 import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
+import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { format } from "date-fns";
 import { saToday, calendarDate, addSaDays } from "@/lib/dates";
 import { initializeTransaction } from "@/lib/paystack";
@@ -162,8 +163,24 @@ export async function adminCancelBookingAction(
   bookingId: string,
   studentId: string,
   refundCredit: boolean,
-) {
+): Promise<{ calendarWarning?: string }> {
   await requireRole("super_admin");
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, graphEventId: true, date: true },
+  });
+  if (!booking) throw new Error("Booking not found");
+
+  // Remove the Outlook event. This file cancelled bookings for months without ever
+  // mentioning the calendar: the row read "cancelled" in the portal while the meeting
+  // stayed live in Outlook and Teams, and the client kept the invite. Cheslon Faroa's
+  // 10 Sep session is the one that surfaced it — cancelled 13 Aug, still in his
+  // calendar, and no calendar_sync_log row at all, because no Graph call was ever made.
+  //
+  // The bug was never a wrong branch — every OTHER cancel path removes the event. It
+  // was a missing one. See lib/calendar-removal.ts for how the removal decides shape.
+  const removal = await removeBookingFromCalendar(booking);
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -201,16 +218,21 @@ export async function adminCancelBookingAction(
   }
 
   revalidatePath(`/admin/clients/${studentId}`);
+  return removal.warning ? { calendarWarning: removal.warning } : {};
 }
 
 export async function adminLateCancelWithFeeAction(
   bookingId: string,
   studentId: string,
-) {
+): Promise<{ calendarWarning?: string }> {
   await requireRole("super_admin");
 
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
+
+  // Same gap as adminCancelBookingAction above — a late cancel took the fee and left
+  // the meeting live.
+  const removal = await removeBookingFromCalendar(booking);
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -259,6 +281,7 @@ export async function adminLateCancelWithFeeAction(
   }
 
   revalidatePath(`/admin/clients/${studentId}`);
+  return removal.warning ? { calendarWarning: removal.warning } : {};
 }
 
 // ────────────────────────────────────────────────────────────

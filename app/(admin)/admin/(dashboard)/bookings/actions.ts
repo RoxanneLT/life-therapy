@@ -20,6 +20,7 @@ import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 import { escapeHtml } from "@/lib/utils";
+import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { parseLineItems, readLineItems } from "@/lib/billing-types";
 
 export async function updateBookingStatus(id: string, status: BookingStatus) {
@@ -53,21 +54,13 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
   let calendarWarning: string | undefined;
 
   if (status === "cancelled") {
-    if (booking.graphEventId) {
-      if (booking.recurringSeriesId) {
-        const dateStr = saDateStr(booking.date);
-        const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
-        if (delResult.failed.length > 0) {
-          calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
-        }
-      } else {
-        try {
-          await cancelCalendarEvent(booking.graphEventId);
-        } catch {
-          calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
-        }
-      }
-    }
+    // Decided by how many bookings SHARE the event id — see lib/calendar-removal.ts.
+    // Branching on `recurringSeriesId` asked about the BOOKING and assumed the
+    // answer described the EVENT. For a series whose bookings each hold their own
+    // standalone event, that assumption removed nothing at all: the session read
+    // "cancelled" here and stayed live in the client's calendar and in Teams.
+    const removal = await removeBookingFromCalendar(booking);
+    if (removal.warning) calendarWarning = removal.warning;
     const config = getSessionTypeConfig(booking.sessionType);
     const email = await renderEmail("booking_cancellation", {
       clientName: booking.clientName,
@@ -114,15 +107,10 @@ export async function deleteBooking(id: string) {
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) throw new Error("Booking not found");
 
-  // Calendar cleanup
-  if (booking.graphEventId) {
-    if (booking.recurringSeriesId) {
-      const dateStr = saDateStr(booking.date);
-      await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]).catch(console.error);
-    } else {
-      await cancelCalendarEvent(booking.graphEventId).catch(console.error);
-    }
-  }
+  // Calendar cleanup. Runs BEFORE the row is deleted, which the count below relies
+  // on: this booking must still hold its own event id for the shared-count to read
+  // true. See lib/calendar-removal.ts.
+  await removeBookingFromCalendar(booking);
 
   // Check if this is the last booking in its series — clean up orphaned Graph event
   if (booking.recurringSeriesId) {
@@ -210,21 +198,10 @@ export async function rescheduleBooking(
 
   let calendarWarning: string | undefined;
 
-  // Step 2: Only then remove the old calendar event
-  if (booking.graphEventId) {
-    if (booking.recurringSeriesId) {
-      const oldDateStr = saDateStr(booking.date);
-      const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [oldDateStr]);
-      if (delResult.failed.length > 0) {
-        calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
-      }
-    } else {
-      try {
-        await cancelCalendarEvent(booking.graphEventId);
-      } catch {
-        calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
-      }
-    }
+  // Step 2: Only then remove the old calendar event — see lib/calendar-removal.ts.
+  const oldRemoval = await removeBookingFromCalendar(booking);
+  if (oldRemoval.warning) {
+    calendarWarning = "Old Outlook event could not be removed — please delete it manually.";
   }
 
   if (!calResult) {
@@ -1454,15 +1431,10 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
 
   if (toDelete.length === 0) return { deleted: 0, skippedLateCancels: lateCancelCount };
 
-  // Calendar cleanup
+  // Calendar cleanup. Runs BEFORE deleteMany so every row still holds its event id
+  // and the shared-count reads true — see lib/calendar-removal.ts.
   for (const booking of toDelete) {
-    if (booking.graphEventId) {
-      if (booking.recurringSeriesId) {
-        await deleteRecurringEventOccurrences(booking.graphEventId, [saDateStr(booking.date)]).catch(console.error);
-      } else {
-        await cancelCalendarEvent(booking.graphEventId).catch(console.error);
-      }
-    }
+    await removeBookingFromCalendar(booking);
   }
 
   // Check for orphaned series Graph events after deletion
@@ -1609,22 +1581,9 @@ export async function cancelBookingAction(id: string, chargeLateFee: boolean) {
     },
   });
 
-  let calendarWarning: string | undefined;
-  if (booking.graphEventId) {
-    if (booking.recurringSeriesId) {
-      const dateStr = saDateStr(booking.date);
-      const delResult = await deleteRecurringEventOccurrences(booking.graphEventId, [dateStr]);
-      if (delResult.failed.length > 0) {
-        calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
-      }
-    } else {
-      try {
-        await cancelCalendarEvent(booking.graphEventId);
-      } catch {
-        calendarWarning = "Calendar event could not be removed — delete manually in Outlook.";
-      }
-    }
-  }
+  // See lib/calendar-removal.ts — decided by how many bookings share the event id.
+  const lateCancelRemoval = await removeBookingFromCalendar(booking);
+  const calendarWarning = lateCancelRemoval.warning;
 
   const config = getSessionTypeConfig(booking.sessionType);
   const email = await renderEmail("booking_cancellation", {

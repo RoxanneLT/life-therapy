@@ -1582,6 +1582,96 @@ check("schema: no prisma migrate invocations in scripts", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 7. CALENDAR
+//
+// A cancelled booking whose Outlook event is left standing is invisible from
+// every screen we own: the row goes grey, the portal says "cancelled", and the
+// client still has the meeting. It surfaces when they turn up.
+//
+// This happened. `adminCancelBookingAction` and `adminLateCancelWithFeeAction`
+// on the client detail page cancelled bookings for months without one Graph
+// call between them — Cheslon Faroa's 10 Sep session sat live in Outlook from
+// 13 Aug, with no calendar_sync_log row to show for it, because nothing was
+// ever attempted. Not a wrong branch. A missing one, in a file whose siblings
+// all had it — which is why no reviewer reading a diff would see anything odd.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check("calendar: a cancel path removes the calendar event", () => {
+  // NOTE: this scans RAW source, not code(). The marker it hunts for is the string
+  // literal `status: "cancelled"`, and code() blanks string literals — so the
+  // stripped version contains `status: ""` and the check can never fire. That is
+  // the exact way the +02:00 check sat green for months. A comment cannot fake a
+  // hit here, because the second half of the test is the ABSENCE of a call.
+  const files = walk(join(ROOT, "app")).filter((f) => f.endsWith("actions.ts"));
+
+  // Only bookings own a calendar event. Invoices and payment requests carry a
+  // `status: "cancelled"` of their own and must not be dragged in.
+  // `[^;]` keeps the match inside ONE statement. Without it the pattern happily
+  // spanned a `prisma.booking.updateMany(...)` and a LATER `recordAudit({ after:
+  // { status: "cancelled" } })`, flagging three invoice-voiding actions that never
+  // go near a booking's status.
+  const CANCELS_A_BOOKING = /prisma\.booking\.update(?:Many)?\([^;]{0,400}?status:\s*"cancelled"/;
+
+  for (const file of files) {
+    const src = read(file);
+    if (!CANCELS_A_BOOKING.test(src)) continue;
+
+    // Split on top-level `export async function` / `async function` boundaries.
+    for (const part of src.split(/\n(?=(?:export )?async function )/)) {
+      if (!CANCELS_A_BOOKING.test(part)) continue;
+
+      const name = /(?:export )?async function (\w+)/.exec(part)?.[1] ?? "(anonymous)";
+
+      // Matched against comment-stripped text so prose about the calendar cannot
+      // stand in for reaching it. Series-wide cancels remove their events in a
+      // grouped pass, which still lands inside the same function.
+      const touchesCalendar =
+        /removeBookingFromCalendar|deleteRecurringEventOccurrences|cancelCalendarEvent/.test(
+          code(part),
+        );
+      if (touchesCalendar) continue;
+
+      fail(
+        "calendar",
+        `${rel(file)} → ${name}`,
+        "cancels a booking without removing its calendar event",
+        "call removeBookingFromCalendar(booking) — see lib/calendar-removal.ts",
+      );
+    }
+  }
+});
+
+check("calendar: removal shape is not inferred from recurringSeriesId", () => {
+  // `recurringSeriesId` answers a question about the BOOKING; what decides the
+  // delete is whether `graphEventId` is a series MASTER. Branching on the first
+  // to choose between the two Graph deletes conflates them — it deleted fifty
+  // sessions in July 2026. lib/calendar-removal.ts counts instead.
+  const files = [
+    ...walk(join(ROOT, "app")).filter((f) => f.endsWith(".ts")),
+    ...walk(join(ROOT, "lib")).filter((f) => f.endsWith(".ts")),
+  ];
+
+  for (const file of files) {
+    if (rel(file) === "lib/calendar-removal.ts") continue;
+    const src = code(read(file));
+
+    // The shape: a recurringSeriesId condition, then an occurrence delete, then
+    // an else reaching for the whole-event cancel — within a few lines.
+    const re =
+      /recurringSeriesId\s*\)[\s\S]{0,320}?deleteRecurringEventOccurrences[\s\S]{0,320}?\belse\b[\s\S]{0,200}?cancelCalendarEvent/g;
+    for (const m of src.matchAll(re)) {
+      const line = src.slice(0, m.index).split("\n").length;
+      fail(
+        "calendar",
+        `${rel(file)}:${line}`,
+        "picks the calendar delete by recurringSeriesId instead of by who holds the event id",
+        "call removeBookingFromCalendar(booking) — see lib/calendar-removal.ts",
+      );
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KNOWN DEFECTS — the ratchet.
 //
 // These are REAL bugs, read and classified, not false positives. They are listed

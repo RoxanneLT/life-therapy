@@ -3,47 +3,17 @@
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import {
-  cancelCalendarEvent,
-  createCalendarEvent,
-  deleteRecurringEventOccurrences,
-} from "@/lib/graph";
+import { createCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { getAvailableSlots } from "@/lib/availability";
 import { evaluateCancel, evaluateReschedule } from "@/lib/booking-policy";
 import { refundCredit, forfeitCredit } from "@/lib/credits";
+import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { format } from "date-fns";
-import { calendarDate, saDateStr } from "@/lib/dates";
+import { calendarDate } from "@/lib/dates";
 import { getBaseUrlForCurrency } from "@/lib/region";
-
-/**
- * Remove THIS session from the calendar, never the series it belongs to.
- *
- * `graphEventId` on a series booking is the recurring master id, shared by every
- * booking in the series — so deleting by that id removes all of them. Mirrors the
- * admin branch in app/(admin)/admin/(dashboard)/bookings/actions.ts.
- *
- * Never throws: a calendar failure must not abort a cancellation the client has
- * already been told is allowed. The 4-hourly reconcile picks up any stragglers.
- */
-async function removeOccurrenceFromCalendar(booking: {
-  graphEventId: string | null;
-  recurringSeriesId: string | null;
-  date: Date;
-}): Promise<void> {
-  if (!booking.graphEventId) return;
-  try {
-    if (booking.recurringSeriesId) {
-      await deleteRecurringEventOccurrences(booking.graphEventId, [saDateStr(booking.date)]);
-    } else {
-      await cancelCalendarEvent(booking.graphEventId);
-    }
-  } catch (err) {
-    console.error("Portal: failed to remove calendar occurrence", err);
-  }
-}
 
 /**
  * Refusals are RETURNED, never thrown — these messages are read by CLIENTS.
@@ -72,15 +42,11 @@ export async function portalCancelBookingAction(
   const result = evaluateCancel(booking);
   if (!result.allowed) return { success: false, error: result.reason };
 
-  // Cancel the calendar event — ONE occurrence when this booking belongs to a series.
-  //
-  // For a series booking, graphEventId is the recurring MASTER id shared by every
-  // booking in the series. cancelCalendarEvent() on that id deletes the whole thing:
-  // a client cancelling one session of a twenty-session series wiped the entire series
-  // from Roxanne's calendar and their own. The admin paths have always branched here
-  // (bookings/actions.ts:55); the portal never did, so the worst version of this was
-  // the one reachable by clients.
-  await removeOccurrenceFromCalendar(booking);
+  // Remove this session's calendar entry — and only this one. When graphEventId is a
+  // recurring MASTER shared by every booking in the series, an unconditional delete
+  // wipes all of them: one client cancelling one session of a twenty-session series
+  // took the whole series off Roxanne's calendar and their own.
+  await removeBookingFromCalendar(booking);
 
   const isLate = result.type === "late" || result.type === "anti_abuse";
   const billingNote = isLate ? "(late cancel)" : "(cancelled)";
@@ -193,7 +159,7 @@ export async function portalRescheduleBookingAction(
   // master, so an unconditional delete moved one session and destroyed the other
   // nineteen. The replacement below is a standalone event, which is the same shape
   // the admin reschedule produces.
-  await removeOccurrenceFromCalendar(booking);
+  await removeBookingFromCalendar(booking);
 
   // Create new calendar event
   const dateObj = calendarDate(newDate);
