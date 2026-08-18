@@ -23,7 +23,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -172,13 +171,28 @@ export default async function BookingDetailPage({ params }: Props) {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
+              {/*
+                A plain submit button, NOT AlertDialogAction.
+
+                AlertDialogAction closes the dialog on click, which unmounts
+                AlertDialogContent — and the <form> lives inside it. The form went
+                away before the submission completed, so the server action never
+                ran: the dialog promised "this will permanently delete this booking"
+                and then did nothing at all. Zero booking_deleted audit rows had ever
+                been written, on an action that writes one before it deletes.
+
+                Nothing closes the dialog now. On success the action redirects, which
+                takes the dialog with it; on failure the dialog stays open, which is
+                the honest outcome — it is the one case where the old wiring and a
+                real error were indistinguishable.
+              */}
               <form action={handleDelete}>
-                <AlertDialogAction
+                <Button
                   type="submit"
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Delete
-                </AlertDialogAction>
+                </Button>
               </form>
             </AlertDialogFooter>
           </AlertDialogContent>

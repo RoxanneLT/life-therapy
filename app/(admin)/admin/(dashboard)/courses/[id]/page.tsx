@@ -7,7 +7,6 @@ import { updateCourse, deleteCourse } from "../actions";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -87,8 +86,10 @@ export default async function EditCoursePage({
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
+              {/* Plain submit, not AlertDialogAction — it closes the dialog and
+                  unmounts this form before the action runs. See the bookings page. */}
               <form action={handleDelete}>
-                <AlertDialogAction type="submit">Delete</AlertDialogAction>
+                <Button type="submit" variant="destructive">Delete</Button>
               </form>
             </AlertDialogFooter>
           </AlertDialogContent>

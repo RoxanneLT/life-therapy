@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/card";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -107,10 +106,12 @@ export default async function EditUserPage({ params }: Props) {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
+                {/* Plain submit, not AlertDialogAction — it closes the dialog and
+                    unmounts this form before the action runs. See the bookings page. */}
                 <form action={handleDelete}>
-                  <AlertDialogAction type="submit" className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  <Button type="submit" className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                     Delete
-                  </AlertDialogAction>
+                  </Button>
                 </form>
               </AlertDialogFooter>
             </AlertDialogContent>

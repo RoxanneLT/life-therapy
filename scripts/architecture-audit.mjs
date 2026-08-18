@@ -1751,6 +1751,32 @@ check("hooks: every incident-class gate has a settings twin", () => {
   }
 });
 
+check("confirm-dialogs: a confirm action is not nested inside the dialog it closes", () => {
+  // Radix's AlertDialogAction closes the dialog on click, which unmounts
+  // AlertDialogContent. A <form> rendered inside that content is unmounted with
+  // it, and the submission never completes — so the dialog states exactly what it
+  // is about to do, and then does nothing.
+  //
+  // Found in production on all four delete dialogs at once (bookings, courses,
+  // testimonials, users). It survived because the failure is INVISIBLE: no error,
+  // no toast, no log line. The tell was in the database — zero booking_deleted
+  // audit rows, on an action that writes one before it deletes.
+  //
+  // Worth flagging as a class rather than a Radix quirk: a control that both
+  // dismisses a surface and submits from within it is racing its own teardown.
+  for (const file of allSource().filter((f) => f.endsWith(".tsx"))) {
+    const src = code(read(file));
+    for (const m of src.matchAll(/<form[^>]*\baction=\{[\s\S]{0,200}?<AlertDialogAction/g)) {
+      fail(
+        "confirm-dialogs",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        "AlertDialogAction submits a form nested in the dialog it dismisses — the form unmounts before the action runs",
+        "use a plain <Button type=\"submit\">; let the action's redirect close the dialog",
+      );
+    }
+  }
+});
+
 check("claude-md: every rule in a rules section carries its net", () => {
   // Defines "rule" by LOCATION, not by content. Prose-parsing to decide what is a
   // rule was tried and produced a 100% false-positive rate on its first run; the
