@@ -1,113 +1,44 @@
 # CLAUDE.md — Life-Therapy Platform
 
-<!-- CANARY-HTML-7Q4X -->
+<!--
+  Built from SPEC_CLAUDE_MD_STANDARD v4.3.
+  BINDING METRIC: the UNENFORCEABLE count — rules whose only control is model
+  attention. `npm run audit` prints it. It may only fall.
+  ADVISORY: ~250 visible always-loaded lines. A tripwire for a ratchet pass —
+  never a reason to relocate prose. Aperture decides location; the count decides
+  urgency.
+  MARKERS (§4 "Enforced" and §5 may contain ONLY marker-carrying bullets):
+    @enforced <ns:control-id>        → HTML comment, invisible, free (E2)
+    UNENFORCEABLE + reason           → VISIBLE prose; attention is the only control
+  EXPERIMENTS — all four answered in THIS harness, 2026-08-18. Re-run in a new one.
+    E1  paths: frontmatter defers loading        — YES. Cross-session A/B, one
+        variable: schema-changes.md was in context at launch without frontmatter,
+        absent from a fresh session with it.
+    E1b scoped rules trigger on edit-without-read — NO. Read of a matching file
+        injects the rule; Write to a new matching path does not. RUNG 4 IS NEVER
+        A CONTROL — it reaches the session that reads before it writes and misses
+        the one that doesn't.
+    E2  HTML comments stripped                    — YES for a comment alone on its
+        line (canary absent, surrounding lines intact). Inline @enforced tags at
+        the END of a prose line DO survive. Never reformat one onto its own line.
+    E3  CLAUDE.md reaches subagents                — YES, positive-with-
+        transcription. An earlier probe reported the opposite and was wrong; see
+        docs/LESSONS.md L-012. They receive it and skim it.
+  Full contract: SPEC_CLAUDE_MD_STANDARD v4.3. Lessons: docs/LESSONS.md.
+-->
 
-## PENDING EXPERIMENT — Q4 only. Q1–Q3 and Q5 answered 2026-08-18; findings below.
+## 1 · START HERE
 
-**Do not open any file before answering.** Reading one contaminates the result.
-
-**Q4 — does a path-scoped rule fire on WRITE, or only on READ?** In a **fresh session**,
-WRITE a new file at `scripts/_e1b-probe.mjs` (one line, any content) **without reading
-anything first**. Did `.claude/rules/schema-changes.md` appear in context? Then delete
-the probe file and record the answer here.
-
-It must be a **new file via Write**, not an Edit: the Edit tool refuses to touch a file
-this session hasn't Read, so "edit without reading" is unreachable by construction. Write
-on a new path is the only edit-class operation that can reach a matching path with no
-prior read — which is also the exact shape of the reckless session this question is about.
-`scripts/**` is in the rule's `paths:` list, so the path does match.
-
-**Why Q4 is load-bearing.** The rule is now *known* to fire on Read (Q3). If it fires on
-Read but **not** on Write, a scoped rule reaches the session that looks before it writes
-and misses the one that doesn't — protection present exactly when it is least needed.
-That would be reason to keep incident-class content out of scoped rules entirely. Until
-Q4 answers, `.claude/rules/schema-changes.md` keeps its frontmatter only because
-`bash-gate.js:43` denies `prisma migrate` unconditionally; the prose can leave context
-because the protection doesn't.
-
-While you are there, note whether `<!-- CANARY-HTML-7Q4X -->` on line 3 reached you. It
-is kept deliberately as a standing check on the Q1 finding; delete it with this section.
-
-### Findings so far (2026-08-18)
-
-- **Q1 — block-level HTML comments are stripped from CLAUDE.md before it reaches context.**
-  Line 3 (`<!-- CANARY-HTML-7Q4X -->`) and its trailing blank line were absent; lines 1–2
-  and everything from line 5 arrived intact and closed over the gap. **But inline HTML
-  comments survive** — every `<!-- @enforced … -->` tag reached context, because each sits
-  at the end of a line of prose rather than alone on its own line. *Consequence: never
-  reformat an `@enforced` tag onto its own line — it would silently vanish from context
-  while still looking present in the file.*
-- **Q2 — exactly one project-instruction file is loaded at launch:** `CLAUDE.md`. No
-  `.claude/rules/*` file is present until something triggers it.
-- **Q3 — YES, the scoped-rule trigger fires on Read.** Reading `prisma/schema.prisma`
-  (matching `paths: ["prisma/**", "scripts/**"]`) injected the full text of
-  `.claude/rules/schema-changes.md` into context on the next turn. Path-scoping therefore
-  *defers* loading rather than merely suppressing it. The frontmatter itself is stripped
-  from the injected copy.
-- **Q4 — NO, the trigger does not fire on Write.** A fresh session wrote a new file at
-  `scripts/_e1b-probe.mjs` with no prior read. `scripts/**` **is** in the rule's `paths:`
-  list, so the path matched — and the rule did not arrive. That session enumerated what
-  *did* arrive (two tool-schema/MCP reminders, nothing else), so this is an enumeration
-  rather than a bare negative.
-
-  **This is the bad answer, and it decides the general rule.** A scoped rule reaches the
-  session that reads before it writes and misses the one that doesn't — protection
-  present exactly when it is least needed. So: *never scope incident-class prose.* The
-  frontmatter stays on `schema-changes.md` only because `bash-gate.js` denies
-  `prisma migrate` unconditionally; the prose may leave context because the protection
-  does not. A rule file with no such twin must not be scoped.
-
-  (Plausible mechanism, worth knowing but not relied on: Read *delivers file content*
-  and the rule rides along with it; Write delivers none.)
-
-- **Q5 — subagents DO receive CLAUDE.md. Two runs disagreed; the disagreement is the
-  lesson.** One `census` reported no CLAUDE.md. Another reported the full file, named the
-  delivery wrapper (`Contents of …(project instructions, checked into the codebase)`), and
-  transcribed lines 1–6 — including freshly-edited text it could not have known otherwise.
-
-  The protocol's own rule settles it: **a bare negative cannot distinguish absent from
-  overlooked; transcription can.** The positive-with-proof wins, and the first run is a
-  subagent misreporting its own context — which is exactly the failure the transcribe-
-  don't-report protocol was written to catch, arriving inside that protocol.
-
-  **Consequence for the doctrine below:** the claim that prose "is not read at all by a
-  subagent" is **wrong as stated**. It is *present* and *unlikely to be attended to* by an
-  agent handed a narrow task. The conclusion survives — incident-class rules still belong
-  in hooks and checks — but for a weaker reason, and the sentence at line ~457 is corrected
-  accordingly. A false mechanism argued for a true conclusion, which is the kind of support
-  that collapses the day someone checks it.
-
-**Revert in one pass:** delete this section AND the canary on line 3, then decide the
-frontmatter per Q4.
-
-## START HERE — where the repo lives, and the first thing to do in a session
-
-**The repo lives OUTSIDE OneDrive. The exact path is per-machine.**
+**The repo lives OUTSIDE OneDrive.** That is the invariant; the drive is per-machine.
+Don't hardcode `C:\dev` anywhere, and don't guess the desktop's. Why this is a rule and
+not a preference: §6, 2026-08-17.
 
 | Machine | Path |
 |---|---|
 | Laptop | `C:\dev\life-therapy` (alongside `C:\dev\pleks`) |
-| Desktop | **not yet decided** — it has C/D/E/F; the working volume is a Windows Storage Space (RAID-10), and one of the others is OneDrive. Deliberately left blank rather than guessed. |
+| Desktop | **not yet decided** — C/D/E/F; the working volume is a Windows Storage Space (RAID-10), one of the others is OneDrive. Deliberately blank rather than guessed. **Write the chosen path here at setup** so the next session doesn't ask again. |
 
-Don't hardcode `C:\dev` into anything, and don't guess the desktop's drive. The
-invariant is *not inside OneDrive*; the drive is a per-machine preference.
-
-Nothing is blocked by the unknown: `SETUP-NEW-PC.ps1` lists the machine's drives
-with their free space and asks. **When the desktop is first set up, write the chosen
-path into the table above** so the next session doesn't have to ask again.
-
-Stean works from more than one machine, so the instinct is to keep the project in
-OneDrive. Don't. On 2026-08-17 that combination cost a working day: `node_modules`
-became a field of unreadable cloud placeholders (`npm` itself could not run), and
-then **118 git objects went unreadable** — `git fsck`, `git rev-list` and `git push`
-all failed with `mmap failed: Invalid argument`, so finished work could not be
-shipped at all. Thousands of tiny files, placeholder hydration, and two machines
-writing pack files independently are what break it. Syncing the *code* was never the
-problem; syncing the *repo internals* was.
-
-**Git syncs the code. OneDrive syncs only what git ignores.**
-
-### First moves in any session, before touching code
+**First moves, before touching code:**
 
 ```bash
 git status          # never assume this machine is current
@@ -116,479 +47,480 @@ git pull            # another machine may have pushed
 npm run secrets     # are .env.local etc. in sync with OneDrive?
 ```
 
-Then skim `docs/LESSONS.md` for open items naming this project. A propagation ledger
-nobody reads where the work happens is a status line with extra distance — and this
-repo has watched five kinds of artefact go stale in one session.
+`git status` first is not a formality: a second machine may have pushed, and a stale local
+copy here silently reintroduces fixed bugs.
 
-`git status` first is not a formality here. A second machine may have pushed, and
-this is a codebase where a stale local copy silently reintroduces fixed bugs.
+**Then skim `docs/LESSONS.md` for open items naming this project.** A propagation ledger
+nobody reads where the work happens is a status line with extra distance.
 
-### Setting up a machine that has never had the repo
+**Session state:** `docs/SESSION_HANDOVER_2026-08-17.md` — what was fixed, the DDL already
+live in production, the open TODO list in priority order, and which claims were reasoned
+rather than demonstrated. It survives compaction because it is on disk.
 
-There is a bootstrap problem, and it is already solved: a fresh machine has no
-working folder, because the repo no longer arrives by sync. The one thing that DOES
-still arrive is the secrets folder — so the installer lives there:
+### A machine that has never had the repo
 
-> **`~/OneDrive/dev-secrets/life-therapy/SETUP-NEW-PC.ps1`** — right-click → *Run
-> with PowerShell*. It **asks where to put the repo**, listing the machine's drives
-> and their free space, then clones, runs `npm ci`, copies the secrets into place
-> and runs `npm run check`. Safe to re-run (pulls if the repo already exists).
+The bootstrap problem is solved: a fresh machine has no working folder, because the repo no
+longer arrives by sync. The one thing that *does* still arrive is the secrets folder, so the
+installer lives there.
+
+> **`~/OneDrive/dev-secrets/life-therapy/SETUP-NEW-PC.ps1`** — right-click → *Run with
+> PowerShell*. It **asks where to put the repo**, listing drives and free space, then clones,
+> runs `npm ci`, copies secrets into place and runs `npm run check`. Safe to re-run.
 > `README.txt` beside it explains the layout.
 >
-> Pass the path directly to skip the prompt — this is the desktop case:
-> `.\SETUP-NEW-PC.ps1 -RepoPath 'E:\dev\life-therapy'`
+> Skip the prompt — the desktop case: `.\SETUP-NEW-PC.ps1 -RepoPath 'E:\dev\life-therapy'`
 >
-> It **refuses any path containing "onedrive"**, which is the mistake it exists to
-> prevent.
+> It **refuses any path containing "onedrive"**, which is the mistake it exists to prevent.
 
-Equivalent by hand (substitute your own drive):
+By hand, substituting your own drive:
 
 ```bash
 git clone https://github.com/RoxanneLT/life-therapy.git <YOUR-PATH>\life-therapy
 cd <YOUR-PATH>\life-therapy
 npm ci                 # postinstall runs `prisma generate`
 npm run secrets:pull   # brings .env.local, .env, .claude/settings.local.json
-npm run check          # expect green: tsc + eslint + the architecture audit + tests
+npm run check
 ```
 
 ### The secrets channel
 
-Git deliberately does not carry `.env.local`, `.env` or
-`.claude/settings.local.json`. Those live in `~/OneDrive/dev-secrets/life-therapy`
-and move with `scripts/sync-secrets.mjs`:
+Git deliberately does not carry `.env.local`, `.env` or `.claude/settings.local.json`. They
+live in `~/OneDrive/dev-secrets/life-therapy` and move with `scripts/sync-secrets.mjs`:
+`npm run secrets` (status only) · `secrets:pull` (OneDrive → here, after a clone or when the
+other machine changed a key) · `secrets:push` (here → OneDrive, after YOU change one).
+`LT_SECRETS_DIR` overrides the location.
 
-- `npm run secrets` — status only, changes nothing
-- `npm run secrets:pull` — OneDrive → this working copy (after a clone, or when the
-  other machine changed a key)
-- `npm run secrets:push` — this working copy → OneDrive (after YOU change one)
-
-`LT_SECRETS_DIR` overrides the location if OneDrive sits elsewhere on a machine.
-
-> If you find yourself working in `C:\Users\stean\OneDrive\Websites\Life Therapy`,
-> stop. That is the retired copy, and its `.git` is damaged. Move to the real one.
-
-**Picking up mid-stream?** `docs/SESSION_HANDOVER_2026-08-17.md` is the current state:
-what was fixed, the three DDL changes already live in production, the open TODO list in
-priority order, and the claims that were reasoned rather than demonstrated.
+> If you find yourself in `C:\Users\stean\OneDrive\Websites\Life Therapy`, stop. That is the
+> retired copy and its `.git` is damaged. Move to the real one.
 
 ---
 
-## Project Overview
+## 2 · WHAT THIS PROJECT IS, AND HOW TO REACH ITS SYSTEMS
 
-Life-Therapy is an online counselling and life coaching platform built with **Next.js 14+ (App Router)**, **Prisma** (PostgreSQL), **Supabase Auth**, **Paystack** payments, and deployed on **Vercel**. The admin manages clients, bookings, billing, courses, digital products, and email communications. Clients access a portal for bookings, session history, course content, and invoices.
+Life-Therapy is an online counselling and life-coaching platform: **Next.js (App Router)**,
+**Prisma** on PostgreSQL, **Supabase Auth**, **Paystack**, deployed on **Vercel**. Admin
+manages clients, bookings, billing, courses, digital products and email. Clients get a portal
+for bookings, session history, course content and invoices.
 
-**Domains:**
-- `life-therapy.co.za` — South African clients (ZAR)
-- `life-therapy.online` — International clients (USD/EUR/GBP)
+Two domains, **one deployment**, region decided per-request from the hostname:
+`life-therapy.co.za` (SA, ZAR) and `life-therapy.online` (international, USD/EUR/GBP).
+
+**Reaching the systems — query them directly rather than asking for pasted output:**
+
+| System | How |
+|---|---|
+| Production DB | **Management API over REST** (`SUPABASE_ACCESS_TOKEN` from `.env.local`). The Supabase **MCP tools do not work here** — every call, even a read-only `list_tables`, returns `MCP error -32600: You do not have permission`. Reads as much as DDL. |
+| One-off scripts | `npx tsx --env-file=.env.local <script>` — ESM hoists imports above `dotenv.config()`, and `.env` holds a `johndoe@localhost` placeholder `DATABASE_URL` |
+| Deploys, build logs, runtime errors | Vercel MCP (read-only calls pre-allowed) |
+| PRs | GitHub MCP (read-only calls pre-allowed) |
 
 ---
 
-## Critical Rules
+## 3 · THE GATES
 
-### DO NOT
-> A rule marked **unchecked** has no mechanical net. Nothing will catch a violation, so
-> it is held by attention alone — treat those as the ones to slow down for. The rest are
-> enforced; follow them, and the build disagrees with you if you don't.
+| Gate | Command |
+|---|---|
+| Before every commit | `npm run check` |
+| Before every push | `npm run check`, then wait to be asked |
+| Before every deploy | Vercel builds from `master`; there is no separate deploy step |
+
+**Push policy: never push.** Commit, report, and wait. Stéan walks and visually checks the
+work before it goes out. This is a standing rule, not a formality.
+
+`npm run check` is a gauntlet, not a typecheck:
+
+```
+tsc --noEmit
+  && eslint . --max-warnings 0        ← warnings are errors; they never accumulate
+  && node scripts/architecture-audit.mjs
+  && npm run test:gate                ← probes for the bash gate itself
+  && npm run test                     ← lib/*.test.ts
+```
+
+Pieces: `npm run typecheck` · `npm run lint` · `npm run audit` · `npm run test:dates` ·
+`npm run test:gate` · `npm run test:removal`. Run the whole thing after each logical change,
+not after ten.
+
+**Hook-denied** (precise patterns — the smart layer, `.claude/hooks/bash-gate.js`):
+`git push --force` · `git reset --hard` · `rm -rf` on `/` or `~` · `prisma migrate` /
+`prisma db push` (they do not work here — see `.claude/rules/schema-changes.md`).
+Reading `.env*` is denied at the settings layer.
+
+**Hook-asks:** `git push` · any SQL through the Management API · `vercel`.
+
+**Settings-ask twins** (coarse patterns — **dormant while the hook lives**, consulted only
+when it is dead): every gate above names its twin inline as `// @twin`. Reconciled by
+`hooks: every incident-class gate has a settings twin`, which also checks each twin's probe
+record and fails if the rule it covers has been edited since.
+<!-- @enforced audit:hooks-every-incident-class-gate-has-a-settings-twin -->
+
+`ddl-gate.js` is the second hook, on `Write|Edit`. It **asks** before a file is written that
+applies DDL to production. `bash-gate` already asks when that URL appears in a *command* — but
+the documented way to run anything needing real credentials puts the URL in a file and leaves
+the command line indistinguishable from any other script run. Five schema changes reached
+production that way on 2026-08-18 without the gate firing once. Asking at the point the
+statement is *written* is also the point a human can still read it. It asks, never denies; a
+`SELECT` through the same endpoint stays quiet.
+
+Approval-gated actions sequence to the **end** of a task. The gates are load-bearing — do not
+engineer around them.
+
+---
+
+## 4 · WHERE THE RULES LIVE
+
+Inventory and documentation status live **in the audit** (`documented:` flags at each
+control's site), never as a per-control list here — a list here would grow with every control
+added, inside the file with a budget.
+
+| Family | Where |
+|---|---|
+| ESLint | `eslint.config.mjs`, `--max-warnings 0` |
+| Audit checks | `scripts/architecture-audit.mjs` — each named after the bug class it catches |
+| Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js` + `.claude/settings.json` |
+| Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs` |
+| Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |
+| Rule files | `.claude/rules/schema-changes.md` — why `prisma migrate` fails here (the pgbouncer pooler) and the Management API path that works |
+
+`.claude/rules/*.md` carries `paths:` frontmatter and is **guidance only, never the sole
+holder of incident-class content** — E1b: read-triggered, so an edit-blind session gets none
+of it. `schema-changes.md` is scoped only because `bash-gate` denies the dangerous command
+unconditionally; the prose may leave context because the protection does not.
+
+**Where a new rule goes — what does it cost the day the model ignores it once?**
+
+| Cost | Where it lives |
+|---|---|
+| Annoyance — a style slip, a re-run | Prose. Advisory, and that is fine |
+| **Incident** — wrong money, a client emailed, data unrecoverable | A hook (one tool call's aperture, reaches every context) and/or a check (whole-tree aperture, catches what lands anyway), plus a settings twin at `ask`, plus probes |
+
+The two layers catch different things, so use both. On 2026-08-18 a scripted edit silently
+failed to apply: a function signature changed and its guard did not. `tsc`, ESLint and 173
+tests all passed — a throw is perfectly legal code — and the *audit* caught it by naming the
+exact string still being thrown. A hook could not have seen it. Conversely a check cannot stop
+anything landing.
+
+**Probe first, both directions, before version one.** A planted violation must **fail**, and a
+known-good case must **pass**. The second half is the load-bearing one: a suite that only
+plants violations cannot tell a working check from one that never matches, and a
+never-matching pattern reports 100% violations — tool failure and catastrophic finding are the
+same output. The `+02:00` check silently never fired until a planted probe exposed that it was
+scanning comment-stripped source, where string literals — the only place an offset ever lives
+— had already been removed. Probes cannot travel through the channel the control inspects:
+the gate's fixtures name the commands it blocks, so they live in a file on disk.
+
+If a rule concerns **one file**, it goes in that file as a comment, not here. Reasoning splits
+by subject: *why this change* → commit message; *why the code has this shape*, false leads
+included → comment at the site, because the next reader won't run blame.
+
+**Precedence.** Mechanisms enforce; they don't assert. Prose contradicting a green check is
+stale prose — report it, don't act on it. Hook-permits vs check-forbids → the check governs;
+file a finding against the hook. `KNOWN_DEFECTS` entries are owned debt — real, classified
+bugs parked so unrelated work isn't blocked, while any *new* finding fails the build. The list
+may only shrink, and the audit fails if an entry stops firing, so it can't outlive its bug.
+Never fix one inside unrelated work.
+
+**Allowlists are decision logs, not silencers.** `ZAR_BY_CONSTRUCTION` and
+`REVALIDATE_EXCEPTIONS` carry a reason per entry. A false positive is resolved by an
+allowlist **entry**, never by closing the finding — otherwise it returns next month, gets
+re-investigated by someone with less context, and eventually gets "fixed", which is how a
+deliberate asymmetry becomes a bug. Exemptions are probed too: `allowlists: every exemption is
+still load-bearing` fails when an entry stops suppressing anything. A stale exemption is worse
+than a missing one — it reads as a considered decision and silently covers whatever is written
+into that file next.
+
+### Enforced
+
+<!-- Marker-carrying bullets only. A marker-less bullet here fails the audit. -->
 
 - **Never hardcode prices, rates, or currency.** Read from `SiteSetting`, `BillingPreset`, or the booking's stored price/currency — and derive the currency from `priceCurrency`, the student's region, or the PaymentRequest's `currency`. Never assume ZAR. <!-- @enforced audit:money-no-hardcoded-currency-in-business-logic -->
-- **Never create parallel systems when you can extend existing ones.** Example: manual invoices reuse the pro-forma → Paystack → tax invoice pipeline, they don't build a second invoicing flow. *(unchecked — "is this a duplicate system" is a judgement about intent; ask `grounder` before building.)*
-- **Never modify the Prisma schema without being explicitly told to.** If you think a schema change is needed, describe it and wait. An approved one goes through the Supabase Management API. *(the ASKING is unchecked — nothing can tell an approved change from an invented one. The migrate path is blocked: <!-- @enforced hook:bash-gate --> plus <!-- @enforced audit:schema-no-prisma-migrate-invocations-in-scripts -->. See `.claude/rules/schema-changes.md`.)*
-- **Never delete data.** Use soft-delete patterns (status flags, `isActive: false`, `archivedAt` timestamps). *(unchecked — and this one has real reach: `deleteMany` is legitimate in cleanup paths, so no scanner can separate the two. Highest-consequence unchecked rule here.)*
-- **Never hand-roll a date.** No `new Date(y, m, d)`, no `.toISOString().slice(0, 10)` on a timestamp, no `format()` for display, no hardcoded `+02:00`. Everything goes through `lib/dates.ts` — see below. <!-- @enforced audit:date-safety-no-local-midnight-date-constructors --> <!-- @enforced audit:date-safety-no-iso-slicing-a-real-instant --> <!-- @enforced audit:date-safety-no-hardcoded-02-00-offset -->
-- **Never push.** Commit, report, and wait. The user walks and visually checks the work before it goes out. <!-- @enforced hook:bash-gate --> <!-- @enforced settings:ask-git-push -->
-- **Never send emails or trigger external side effects in a "save" action.** Side effects (email, PDF generation, Paystack link creation) only happen when the user explicitly clicks "Send" or "Create & Send". *(unchecked — a send inside a save is well-formed code; only the button's name says it's wrong.)*
-- **Never auto-fill or guess client data.** If a field needs a value and you don't have it, leave it empty or show a placeholder. *(unchecked — a fabricated value is indistinguishable from a real one at the point it is written.)*
+- **Never hand-roll a date.** No `new Date(y, m, d)`, no `.toISOString().slice(0, 10)` on a timestamp, no `format()` for display, no hardcoded `+02:00`. Everything goes through `lib/dates.ts` — §9. <!-- @enforced audit:date-safety-no-local-midnight-date-constructors --> <!-- @enforced audit:date-safety-no-iso-slicing-a-real-instant --> <!-- @enforced audit:date-safety-no-hardcoded-02-00-offset -->
+- **Never push.** Commit, report, and wait. <!-- @enforced hook:bash-gate --> <!-- @enforced settings:ask-git-push -->
 - **Never use `any` types.** Use proper Prisma types or define interfaces. <!-- @enforced eslint:@typescript-eslint/no-explicit-any -->
-
-### ALWAYS
-- **Read the actual files before writing code.** Don't assume structure — the codebase has specific patterns. Read the component, its imports, and the actions file before making changes. *(unchecked, and it is the root of most of what follows: every rule below is easy to satisfy once you have read the file and impossible to satisfy reliably from memory.)*
 - **Use `requireRole("super_admin", "editor")` on every server action** that modifies data. Read-only actions can use `requireRole("super_admin")` alone. <!-- @enforced audit:server-action-auth-every-mutating-action-is-guarded-for-its-route-group --> <!-- @enforced audit:server-action-auth-mutating-api-routes-and-inline-actions-are-guarded -->
 - **Use `revalidatePath()` after every mutation** to refresh the relevant page data. <!-- @enforced audit:mutation-revalidate-every-mutating-action-calls-revalidatepath -->
 - **Return refusals a human will read; never throw them.** Next.js strips a thrown message in production and shows React's digest instead — so the reason, the one thing they needed, is the one thing they can't see. <!-- @enforced audit:server-action-ux-a-refusal-a-human-reads-is-returned-not-thrown -->
-- **Use `toast` from `sonner` for success/error feedback** on client-side actions. *(unchecked — silence reads as success. A cancelled session sat live in Outlook for five days behind a dialog that closed without a word; see `226faa7`.)*
-- **Use confirmation dialogs for destructive actions** (cancel, void, delete, send). *(unchecked — "destructive" is a judgement about consequence, not a code shape.)*
-- **Handle errors with try/catch and user-friendly messages.** Never let raw errors reach the UI. *(unchecked in general; the refusal case above is.)*
-- **Use the existing `formatPrice(cents, currency)` utility** for all currency display. <!-- @enforced audit:money-formatprice-always-passes-a-currency --> <!-- @enforced audit:money-no-local-currency-formatter -->
-- **Use `recordAudit()` from `lib/audit.ts`** for billing type changes, booking cancellations, payment recording, invoice voiding, client status changes, and discount changes. *(unchecked — nothing can tell which mutations are audit-worthy. The list above is the answer; extend it rather than re-deriving it.)*
+- **Use `formatPrice(cents, currency)`** for all currency display — never manual string concatenation. <!-- @enforced audit:money-formatprice-always-passes-a-currency --> <!-- @enforced audit:money-no-local-currency-formatter -->
+- **A cancel path removes the calendar event**, and the removal's shape is decided by counting who holds the `graphEventId` — never by `recurringSeriesId`. `lib/calendar-removal.ts`. <!-- @enforced audit:calendar-a-cancel-path-removes-the-calendar-event --> <!-- @enforced audit:calendar-removal-shape-is-not-inferred-from-recurringseriesid -->
+- **Server vars go through `lib/env.ts`** — `env()`, `requireEnv()`, `envOr()`, `isConfigured()`, `missingRequiredEnv()`. A var read raw at its point of use is discovered missing only there, mid-request. Allowlisted exceptions: the Supabase/Prisma client constructors (hard deps, guarded at construction) and `CRON_SECRET`/`AUDIT_IP_HMAC_KEY` (their own single guarded readers). **`NEXT_PUBLIC_*` stays a literal `process.env.NEXT_PUBLIC_X`** — the compiler inlines it into the client bundle, which only works on a literal member access. <!-- @enforced audit:env-no-raw-process-env-for-a-server-var-outside-lib-env-ts -->
+- **A confirm action is never nested inside the dialog it dismisses.** <!-- @enforced audit:confirm-dialogs-a-confirm-action-is-not-nested-inside-the-dialog-it-closes -->
+- **Never hardcode `https://life-therapy.co.za`.** §9, URLs. <!-- @enforced audit:dual-domain-no-hardcoded-life-therapy-domain-in-a-client-facing-path -->
 
 ---
 
-## Architecture & Patterns
+## 5 · DOCTRINE THE MACHINE CANNOT HOLD
 
-### File Structure
-```
-app/
-  (admin)/admin/(dashboard)/   ← Admin pages (requires auth + role check)
-  (public)/                    ← Public-facing pages (marketing, booking, login)
-  (portal)/portal/             ← Client portal (requires student auth)
-  api/                         ← API routes (webhooks, downloads, cron triggers)
-  auth/callback/               ← Supabase auth callback handler
+These have **no mechanical net**. Nothing will catch a violation, so they are held by
+attention alone — they are the ones to slow down for. Everything in §4 is enforced; follow it
+and the build disagrees with you if you don't. Mechanise one of these and it moves up to §4,
+and the count below falls, which is the point.
 
-components/
-  admin/                       ← Admin-specific components
-  public/                      ← Public site components
-  portal/                      ← Client portal components
-  ui/                          ← shadcn/ui primitives
-
-lib/
-  billing.ts                   ← Date utils, VAT/discount calc, rate lookup, billing contact resolution
-  billing-types.ts             ← InvoiceLineItem type definition
-  generate-payment-requests.ts ← Monthly billing run (postpaid clients)
-  generate-invoice-pdf.ts      ← jsPDF-based invoice and pro-forma PDF generation
-  send-invoice.ts              ← All payment request + invoice email functions
-  email-render.ts              ← Template rendering (DB templates with fallback to hardcoded)
-  email-templates.ts           ← Hardcoded email template functions + base wrapper
-  graph.ts                     ← Microsoft Graph API (calendar events, Teams meetings)
-  booking-config.ts            ← SESSION_TYPES, TIMEZONE, slot times
-  settings.ts                  ← getSiteSettings() — single source of truth for config
-  pricing.ts                   ← Multi-currency price helpers
-  region.ts                    ← Region/currency types and config
-  credits.ts                   ← Session credit balance, deduct, forfeit
-  cron/                        ← Scheduled job processors (billing, reminders, follow-ups)
-
-prisma/
-  schema.prisma                ← Single schema file, PostgreSQL
-```
-
-### Server Actions Pattern
-All admin mutations are server actions in `actions.ts` files co-located with their page:
-```typescript
-"use server";
-import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
-
-export async function doSomethingAction(data: SomeType) {
-  await requireRole("super_admin", "editor");
-  // ... mutation logic ...
-  revalidatePath("/admin/relevant-page");
-  return { success: true };
-}
-```
-
-### Component Pattern
-- Pages are server components that fetch data and pass it as props.
-- Interactive parts are extracted into `"use client"` components.
-- Forms use `useActionState` or `useTransition` with server actions.
-- Toast notifications via `sonner` for all user-facing feedback.
-
-### Email System
-Emails use a two-layer system:
-1. **DB templates** (`EmailTemplate` model) — editable by admin, checked first
-2. **Hardcoded fallbacks** (`email-render.ts` → `email-templates.ts`) — used when DB template doesn't exist or is inactive
-
-Template variables are `{{variableName}}` placeholders. The call site pre-computes any HTML blocks (session summaries, Teams links) and passes them as string variables.
-
-### Billing Flow (Postpaid Clients)
-```
-Monthly cron → generateMonthlyPaymentRequests()
-  → creates PaymentRequest records with line items
-  → sendPaymentRequestEmail() sends email + pro-forma PDF
-  → reminder/due-today/overdue emails on schedule
-  → client pays via EFT
-  → admin records payment via "Record Payment" action
-  → real tax invoice generated + emailed
-```
-
-### URLs & the two domains
-
-`life-therapy.co.za` (ZAR) and `life-therapy.online` (international) are served by **one deployment**;
-region is decided per-request from the hostname. So a URL in an email/PDF must follow the recipient's
-region, never a hardcoded domain. Three resolvers, in `lib/region.ts`:
-
-- `getBaseUrl()` (`lib/get-region.ts`) — request context; reads the region cookie the middleware set.
-- `getBaseUrlForCurrency(currency)` — emailing **someone else's** record (cron, webhook, admin action):
-  ZAR → `.co.za`, else `.online`.
-- `appBaseUrl()` — the last resort when you have neither host nor recipient. Folds the two env vars
-  (`NEXT_PUBLIC_APP_URL`/`NEXT_PUBLIC_BASE_URL`); not yet region-aware.
-
-**Never hardcode `https://life-therapy.co.za`.** The `NEXT_PUBLIC_APP_URL` override in
-`getBaseUrlForRegion` is **non-production only** — in prod it would send every international client's
-links to `.co.za`, because there is one env scope for both domains. The audit's `dual-domain` check
-forbids the literal outside `lib/region.ts`/`lib/copy.ts`/`app/layout.tsx`.
-
-### Multi-Currency
-- Bookings store `priceCurrency` (ZAR/USD/EUR/GBP) and `priceZarCents` (price in that currency's cents)
-- PaymentRequests have a `currency` field
-- All `formatPrice()` calls must pass the correct currency
-- VAT applies to ZAR only — international currencies are zero-rated
-- Session rates are configured per-currency in SiteSettings
-
-### Dates & Timezone — `lib/dates.ts` is the only source of truth
-
-The business runs in **SAST (Africa/Johannesburg, UTC+2, no DST)**. Vercel runs in **UTC**. Every
-date bug this codebase has had came from confusing two things:
-
-- A **calendar date** is a *day*. `booking.date`, `originalDate`, `dateOfBirth` are Prisma `@db.Date`
-  columns stored at UTC midnight. Build them with `calendarDate("2026-07-08")`.
-- A **real instant** is a *moment*. `createdAt`, `paidAt`, `new Date()`. Resolve them to a day with
-  `saDateStr(x)` — **never** `.toISOString().slice(0, 10)`, which gives the *UTC* day and is wrong
-  for two hours every night. **The SAST day turns over at 22:00 UTC**, not midnight.
-
-`lib/dates.ts` owns `TIMEZONE` and exports: `saDateStr`, `saToday`, `saFormat`, `saInstant`,
-`saDayStart`, `saDayEnd`, `calendarDate`, `addSaDays`, `diffSaDays`, `saMonthStart`, `isSameSaDay`,
-`bookingStartsAt`, `isSaDateStr`.
-
-Rules:
-- **It fails closed.** Malformed input throws rather than returning an `Invalid Date` (which compares
-  `false` both ways, so a Prisma `where` built from one silently matches nothing — a failure that
-  reads exactly like "no results"). At untrusted boundaries (query params, imports) guard with
-  `isSaDateStr()` first and fall back.
-- **Ranges over a timestamp column** use `gte: saDayStart(d), lt: saDayStart(addSaDays(d, 1))` — an
-  exclusive next-day start. `saDayEnd` is inclusive-to-the-second and misses the last 999ms.
-- **Thresholds phrased in days** use `diffSaDays`, not a division by 86,400,000 (23:00 Mon → 08:00
-  Tue is 1 calendar day but floors to 0).
-- **Exceptions that look like bugs but aren't:** `.slice(0, 10)` on a `@db.Date` is exact; and two
-  Graph call sites slice a datetime string legitimately because the request sends a
-  `Prefer: outlook.timezone` header, so Graph returns SAST-local strings. Do not "fix" those.
-- `npm run test:dates` pins the boundaries. Run it whenever you touch date handling.
-
-### Calendar Integration (Microsoft Graph)
-- Single bookings: one Graph event per booking
-- Recurring series: ONE recurring Graph event for the whole series (not N individual events)
-- All bookings in a series share the same `graphEventId` (the series master ID)
-- Cancelling/rescheduling a single booking in a series: delete/modify that occurrence only, NOT the entire series
-- Check `booking.recurringSeriesId` — if present, use `deleteRecurringEventOccurrences()` instead of `cancelCalendarEvent()`
+- **Read the actual source files before writing code.** Don't assume structure — this codebase has specific patterns. Read the component, its imports, and the actions file first. UNENFORCEABLE — and it is the root of most of the rest: every rule here is easy to satisfy once you have read the file and impossible to satisfy reliably from memory. Reading is also what summons the scoped rule files (E1b).
+- **Never create parallel systems when you can extend existing ones.** Manual invoices reuse the pro-forma → Paystack → tax-invoice pipeline; they don't build a second invoicing flow. UNENFORCEABLE — "is this a duplicate system" is a judgement about intent. Ask `grounder` before building.
+- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes through the Supabase Management API. UNENFORCEABLE — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.)
+- **Never delete data.** Soft-delete: status flags, `isActive: false`, `archivedAt`. UNENFORCEABLE, and this one has real reach — `deleteMany` is legitimate in cleanup paths, so no scanner can separate the two. The highest-consequence rule on this list.
+- **Never send emails or trigger external side effects in a "save" action.** Email, PDF generation and Paystack link creation happen only when the user explicitly clicks "Send" or "Create & Send". UNENFORCEABLE — a send inside a save is well-formed code; only the button's name says it's wrong.
+- **Never auto-fill or guess client data.** If a field needs a value you don't have, leave it empty or show a placeholder. UNENFORCEABLE — a fabricated value is indistinguishable from a real one at the point it is written.
+- **Use `toast` from `sonner` for success and error feedback** on client-side actions. UNENFORCEABLE — and silence reads as success. A cancelled session sat live in Outlook for five days behind a dialog that closed without a word (§6).
+- **Use confirmation dialogs for destructive actions** — cancel, void, delete, send. UNENFORCEABLE — "destructive" is a judgement about consequence, not a code shape.
+- **Use `recordAudit()` from `lib/audit.ts`** for billing-type changes, booking cancellations, payment recording, invoice voiding, client status changes and discount changes. UNENFORCEABLE — nothing can tell which mutations are audit-worthy. That list is the answer; extend it rather than re-deriving it.
 
 ---
 
-## Naming Conventions
+## 6 · SCARS
 
-- **Server actions**: `verbNounAction` — e.g. `createManualPaymentRequestAction`, `excludeFromBillingAction`
-- **Components**: PascalCase — e.g. `UpcomingBillingSection`, `PaymentRequestActions`
-- **Files**: kebab-case — e.g. `upcoming-billing-section.tsx`, `payment-request-actions.tsx`
-- **DB fields**: camelCase matching Prisma convention
-- **CSS**: Tailwind utility classes only, no custom CSS files
-- **Currency amounts**: Always stored as integer cents. Display with `formatPrice(cents, currency)`.
+<!-- Outside any budget. Un-mechanised scars keep their narrative. Once mechanised: narrative
+     moves to a comment at the site it concerns and one citation line stays here. -->
+
+- **2026-08-17 · OneDrive ate the repo.** Cost: a working day, and finished work that could
+  not be shipped. `node_modules` became a field of unreadable cloud placeholders — `npm`
+  itself could not run — and then **118 git objects went unreadable**: `git fsck`,
+  `git rev-list` and `git push` all failed with `mmap failed: Invalid argument`. Thousands of
+  tiny files, placeholder hydration, and two machines writing pack files independently are
+  what break it. Syncing the *code* was never the problem; syncing the *repo internals* was.
+  **Git syncs the code. OneDrive syncs only what git ignores.** No single site — it stays
+  narrative here. Mechanised only at the installer, which refuses any path containing
+  "onedrive".
+
+- **2026-08-18 · A cancelled session stayed live in Teams.** Cost: a client kept a meeting
+  invite for a session cancelled five days earlier. The cancel action on the client detail
+  page never mentioned the calendar at all — no Graph call, and no `calendar_sync_logs` row to
+  show for it, on a table with 1,123 rows. Not a wrong branch: a **missing** one, in a file
+  whose siblings all had it, which is why no reviewer reading a diff would see anything odd.
+  The tell was an absence in the database. → `audit:calendar-a-cancel-path-removes-the-calendar-event`
+  · narrative at `lib/calendar-removal.ts`
+
+- **2026-08-18 · The delete dialog that took the form down with it.** Cost: every delete in
+  the admin UI silently did nothing, for the life of the feature. `AlertDialogAction` closes
+  the dialog on click, which unmounts `AlertDialogContent` — and the `<form>` was inside it, so
+  the submission never completed. The dialog stated exactly what it was about to do and then
+  did nothing. Proof was again an absence: zero `booking_deleted` audit rows, on an action that
+  writes one *before* it deletes. → `audit:confirm-dialogs-a-confirm-action-is-not-nested-inside-the-dialog-it-closes`
+  · narrative at `app/(admin)/admin/(dashboard)/bookings/[id]/page.tsx`
+
+- **2026-08-18 · The gate denied its own commit.** Cost: a blocked commit, and a hole found.
+  A wrapped line in a commit message began with a gated command, and `\n` is a command
+  separator — so a heredoc *describing* the rule read as invoking it. The scar records this
+  being fixed once, for the inline case; the multi-line door stayed open and the same bug came
+  back through it a day later. → `.claude/hooks/bash-gate.test.mjs`
+  · narrative at `.claude/hooks/bash-gate.js`
+
+- **2026-08-18 · Five schema changes reached production ungated.** Cost: five unreviewed DDL
+  statements. The gate matched on how the target appeared in a *command*, and the documented
+  path supplies it by reference (`--env-file`), inside a file. → `.claude/hooks/ddl-gate.js` ·
+  general form in `docs/LESSONS.md` L-001
+
+- **Dates: every date bug this codebase has had** came from confusing a calendar *day* with a
+  real *instant*. Full doctrine in §9. → three `date-safety:` checks · `npm run test:dates`
 
 ---
 
-## Common Pitfalls
+## 7 · AGENTS
 
-1. **`priceZarCents` is misnamed.** It stores cents in WHATEVER currency the booking used, not necessarily ZAR. Always check `priceCurrency` alongside it.
+| Agent | For | Access |
+|---|---|---|
+| `grounder` | **Before writing any code.** Maps the machinery a task touches so you extend it instead of duplicating it | read-only, sonnet |
+| `census` | Repo-wide counts, find-all-usages, pattern audits — returns **classified** hits, not file dumps | read-only, sonnet |
+| `db-inspector` | Live-data claims against production; every answer carries the query behind it | read-only, SELECT, sonnet |
+| `implementer` | A pre-scoped mechanical transform; returns misfit judgment sites rather than guessing | write, `isolation: worktree`, never commits, sonnet |
+| `walker` | Adversarial pre-push review — tries to **refute** the work. Independent context is the point | read-only, opus |
 
-2. **`getSessionRate()` in `lib/billing.ts` is for fallback rate lookup only.** When billing existing bookings, use the booking's stored price, not a re-fetched rate.
+Mechanical reading → the read-only three. Mechanical writing → the isolated implementer.
+Judgment stays in the main session. Proposers get worktrees; verifiers need `node_modules` and
+the main checkout.
 
-3. **PaymentRequest unique constraint is `[studentId, billingMonth]`.** If creating multiple PRs for the same client in the same month (different currencies), append the currency to the billingMonth key.
+Subagents **do** receive this file (E3) — but a narrow-task agent skims it, and rung-4 files
+never reach an edit-blind session (E1b). Presence is not enforcement, which is why the
+incident class lives at hooks and checks.
 
-4. **Supabase auth tokens in URLs must be `encodeURIComponent()`-encoded.** Base64 tokens contain `+` and `/` which break in query strings.
-
-5. **The `(public)` route group layout wraps all public pages** including `/reset-password` and `/login`. It does NOT have auth guards.
-
-6. **Email template changes need TWO updates**: the hardcoded fallback in `email-render.ts` AND the DB-stored template (if it exists and is active). Use the admin email template editor or a migration script.
-
-7. **Recurring calendar events**: after the recent refactor, all bookings in a series share one `graphEventId`. The old pattern of calling `cancelCalendarEvent` per booking would delete the entire series. Always check `recurringSeriesId` first.
-
----
-
-## Testing Checklist (before deploying)
-
-- [ ] All server actions have `requireRole()` as the first line
-- [ ] All mutations call `revalidatePath()` for affected pages
-- [ ] Currency formatting uses `formatPrice(cents, currency)` — never manual string concatenation
-- [ ] Email sends have `.catch(console.error)` — never let email failures crash the request
-- [ ] Prisma queries use `select` or `include` to limit data — never fetch entire records when only IDs are needed
-- [ ] New UI components handle empty states (no data, loading, error)
-- [ ] Destructive actions have confirmation dialogs
+**Classify per site, never sweep.** A pattern that looks uniform usually isn't — during the
+date centralisation, two call sites identical to twenty-five others were correct for a reason
+invisible to the regex. Blanket codemods break production.
 
 ---
 
-## Environment access — `lib/env.ts` is the only reader of server vars
+## 8 · SESSION HYGIENE
 
-A var read raw at its point of use is discovered MISSING only there, mid-request. `lib/env.ts`
-declares every server var once and reads it through a validating accessor:
+**Anchor grounding claims** to the SHA read. *Does X* → anchor, past tense. *Should X* → no
+anchor. An unanchored observation is itself a finding. An anchored one killed its own author's
+wrong diagnosis here: a commit SHA disproved a claim that a code path was broken.
 
-- `env(name)` — the value or `undefined` (typed name; a typo won't compile).
-- `requireEnv(name)` — the value or a **named throw** (fail-closed).
-- `envOr(name, default)` — genuine config with a default.
-- `isConfigured(...names)` — an integration is on only if ALL its vars are set (a half-set one reads
-  as off, never as a mid-request error).
-- `missingRequiredEnv()` — the required set that's absent; asserted once/day from the daily cron.
+**Whole-file reconciliation** on any status correction — grep `awaiting`, `TODO`, `- [ ]`,
+and settle all of them or say why not. A partially-fixed file looks reviewed, which is worse
+than one that doesn't. This includes handover docs, LESSONS entries and probe records.
 
-Rules:
-- **Server vars go through `lib/env.ts`.** The `env` audit check forbids raw `process.env.<SERVER_VAR>`
-  elsewhere. Exceptions (allowlisted): the Supabase/Prisma client constructors (hard deps, guarded at
-  construction), and `CRON_SECRET`/`AUDIT_IP_HMAC_KEY` (their own single guarded readers).
-- **`NEXT_PUBLIC_*` stays a literal `process.env.NEXT_PUBLIC_X`** — the Next.js compiler inlines it into
-  the client bundle, which only works on a literal member-access. Routing it through a function leaves
-  `undefined` in the browser. These are client-safe by definition.
+**Verify before you tick.** A commit message proves attempt, not landing. **Re-read after a
+scripted edit** — four silently failed to apply in one session, and two were caught only
+because a count was byte-identical before and after.
 
-## Environment variables
+**Citations verified, not plausible** — a zero-hit grep is the check.
 
-**The list lives in `lib/env.ts`** — `REQUIRED_IN_PROD` and `OPTIONAL`, each entry carrying
-why it is in that group. A table here drifted and omitted two required vars (`cc8cbb9`).
+**Commit ≠ push.** One coherent revertable change; interdependent files together; unrelated
+concerns split with `git add -p`; amend un-pushed fixes rather than piling `fix: oops`; pushed
+commits are immutable, so fix forward.
 
-What does not live in code:
+**Ambiguous spec, or spec-vs-code conflict:** flag it and stop. Do not implement around it.
+
+---
+
+## 9 · PROJECT SLOTS
+
+### SSOTs — never restate a value here
+
+| What | File |
+|---|---|
+| Server env vars | `lib/env.ts` (`REQUIRED_IN_PROD`, `OPTIONAL`, each with its reason) |
+| Dates & timezone | `lib/dates.ts` |
+| Site config | `lib/settings.ts` — `getSiteSettings()` |
+| Region / currency | `lib/region.ts`, `lib/pricing.ts` |
+| Session types, slots | `lib/booking-config.ts` |
+| Calendar removal | `lib/calendar-removal.ts` |
+| Schema | `prisma/schema.prisma` |
+
+### What does not live in code
 
 > **`CRON_SECRET` is headers-only.** The query-string path (`?secret=`) was removed: it put a
-> live credential into Vercel access logs and browser history. Trigger a job by hand with a
-> header: `curl -H "x-cron-secret: $CRON_SECRET" https://life-therapy.co.za/api/cron/daily`
+> live credential into Vercel access logs and browser history. Trigger a job by hand with
+> `curl -H "x-cron-secret: $CRON_SECRET" https://life-therapy.co.za/api/cron/daily`
 >
 > **`AUDIT_IP_HMAC_KEY` refuses to write an unkeyed hash.** Without it `recordAuthEvent` still
 > records the event, omits the IP hash, and logs an error. IPv4 is only 2^32 values, so an IP
 > "hashed" with a key anyone can read is reversible by brute force in minutes — a column that
 > looks protected and isn't is worse than storing the raw IP.
 >
-> **Local runs need `.env.local` explicitly.** `.env` holds a `johndoe@localhost` placeholder
-> `DATABASE_URL`, and ESM hoists imports above `dotenv.config()`, so a one-off script must be
-> run as `npx tsx --env-file=.env.local <script>`.
->
 > **The Graph vars are `MS_GRAPH_*`, not `GRAPH_*`** — mis-documented once, and it cost a
 > debugging session.
 
----
-
-## Pre-Commit Check
-
-Run before every commit:
-```bash
-npm run check
-```
-
-This runs TypeScript type checking (`tsc --noEmit`) + ESLint. If it
-fails, fix the errors before committing. Do not push code that fails
-`npm run check`.
-
-`npm run check` is now a gauntlet, not just a typecheck:
+### Layout
 
 ```
-tsc --noEmit
-  && eslint . --max-warnings 0        ← warnings are errors; they never accumulate
-  && node scripts/architecture-audit.mjs
-  && npm run test:dates
+app/
+  (admin)/admin/(dashboard)/   ← Admin pages (auth + role check)
+  (public)/                    ← Marketing, booking, login
+  (portal)/portal/             ← Client portal (student auth)
+  api/                         ← Webhooks, downloads, cron triggers
+  auth/callback/               ← Supabase auth callback
+components/   admin/ · public/ · portal/ · ui/ (shadcn primitives)
+lib/
+  billing.ts                   ← VAT/discount calc, rate lookup, billing contact resolution
+  billing-types.ts             ← InvoiceLineItem + zod parsing
+  generate-payment-requests.ts ← Monthly billing run (postpaid)
+  generate-invoice-pdf.ts      ← jsPDF invoice + pro-forma
+  send-invoice.ts              ← Payment-request and invoice emails
+  email-render.ts              ← Template rendering (DB first, hardcoded fallback)
+  email-templates.ts           ← Hardcoded templates + base wrapper
+  graph.ts                     ← Microsoft Graph (calendar, Teams)
+  credits.ts                   ← Session credit balance, deduct, forfeit
+  cron/                        ← Scheduled processors (billing, reminders, follow-ups)
 ```
 
-Quick commands:
-- `npm run typecheck` — TypeScript only
-- `npm run lint` — ESLint only (`--max-warnings 0`)
-- `npm run audit` — the architecture audit alone
-- `npm run test:dates` — boundary tests for `lib/dates.ts`
-- `npm run check` — all four (run this before every commit)
+### Patterns
 
-### The architecture audit (`scripts/architecture-audit.mjs`)
+**Server actions** live in `actions.ts` co-located with their page: `requireRole` first,
+mutation, `revalidatePath`, return. **Pages are server components** that fetch and pass props;
+interactive parts extract into `"use client"` components using `useActionState` or
+`useTransition`.
 
-Typecheck and ESLint catch *syntax* mistakes. They cannot catch "this server action mutates the DB
-without `requireRole`", or "this invoice adds SA VAT to a USD client". Those are the bugs that keep
-reaching production, so they get a scanner. **Each check is named after the bug class it catches, and
-every one exists because we shipped that bug.** When a new class gets through, add a check — the
-suite grows a scar for every wound.
+**Emails are two-layer**: DB templates (`EmailTemplate`, editable by admin) checked first,
+hardcoded fallbacks in `email-render.ts` → `email-templates.ts` second. Variables are
+`{{name}}` placeholders; the call site pre-computes HTML blocks and passes them as strings.
+A template change needs **both** updated if a DB row exists and is active.
 
-**Where does a rule belong?** Ask what it costs the day the model ignores it once.
+**Postpaid billing:** monthly cron → `generateMonthlyPaymentRequests()` creates PaymentRequest
+records with line items → `sendPaymentRequestEmail()` sends email + pro-forma PDF →
+reminder/due-today/overdue emails on schedule → client pays by EFT → admin records payment →
+real tax invoice generated and emailed.
 
-| Cost of ignoring it once | Where it lives |
-|---|---|
-| Annoyance — a style slip, a re-run | `CLAUDE.md`. Prose is advisory, and that is fine here |
-| **Incident** — wrong money, a client emailed, data unrecoverable | A **check**, or a hook |
+### Dates & timezone
 
-Prose is read attentively on day one and skimmed by the twentieth session — and skimmed hardest by
-a subagent handed a narrow task. (It *is* delivered to subagents: measured 2026-08-18, after a
-first probe wrongly reported otherwise. Present, not absent — and unlikely to be attended to,
-which is a weaker claim reaching the same place.) Anything incident-class has to be mechanical, or
-it is being enforced by whoever happens to be paying attention.
+The business runs in **SAST (Africa/Johannesburg, UTC+2, no DST)**. Vercel runs in **UTC**.
 
-The two layers catch different things, so use both. A **hook** fires at write time and refuses;
-a **check** fires at `npm run check` and can see the whole tree at once. On 2026-08-18 a scripted
-edit silently failed to apply: the function signature changed and its guard did not. `tsc`, ESLint
-and 173 tests all passed — a throw is perfectly legal code — and the *audit* caught it on the next
-run by naming the exact string still being thrown. A hook could not have seen it.
+- A **calendar date** is a *day*: `booking.date`, `originalDate`, `dateOfBirth` are `@db.Date`
+  columns stored at UTC midnight. Build them with `calendarDate("2026-07-08")`.
+- A **real instant** is a *moment*: `createdAt`, `paidAt`, `new Date()`. Resolve to a day with
+  `saDateStr(x)` — never `.toISOString().slice(0, 10)`, which gives the *UTC* day and is wrong
+  for two hours every night. **The SAST day turns over at 22:00 UTC.**
 
-Two rules keep it trustworthy:
+`lib/dates.ts` owns `TIMEZONE` and exports `saDateStr`, `saToday`, `saFormat`, `saInstant`,
+`saDayStart`, `saDayEnd`, `calendarDate`, `addSaDays`, `diffSaDays`, `saMonthStart`,
+`isSameSaDay`, `bookingStartsAt`, `isSaDateStr`.
 
-- **Classify per site, never sweep.** Half of every first run is false positives. A scanner that
-  cries wolf is one people learn to wave through — which is worse than no scanner, because it reports
-  a reassuring green. Both allowlists (`ZAR_BY_CONSTRUCTION`, `REVALIDATE_EXCEPTIONS`) carry a
-  *reason* per entry: they are decision logs, not silencers.
-- **A false positive is resolved by an allowlist ENTRY, not by closing the finding.** Otherwise it
-  returns next month, gets re-investigated by someone with less context, and eventually gets
-  "fixed" — which is how a deliberate asymmetry becomes a bug.
-- **Exemptions are probed too.** Every check is proven by planting a violation; `allowlists: every
-  exemption is still load-bearing` proves the reverse, failing when an entry no longer suppresses
-  anything. A stale exemption is worse than a missing one: it reads as a considered decision and
-  silently covers whatever is written into that file next.
-- **Prove the probe fires.** A check that cannot fail is worthless. Plant a violation, confirm the
-  check catches it, remove it. The `+02:00` check silently never fired until a planted probe exposed
-  that it was scanning comment-stripped source, where string literals — the only place an offset ever
-  lives — had already been removed.
+- **It fails closed.** Malformed input throws rather than returning an `Invalid Date`, which
+  compares `false` both ways — so a Prisma `where` built from one silently matches nothing, a
+  failure that reads exactly like "no results". At untrusted boundaries guard with
+  `isSaDateStr()` first and fall back.
+- **Ranges over a timestamp column** use `gte: saDayStart(d), lt: saDayStart(addSaDays(d, 1))`.
+  `saDayEnd` is inclusive-to-the-second and misses the last 999ms.
+- **Thresholds phrased in days** use `diffSaDays`, not division by 86,400,000 (23:00 Mon →
+  08:00 Tue is 1 calendar day but floors to 0).
+- **Exceptions that look like bugs but aren't:** `.slice(0, 10)` on a `@db.Date` is exact, and
+  two Graph call sites slice a datetime string legitimately because the request sends a
+  `Prefer: outlook.timezone` header. Do not "fix" those.
 
-**`KNOWN_DEFECTS` is a ratchet.** Real, classified bugs live there so unrelated work isn't blocked,
-while any *new* finding fails the build. The list may only ever shrink; the audit fails if an entry
-stops firing, so it can't outlive its bug. An entry is a debt, not a dismissal.
+### URLs & the two domains
 
----
+A URL in an email or PDF must follow the *recipient's* region, never a hardcoded domain.
+Three resolvers: `getBaseUrl()` (`lib/get-region.ts`, request context, reads the region cookie
+the middleware set) · `getBaseUrlForCurrency(currency)` (emailing **someone else's** record —
+cron, webhook, admin action: ZAR → `.co.za`, else `.online`) · `appBaseUrl()` (last resort
+with neither host nor recipient; folds `NEXT_PUBLIC_APP_URL`/`NEXT_PUBLIC_BASE_URL`, not yet
+region-aware).
 
-## Agents, Commands & Permissions (`.claude/`)
+The `NEXT_PUBLIC_APP_URL` override in `getBaseUrlForRegion` is **non-production only** — in
+prod it would send every international client's links to `.co.za`, because there is one env
+scope for both domains. The `dual-domain` check forbids the literal outside `lib/region.ts`,
+`lib/copy.ts` and `app/layout.tsx`.
 
-The harness is configured to keep judgment in the main session and push the bulk work — sweeps,
-codemods, live-DB reads, adversarial review — out to subagents with their own context.
+### Multi-currency
 
-### Agents (`.claude/agents/`)
+Bookings store `priceCurrency` (ZAR/USD/EUR/GBP) and `priceZarCents`. PaymentRequests have
+their own `currency`. VAT applies to **ZAR only** — international currencies are zero-rated.
+Session rates are configured per currency in SiteSettings.
 
-| Agent | Use it for | Model |
-|---|---|---|
-| `grounder` | **Before writing any code.** Maps the existing machinery a task touches so you extend it instead of duplicating it. Read-only. | sonnet |
-| `census` | Repo-wide counts, find-all-usages, pattern audits. Returns *classified* hits, not file dumps. Read-only. | sonnet |
-| `db-inspector` | Verifying a live-data claim against production. Every answer comes back with the query behind it. **SELECT only.** | sonnet |
-| `implementer` | A pre-scoped mechanical transform (codemod, rename sweep). Spawn with `isolation: "worktree"`. Never pushes. | sonnet |
-| `walker` | Adversarial pre-push review. Tries to *refute* the work. Independent context is the point. Read-only. | opus |
+### Calendar (Microsoft Graph)
 
-The recurring lesson encoded in all of them: **classify per site, never sweep.** A pattern that looks
-uniform usually isn't — during the date centralisation, two call sites identical to 25 others were
-correct for a reason invisible to the regex. Blanket codemods break production.
+A single booking gets one event. A recurring series gets **one recurring event**, and every
+booking in it shares that series-master `graphEventId`. Removing one booking's entry goes
+through `removeBookingFromCalendar()`, which decides by **counting how many bookings hold the
+id** — a master is shared by its siblings, a standalone event is held by exactly one booking.
+Do not infer the shape from `recurringSeriesId`: that asks about the booking, and it has been
+wrong in both directions (§6).
 
-### Commands (`.claude/commands/`)
+### Naming
 
-- **`/walk`** — adversarial review of the current diff against `origin`, before anything is pushed.
-- **`/wrap`** — session close: checks green, commit, handoff report. **Explicitly does not push.**
+Server actions `verbNounAction` · components PascalCase · files kebab-case · DB fields
+camelCase · Tailwind utilities only, no custom CSS · currency always integer cents.
 
-### Permissions (`.claude/settings.json` + `.claude/hooks/bash-gate.js`)
+### Gotchas
 
-Default mode is `acceptEdits`, with read-only MCP calls (Supabase inspection, Vercel logs, GitHub
-PR reads) pre-allowed so routine work doesn't prompt. The gates that matter:
+1. **`priceZarCents` is misnamed.** It stores cents in whatever currency the booking used.
+   Always check `priceCurrency` alongside it.
+2. **`getSessionRate()` is fallback lookup only.** When billing existing bookings, use the
+   booking's stored price, not a re-fetched rate.
+3. **PaymentRequest is unique on `[studentId, billingMonth]`.** For two PRs in one month in
+   different currencies, append the currency to the `billingMonth` key.
+4. **Supabase auth tokens in URLs need `encodeURIComponent()`.** Base64 contains `+` and `/`,
+   which break in query strings.
+5. **The `(public)` route group layout wraps all public pages**, including `/reset-password`
+   and `/login`. It has no auth guards.
+6. **`lib/generated/prisma` is git-ignored** and rebuilt by `postinstall` and `build`. A stale
+   local client is the usual cause of `prisma.someModel is undefined` after a schema change.
 
-- **Denied outright:** `git push --force`, `git reset --hard`, `rm -rf /`, and **`prisma migrate` /
-  `prisma db push`** (they do not work here — see `.claude/rules/schema-changes.md`). Reading `.env*`
-  is denied.
-- **Always asks:** `git push` (the user walks the work first — this is a standing rule, not a
-  formality), any SQL against production, Prisma schema operations, and deploys.
+### Brand
 
-> **The Supabase MCP tools do not work here.** Every call — even a read-only `list_tables` — returns
-> `MCP error -32600: You do not have permission`. Query production through the **Management API over
-> REST** (`SUPABASE_ACCESS_TOKEN` from `.env.local`); see `.claude/rules/schema-changes.md`. This
-> applies to reads as much as to DDL.
+Warm, empowering, professional but approachable. *"You are not broken. You are becoming."*
+Sage `#87A878` · cream `#F5F0E8` · dark sage `#5C7A52` · terracotta `#C4704F`. Playfair
+Display (headings), Lora (body), Cormorant Garamond (accent). Admin UI is shadcn/ui default
+theme, not brand-styled.
 
-`ddl-gate.js` is the second hook, on `Write|Edit`. It asks before a FILE is written that applies
-DDL to production through the Management API. `bash-gate` already asks when that URL appears in a
-*command* — but the documented way to run anything needing real credentials is
-`npx tsx --env-file=.env.local <script>`, which puts the URL in the file and leaves the command
-line indistinguishable from any other script run. Five schema changes reached production that way
-on 2026-08-18 without the gate firing once. Asking at the point the statement is *written* is also
-the point a human can still read it. It asks, never denies — this is the working path for schema
-changes, it just must not be silent. A `SELECT` through the same endpoint stays quiet.
-
-The `bash-gate.js` PreToolUse hook exists because allow-rules can't cover commands containing `$()`
-or heredocs — Claude Code decomposes those and prompts anyway, which stalls a long session on a
-trivial grep. The hook decides *before* the permission system: allow by default, gate the named
-dangerous shapes.
-
-**It is not belt-and-braces with `settings.json`, and this file claimed otherwise until it was
-measured.** A hook `allow` short-circuits the permission system: `Bash(curl*)` is in
-`permissions.ask`, and a bare curl ran with no prompt. So every `settings.json` Bash rule is
-dormant while the hook is alive. That is the whole point of the `@twin` markers in `bash-gate.js` —
-the twin covers the one case where this hook is *dead*, which is the failure that reports a
-non-blocking status nobody reads. Reconciled by `hooks: every incident-class gate has a settings
-twin`. <!-- @enforced audit:hooks-every-incident-class-gate-has-a-settings-twin -->
-
-### Rules (`.claude/rules/`)
-
-- **`schema-changes.md`** — why `prisma migrate` fails on this project (the pgbouncer pooler) and the
-  Management API path that actually works.
-
----
-
-## Brand Quick Reference
-
-- **Brand voice**: Warm, empowering, professional but approachable
-- **Phrase**: "You are not broken. You are becoming."
-- **Palette**: Sage green `#87A878`, cream `#F5F0E8`, dark sage `#5C7A52`, terracotta `#C4704F`
-- **Fonts**: Playfair Display (headings), Lora (body), Cormorant Garant (accent)
-- **Admin UI**: shadcn/ui components with default theme (not brand-styled)
+<!--
+  MAINTENANCE (stripped, free)
+  Intake on every incident — stop at the first structural yes:
+    name the bug CLASS → hook? (+twin +probes) → check? (+probes) → either way,
+    reasoning including the false lead to a comment at the site → single-file?
+    comment only → cross-cutting guidance? scoped rule file → global or
+    unenforceable? §5, visibly → portable? docs/LESSONS.md with an Applied: line
+    (a date or n/a: — never "pending").
+  Ratchet each release: report N unenforceable + delta. Controls trend up, prose
+  trends down; both growing means prose is being reached too early.
+-->

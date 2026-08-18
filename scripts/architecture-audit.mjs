@@ -1859,7 +1859,10 @@ check("claude-md: every rule in a rules section carries its net", () => {
   const src = read(join(ROOT, "CLAUDE.md"));
   const lines = src.split("\n");
 
-  const RULES_SECTIONS = ["### DO NOT", "### ALWAYS"];
+  // Sections DECLARED to hold rules and nothing else. §4's prose bullets live above
+  // the "### Enforced" heading, so they are out of scope by construction rather than
+  // by classification.
+  const RULES_SECTIONS = ["### Enforced", "## 5 · DOCTRINE THE MACHINE CANNOT HOLD"];
   let inRules = false;
   let unenforceable = 0;
   let tagged = 0;
@@ -1874,12 +1877,13 @@ check("claude-md: every rule in a rules section carries its net", () => {
     for (let j = i + 1; j < lines.length && !/^[-#]/.test(lines[j]); j++) body += "\n" + lines[j];
 
     const hasEnforced = /@enforced\s+\w+:/.test(body);
-    // `\b`, not a punctuation class. The first version demanded a space or dash
-    // after the word and false-positived on `(unchecked, and it is…)` — a rule that
-    // WAS tagged. Third first-run false positive in this format's short life, and
-    // the third caused by guessing at surrounding characters instead of anchoring
-    // on the token itself.
-    const hasUnenforceable = /\(unchecked\b/.test(body);
+    // Anchor on the TOKEN, never on its neighbourhood. An earlier version demanded a
+    // space or dash after the word and false-positived on a rule that WAS tagged,
+    // `(unchecked, and it is…)`. Same cause as three other false positives in this
+    // suite: a truncated extension alternation, an identifier wrapped across a line,
+    // and a marker matched inside prose ABOUT the marker. One class, not four —
+    // tokenize, then match.
+    const hasUnenforceable = /\bUNENFORCEABLE\b/.test(body);
 
     if (hasEnforced) tagged++;
     if (hasUnenforceable) unenforceable++;
@@ -1889,7 +1893,7 @@ check("claude-md: every rule in a rules section carries its net", () => {
         "claude-md",
         `CLAUDE.md:${i + 1}`,
         "a rule in a rules section names neither its enforcement nor why it has none",
-        "add `<!-- @enforced <ns>:<id> -->`, or state `(unchecked — <reason>)` in visible prose",
+        "add `<!-- @enforced <ns>:<id> -->`, or state `UNENFORCEABLE — <reason>` in visible prose",
       );
     }
   }
