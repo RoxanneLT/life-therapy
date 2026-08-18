@@ -1751,6 +1751,80 @@ check("hooks: every incident-class gate has a settings twin", () => {
   }
 });
 
+check("claude-md: every rule in a rules section carries its net", () => {
+  // Defines "rule" by LOCATION, not by content. Prose-parsing to decide what is a
+  // rule was tried and produced a 100% false-positive rate on its first run; the
+  // sections below are declared to hold rules and nothing else, so an untagged
+  // bullet inside one is a forgotten tag by construction — no classification.
+  //
+  // Residue, stated because it cannot be closed: an incident-class rule written
+  // into orientation or a scar narrative stays invisible to this check. Nothing
+  // mechanical catches that. The ratchet pass asking "is this enforceable?" per
+  // paragraph is a HUMAN control, and it is the only one there is.
+  //
+  // Raw source: the markers are HTML comments, and code() strips comments.
+  const src = read(join(ROOT, "CLAUDE.md"));
+  const lines = src.split("\n");
+
+  const RULES_SECTIONS = ["### DO NOT", "### ALWAYS"];
+  let inRules = false;
+  let unenforceable = 0;
+  let tagged = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^#{2,3} /.test(line)) inRules = RULES_SECTIONS.includes(line.trim());
+    if (!inRules || !/^- \*\*/.test(line)) continue;
+
+    // A rule may run onto continuation lines; its marker may sit on any of them.
+    let body = line;
+    for (let j = i + 1; j < lines.length && !/^[-#]/.test(lines[j]); j++) body += "\n" + lines[j];
+
+    const hasEnforced = /@enforced\s+\w+:/.test(body);
+    // `\b`, not a punctuation class. The first version demanded a space or dash
+    // after the word and false-positived on `(unchecked, and it is…)` — a rule that
+    // WAS tagged. Third first-run false positive in this format's short life, and
+    // the third caused by guessing at surrounding characters instead of anchoring
+    // on the token itself.
+    const hasUnenforceable = /\(unchecked\b/.test(body);
+
+    if (hasEnforced) tagged++;
+    if (hasUnenforceable) unenforceable++;
+
+    if (!hasEnforced && !hasUnenforceable) {
+      fail(
+        "claude-md",
+        `CLAUDE.md:${i + 1}`,
+        "a rule in a rules section names neither its enforcement nor why it has none",
+        "add `<!-- @enforced <ns>:<id> -->`, or state `(unchecked — <reason>)` in visible prose",
+      );
+    }
+  }
+
+  // Direction 2: every @enforced tag resolves to a control that exists. A tag that
+  // names nothing is decoration. One was wrong on the format's first day — written
+  // from memory, slugifying near a real check but not to it.
+  const auditSrc = read(join(ROOT, "scripts/architecture-audit.mjs"));
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const known = [...auditSrc.matchAll(/check\("([^"]+)"/g)].map((m) => slug(m[1]));
+
+  for (const m of src.matchAll(/@enforced\s+audit:([^\s>]+)/g)) {
+    if (!known.some((k) => k === m[1] || k.startsWith(m[1]))) {
+      fail(
+        "claude-md",
+        `CLAUDE.md:${src.slice(0, m.index).split("\n").length}`,
+        `@enforced names audit check "${m[1]}", which does not exist`,
+        "derive the id from the check name by slugifying it — do not write it from memory",
+      );
+    }
+  }
+
+  // The binding metric. Total line count moves for scaffolding, scars and
+  // orientation, none of which the ratchet is trying to reduce; this number may
+  // only fall, except when a new un-mechanisable rule arrives with its reason.
+  console.log(`      ↳ ${unenforceable} unenforceable of ${unenforceable + tagged} rules`);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // KNOWN DEFECTS — the ratchet.
 //

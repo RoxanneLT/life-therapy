@@ -74,6 +74,10 @@ git pull            # another machine may have pushed
 npm run secrets     # are .env.local etc. in sync with OneDrive?
 ```
 
+Then skim `docs/LESSONS.md` for open items naming this project. A propagation ledger
+nobody reads where the work happens is a status line with extra distance — and this
+repo has watched five kinds of artefact go stale in one session.
+
 `git status` first is not a formality here. A second machine may have pushed, and
 this is a codebase where a stale local copy silently reintroduces fixed bugs.
 

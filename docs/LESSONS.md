@@ -139,6 +139,71 @@ Applied:  life-therapy → prisma rule verified against bash-gate.js:43, which
                          this check today, since H1–H4 exist only as spec.
 ```
 
+### L-007 · A check that passes without executing its subject
+
+```
+Date:     2026-08-18
+Origin:   pleks (4 instances) · life-therapy (1, while writing this entry)
+Cost:     a suite reporting success on a run where setup had failed
+Class:    unfalsifiable-control
+General:  L-002 covers a check that cannot FAIL. This is its sibling: a check
+          that never RAN and reports success anyway — setup fails, the subject
+          is never invoked, the harness sees no failures and prints green.
+          Absence of failure is not evidence of execution.
+          The agent-facing form is worse, because the agent cannot see the
+          difference. Observed live: a probe written as
+              <command>; echo "completed without a prompt"
+          where the echo runs unconditionally. The command asserted its own
+          conclusion, and the output was indistinguishable from evidence.
+          Probe: break the SUBJECT, watch the check fail. If it still passes,
+          the check was never reaching it.
+          Corollary for agents: never report on a signal you cannot observe.
+          A permission prompt, a hook firing, an approval — these leave the
+          tool result identical either way. Ask the human; do not infer.
+Applied:  life-therapy → open item: twin-interception probes await human
+                         observation (see L-006, B3)
+          pleks        → open item
+```
+
+### L-008 · Read the decision log before calling something drift
+
+```
+Date:     2026-08-18
+Origin:   pleks (twice in one day)
+Cost:     two proposals to "fix" live state that was deliberate
+Class:    false-positive-handling
+General:  A deliberate asymmetry is indistinguishable from an oversight to
+          anyone who arrives after the decision. Without a log, every reviewer
+          re-investigates it, and eventually one of them "fixes" it — which is
+          how a considered decision becomes a bug.
+          This is the allowlist-with-reasons doctrine arriving as an INCIDENT
+          in the project that specified it, which is the finding: a lesson that
+          lives in a spec rather than where the work happens has not been
+          applied. Read the log for intent before proposing to change state.
+Applied:  life-therapy → allowlists carry a reason per entry, and
+                         `allowlists: every exemption is still load-bearing`
+                         fails when one stops suppressing anything (2026-08-18)
+          pleks        → open item
+```
+
+### L-009 · Drift-vs-replay: two artefacts with a common ancestor
+
+```
+Date:     2026-08-18
+Origin:   pleks
+Cost:     a comparison that could not have found what it was looking for
+Class:    unfalsifiable-control
+General:  A check that compares two artefacts derived from a common ancestor
+          cannot detect anything they inherited together. It finds divergence,
+          which is not the same as error, and reports agreement as correctness.
+          Verify against ground truth, not against the sibling.
+Applied:  life-therapy → n/a: no generated-artefact pair here. The nearest
+                         shape is prisma/schema.prisma vs the live database,
+                         and that is already verified against the DB itself
+                         via `prisma db pull`, not against a sibling copy.
+          pleks        → open item
+```
+
 ### L-006 · A hook is a single point of failure, and it degrades silently
 
 ```
