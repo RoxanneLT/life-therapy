@@ -102,7 +102,7 @@ git clone https://github.com/RoxanneLT/life-therapy.git <YOUR-PATH>\life-therapy
 cd <YOUR-PATH>\life-therapy
 npm ci                 # postinstall runs `prisma generate`
 npm run secrets:pull   # brings .env.local, .env, .claude/settings.local.json
-npm run check          # expect green: tsc + eslint + 26 audit checks + 139 tests
+npm run check          # expect green: tsc + eslint + the architecture audit + tests
 ```
 
 ### The secrets channel
@@ -140,26 +140,30 @@ Life-Therapy is an online counselling and life coaching platform built with **Ne
 ## Critical Rules
 
 ### DO NOT
-- **Never hardcode prices, rates, or currency.** Always read from `SiteSetting`, `BillingPreset`, or the booking's stored price/currency.
-- **Never hardcode "ZAR" as the currency.** Always derive from the booking's `priceCurrency`, the student's region, or the PaymentRequest's `currency` field.
-- **Never create parallel systems when you can extend existing ones.** Example: manual invoices reuse the pro-forma → Paystack → tax invoice pipeline, they don't build a second invoicing flow.
-- **Never modify the Prisma schema without being explicitly told to.** If you think a schema change is needed, describe it and wait for confirmation. When one IS approved, it goes through the Supabase Management API — **`prisma migrate` and `prisma db push` do not work on this project** and are blocked. See `.claude/rules/schema-changes.md`.
-- **Never delete data.** Use soft-delete patterns (status flags, `isActive: false`, `archivedAt` timestamps).
-- **Never hand-roll a date.** No `new Date(y, m, d)`, no `.toISOString().slice(0, 10)` on a timestamp, no `format()` for display, no hardcoded `+02:00`. Everything goes through `lib/dates.ts` — see below.
-- **Never push.** Commit, report, and wait. The user walks and visually checks the work before it goes out.
-- **Never send emails or trigger external side effects in a "save" action.** Side effects (email, PDF generation, Paystack link creation) only happen when the user explicitly clicks "Send" or "Create & Send".
-- **Never auto-fill or guess client data.** If a field needs a value and you don't have it, leave it empty or show a placeholder.
-- **Never use `any` types.** Use proper Prisma types or define interfaces.
+> A rule marked **unchecked** has no mechanical net. Nothing will catch a violation, so
+> it is held by attention alone — treat those as the ones to slow down for. The rest are
+> enforced; follow them, and the build disagrees with you if you don't.
+
+- **Never hardcode prices, rates, or currency.** Read from `SiteSetting`, `BillingPreset`, or the booking's stored price/currency — and derive the currency from `priceCurrency`, the student's region, or the PaymentRequest's `currency`. Never assume ZAR. <!-- @enforced audit:money-no-hardcoded-currency-in-business-logic -->
+- **Never create parallel systems when you can extend existing ones.** Example: manual invoices reuse the pro-forma → Paystack → tax invoice pipeline, they don't build a second invoicing flow. *(unchecked — "is this a duplicate system" is a judgement about intent; ask `grounder` before building.)*
+- **Never modify the Prisma schema without being explicitly told to.** If you think a schema change is needed, describe it and wait. An approved one goes through the Supabase Management API. *(the ASKING is unchecked — nothing can tell an approved change from an invented one. The migrate path is blocked: <!-- @enforced hook:bash-gate --> plus <!-- @enforced audit:schema-no-prisma-migrate-invocations-in-scripts -->. See `.claude/rules/schema-changes.md`.)*
+- **Never delete data.** Use soft-delete patterns (status flags, `isActive: false`, `archivedAt` timestamps). *(unchecked — and this one has real reach: `deleteMany` is legitimate in cleanup paths, so no scanner can separate the two. Highest-consequence unchecked rule here.)*
+- **Never hand-roll a date.** No `new Date(y, m, d)`, no `.toISOString().slice(0, 10)` on a timestamp, no `format()` for display, no hardcoded `+02:00`. Everything goes through `lib/dates.ts` — see below. <!-- @enforced audit:date-safety-no-local-midnight-date-constructors --> <!-- @enforced audit:date-safety-no-iso-slicing-a-real-instant --> <!-- @enforced audit:date-safety-no-hardcoded-02-00-offset -->
+- **Never push.** Commit, report, and wait. The user walks and visually checks the work before it goes out. <!-- @enforced hook:bash-gate --> <!-- @enforced settings:ask-git-push -->
+- **Never send emails or trigger external side effects in a "save" action.** Side effects (email, PDF generation, Paystack link creation) only happen when the user explicitly clicks "Send" or "Create & Send". *(unchecked — a send inside a save is well-formed code; only the button's name says it's wrong.)*
+- **Never auto-fill or guess client data.** If a field needs a value and you don't have it, leave it empty or show a placeholder. *(unchecked — a fabricated value is indistinguishable from a real one at the point it is written.)*
+- **Never use `any` types.** Use proper Prisma types or define interfaces. <!-- @enforced eslint:@typescript-eslint/no-explicit-any -->
 
 ### ALWAYS
-- **Read the actual files before writing code.** Don't assume structure — the codebase has specific patterns. Read the component, its imports, and the actions file before making changes.
-- **Use `requireRole("super_admin", "editor")` on every server action** that modifies data. Read-only actions can use `requireRole("super_admin")` alone.
-- **Use `revalidatePath()` after every mutation** to refresh the relevant page data.
-- **Use `toast` from `sonner` for success/error feedback** on client-side actions.
-- **Use confirmation dialogs for destructive actions** (cancel, void, delete, send).
-- **Handle errors with try/catch and user-friendly messages.** Never let raw errors reach the UI.
-- **Use the existing `formatPrice(cents, currency)` utility** for all currency display.
-- **Use `recordAudit()` from `lib/audit.ts`** for billing type changes, booking cancellations, payment recording, invoice voiding, client status changes, and discount changes.
+- **Read the actual files before writing code.** Don't assume structure — the codebase has specific patterns. Read the component, its imports, and the actions file before making changes. *(unchecked, and it is the root of most of what follows: every rule below is easy to satisfy once you have read the file and impossible to satisfy reliably from memory.)*
+- **Use `requireRole("super_admin", "editor")` on every server action** that modifies data. Read-only actions can use `requireRole("super_admin")` alone. <!-- @enforced audit:server-action-auth-every-mutating-action-is-guarded-for-its-route-group --> <!-- @enforced audit:server-action-auth-mutating-api-routes-and-inline-actions-are-guarded -->
+- **Use `revalidatePath()` after every mutation** to refresh the relevant page data. <!-- @enforced audit:mutation-revalidate-every-mutating-action-calls-revalidatepath -->
+- **Return refusals a human will read; never throw them.** Next.js strips a thrown message in production and shows React's digest instead — so the reason, the one thing they needed, is the one thing they can't see. <!-- @enforced audit:server-action-ux-a-refusal-a-human-reads-is-returned-not-thrown -->
+- **Use `toast` from `sonner` for success/error feedback** on client-side actions. *(unchecked — silence reads as success. A cancelled session sat live in Outlook for five days behind a dialog that closed without a word; see `226faa7`.)*
+- **Use confirmation dialogs for destructive actions** (cancel, void, delete, send). *(unchecked — "destructive" is a judgement about consequence, not a code shape.)*
+- **Handle errors with try/catch and user-friendly messages.** Never let raw errors reach the UI. *(unchecked in general; the refusal case above is.)*
+- **Use the existing `formatPrice(cents, currency)` utility** for all currency display. <!-- @enforced audit:money-formatprice-always-passes-a-currency --> <!-- @enforced audit:money-no-local-currency-formatter -->
+- **Use `recordAudit()` from `lib/audit.ts`** for billing type changes, booking cancellations, payment recording, invoice voiding, client status changes, and discount changes. *(unchecked — nothing can tell which mutations are audit-worthy. The list above is the answer; extend it rather than re-deriving it.)*
 
 ---
 
