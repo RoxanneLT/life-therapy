@@ -33,27 +33,52 @@ Method, in order:
      different instant on Vercel (UTC) than on a dev machine (SAST).
    - Success stamped on a failed send; an email/PDF/Paystack side effect fired from a "save".
 
-3. **Composition pass.** Pieces individually correct that disagree with each other. The canonical
+3. **The other sites.** A diff shows you where the fix WAS applied. It cannot show you where it was
+   not, and that is where this codebase's worst bugs have lived — every one of them a defence that
+   existed and reached some of its sites.
+
+   For every guard, escape, validation or stamp in the diff, find every other place that answers the
+   same question, and check each. Grep for the *shape*, not for the file: the sibling is usually a
+   near-copy under a different name.
+
+   Actual instances, all shipped, all found this way rather than by reading the diff:
+   - `replacePlaceholders` exists **five** times in `lib/`. Escaping was added to one. The other four
+     substituted client-supplied names into HTML for weeks afterwards.
+   - Four paths hand out session credits. Only one stamped an expiry, so the expiry window applied to
+     credits granted by hand and never to credits a client had **paid for**.
+   - A durable rate limiter existed; the endpoint that writes client records used the in-memory one,
+     because its `prisma.student.upsert` sat one file away inside a helper.
+   - The reschedule conflict check existed on the series path and not the single-booking path.
+
+   **Verify both ends of any deliberate asymmetry.** Where two paths are treated differently on
+   purpose, a guard pinning one end passes review while the invariant quietly inverts. The
+   partly-paid void bug was exactly this: a UI guard on `status !== "paid"` that could not see a
+   request holding real money at status `pending`.
+
+   A review that confirms the change and never asks "how many other places have this shape" is
+   inadequate, however carefully it read the diff.
+
+4. **Composition pass.** Pieces individually correct that disagree with each other. The canonical
    miss here: the invoice CSV *rows* were fixed to render in SAST while the CSV *filter* still built
    its financial-year boundaries at local midnight — so an invoice dated 1 March exported inside
    FY2026. Check that a gate and the computation it guards anchor on the same value, the same
    timezone resolution, and the same end of the range.
 
-4. **The SAST surface.** Anything touching dates gets checked against `lib/dates.ts`. A calendar date
+5. **The SAST surface.** Anything touching dates gets checked against `lib/dates.ts`. A calendar date
    (`@db.Date`, UTC midnight — `booking.date`, `dateOfBirth`) is a *day*; `createdAt`/`paidAt` are
    *moments*. Slicing a moment's ISO string yields the UTC day, wrong from 22:00 UTC onward. Money
    and legal artefacts (invoice numbers, tax exports) are the high-stakes consumers.
 
-5. **The money surface.** Never a hardcoded price or currency; `formatPrice(cents, currency)` on
+6. **The money surface.** Never a hardcoded price or currency; `formatPrice(cents, currency)` on
    every display; `priceZarCents` is misnamed and holds cents in *whatever* currency
    `priceCurrency` names; VAT is ZAR-only.
 
-6. **The house rules.** `requireRole()` as the first line of every mutating action;
+7. **The house rules.** `requireRole()` as the first line of every mutating action;
    `revalidatePath()` after every mutation; `recordAudit()` on billing/booking/payment state changes;
    no `any`; no data deletion (soft-delete only); email failures `.catch(console.error)` and never
    crash the request.
 
-7. **Test honesty.** Does a test exist that FAILS on the pre-fix code? A test asserting a bug's
+8. **Test honesty.** Does a test exist that FAILS on the pre-fix code? A test asserting a bug's
    current behaviour is worse than no test. Every closed fail-open needs its must-throw fixture —
    `lib/dates.test.ts` is the model.
 

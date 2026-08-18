@@ -394,6 +394,23 @@ reaching production, so they get a scanner. **Each check is named after the bug 
 every one exists because we shipped that bug.** When a new class gets through, add a check — the
 suite grows a scar for every wound.
 
+**Where does a rule belong?** Ask what it costs the day the model ignores it once.
+
+| Cost of ignoring it once | Where it lives |
+|---|---|
+| Annoyance — a style slip, a re-run | `CLAUDE.md`. Prose is advisory, and that is fine here |
+| **Incident** — wrong money, a client emailed, data unrecoverable | A **check**, or a hook |
+
+Prose is read attentively on day one and skimmed by the twentieth session — and it is not read at
+all by a subagent that was handed a narrow task. Anything incident-class has to be mechanical, or
+it is being enforced by whoever happens to be paying attention.
+
+The two layers catch different things, so use both. A **hook** fires at write time and refuses;
+a **check** fires at `npm run check` and can see the whole tree at once. On 2026-08-18 a scripted
+edit silently failed to apply: the function signature changed and its guard did not. `tsc`, ESLint
+and 173 tests all passed — a throw is perfectly legal code — and the *audit* caught it on the next
+run by naming the exact string still being thrown. A hook could not have seen it.
+
 Two rules keep it trustworthy:
 
 - **Classify per site, never sweep.** Half of every first run is false positives. A scanner that
@@ -450,6 +467,15 @@ PR reads) pre-allowed so routine work doesn't prompt. The gates that matter:
 > `MCP error -32600: You do not have permission`. Query production through the **Management API over
 > REST** (`SUPABASE_ACCESS_TOKEN` from `.env.local`); see `.claude/rules/schema-changes.md`. This
 > applies to reads as much as to DDL.
+
+`ddl-gate.js` is the second hook, on `Write|Edit`. It asks before a FILE is written that applies
+DDL to production through the Management API. `bash-gate` already asks when that URL appears in a
+*command* — but the documented way to run anything needing real credentials is
+`npx tsx --env-file=.env.local <script>`, which puts the URL in the file and leaves the command
+line indistinguishable from any other script run. Five schema changes reached production that way
+on 2026-08-18 without the gate firing once. Asking at the point the statement is *written* is also
+the point a human can still read it. It asks, never denies — this is the working path for schema
+changes, it just must not be silent. A `SELECT` through the same endpoint stays quiet.
 
 The `bash-gate.js` PreToolUse hook exists because allow-rules can't cover commands containing `$()`
 or heredocs — Claude Code decomposes those and prompts anyway, which stalls a long session on a
