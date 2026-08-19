@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { saFormat } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -223,7 +224,7 @@ export function UsersPanel({ users, embedded, headerTitle, headerDescription }: 
                         </Badge>
                       </TableCell>
                       <TableCell className="px-4 text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleDateString()}
+                        {saFormat(new Date(user.createdAt), "d MMM yyyy")}
                       </TableCell>
                       <TableCell className="px-4">
                         <Button variant="ghost" size="icon" asChild aria-label="Edit user">

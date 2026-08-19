@@ -86,6 +86,28 @@ function code(src) {
     .replace(/'(?:\\.|[^'\\])*'/g, "''");
 }
 
+/**
+ * Comments gone, STRING LITERALS KEPT. The other half of `code()`.
+ *
+ * Most checks want one of two things and there was only ever one helper. `code()` removes
+ * comments AND literals, which is right when prose must not read as a violation and wrong
+ * whenever the thing being hunted lives in quotes — five checks were written against it
+ * while hunting a literal and silently could not fire.
+ *
+ * A sixth found the opposite failure: `code()`'s literal-blanking is regex-based, so an
+ * apostrophe or quote it pairs wrongly swallows everything to the next match. On one file
+ * it deleted the entire tail, and a check scanning it reported clean on a planted
+ * violation. That is not a bug worth chasing in a heuristic stripper — it is a reason to
+ * stop asking it for something it was never for.
+ *
+ * Use this when the target is a literal or a member access and prose must still be
+ * excluded; use `code()` only when literals genuinely must not match.
+ */
+function codeKeepingLiterals(src) {
+  const keepLines = (m) => "\n".repeat((m.match(/\n/g) || []).length);
+  return src.replace(/\/\*[\s\S]*?\*\//g, keepLines).replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
 /** A check name normalised to a control id. Shared, so the two call sites cannot drift. */
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -134,6 +156,16 @@ if (process.argv.includes("--selftest")) {
   t("a marker-only comment is a marker", isMarker(" @enforced audit:foo "), true);
   t("two markers in one comment", isMarker(" @enforced audit:foo @enforced hook:bar "), true);
   t("prose ABOUT the marker is not a marker", isMarker(" @enforced <ns:control-id> → an HTML comment"), false);
+
+  // The SIXTH code() incident, and the one that is not "it blanked my literal". Its
+  // literal-stripping is regex-based, so a quote it pairs wrongly swallows everything to
+  // the next match — on one real file it deleted the whole tail, and a check scanning it
+  // reported CLEAN on a planted violation. codeKeepingLiterals() is the safe reach when
+  // the target is a literal or a member access.
+  const swallowed = `const re = /^[=+@]/;\nconst s = "a";\nd.toLocaleDateString("en-ZA");`;
+  t("codeKeepingLiterals keeps a member access", /toLocaleDateString/.test(codeKeepingLiterals(swallowed)), true);
+  t("codeKeepingLiterals still strips comments", /secret/.test(codeKeepingLiterals("// secret\nconst a = 1;")), false);
+  t("...and keeps the literal a check might hunt", /"en-ZA"/.test(codeKeepingLiterals(swallowed)), true);
 
   console.log(failed ? `\n❌ audit selftest: ${failed} wrong` : `\n✅ audit selftest — the helpers still behave as every check assumes`);
   process.exit(failed ? 1 : 0);
@@ -2280,8 +2312,6 @@ const DUPLICATE_BODIES_KNOWN = [
   // are disproportionately date/time, so these belong in lib/dates.ts.
   "app/(portal)/portal/(dashboard)/book/actions.ts → formatMinutesToTime | app/(public)/book/actions.ts → formatMinutesToTime | lib/availability.ts → formatTime",
   "app/(admin)/admin/(dashboard)/bookings/day-view.tsx → timeToMinutes | app/(admin)/admin/(dashboard)/bookings/week-view.tsx → timeToMinutes",
-  // A date formatter in two places — same class, same reason to collapse.
-  "app/(admin)/admin/(dashboard)/invoices/page.tsx → formatDate | app/(admin)/admin/(dashboard)/reports/actions.ts → formatDate",
   // UI handlers. Real duplication, low blast radius; collapsing them is tidying, not
   // risk reduction, so they sit at the back of the queue.
   "components/admin/admin-header.tsx → handleSignOut | components/portal/portal-header.tsx → handleSignOut",
@@ -2410,6 +2440,72 @@ check("mechanisable: every unenforceable rule has a queue entry, and vice versa"
     fail("mechanisable", `CLAUDE.md:${i + 1}`,
       "an unenforceable rule with no build-queue entry",
       "add an entry to docs/MECHANISABLE.md and point at it with `→ M-0N` — a sketch, or the measurement saying why none is worth building");
+  }
+});
+
+/**
+ * `toLocale*` sites that are genuinely safe, each classified against the value it
+ * formats — NOT baselined from a first run. Three of the four were resolved by opening
+ * the file and asking what the date IS, which is the difference between a debt record
+ * and a record of the author's ignorance (`dev-standards/LESSONS.md` L-27).
+ */
+const LOCALE_FORMAT_ALLOWED = [
+  {
+    at: "app/(admin)/admin/(dashboard)/bookings/series-timeline.tsx",
+    why: "formats `booking.date`, a @db.Date stored at UTC midnight. Midnight UTC renders as the same calendar day in UTC and in SAST (UTC+2), so the runtime zone cannot shift it here. Would break in a negative-offset zone; Vercel is UTC.",
+  },
+  {
+    at: "app/(admin)/admin/(dashboard)/page.tsx",
+    why: "two sites: a `{month: 'short'}` label on `now`, and `nextSession.date` which is a @db.Date. The month label is wrong only in the last two hours of a month, on a dashboard heading — noted, not worth the churn.",
+  },
+  {
+    at: "app/(admin)/admin/(dashboard)/invoices/page.tsx",
+    why: "formats `new Date('YYYY-MM-01')` for a billing-month label. Month and year only, from a constructed first-of-month — no instant involved.",
+  },
+  {
+    at: "components/ui/calendar.tsx",
+    why: "vendored shadcn. Writes a `data-day` ATTRIBUTE, not display text, and the file is regenerated by `npx shadcn add`.",
+  },
+];
+
+check("date-safety: display formatting resolves in SAST", () => {
+  // The date-safety family caught `.toISOString().slice(0,10)`, `format()`,
+  // `new Date(y,m,d)` and a literal `+02:00` — and not this spelling, which is how four
+  // real instants were rendered in the SERVER's zone. `toLocaleDateString` without a
+  // `timeZone` option formats in the runtime's zone, UTC on Vercel, so an invoice created
+  // at 00:30 SAST displayed and EXPORTED under the previous day. Every night, 22:00 to
+  // midnight — the turnover this project's oldest scar is about.
+  //
+  // Found by classifying a duplication finding rather than accepting its count: two
+  // copies of `formatDate` were flagged as debt, and reading them showed the duplication
+  // was the smaller half of the problem.
+  //
+  // RAW source: `toLocaleDateString` is a member access, not a literal, but the allowlist
+  // reasons quote it in prose — and a comment explaining the rule must not read as a
+  // violation of it, so comments are stripped for the match.
+  for (const file of allSource().filter((f) => /\.tsx?$/.test(f))) {
+    if (rel(file) === "lib/dates.ts") continue; // the SSOT, which passes an explicit zone
+    const allowed = LOCALE_FORMAT_ALLOWED.find((a) => a.at === rel(file));
+    const src = codeKeepingLiterals(read(file));
+    for (const m of src.matchAll(/\.toLocale(?:Date|Time)String\s*\(/g)) {
+      if (allowed) continue;
+      fail(
+        "date-safety",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        "formats a date in the runtime's timezone — UTC on Vercel, not SAST",
+        "use saFormat(date, pattern) from lib/dates.ts — or add a LOCALE_FORMAT_ALLOWED entry saying which value it formats and why the zone cannot shift it",
+      );
+    }
+  }
+  // An exemption that stops exempting is a stale decision covering whatever is written
+  // into that file next.
+  for (const a of LOCALE_FORMAT_ALLOWED) {
+    const abs = join(ROOT, a.at);
+    if (!existsSync(abs)) {
+      fail("date-safety", a.at, "LOCALE_FORMAT_ALLOWED names a file that no longer exists", "remove the entry");
+    } else if (!/\.toLocale(?:Date|Time)String\s*\(/.test(codeKeepingLiterals(read(abs)))) {
+      fail("date-safety", a.at, "is exempted from the locale-formatting rule but no longer formats one", "remove the entry");
+    }
   }
 });
 

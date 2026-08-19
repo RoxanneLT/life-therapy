@@ -1,4 +1,5 @@
 import { sendEmail } from "@/lib/email";
+import { saFormat } from "@/lib/dates";
 import { getSiteSettings } from "@/lib/settings";
 import { envOr } from "@/lib/env";
 
@@ -80,7 +81,7 @@ export async function sendCronDigest(
       to: adminEmail,
       subject: `[Life-Therapy] daily cron — ${issues.length} issue${issues.length === 1 ? "" : "s"}`,
       html: `
-        <h3>Daily Cron Report — ${new Date(ranAt).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}</h3>
+        <h3>Daily Cron Report — ${saFormat(new Date(ranAt), "d MMMM yyyy")}</h3>
         <p>${issues.length} issue${issues.length === 1 ? "" : "s"} detected:</p>
         <pre style="background: #fef2f2; padding: 12px; border-radius: 6px; font-size: 13px; color: #991b1b;">${issueLines}</pre>
         <h4>Full run summary:</h4>

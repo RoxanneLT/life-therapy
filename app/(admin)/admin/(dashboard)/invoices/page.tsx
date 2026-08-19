@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { saFormat } from "@/lib/dates";
 import { BookingStatus } from "@/lib/generated/prisma/client";
 import { requireRole } from "@/lib/auth";
 import {
@@ -58,13 +59,15 @@ const VALID_SORT_FIELDS = new Set<SortField>([
   "invoiceNumber", "createdAt", "billingName", "type", "totalCents", "status",
 ]);
 
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+/**
+ * Display dates resolve in SAST, never the server's zone.
+ *
+ * `toLocaleDateString` without a `timeZone` formats in the RUNTIME's zone — UTC on
+ * Vercel — so an invoice created at 00:30 SAST rendered as the previous day, every
+ * night between 22:00 and midnight. The date-safety checks did not catch this spelling;
+ * it was found by classifying a duplication finding instead of accepting its count.
+ */
+const formatDate = (date: Date) => saFormat(new Date(date), "d MMM yyyy");
 
 export default async function InvoicesPage({
   searchParams,

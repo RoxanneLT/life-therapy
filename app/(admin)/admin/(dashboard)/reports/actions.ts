@@ -3,15 +3,15 @@
 import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv";
 import { requireRole } from "@/lib/auth";
-import { saToday } from "@/lib/dates";
+import { saFormat, saToday } from "@/lib/dates";
 
-function formatDate(date: Date): string {
-  return new Date(date).toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+/**
+ * SAST, not the server's zone — these rows are a financial register. `toLocaleDateString`
+ * without a `timeZone` formats in the RUNTIME's zone (UTC on Vercel), so an invoice
+ * created at 00:30 SAST exported under the previous day, and into the previous month on
+ * the first of a month.
+ */
+const formatDate = (date: Date) => saFormat(new Date(date), "d MMM yyyy");
 
 function formatCurrency(cents: number): string {
   return (cents / 100).toFixed(2);
