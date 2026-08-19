@@ -1,5 +1,27 @@
 # LESSONS — portable findings
 
+> **The cross-project ledger now lives at `C:\dev\dev-standards/LESSONS.md`** (its own git repo,
+> per SPEC §7, with `check-lessons.mjs` enforcing the two `Applied:` states). This file predates it
+> and now duplicates part of it.
+>
+> **That duplication is debt, not redundancy** — two ledgers drift, and the drift is silent because
+> neither reads the other. This file should shrink to entries that are only true of this codebase,
+> plus a pointer. Not done yet; recorded here rather than left to be rediscovered.
+>
+> **Open items from the shared ledger naming this project** — surveyed 2026-08-19. Both are real
+> gaps, deliberately *not* recorded there as a ledger state, because an unapplied lesson is a queue
+> item with an owner and "unapplied" is not one of the two permitted values:
+>
+> - **L-04 · a marker the parser cannot read is worse than a missing marker.** The `claude-md`
+>   check resolves `@enforced audit:<id>` against real checks, but a tag in any other namespace
+>   (`eslint:`, `hook:`, `settings:`) is only tested for *shape*. A malformed `eslint:` id would
+>   pass the "is it tagged" test, resolve to nothing, and be counted as enforced. Five of the
+>   eighteen tags here are in that unverified position.
+> - **L-10 · an enumeration test that can enumerate zero passes while checking nothing.** No check
+>   in `scripts/architecture-audit.mjs` asserts a floor on the files it found. If `walk()` returned
+>   an empty array — a moved directory, a changed glob — all 43 checks would pass in silence and
+>   report a reassuring green. The fix is a realistic floor, never `> 0`.
+
 Cross-project lessons. An entry qualifies only if it is **stack-independent**: the
 general form must hold for a repo that shares none of this one's tooling.
 

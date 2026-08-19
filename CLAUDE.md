@@ -8,7 +8,10 @@
   never a reason to relocate prose. Aperture decides location; the count decides
   urgency.
   MARKERS (§4 "Enforced" and §5 may contain ONLY marker-carrying bullets):
-    @enforced <ns:control-id>        → HTML comment, invisible, free (E2)
+    @enforced <ns:control-id>        → inline HTML comment. Hidden from RENDERED
+        markdown, but it DOES reach the model — see E2. Not free. It is metadata
+        the model never has to act on, which is why it may be quiet; it is not
+        weightless, and the ratio metric must not be sold as if it were.
     UNENFORCEABLE + reason           → VISIBLE prose; attention is the only control
   EXPERIMENTS — all four answered in THIS harness, 2026-08-18. Re-run in a new one.
     E1  paths: frontmatter defers loading        — YES. Cross-session A/B, one
@@ -18,9 +21,14 @@
         injects the rule; Write to a new matching path does not. RUNG 4 IS NEVER
         A CONTROL — it reaches the session that reads before it writes and misses
         the one that doesn't.
-    E2  HTML comments stripped                    — YES for a comment alone on its
-        line (canary absent, surrounding lines intact). Inline @enforced tags at
-        the END of a prose line DO survive. Never reformat one onto its own line.
+    E2  HTML comments stripped                    — ONLY a comment block standing
+        alone. Canary absent, surrounding lines intact; this whole header block is
+        absent from the injected copy too. But an inline tag at the END of a prose
+        line SURVIVES — verified 2026-08-19 by inspecting the injected copy, which
+        carries all 18 `<!-- @enforced ... -->` tags and none of this block.
+        Two consequences, opposite in sign: never reformat an @enforced tag onto
+        its own line (it would vanish while still reading as present in the file),
+        and never call the tags free (they cost context; they are merely quiet).
     E3  CLAUDE.md reaches subagents                — YES, positive-with-
         transcription. An earlier probe reported the opposite and was wrong; see
         docs/LESSONS.md L-012. They receive it and skim it.
