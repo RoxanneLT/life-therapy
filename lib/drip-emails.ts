@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 import { appBaseUrl } from "@/lib/region";
 import { assessEngagement } from "@/lib/engagement";
+import { stepIsDue } from "@/lib/send-pacing";
 
 const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
@@ -84,6 +85,8 @@ interface DripCandidate {
   completedAt: Date | null;
   clientStatus: string;
   hasConsultationBooking: boolean;
+  /** When this client last received a drip step — the second pacing clock. */
+  lastSentAt: Date | null;
 }
 
 interface DripResult {
@@ -166,6 +169,7 @@ export async function processDripEmails(): Promise<DripResult> {
       completedAt: progress?.completedAt ?? null,
       clientStatus: student.clientStatus,
       hasConsultationBooking: emailsWithConsultation.has(student.email.toLowerCase()),
+      lastSentAt: progress?.lastSentAt ?? null,
     });
   }
 
@@ -248,8 +252,28 @@ async function processSingleClient(
     return "skipped";
   }
 
-  // Check if it's time to send (daysSinceSignup >= dayOffset)
-  if (daysSinceSignup < dripEmail.dayOffset) {
+  // BOTH clocks. `daysSinceSignup >= dayOffset` alone paces a client who has kept up, and
+  // says nothing about one who is behind: for a client signed up 156 days ago and sitting
+  // at step 0, every step is already due and the cron's frequency becomes the cadence.
+  // The campaign processor met exactly that on 2026-08-19 — 68 emails to 28 clients in a
+  // day, because its cron is two-hourly. This one runs daily, so the same defect delivers
+  // one a day for weeks instead of three in an afternoon. Same rule, same helper.
+  const prevDrip =
+    currentStep > 0
+      ? await prisma.dripEmail.findUnique({
+          where: { type_step: { type: currentPhase, step: currentStep - 1 } },
+          select: { dayOffset: true },
+        })
+      : null;
+
+  const pacing = stepIsDue({
+    daysSinceStart: daysSinceSignup,
+    dayOffset: dripEmail.dayOffset,
+    prevDayOffset: prevDrip?.dayOffset ?? null,
+    lastSentAt: candidate.lastSentAt,
+    now: new Date(),
+  });
+  if (!pacing.due) {
     return "skipped";
   }
 

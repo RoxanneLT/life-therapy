@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { assessEngagement, mayReceiveMarketing } from "@/lib/engagement";
+import { stepIsDue } from "@/lib/send-pacing";
 import { escapeTemplateVariables, replacePlaceholders } from "@/lib/email-render";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
@@ -302,8 +303,28 @@ async function processSingleCampaignContact(
     return "skipped";
   }
 
-  // Check if day offset has been reached
-  if (daysSinceActivation < campaignEmail.dayOffset) {
+  // BOTH clocks, not just the schedule. `daysSinceActivation >= dayOffset` alone is
+  // correct for a recently-activated campaign and catastrophic for an old one: for a
+  // campaign activated 156 days ago every step is already past its offset, so the cron's
+  // own frequency became the send cadence — 68 emails to 28 clients in one day, three
+  // each for fourteen of them, because this processor runs two-hourly (§6, 2026-08-19).
+  //
+  // The second clock is this contact's own `lastSentAt`, which was written on every send
+  // here and never read. Spacing comes from the campaign's own configuration, floored at
+  // a day, so cron frequency cannot change what a client experiences.
+  const prevOffset =
+    progress.currentStep > 0
+      ? campaign.emails.find((e) => e.step === progress.currentStep - 1)?.dayOffset ?? null
+      : null;
+
+  const pacing = stepIsDue({
+    daysSinceStart: daysSinceActivation,
+    dayOffset: campaignEmail.dayOffset,
+    prevDayOffset: prevOffset,
+    lastSentAt: progress.lastSentAt,
+    now: new Date(),
+  });
+  if (!pacing.due) {
     return "skipped";
   }
 

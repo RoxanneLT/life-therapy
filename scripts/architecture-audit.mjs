@@ -1301,6 +1301,43 @@ check("email-safety: the couples partner invite goes through its one helper", ()
   }
 });
 
+check("pacing: a sequenced sender consults the contact's own clock, not just the schedule", () => {
+  // The 2026-08-19 burst. A multi-step campaign asked one question — has the SCHEDULE
+  // reached this step, `daysSinceActivation >= dayOffset` — which is right for a campaign
+  // activated recently and useless for one activated 156 days ago, where every step is
+  // already past its offset. With no second clock the cron's own frequency became the send
+  // cadence: `campaign_steps` runs two-hourly, so 68 emails reached 28 clients in one day
+  // and fourteen of them got three.
+  //
+  // `lastSentAt` was written on every send in both processors and read by neither. The
+  // guard was one field lookup away the whole time, which is why this check exists rather
+  // than a note asking people to remember.
+  //
+  // Both senders are named because they had the SAME defect at different speeds — drip's
+  // cron is daily, so it delivers one a day for weeks instead of three in an afternoon.
+  // Fixing one and not the other is the shape this codebase keeps meeting.
+  const SEQUENCED_SENDERS = ["lib/campaign-process.ts", "lib/drip-emails.ts"];
+
+  for (const rel_ of SEQUENCED_SENDERS) {
+    const path = join(ROOT, rel_);
+    if (!existsSync(path)) {
+      fail("pacing", rel_, "a sequenced sender named by this check is missing", "re-point the check or remove the entry — a named file that is gone means the check is asserting nothing");
+      continue;
+    }
+    // Comments stripped, literals kept: both files explain the incident at length and name
+    // the helper while doing so, so raw text would match the prose and pass with the guard
+    // deleted. That trap has been met four times in this file.
+    const src = codeKeepingLiterals(read(path));
+    if (/\bstepIsDue\s*\(/.test(src)) continue;
+    fail(
+      "pacing",
+      rel_,
+      "advances a multi-step sequence without consulting stepIsDue()",
+      "gate the send on stepIsDue() from lib/send-pacing.ts — the schedule alone cannot pace a sequence whose steps are all overdue, and cron frequency then decides what a client receives",
+    );
+  }
+});
+
 check("whatsapp: the send path validates the number before it builds a request", () => {
   // Escalated from a crawler finding on 2026-08-19 — the first one it produced, and it
   // flagged itself as mechanisable, which it was.
