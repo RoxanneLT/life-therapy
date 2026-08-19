@@ -76,8 +76,26 @@ export interface ClassifiedOrphan {
   clientName: string;
   date: string;
   start: string;
-  /** False when the guard refuses deletion — the client still has a missing booking,
-   *  so this is a suspected wrong-day twin rather than a stale duplicate. */
+  /**
+   * False when the guard refuses deletion — the client still has a missing booking,
+   * so this is a suspected wrong-day twin rather than a stale duplicate.
+   *
+   * The rule, and why it is shaped this way: a ghost is safe to delete ONLY if its
+   * client has no booking left unmatched this run. If the same client still has a
+   * missing booking, the ghost is almost certainly the wrong-day twin of that
+   * now-eventless booking (Mia 2026-07-09, Chanene 2026-07-21) and deleting it is the
+   * silent data loss. If every one of that client's bookings matched, the ghost is a
+   * true duplicate — the booking is already satisfied by another event, the harmless
+   * 2026-06-24 cleanup — and stays deletable.
+   *
+   * Deliberately NOT "never delete a recurring occurrence": that blanket rule would
+   * have blocked June's correct cleanup and let stale duplicates accumulate for ever.
+   *
+   * This narrative moved here on 2026-08-19 from an extracted `isGhostDeletable()`
+   * helper that nothing ever called. Two expressions of one rule, one of them dead, is
+   * worse than one: a correction applied to the unused copy changes nothing while
+   * looking like a fix.
+   */
   deletable: boolean;
   proposal: ProposedAction;
   /** Why the guard refused, when it did. */
@@ -138,8 +156,16 @@ export function parseClientName(subject: string): string {
     .trim();
 }
 
-/** Match key: a booking and an event are "the same" if day, start time and client agree. */
-export function matchKey(date: string, start: string, clientName: string): string {
+/**
+ * Match key: a booking and an event are "the same" if day, start time and client agree.
+ *
+ * Internal, not exported: it is used only inside this module. The crawler flagged the
+ * export rather than the function, and those are different findings — an unused export
+ * is surface nobody needs, an unused function is code nobody runs. Deleting it outright
+ * on the strength of "unused export" broke the build, which is the cheapest possible way
+ * to learn the distinction.
+ */
+function matchKey(date: string, start: string, clientName: string): string {
   return `${date}|${start}|${normName(clientName)}`;
 }
 
@@ -150,25 +176,21 @@ export function matchKey(date: string, start: string, clientName: string): strin
  * expanded occurrence whose master is what the booking points at (a recurring series).
  * Matching only on `id` would be wrong for every recurring occurrence, since
  * calendarView gives occurrences their own ids.
+ *
+ * Internal, for the same reason as `matchKey` above.
  */
-export function eventBelongsToBooking(ev: ClassifyEvent, booking: ClassifyBooking): boolean {
+function eventBelongsToBooking(ev: ClassifyEvent, booking: ClassifyBooking): boolean {
   if (!booking.graphEventId) return false;
   return ev.id === booking.graphEventId || ev.seriesMasterId === booking.graphEventId;
 }
 
 /**
  * A ghost is safe to delete ONLY if its client has NO booking left unmatched this run.
- *
- * If the same client still has a missing booking, the ghost is almost certainly the
- * wrong-day twin of that now-eventless booking (Mia 2026-07-09, Chanene 2026-07-21) —
- * deleting it is the silent data loss. If every one of the client's bookings matched,
- * the ghost is a true duplicate (the booking is already satisfied by another event —
- * the harmless 2026-06-24 cleanup) and stays deletable.
- *
- * This is deliberately NOT "never delete a recurring occurrence": that blanket rule
- * would have blocked June's correct cleanup and let stale duplicates accumulate forever.
+ * The reasoning, and the incidents behind it, sit on `ClassifiedOrphan.deletable` above,
+ * where a reader meets the rule at the field it governs. Internal, like its two
+ * neighbours.
  */
-export function isGhostDeletable(
+function isGhostDeletable(
   ghostClientNorm: string,
   clientsWithMissingBookings: Set<string>,
 ): boolean {
