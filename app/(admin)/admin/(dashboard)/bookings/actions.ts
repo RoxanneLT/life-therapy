@@ -20,7 +20,8 @@ import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 import { escapeHtml } from "@/lib/utils";
-import { emailRefusal, isDeliverableEmail } from "@/lib/email-address";
+import { emailRefusal } from "@/lib/email-address";
+import { resolvePartnerEmail, sendCouplesPartnerInvite } from "@/lib/couples-invite";
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { parseLineItems, readLineItems } from "@/lib/billing-types";
 
@@ -919,17 +920,10 @@ export async function adminCreateBookingAction(
    * two couples sessions on record, one carried a malformed address and the other
    * carried NULL — and a NULL sends nothing at all, silently, which is the worse half.
    */
-  let partnerTo = data.couplesPartnerEmail?.trim() || null;
-  if (data.sessionType === "couples" && !partnerTo) {
-    const link = await prisma.clientRelationship.findFirst({
-      where: { studentId: student.id, relationshipType: "partner" },
-      select: { relatedStudent: { select: { email: true } } },
-    });
-    const linked = link?.relatedStudent?.email ?? null;
-    // Only if it can actually receive mail — a fallback that inherits a bad address is
-    // worse than none, because it reads as deliberate.
-    if (isDeliverableEmail(linked)) partnerTo = linked;
-  }
+  const partnerTo =
+    data.sessionType === "couples"
+      ? await resolvePartnerEmail(student.id, data.couplesPartnerEmail)
+      : null;
 
   // Create calendar event (in-person: block calendar but no Teams link)
   const calResult = await createCalendarEvent({
@@ -1071,34 +1065,18 @@ export async function adminCreateBookingAction(
     // whether the second person hears about their session depended on which
     // screen it was booked from.
     if (data.sessionType === "couples" && partnerTo) {
-      const partnerEmail = await renderEmail(
-        "couples_partner_invite",
-        {
-          partnerName: data.couplesPartnerName || "there",
-          clientName,
-          sessionType: config.label,
-          date: dateStr,
-          time: timeStr,
-          teamsSection,
-        },
-        baseUrl,
-      );
-      // The RESULT IS READ. sendEmail returns { success, error } and never throws, so
-      // discarding it drops the only signal there is. A partner invite refused by the
-      // provider — `seanteres9@gmailcom`, no dot — sat in email_logs for a week reading
-      // to everyone as "he never gets our emails", because nothing surfaced it.
-      const sent = await sendEmail({
-        to: partnerTo,
-        ...partnerEmail,
-        templateKey: "couples_partner_invite",
+      partnerWarning = await sendCouplesPartnerInvite({
+        bookingId: booking.id,
         studentId: student.id,
-        metadata: { bookingId: booking.id, partnerInvite: true },
-      });
-      if (!sent.success) {
-        partnerWarning =
-          `The session is booked, but the invite to ${data.couplesPartnerName || "the partner"} ` +
-          `(${partnerTo}) was not delivered: ${sent.error ?? "unknown error"}. They have not been told about it.`;
-      }
+        partnerTo,
+        partnerName: data.couplesPartnerName ?? null,
+        clientName,
+        sessionLabel: config.label,
+        dateStr,
+        timeStr,
+        teamsSection,
+        baseUrl,
+      }) ?? undefined;
     }
 
     await prisma.booking.update({
@@ -1145,6 +1123,17 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
   });
   if (!student) throw new Error("Client not found");
+
+  // Same gates as the single-booking path: refuse an address the provider will reject
+  // before anything is created, and resolve the one actually used.
+  const partnerRefusal = emailRefusal(data.couplesPartnerEmail, "Partner email");
+  if (partnerRefusal) throw new Error(partnerRefusal);
+
+  const partnerTo =
+    data.sessionType === "couples"
+      ? await resolvePartnerEmail(student.id, data.couplesPartnerEmail)
+      : null;
+  let partnerWarning: string | undefined;
 
   const config = getSessionTypeConfig(data.sessionType);
   const isPostpaid = student.billingType === "postpaid";
@@ -1254,7 +1243,8 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         status: "confirmed",
         adminNotes: data.adminNotes || null,
         couplesPartnerName: data.couplesPartnerName || null,
-        couplesPartnerEmail: data.couplesPartnerEmail || null,
+        // The RESOLVED address, so the row records who was written to.
+        couplesPartnerEmail: partnerTo,
         graphEventId: seriesEventId,
         teamsMeetingUrl: seriesTeamsMeetingUrl,
         confirmationToken,
@@ -1401,6 +1391,34 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         studentId: student.id,
         metadata: { recurringSeriesId },
       });
+
+      // The partner's invite. This path sent NOTHING to the partner — not a
+      // malformed address, not a failed send, simply no attempt, so a couples
+      // series left the second person uninvited to every session in it. The
+      // single-booking path had the same gap and was fixed on 2026-08-18; this
+      // is the sibling that answers the same question and did not get the fix
+      // (`docs/LESSONS.md` L-21).
+      //
+      // They get the date list and the Teams link — they are attending these
+      // sessions. No portal link, no account, nothing about billing: none of
+      // that is theirs.
+      if (data.sessionType === "couples" && partnerTo) {
+        partnerWarning =
+          (await sendCouplesPartnerInvite({
+            bookingId: recurringSeriesId,
+            studentId: student.id,
+            partnerTo,
+            partnerName: data.couplesPartnerName ?? null,
+            clientName,
+            sessionLabel: `${config.label} — ${createdDates.length} sessions`,
+            dateStr: `<ul style="padding-left: 20px; margin: 12px 0;">${dateListHtml}</ul>`,
+            timeStr: `${data.startTime} – ${data.endTime} (SAST)`,
+            teamsSection: seriesTeamsMeetingUrl
+              ? `<p style="margin: 16px 0;"><a href="${seriesTeamsMeetingUrl}">Join the session</a></p>`
+              : "",
+            baseUrl,
+          })) ?? undefined;
+      }
     } catch {
       // Email failure shouldn't block series creation
     }
@@ -1412,6 +1430,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     skipped: skippedDates,
     creditsUsed,
     seriesId: recurringSeriesId,
+    partnerWarning,
     calendarWarning: availableDates.length > 0 && !seriesEventId
       ? "Recurring calendar event could not be created — please add it manually in Outlook."
       : calendarWarning,
@@ -1865,6 +1884,14 @@ interface AdminCreateHistoricalData {
 
 export async function adminCreateHistoricalBookingAction(data: AdminCreateHistoricalData) {
   await requireRole("super_admin", "editor");
+
+  // Validated like the other two, but DELIBERATELY NOT INVITED. This records a session
+  // that already happened; emailing the partner an invitation to a past appointment
+  // would be worse than silence. The address is still checked, because the row is read
+  // later — by billing, by reporting, and by whoever books the next session from it —
+  // and a malformed value stored here propagates quietly.
+  const partnerRefusal = emailRefusal(data.couplesPartnerEmail, "Partner email");
+  if (partnerRefusal) throw new Error(partnerRefusal);
 
   const student = await prisma.student.findUnique({
     where: { id: data.studentId },

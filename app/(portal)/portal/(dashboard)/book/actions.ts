@@ -8,6 +8,7 @@ import { getAvailableSlots } from "@/lib/availability";
 import { createCalendarEvent, cancelCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
+import { resolvePartnerEmail, sendCouplesPartnerInvite } from "@/lib/couples-invite";
 import { formatPrice, escapeHtml } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Currency } from "@/lib/region";
@@ -142,37 +143,52 @@ async function sendPortalBookingEmails(opts: {
   // They get the Teams link deliberately: they are attending the same session, and
   // an invite without the way in is not an invite. It carries no portal link, no
   // account and nothing about billing — none of that is theirs.
-  const partnerEmail = booking.couplesPartnerEmail;
-  const partnerInvite =
-    partnerEmail && booking.sessionType === "couples"
-      ? await renderEmail(
-          "couples_partner_invite",
-          {
-            partnerName: booking.couplesPartnerName || "there",
-            clientName,
-            sessionType: sessionLabel,
-            date: dateStr,
-            time: timeStr,
-            teamsSection,
-          },
-          baseUrl,
-        )
+  // Resolved, not taken raw: a client who leaves the partner field blank still has a
+  // linked partner on their account, and NULL sends nothing at all — silently, which
+  // is the worse half of the failure this path shares with the admin one.
+  const partnerEmail =
+    booking.sessionType === "couples"
+      ? await resolvePartnerEmail(booking.studentId ?? "", booking.couplesPartnerEmail)
       : null;
+
+  // The partner invite is sent through the shared helper, which READS the send result.
+  //
+  // It used to sit inside the Promise.allSettled below, which discards the outcome
+  // twice over: sendEmail returns { success, error } rather than throwing, and
+  // "settled" is true whether the provider accepted the message or refused it. A
+  // client booking their own couples session with a mistyped partner address got the
+  // same silent failure the admin path did — and on this path nobody at Life-Therapy
+  // is even in the room to notice.
+  if (partnerEmail && booking.sessionType === "couples") {
+    const warning = await sendCouplesPartnerInvite({
+      bookingId: booking.id,
+      studentId: booking.studentId,
+      partnerTo: partnerEmail,
+      partnerName: booking.couplesPartnerName,
+      clientName,
+      sessionLabel,
+      dateStr,
+      timeStr,
+      teamsSection,
+      baseUrl,
+    });
+    // Nobody at Life-Therapy is watching this screen, so the warning is written onto
+    // the booking itself, where the admin sees it when they open the session. A
+    // console line would be the same mistake as the log table it replaces: recorded
+    // somewhere durable, reaching nobody (`docs/LESSONS.md` L-22).
+    if (warning) {
+      await prisma.booking
+        .update({
+          where: { id: booking.id },
+          data: { adminNotes: `⚠ ${warning}` },
+        })
+        .catch(console.error);
+    }
+  }
 
   await Promise.allSettled([
     sendEmail({ to: clientEmail, ...confirmEmail, templateKey: "booking_confirmation", metadata: { bookingId: booking.id } }),
     sendEmail({ to: notifyAddress, ...notifyEmail, templateKey: "booking_notification", metadata: { bookingId: booking.id } }),
-    ...(partnerInvite && partnerEmail
-      ? [
-          sendEmail({
-            to: partnerEmail,
-            ...partnerInvite,
-            templateKey: "couples_partner_invite",
-            studentId: booking.studentId ?? undefined,
-            metadata: { bookingId: booking.id, partnerInvite: true },
-          }),
-        ]
-      : []),
   ]);
 
   await prisma.booking.update({

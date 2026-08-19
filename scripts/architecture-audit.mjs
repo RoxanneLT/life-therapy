@@ -1223,6 +1223,41 @@ check("email-safety: a marketing sender checks consent", () => {
   }
 });
 
+check("email-safety: the couples partner invite goes through its one helper", () => {
+  // Four screens create a couples booking, and each grew its own version of "tell the
+  // partner". They disagreed about whether the address was validated, whether the send
+  // result was read, and whether a missing address fell back to the linked partner's.
+  // One of the four was fixed after an invite was refused by the provider and nobody
+  // found out for a week; the other three kept the bug (docs/LESSONS.md L-21).
+  //
+  // So the logic lives in lib/couples-invite.ts and the sites call it. A new site that
+  // renders the template itself is a fifth divergence waiting to happen.
+  // RAW source. The marker is a STRING LITERAL, and code() blanks those — scanning the
+  // stripped text finds `""` and never fires. Caught by planting the violation and
+  // watching nothing happen; it is the same trap the `+02:00` check shipped with, and
+  // it is a fixture in this file's own selftest. Knowing the rule did not prevent it.
+  // The template MACHINERY names every key by definition — that is its job, not a
+  // second send path. Excluded by name so the exclusion is a decision on the record.
+  const DEFINES_TEMPLATES = new Set([
+    "lib/couples-invite.ts", // the one helper this check exists to funnel through
+    "lib/email-render.ts", // the renderer registry: every key appears here
+    "lib/email-templates.ts", // hardcoded fallbacks, same reason
+  ]);
+
+  for (const file of allSource().filter((f) => f.endsWith(".ts"))) {
+    if (DEFINES_TEMPLATES.has(rel(file))) continue;
+    const src = read(file);
+    for (const m of src.matchAll(/"couples_partner_invite"/g)) {
+      fail(
+        "email-safety",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        "renders or sends the couples partner invite directly instead of via sendCouplesPartnerInvite()",
+        "call sendCouplesPartnerInvite() from lib/couples-invite.ts — it validates, resolves the address, and READS the send result",
+      );
+    }
+  }
+});
+
 check("email-safety: a hardcoded template escapes client-supplied values", () => {
   // The sibling of the placeholder-substituter check below. That one covers the
   // DB-template path; this covers the hardcoded fallbacks, where the same values
