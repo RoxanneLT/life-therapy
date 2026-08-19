@@ -45,41 +45,16 @@ const STORAGE_HOSTNAMES: Record<string, string> = {
 // ─── Storage Zone: File Upload ─────────────────────────────────────────────
 
 /**
- * Upload a file Buffer to Bunny Storage Zone.
- * Returns the public CDN URL on success.
- *
- * @param buffer   File contents
- * @param path     Destination path within the storage zone, e.g. "courses/module-1/worksheet.pdf"
- * @param mimeType e.g. "application/pdf"
- */
-export async function uploadToStorage(
-  buffer: Buffer,
-  path: string,
-  mimeType: string
-): Promise<string> {
-  const { zone, key, hostname } = getStorageCreds();
-  const url = `https://${hostname}/${zone}/${path}`;
-
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: {
-      AccessKey: key,
-      "Content-Type": mimeType,
-    },
-    body: buffer as unknown as BodyInit,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Bunny Storage upload failed (${res.status}): ${text}`);
-  }
-
-  return getCdnUrl(path);
-}
-
-/**
  * Delete a file from Bunny Storage Zone by its CDN URL or path.
  */
+/**
+ * The public CDN URL for a stored path. Internal: `getStorageUploadTarget` returns it to
+ * callers, so nothing outside needs to build one itself.
+ */
+function getCdnUrl(path: string): string {
+  return `https://${CDN_HOSTNAME}/${path}`;
+}
+
 export async function deleteFromStorage(pathOrUrl: string): Promise<void> {
   const { zone, key, hostname } = getStorageCreds();
   const path = pathOrUrl.startsWith("http")
@@ -93,24 +68,8 @@ export async function deleteFromStorage(pathOrUrl: string): Promise<void> {
   });
 }
 
-/**
- * Build a public CDN URL from a storage path.
- */
-export function getCdnUrl(path: string): string {
-  return `https://${CDN_HOSTNAME}/${path}`;
-}
-
 // ─── Bunny Stream: Video ───────────────────────────────────────────────────
 
-export interface BunnyVideo {
-  guid: string;
-  title: string;
-  status: number; // 0=queued, 3=encoding, 4=finished, 5=error
-  length: number; // seconds
-  views: number;
-  storageSize: number;
-  thumbnailFileName: string;
-}
 
 /**
  * Create a new video entry in Bunny Stream (returns a GUID for direct upload).
@@ -135,49 +94,6 @@ export async function createStreamVideo(title: string): Promise<{ guid: string }
     throw new Error(`Bunny Stream create failed (${res.status}): ${text}`);
   }
 
-  return res.json();
-}
-
-/**
- * Upload video bytes to an existing Bunny Stream video GUID.
- * For large files use the TUS resumable upload endpoint instead.
- */
-export async function uploadStreamVideo(
-  guid: string,
-  buffer: Buffer
-): Promise<void> {
-  const { libraryId, key } = getStreamCreds();
-
-  const res = await fetch(
-    `https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`,
-    {
-      method: "PUT",
-      headers: {
-        AccessKey: key,
-        "Content-Type": "video/*",
-      },
-      body: buffer as unknown as BodyInit,
-    }
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Bunny Stream upload failed (${res.status}): ${text}`);
-  }
-}
-
-/**
- * Fetch metadata for a Bunny Stream video.
- */
-export async function getStreamVideo(guid: string): Promise<BunnyVideo> {
-  const { libraryId, key } = getStreamCreds();
-
-  const res = await fetch(
-    `https://video.bunnycdn.com/library/${libraryId}/videos/${guid}`,
-    { headers: { AccessKey: key } }
-  );
-
-  if (!res.ok) throw new Error(`Bunny Stream fetch failed (${res.status})`);
   return res.json();
 }
 

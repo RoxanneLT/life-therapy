@@ -271,20 +271,12 @@ export const studentLoginSchema = z.object({
 // ============================================================
 // Type exports
 // ============================================================
-export type LoginInput = z.infer<typeof loginSchema>;
-export type PageSectionInput = z.infer<typeof pageSectionSchema>;
-export type CourseInput = z.infer<typeof courseSchema>;
-export type TestimonialInput = z.infer<typeof testimonialSchema>;
-export type SiteSettingsInput = z.infer<typeof siteSettingsSchema>;
-export type BookingFormInput = z.infer<typeof bookingFormSchema>;
-export type AvailabilityOverrideInput = z.infer<typeof availabilityOverrideSchema>;
-export type BookingSettingsInput = z.infer<typeof bookingSettingsSchema>;
-export type ModuleInput = z.infer<typeof moduleSchema>;
-export type LectureInput = z.infer<typeof lectureSchema>;
-export type QuizQuestionInput = z.infer<typeof quizQuestionSchema>;
-export type CouponInput = z.infer<typeof couponSchema>;
-export type PackageInput = z.infer<typeof packageSchema>;
-export type DigitalProductInput = z.infer<typeof digitalProductSchema>;
-export type PageSeoInput = z.infer<typeof pageSeoSchema>;
-export type StudentRegisterInput = z.infer<typeof studentRegisterSchema>;
-export type StudentLoginInput = z.infer<typeof studentLoginSchema>;
+// Seventeen `z.infer<typeof xSchema>` aliases lived here and not one was imported. They
+// were removed on 2026-08-19 rather than kept "for documentation": a derived alias
+// documents nothing the schema above it does not already say, and it is one line to
+// write at the point somebody actually needs it —
+//
+//   type CouponInput = z.infer<typeof couponSchema>;
+//
+// Nothing is lost, and seventeen entries stop appearing in every dead-code report.
+// Noise that never shrinks is how a report stops being read.
