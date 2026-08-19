@@ -44,7 +44,9 @@ export interface SendResult {
  * Normalize phone numbers to E.164 format for the WhatsApp API.
  * Backed by the shared, numbering-plan-aware normaliser (lib/phone). For an
  * invalid number it falls back to a compacted best-effort so this never returns
- * an empty string — callers should gate on isValidPhone() before sending.
+ * an empty string. Callers do NOT carry the validity gate: it lives inside
+ * `sendWhatsAppTemplate`, so a number this could not parse is refused at the send
+ * rather than compacted and shipped.
  * "082 123 4567" → "+27821234567" · "+447911123456" → "+447911123456"
  */
 export function normalizePhoneNumber(phone: string): string {
@@ -94,6 +96,20 @@ export async function sendWhatsAppTemplate(
 
   if (!token || !phoneNumberId) {
     return { success: false, error: "WhatsApp not configured" };
+  }
+
+  // The master switch, read HERE and not only by callers. Three cron paths each ANDed
+  // `whatsappEnabled` with their own category flag, and this module — the one place every
+  // send passes through — never consulted it. So `sendAndLogTemplate` looked like the safe
+  // entry point (it checks consent, validates, writes a log row) while messaging clients
+  // with the channel switched off in the admin panel.
+  //
+  // The same rule for VALIDITY was moved into the send minutes earlier, for the same
+  // reason; the switch was left behind in that move, which is what a second crawl found.
+  // Category flags stay at the callers — those genuinely differ per caller. Whether the
+  // channel is on at all does not.
+  if (!settings.whatsappEnabled) {
+    return { success: false, error: "WhatsApp is switched off" };
   }
 
   // Returned, never thrown: the admin action renders this string, and a thrown message

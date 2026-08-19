@@ -1336,13 +1336,34 @@ check("whatsapp: the send path validates the number before it builds a request",
 
   // The enclosing function: from the last `function` declaration before the marker.
   const fnStart = src.lastIndexOf("function ", at);
-  const guarded = /isValidPhone\s*\(/.test(src.slice(fnStart, at));
-  if (!guarded) {
+  // Comments stripped, literals kept. Both gates are explained in comments INSIDE this
+  // function that necessarily name the thing they guard, so scanning raw text matched the
+  // prose and passed with the gate deleted — the check reading its own documentation,
+  // caught by probing it rather than by reading it. Literals stay because the settings key
+  // is a member access, not a string, and code() would blank what is being hunted.
+  const before = codeKeepingLiterals(src.slice(fnStart, at));
+  const line = src.slice(0, at).split("\n").length;
+
+  if (!/isValidPhone\s*\(/.test(before)) {
     fail(
       "whatsapp",
-      `lib/whatsapp.ts:${src.slice(0, at).split("\n").length}`,
+      `lib/whatsapp.ts:${line}`,
       "builds a WhatsApp request without validating the recipient in the same function",
       "gate on isValidPhone() and return { success: false, error } — the compacting fallback in normalizePhoneNumber never returns empty, so an unvalidated number is sent rather than refused",
+    );
+  }
+
+  // The master switch, added after a SECOND crawl found the identical shape one rule over:
+  // `whatsappEnabled` was ANDed with a category flag in three cron callers and read nowhere
+  // in this module, so the entry point that looks safest would message clients with the
+  // channel switched off. Moving one caller-remembered rule to the send and leaving its
+  // sibling behind is how a half-applied fix reads as a whole one.
+  if (!/whatsappEnabled/.test(before)) {
+    fail(
+      "whatsapp",
+      `lib/whatsapp.ts:${line}`,
+      "builds a WhatsApp request without consulting the whatsappEnabled master switch",
+      "read settings.whatsappEnabled here and refuse when it is off — per-category flags belong to the callers, but whether the channel is on at all does not",
     );
   }
 });
