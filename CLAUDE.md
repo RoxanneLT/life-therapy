@@ -345,7 +345,14 @@ measurement, not open**: a refusal that carries its numbers is a finish.
   nobody told `injectTracking`, which went on wrapping **every** link in every email. Both
   halves were right in isolation, both files read well, and nothing errored — the email sent,
   the link rendered, the endpoint answered exactly as designed. The defect existed only in the
-  gap between two files, which is why no reviewer of either diff would see it. →
+  gap between two files, which is why no reviewer of either diff would see it.
+  Nineteen emails went out over the two days, and `clicksCount` read 0 for every one —
+  the refusal returned *before* the counter, so the data could not tell "never clicked"
+  from "clicked and got an error page". Links already in inboxes are frozen and no
+  server-side change reaches them, so the reader now forgives what the writer will never
+  produce again: a foreign URL is forwarded only if it **exactly matches a Teams link
+  already stored on a booking** — a lookup against data we hold, never a list of hosts we
+  trust, because the latter is the open redirector wearing a fix's clothes. →
   `audit:email-tracking-a-tracked-link-is-one-the-redirector-will-forward` ·
   `lib/email-tracking.test.ts` · narrative at `lib/email-tracking.ts`
 

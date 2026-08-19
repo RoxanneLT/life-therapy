@@ -1345,6 +1345,30 @@ check("email-tracking: a tracked link is one the redirector will forward", () =>
       "import isOurHost from lib/region.ts, which derives the list from REGION_CONFIG",
     );
   }
+
+  // The legacy repair forwards a foreign URL only when it exactly matches a Teams
+  // link already stored on a booking — a lookup against data we hold, not a list of
+  // hosts we trust. The tempting "simplification" is `hostname === "teams.microsoft.com"`,
+  // which restores the open redirector: any attacker-chosen Teams URL would pass, and
+  // a redirector on the practice's own domain is what a phishing link wants to be.
+  //
+  // codeKeepingLiterals, not code(): the host is a STRING LITERAL and code() blanks
+  // those, so this would scan `""` and never fire. It is also why the prose above can
+  // name the host freely — comments are stripped, so this check cannot match its own
+  // documentation.
+  const REDIRECT_DECIDERS = ["app/api/track/click/route.ts", "lib/email-tracking.ts"];
+  for (const file of allSource()) {
+    if (!REDIRECT_DECIDERS.includes(rel(file))) continue;
+    const src = codeKeepingLiterals(read(file));
+    const m = /["'`][^"'`]*teams\.microsoft\.com[^"'`]*["'`]/.exec(src);
+    if (!m) continue;
+    fail(
+      "email-tracking",
+      `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+      "hardcodes a foreign host in the redirect decision — that is the open redirector again",
+      "keep the lookup against stored teamsMeetingUrl values; a host allowlist trusts URLs an attacker can choose",
+    );
+  }
 });
 
 check("email-safety: a hardcoded template escapes client-supplied values", () => {

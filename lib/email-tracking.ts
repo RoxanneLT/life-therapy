@@ -29,6 +29,64 @@ export function isTrackableTarget(url: string): boolean {
   }
 }
 
+/**
+ * The READER's decision, kept in this file alongside the writer's on purpose:
+ * they are two halves of one rule, and the whole incident was them living apart.
+ *
+ * `isTrackableTarget` above governs what we WRAP. This governs what we FORWARD,
+ * and the two are deliberately NOT the same predicate:
+ *
+ *   - We never wrap an external link again. Not one.
+ *   - But links already wrapped are sitting in clients' inboxes, frozen, and no
+ *     server-side change reaches them. Nineteen went out over two days, most
+ *     carrying the Teams "Join your session" link.
+ *
+ * So the reader forgives what the writer will never again produce: a foreign
+ * destination is forwarded ONLY if it exactly matches a Teams URL already stored
+ * on a booking. That is not an allowlist of hosts — it is a lookup against data
+ * we hold, which is what keeps this from becoming an open redirector again. An
+ * attacker cannot invent a destination; they would have to already possess a
+ * real meeting URL, and if they did they would not need us to redirect to it.
+ *
+ * The one thing it leaks is an oracle: `?url=X` answering 302 rather than 400
+ * confirms X is one of our meetings. To ask the question you must already hold
+ * the exact URL, which IS the secret — so the answer tells you only what you
+ * brought with you.
+ *
+ * Do NOT "simplify" this into `hostname === "teams.microsoft.com"`. That is the
+ * open redirector again, wearing this comment as cover.
+ */
+export type TrackedTargetVerdict =
+  | { forward: true; reason: "our-host" | "known-meeting" }
+  | { forward: false; reason: "unparseable" | "bad-protocol" | "untrusted" };
+
+export async function classifyTrackedTarget(
+  raw: string,
+  isKnownMeetingUrl: (url: string) => Promise<boolean>,
+): Promise<TrackedTargetVerdict> {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { forward: false, reason: "unparseable" };
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    return { forward: false, reason: "bad-protocol" };
+  }
+  if (isOurHost(parsed.hostname)) {
+    return { forward: true, reason: "our-host" };
+  }
+  // Legacy inbox repair only — reached by links sent 2026-08-17 … 2026-08-19.
+  // Exact string match: the stored values were verified to carry no `&`, no HTML
+  // entities and no stray whitespace, so the value round-trips through the email
+  // and back unchanged. A near-miss falls through to the same refusal as before,
+  // so the worst case is the behaviour we already had.
+  if (await isKnownMeetingUrl(raw)) {
+    return { forward: true, reason: "known-meeting" };
+  }
+  return { forward: false, reason: "untrusted" };
+}
+
 /** Inject a 1x1 tracking pixel and wrap links for click tracking. */
 export function injectTracking(html: string, trackingId: string, baseUrl: string): string {
   let tracked = html.replaceAll(

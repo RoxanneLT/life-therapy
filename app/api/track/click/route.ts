@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isOurHost } from "@/lib/region";
+import { classifyTrackedTarget } from "@/lib/email-tracking";
 
 /**
- * `isOurHost` lives in lib/region.ts, derived from the region config rather than
- * listed again here, and is shared with `injectTracking` — the code that decides
- * what to wrap must use the same predicate as the code that decides what to
- * forward, or the wrapper builds links this endpoint then refuses (§6).
+ * The decision about what may be forwarded lives in lib/email-tracking.ts, beside
+ * the wrapper that decides what to WRAP. They are two halves of one rule, and
+ * this endpoint's history is what happens when they live apart: hardening this
+ * side alone turned every Teams link in every email into a client-facing error
+ * page (§6, 2026-08-19).
  *
- * The hand-written list this replaced had `life-therapy.co.za` and not
+ * `isOurHost` behind it derives from REGION_CONFIG rather than a hand-written
+ * list. The list it replaced had `life-therapy.co.za` and not
  * `life-therapy.online`, so tracked links to the international domain were the
  * ones this endpoint treated as foreign — the dual-domain trap, wearing a
  * security list's clothes.
@@ -24,17 +26,10 @@ export async function GET(request: NextRequest) {
 
   const targetUrl = decodeURIComponent(encodedUrl);
 
-  // Validate URL safety — must be HTTP(S) and from a known host
-  let parsed: URL;
-  try {
-    parsed = new URL(targetUrl);
-  } catch {
-    return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
-  }
-
   // The destination is read from the LIVE request every time — nothing stores
   // where a tracked link was supposed to go, so there is nothing to check it
-  // against. Anyone can call this endpoint directly with a URL of their choosing.
+  // against by tracking id. Anyone can call this endpoint directly with a URL of
+  // their choosing.
   //
   // The old rule was `!isAllowedHost && protocol !== "https:"`, which rejected
   // only a URL that was BOTH foreign AND not https — so every https:// address
@@ -42,11 +37,30 @@ export async function GET(request: NextRequest) {
   // a link beginning life-therapy.co.za that lands wherever the sender likes,
   // which is precisely what a phishing link wants to be.
   //
-  // Our hosts only. If genuinely external links are ever needed in emails, the
-  // safe way is to store the destination against the tracking id and resolve it
-  // here — not to trust the query string.
-  if (!["http:", "https:"].includes(parsed.protocol) || !isOurHost(parsed.hostname)) {
-    return NextResponse.json({ error: "Untrusted URL" }, { status: 400 });
+  // Our own hosts, plus the narrow legacy repair: a foreign URL is forwarded only
+  // if it exactly matches a Teams link we already hold on a booking. The rule and
+  // its reasoning live in lib/email-tracking.ts, beside the wrapper that has to
+  // agree with it — keeping them apart is what caused the incident.
+  const verdict = await classifyTrackedTarget(targetUrl, async (url) => {
+    const known = await prisma.booking.count({ where: { teamsMeetingUrl: url } });
+    return known > 0;
+  });
+
+  if (!verdict.forward) {
+    // Say so out loud. This used to return before touching anything, so a refused
+    // click incremented no counter — `clicksCount` could not tell "never clicked"
+    // from "clicked and got an error page", and the only reason anyone learned the
+    // Teams links were broken is that a client sent a screenshot. An absence of
+    // evidence was reading as evidence of absence.
+    //
+    // A log line, not a database write: the `metadata` column already holds things,
+    // and a JSON column cannot be appended to without reading it first — so writing
+    // the refusal there would silently discard whatever the send recorded.
+    console.warn(
+      `[track/click] refused (${verdict.reason}) t=${trackingId ?? "none"}: ${targetUrl.slice(0, 200)}`,
+    );
+    const message = verdict.reason === "unparseable" ? "Invalid URL" : "Untrusted URL";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   if (trackingId) {
