@@ -141,7 +141,7 @@ work before it goes out. This is a standing rule, not a formality.
 tsc --noEmit
   && eslint . --max-warnings 0        ← warnings are errors; they never accumulate
   && node scripts/architecture-audit.mjs
-  && npm run test:gate                ← probes for the bash gate itself
+  && npm run test:gate                ← probes for BOTH hooks: bash-gate and ddl-gate
   && npm run test                     ← lib/*.test.ts
 ```
 
@@ -158,9 +158,9 @@ Reading `.env*` is denied at the settings layer.
 
 **Settings-ask twins** (coarse patterns — **dormant while the hook lives**, consulted only
 when it is dead): every gate above names its twin inline as `// @twin`. Reconciled by
-`hooks: every incident-class gate has a settings twin`, which also checks each twin's probe
+`hooks: every hook declares its twin or why it cannot have one`, which also checks each twin's probe
 record and fails if the rule it covers has been edited since.
-<!-- @enforced audit:hooks-every-incident-class-gate-has-a-settings-twin -->
+<!-- @enforced audit:hooks-every-hook-declares-its-twin-or-why-it-cannot-have-one -->
 
 `ddl-gate.js` is the second hook, on `Write|Edit`. It **asks** before a file is written that
 applies DDL to production. `bash-gate` already asks when that URL appears in a *command* — but

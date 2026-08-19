@@ -31,10 +31,11 @@
     "secrets:push": "node scripts/sync-secrets.mjs push",
     "crawl:tier0": "knip --no-progress",
     "test:removal": "tsx --test lib/calendar-removal.test.ts",
-    "test:gate": "node .claude/hooks/bash-gate.test.mjs",
+    "test:gate": "node .claude/hooks/bash-gate.test.mjs && node .claude/hooks/ddl-gate.test.mjs",
     "audit:selftest": "node scripts/architecture-audit.mjs --selftest",
     "test:email-address": "tsx --test lib/email-address.test.ts",
-    "test:csv": "tsx --test lib/csv.test.ts"
+    "test:csv": "tsx --test lib/csv.test.ts",
+    "test:ddl-gate": "node .claude/hooks/ddl-gate.test.mjs"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

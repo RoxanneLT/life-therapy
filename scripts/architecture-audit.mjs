@@ -1836,7 +1836,32 @@ check("calendar: removal shape is not inferred from recurringSeriesId", () => {
 // Ask is the floor; absent is the violation.
 // ═══════════════════════════════════════════════════════════════════════════
 
-check("hooks: every incident-class gate has a settings twin", () => {
+check("hooks: every hook declares its twin or why it cannot have one", () => {
+  // This check was named "every incident-class gate" and read exactly ONE file. ddl-gate
+  // — the gate standing between a script and production DDL — was never in scope, so
+  // "every" was doing work the code did not do. The same partial-defence shape the
+  // ledger records (L-21), inside the check written to reconcile defences.
+  //
+  // Every hook now either carries @twin markers or an explicit @no-twin with a reason.
+  // ddl-gate takes the second: settings patterns match tool and PATH, and its question is
+  // about CONTENT, so no path-based twin can express it.
+  const hookDir = join(ROOT, ".claude/hooks");
+  if (existsSync(hookDir)) {
+    for (const f of readdirSync(hookDir).filter((f) => /\.js$/.test(f))) {
+      const src = read(join(hookDir, f));
+      const hasTwin = /^\s*\/\/\s*@twin\s+\S/m.test(src);
+      const hasNoTwin = /@no-twin\s+\S/.test(src);
+      if (!hasTwin && !hasNoTwin) {
+        fail(
+          "hooks",
+          `.claude/hooks/${f}`,
+          "declares neither a settings twin nor @no-twin with a reason",
+          "add `// @twin <settings pattern>` per rule, or `@no-twin <why the settings layer cannot express it>`",
+        );
+      }
+    }
+  }
+
   const hookPath = join(ROOT, ".claude/hooks/bash-gate.js");
   const settingsPath = join(ROOT, ".claude/settings.json");
   if (!existsSync(hookPath) || !existsSync(settingsPath)) {

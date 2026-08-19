@@ -19,6 +19,20 @@
  *
  * ASK, never deny: this is the working path for schema changes (.claude/rules/schema-changes.md),
  * not a forbidden one. What it must not be is silent.
+ *
+ * @no-twin The settings layer cannot express this rule. Its permission patterns match on TOOL
+ * and PATH — `Write(app/**)`, `Edit(lib/**)` — and this gate's whole question is about CONTENT:
+ * does the text being written contain a Management API endpoint AND a DDL keyword. There is no
+ * path that identifies a DDL script, because the documented pattern is an ordinary `.ts` file
+ * anywhere in the tree. A path-based twin would have to gate every file write in the project,
+ * which is a prompt on every edit and would be switched off within an hour.
+ *
+ * So this gate is genuinely single-layer, and that is a real exposure rather than an oversight:
+ * if this file's path breaks, DDL authoring goes unprompted with no backstop, and the failure is
+ * silent (`dev-standards/LESSONS.md` L-16). What stands in for a twin is the probe suite —
+ * ddl-gate.test.mjs, 16 cases, in `npm run check` — so a broken matcher fails the build even
+ * though a broken PATH still would not. Stated because an unstated single point of failure reads
+ * as a covered one.
  */
 const chunks = [];
 process.stdin.on("data", (c) => chunks.push(c));
