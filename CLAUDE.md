@@ -313,6 +313,20 @@ and the count below falls, which is the point.
   back through it a day later. → `.claude/hooks/bash-gate.test.mjs`
   · narrative at `.claude/hooks/bash-gate.js`
 
+- **2026-08-19 · The partner invite the provider refused.** Cost: a client's partner uninvited to
+  every couples session for a week, and a week of debugging aimed at his mailbox and spam filter —
+  the two things that were provably fine, because the message never left the building. The stored
+  address was `seanteres9@gmailcom`, no dot before `com`; Resend rejected it outright.
+  `sendEmail` returned `{ success: false, error }`, the call site was a bare `await`, and the only
+  surviving trace was an `email_logs` row. **The admin UI has a delivery log for campaign email and
+  none for transactional email** — so the one category anybody waits on had no surface. Two further
+  traps in the same bug: `<Input type="email">` does NOT require a dot in the domain (intranet hosts
+  are legal addresses, so the browser was right and the assumption about it was wrong), and the
+  invite reads the BOOKING's `couplesPartnerEmail`, never the partner's client record — so
+  correcting his profile and re-testing could not have worked.
+  → `lib/email-address.ts` · narrative at the partner-invite block in
+  `app/(admin)/admin/(dashboard)/bookings/actions.ts`
+
 - **2026-08-18 · Five schema changes reached production ungated.** Cost: five unreviewed DDL
   statements. The gate matched on how the target appeared in a *command*, and the documented
   path supplies it by reference (`--env-file`), inside a file. → `.claude/hooks/ddl-gate.js` ·
@@ -383,6 +397,7 @@ commits are immutable, so fix forward.
 | Region / currency | `lib/region.ts`, `lib/pricing.ts` |
 | Session types, slots | `lib/booking-config.ts` |
 | Calendar removal | `lib/calendar-removal.ts` |
+| Is this address sendable? | `lib/email-address.ts` — `isDeliverableEmail()`, `emailRefusal()` |
 | Schema | `prisma/schema.prisma` |
 
 ### What does not live in code

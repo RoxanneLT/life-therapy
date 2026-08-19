@@ -128,6 +128,13 @@ All shipped, all found by asking the step-3 question rather than by reading the 
   client detail page, which never mentioned the calendar at all. A client kept a live Teams invite
   for a session cancelled five days earlier, and the tell was an absence — no `calendar_sync_logs`
   row, on a table with 1,123 of them.
+- **The escaping reached 6 of 22 sites** in `lib/email-templates.ts`, and reached them exactly
+  where a reader would *expect* danger: inside a quoted free-text block. The same client-supplied
+  value sat raw two lines below, in the surrounding prose.
+- **The surfacing machinery itself had this shape.** A delivery log exists for *campaign* email and
+  not for *transactional* email — so the one category a human waits on was the one with no surface,
+  and a refused partner invite went unnoticed for a week. When you find a mechanism that reports
+  failures, ask which categories reach it.
 
 ### The SAST surface
 

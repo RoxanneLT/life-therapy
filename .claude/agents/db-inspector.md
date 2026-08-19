@@ -100,3 +100,21 @@ related checks into one statement so you prompt once rather than ten times.
 - **A log table with a start date.** `calendar_sync_logs` begins 2026-06-24; absence before that
   date means "not yet logging", not "did not happen". Check when a table started before reading
   history from it.
+
+### Where failures hide
+
+**`email_logs` is the only record of a failed send, and nothing in the admin UI shows it** —
+there is a delivery log for campaign email and none for transactional. So "the client says they
+never got it" is a question this agent can answer and the UI cannot. Query `email_logs` by `to`
+and by `templateKey`, and read the `status` and `error` columns before anyone investigates a
+mailbox or a spam filter.
+
+Two traps when you do:
+
+- **Search the address that was SENT TO, not the one on the client record.** They are different
+  fields and have differed in practice: a couples invite went to `seanteres9@gmailcom` while the
+  student row read `seanteres9@gmail.com`. A search on the profile address returns nothing and
+  looks like "we never sent anything", which is the opposite of what happened.
+- **A malformed address is refused before it is queued.** The row will read `status: "failed"`
+  with the provider's own message — that is proof the send was attempted and rejected, not proof
+  of a delivery problem. Say which of the two you found.
