@@ -2840,6 +2840,63 @@ check("citations: a lesson reference names the ledger that holds it", () => {
   }
 });
 
+check("claude-md: every marker binds to a bullet", () => {
+  // The inverse of "every rule carries its net", and the half nobody writes. That check
+  // asks whether each BULLET has a marker; this asks whether each MARKER has a bullet.
+  // A marker floating after a prose paragraph claims enforcement for no rule — it is
+  // counted by neither check, so both pass and the section reports as audited.
+  //
+  // A restructure is exactly what produces one: text moves, the marker stays behind, and
+  // nothing about the file looks wrong. CLAUDE.md was restructured to the v4.3 template
+  // in this project, which is why the gap was worth probing rather than assuming.
+  // Confirmed by planting a bullet-less marker: it passed both marker checks in silence
+  // and did not move the unenforceable ratio either.
+  const src = read(join(ROOT, "CLAUDE.md"));
+  const lines = src.split("\n");
+
+  /** Walk back from a line to the bullet that owns it. Blank line or heading = none. */
+  const ownedByBullet = (i) => {
+    for (let j = i; j >= 0; j--) {
+      const line = lines[j];
+      if (/^\s*-\s+\S/.test(line)) return true; // a list bullet
+      if (!line.trim() || /^#{1,6}\s/.test(line) || /^\|/.test(line)) return false;
+    }
+    return false;
+  };
+
+  // 1. Marker comments — a comment whose whole body is `@enforced` tags, the same scope
+  //    the well-formedness check uses so the two cannot disagree about what a marker is.
+  for (const c of src.matchAll(/<!--([\s\S]*?)-->/g)) {
+    if (!/^\s*(?:@enforced\s+\S+\s*)+$/.test(c[1])) continue;
+    const at = src.slice(0, c.index).split("\n").length;
+    if (!ownedByBullet(at - 1)) {
+      fail(
+        "claude-md",
+        `CLAUDE.md:${at}`,
+        "an @enforced marker is not attached to any rule bullet",
+        "move it onto the rule it enforces, or delete it — a marker claiming enforcement for nothing reads as coverage",
+      );
+    }
+  }
+
+  // 2. The visible token. Comments are stripped first, because the maintenance block at
+  //    the top of the file explains the word and would otherwise be its own violation —
+  //    the L-05 shape this file keeps meeting.
+  const visible = src.replace(/<!--[\s\S]*?-->/g, (m) => "\n".repeat((m.match(/\n/g) || []).length));
+  const visibleLines = visible.split("\n");
+  for (let i = 0; i < visibleLines.length; i++) {
+    if (!/\bUNENFORCEABLE\b/.test(visibleLines[i])) continue;
+    if (!ownedByBullet(i)) {
+      fail(
+        "claude-md",
+        `CLAUDE.md:${i + 1}`,
+        "a visible UNENFORCEABLE is not attached to any rule bullet",
+        "attach it to the rule it describes — a floating one is counted as neither enforced nor unenforceable",
+      );
+    }
+  }
+});
+
 check("claude-md: every marker is well-formed and resolves", () => {
   // Scoped to HTML-comment syntax, so prose ABOUT the marker is not a false positive.
   // The header block discusses `@enforced <ns:control-id>` three times; a check that

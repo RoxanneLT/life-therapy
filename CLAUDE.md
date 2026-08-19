@@ -160,7 +160,6 @@ Reading `.env*` is denied at the settings layer.
 when it is dead): every gate above names its twin inline as `// @twin`. Reconciled by
 `hooks: every hook declares its twin or why it cannot have one`, which also checks each twin's probe
 record and fails if the rule it covers has been edited since.
-<!-- @enforced audit:hooks-every-hook-declares-its-twin-or-why-it-cannot-have-one -->
 
 `ddl-gate.js` is the second hook, on `Write|Edit`. It **asks** before a file is written that
 applies DDL to production. `bash-gate` already asks when that URL appears in a *command* — but
@@ -177,9 +176,12 @@ engineer around them.
 
 ## 4 · WHERE THE RULES LIVE
 
-Inventory and documentation status live **in the audit** (`documented:` flags at each
-control's site), never as a per-control list here — a list here would grow with every control
-added, inside the file with a budget.
+The inventory of controls **is the audit** — every `check("…")` in
+`scripts/architecture-audit.mjs`, named after the bug class it catches. Never a per-control
+list here: it would grow with every control added, inside the file with a budget, and it would
+be the copy that goes stale. What binds a rule here to a control there is the `@enforced`
+marker on the rule, checked in both directions — a rule with no marker fails, and a marker
+attached to no rule fails.
 
 | Family | Where |
 |---|---|
