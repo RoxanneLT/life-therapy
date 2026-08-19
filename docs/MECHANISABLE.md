@@ -113,15 +113,17 @@ vs `formatTime`, `toSastDateStr` vs `saDateStr`. Every duplication this codebase
 different names at each site.
 
 Measured on the first run: **10 duplications across 1,352 function bodies** — 0.7%, low enough to
-be a control rather than noise. All ten are carried in `DUPLICATE_BODIES_KNOWN` as debt, with a
-reason each and a ratchet that fails when an entry stops duplicating. Ranked inside that list:
-the five-copy placeholder substituter and the three time helpers first (this codebase's scars are
-disproportionately date/time), the UI handlers last.
+be a control rather than noise. That measurement is why the check was worth building and stays
+true as a dated finding; what the register holds *now* lives in `DUPLICATE_BODIES_KNOWN` itself,
+with a reason per entry and a ratchet that fails when one stops duplicating. Do not restate the
+count here — a number in this file goes stale against the register, which is [[L-29]], and it
+already did once.
 
-**Stated limit.** Exact bodies only. A fifth copy of the placeholder substituter differs from the
-other four by `.replace` vs `.replaceAll` — functionally identical on a global regex — and is
-invisible to the check. The number it reports is a floor, not a census, and near-duplicates still
-need a reader.
+**Stated limit.** Exact bodies only, so the number it reports is a floor rather than a census and
+near-duplicates still need a reader. The original example has since been collapsed by hand and is
+worth keeping as the illustration: a fifth copy of the placeholder substituter differed from the
+other four by `.replace` vs `.replaceAll` — functionally identical on a global regex — and the
+check could not see it. A reader found it; the check never would have.
 
 **The residue, which is genuinely unenforceable.** A second invoicing pipeline built out of
 entirely fresh code shares no bodies with the first and would pass. That is the rule's original
