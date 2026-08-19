@@ -98,12 +98,95 @@ function findCycles(files, graph) {
   return cycles;
 }
 
+/** A tree this small means the walk is broken, not that the tree is small. */
+const FLOOR = 200;
+
+/**
+ * L-10, extracted so the fixture can actually exercise it. Inline, the floor could only
+ * be "tested" by asserting the constant is positive — a fixture that cannot fail, which
+ * is the thing this file exists to be suspicious of.
+ */
+function enumerationIsSane(count) {
+  return count >= FLOOR;
+}
+
+// ── selftest ────────────────────────────────────────────────────────────────
+/**
+ * Adopted from the sibling project, which runs `--selftest` in the SAME gate as the
+ * check itself for six of its controls. This one had none: it was probed by hand the day
+ * it was written, which proves it worked once and nothing thereafter. A check whose
+ * fixtures do not run is a check that can decay to always-green between two commits.
+ *
+ * Fixtures go to disk and travel the real resolution and graph-building path (L-06) — a
+ * hand-built graph object would pass even if `resolveSpec` stopped resolving anything,
+ * which is the failure most likely to happen here.
+ */
+if (process.argv.includes("--selftest")) {
+  const { mkdtempSync, writeFileSync, mkdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const tmp = mkdtempSync(join(tmpdir(), "cycles-fixture-")).replace(/\\/g, "/");
+
+  const write = (rel, body) => {
+    const p = join(tmp, rel).replace(/\\/g, "/");
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, body);
+    return p;
+  };
+
+  let failed = 0;
+  const expect = (name, files, shouldFire) => {
+    const found = findCycles(files, buildGraph(files));
+    const ok = found.length > 0 === shouldFire;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "✓" : "✗"} ${shouldFire ? "must fire " : "must pass "} — ${name}`);
+  };
+
+  const a = write("a.ts", `import { b } from "./b";\nexport const a = () => b;\n`);
+  const b = write("b.ts", `import { a } from "./a";\nexport const b = () => a;\n`);
+  expect("a two-file cycle", [a, b], true);
+
+  // The real case this check was written for: the cycle was TYPE-ONLY, so TypeScript
+  // erased it and nothing ever failed at runtime. If type imports stop being followed,
+  // the only cycles this repo has ever had become invisible.
+  const t1 = write("t1.ts", `import type { T } from "./t2";\nexport type S = T | null;\n`);
+  const t2 = write("t2.ts", `import type { S } from "./t1";\nexport type T = S | string;\n`);
+  expect("a TYPE-ONLY cycle", [t1, t2], true);
+
+  const c = write("c.ts", `import { d } from "./d";\nexport const c = () => d;\n`);
+  const d = write("d.ts", `export const d = 1;\n`);
+  expect("KNOWN-GOOD: a plain dependency, no cycle", [c, d], false);
+
+  const solo = write("solo.ts", `export const x = 1;\n`);
+  expect("KNOWN-GOOD: a file importing nothing", [solo], false);
+
+  // A three-hop cycle: a two-file check that only compared neighbours would miss it.
+  const e1 = write("e1.ts", `import { e2 } from "./e2";\nexport const e1 = () => e2;\n`);
+  const e2 = write("e2.ts", `import { e3 } from "./e3";\nexport const e2 = () => e3;\n`);
+  const e3 = write("e3.ts", `import { e1 } from "./e1";\nexport const e3 = () => e1;\n`);
+  expect("a three-file cycle", [e1, e2, e3], true);
+
+  // The enumeration guard, exercised rather than asserted — L-10. A walk that finds
+  // nothing reports a clean tree, which is the failure this whole file would hide.
+  for (const [name, count, sane] of [
+    ["an empty walk is NOT sane", 0, false],
+    ["a decayed walk is NOT sane", FLOOR - 1, false],
+    ["KNOWN-GOOD: a full walk is sane", FLOOR + 300, true],
+  ]) {
+    const ok = enumerationIsSane(count) === sane;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "✓" : "✗"} ${sane ? "must pass " : "must fire "} — ${name}`);
+  }
+
+  console.log(failed ? `\n❌ ${failed} fixture(s) wrong` : `\n✅ fixtures green — fires on a cycle, quiet on a plain dependency`);
+  process.exit(failed ? 1 : 0);
+}
+
 const files = sourceFiles();
 
 // L-10: assert the enumeration before asserting anything about its members. A walk that
 // finds nothing reports zero cycles, which is indistinguishable from a clean tree.
-const FLOOR = 200;
-if (files.length < FLOOR) {
+
+if (!enumerationIsSane(files.length)) {
   console.error(
     `\n❌ import-cycles: only ${files.length} files discovered (floor ${FLOOR}).\n` +
       `   The walk is broken or the tree moved — a scan of nothing reports a clean tree.\n`,

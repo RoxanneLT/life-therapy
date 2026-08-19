@@ -29,7 +29,7 @@
     "secrets": "node scripts/sync-secrets.mjs status",
     "secrets:pull": "node scripts/sync-secrets.mjs pull",
     "secrets:push": "node scripts/sync-secrets.mjs push",
-    "check:cycles": "node scripts/check-import-cycles.mjs",
+    "check:cycles": "node scripts/check-import-cycles.mjs --selftest && node scripts/check-import-cycles.mjs",
     "crawl:tier0": "knip --no-progress --include files,dependencies,unlisted,unresolved,duplicates,exports,types",
     "crawl:all": "knip --no-progress",
     "test:removal": "tsx --test lib/calendar-removal.test.ts",
