@@ -2840,6 +2840,52 @@ check("citations: a lesson reference names the ledger that holds it", () => {
   }
 });
 
+check("audit: a check that says it scans raw actually scans raw", () => {
+  // L-33: a normaliser can delete the evidence. `code()` blanks string literals, so a
+  // check hunting a value that only ever appears inside quotes cannot fire — it reports
+  // zero, and zero from a rule-checker reads as a clean tree. The `+02:00` check shipped
+  // exactly that way and was green for months.
+  //
+  // Surveyed 2026-08-19: thirteen checks here declare the raw/literal choice load-bearing
+  // in their comments, and NONE of them was blind — the discipline is already applied per
+  // check. So the exposure is not today's behaviour, it is the silent revert: someone
+  // tidies `read(f)` into `code(read(f))`, the check keeps running, and it stops firing.
+  //
+  // This reconciles the CLAIM against the CODE. A comment saying "raw source, not code()"
+  // is a promise; this asserts the file read still keeps its literals. It cannot catch
+  // someone who deletes the comment too — but that is a deliberate act against a stated
+  // reason, not the tidy-up this exists to stop. Stated rather than hidden, because a
+  // check whose limit is unwritten gets trusted past it.
+  const src = read(join(ROOT, "scripts/architecture-audit.mjs"));
+  const starts = [...src.matchAll(/^check\("([^"]+)"/gm)].map((m) => ({ name: m[1], index: m.index }));
+
+  // Excluded by name: this check's own prose necessarily contains the phrases it hunts,
+  // which is the L-05 shape — a metric whose vocabulary appears in the corpus it measures.
+  const SELF = "audit: a check that says it scans raw actually scans raw";
+  const CLAIMS_RAW = /RAW source|raw source, not code|not code\(\)/i;
+
+  for (let i = 0; i < starts.length; i++) {
+    const name = starts[i].name;
+    if (name === SELF) continue;
+    const body = src.slice(starts[i].index, i + 1 < starts.length ? starts[i + 1].index : src.length);
+    if (!CLAIMS_RAW.test(body)) continue;
+
+    // A literal-preserving read is any `read(` not immediately wrapped in `code(`.
+    // `codeKeepingLiterals(read(…))` counts: it strips comments and keeps the quotes,
+    // which is the whole point of its existence.
+    const reads = (body.match(/\bread\(/g) || []).length;
+    const blanked = (body.match(/\bcode\(\s*read\(/g) || []).length;
+    if (reads - blanked > 0) continue;
+
+    fail(
+      "audit",
+      `scripts/architecture-audit.mjs:${src.slice(0, starts[i].index).split("\n").length}`,
+      `"${name}" says it scans raw source, but every read it makes is wrapped in code()`,
+      "code() blanks string literals — restore the raw read, or delete the claim if the target is no longer a literal",
+    );
+  }
+});
+
 check("claude-md: every marker binds to a bullet", () => {
   // The inverse of "every rule carries its net", and the half nobody writes. That check
   // asks whether each BULLET has a marker; this asks whether each MARKER has a bullet.
