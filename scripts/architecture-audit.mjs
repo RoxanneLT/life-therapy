@@ -2116,8 +2116,19 @@ check("hooks: every hook declares its twin or why it cannot have one", () => {
     }
     const sha = createHash("sha1").update(t[1] + "\n" + body.join("\n")).digest("hex").slice(0, 6);
 
-    // The probe record sits in the comment block belonging to this twin.
-    const block = lines.slice(i + 1, i + 6).join("\n");
+    // The probe record sits in the comment block belonging to THIS twin — and the block
+    // must stop at the next one. A fixed five-line window reached past the entry into the
+    // following `// @twin`, so a twin whose own record was deleted borrowed its
+    // neighbour's and passed. Found on 2026-08-19 by deleting a real record and watching
+    // nothing happen; reading the check had not found it, and neither had the structural
+    // checks around it. That is L-03 exactly — an aperture that lets one item see the
+    // next item's marker — in the check written to reconcile the fallback layer.
+    const blockLines = [];
+    for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+      if (/@twin\s/.test(lines[j])) break;
+      blockLines.push(lines[j]);
+    }
+    const block = blockLines.join("\n");
     const probed = /@probed\s+(never|(\d{4}-\d{2}-\d{2})\s+hook-disabled:\s*\S+)/.exec(block);
 
     if (!probed) {
