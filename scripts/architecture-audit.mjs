@@ -2908,8 +2908,24 @@ check("claude-md: every marker binds to a bullet", () => {
   // in this project, which is why the gap was worth probing rather than assuming.
   // Confirmed by planting a bullet-less marker: it passed both marker checks in silence
   // and did not move the unenforceable ratio either.
+  // SCOPED to the rules sections, and the scope is the point. A direction's scope is its
+  // GRAMMAR's scope: the bullets-only grammar belongs to `### Enforced` and §5, so this
+  // takes exactly the scope of its counterpart, "every rule in a rules section carries
+  // its net". Outside those sections a marker legitimately annotates a paragraph —
+  // in `.claude/rules/*.md` the paragraph IS the rule — and demanding a bullet there is
+  // imposing one file's grammar on another's, which is how a check earns an allowlist
+  // instead of a fix. The first version of this check ran file-wide.
+  const RULES_SECTIONS = ["### Enforced", "## 5 · DOCTRINE THE MACHINE CANNOT HOLD"];
   const src = read(join(ROOT, "CLAUDE.md"));
   const lines = src.split("\n");
+
+  /** Line indices that sit inside a rules section. */
+  const inRules = new Set();
+  let active = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{2,3} /.test(lines[i])) active = RULES_SECTIONS.includes(lines[i].trim());
+    if (active) inRules.add(i);
+  }
 
   /** Walk back from a line to the bullet that owns it. Blank line or heading = none. */
   const ownedByBullet = (i) => {
@@ -2926,6 +2942,7 @@ check("claude-md: every marker binds to a bullet", () => {
   for (const c of src.matchAll(/<!--([\s\S]*?)-->/g)) {
     if (!/^\s*(?:@enforced\s+\S+\s*)+$/.test(c[1])) continue;
     const at = src.slice(0, c.index).split("\n").length;
+    if (!inRules.has(at - 1)) continue; // elsewhere, a paragraph may legitimately be the rule
     if (!ownedByBullet(at - 1)) {
       fail(
         "claude-md",
@@ -2943,6 +2960,7 @@ check("claude-md: every marker binds to a bullet", () => {
   const visibleLines = visible.split("\n");
   for (let i = 0; i < visibleLines.length; i++) {
     if (!/\bUNENFORCEABLE\b/.test(visibleLines[i])) continue;
+    if (!inRules.has(i)) continue; // same scope as its counterpart check
     if (!ownedByBullet(i)) {
       fail(
         "claude-md",
