@@ -1301,6 +1301,52 @@ check("email-safety: the couples partner invite goes through its one helper", ()
   }
 });
 
+check("whatsapp: the send path validates the number before it builds a request", () => {
+  // Escalated from a crawler finding on 2026-08-19 — the first one it produced, and it
+  // flagged itself as mechanisable, which it was.
+  //
+  // Two send paths shared one rule and only one enforced it. `sendAndLogTemplate` gated on
+  // the number and wrote a failed log row; the exported `sendWhatsAppTemplate` did not,
+  // and its only external caller — the admin "send test" action — passes a hand-typed
+  // string straight through. An invalid number was then COMPACTED by
+  // `normalizePhoneNumber`'s best-effort fallback, which never returns empty, and shipped
+  // to Meta rather than refused. Four archived clients have their phone stored as the
+  // literal "NA".
+  //
+  // The doc-comment did say "callers should gate on isValidPhone() before sending". A
+  // contract a caller must remember is a contract that gets forgotten — and this one
+  // named a function that was not exported, so an external caller could not have honoured
+  // it even having read it.
+  //
+  // The check: whatever builds the WhatsApp request body must have validated first, in
+  // the same function. Scoped to the module that owns the API call, because that is where
+  // the rule can actually be enforced for every caller at once.
+  const src = read(join(ROOT, "lib/whatsapp.ts"));
+  const marker = 'messaging_product: "whatsapp"';
+  const at = src.indexOf(marker);
+  if (at < 0) {
+    fail(
+      "whatsapp",
+      "lib/whatsapp.ts",
+      "the request-body marker this check anchors on is gone",
+      "the module was restructured — re-point the check rather than deleting it, or the gate stops being enforced silently",
+    );
+    return;
+  }
+
+  // The enclosing function: from the last `function` declaration before the marker.
+  const fnStart = src.lastIndexOf("function ", at);
+  const guarded = /isValidPhone\s*\(/.test(src.slice(fnStart, at));
+  if (!guarded) {
+    fail(
+      "whatsapp",
+      `lib/whatsapp.ts:${src.slice(0, at).split("\n").length}`,
+      "builds a WhatsApp request without validating the recipient in the same function",
+      "gate on isValidPhone() and return { success: false, error } — the compacting fallback in normalizePhoneNumber never returns empty, so an unvalidated number is sent rather than refused",
+    );
+  }
+});
+
 check("email-tiers: a suppression decision goes through lib/engagement.ts", () => {
   // `emailPaused` was consulted directly by four senders, each deciding for itself
   // what a pause meant. It meant the same thing to all of them — don't send — which

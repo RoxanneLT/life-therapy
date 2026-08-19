@@ -58,6 +58,12 @@ export function normalizePhoneNumber(phone: string): string {
  * Internal. `lib/phone.ts` exports its own `isValidPhone` for callers — same name, a
  * different module, and the collision is what made this one look externally used when
  * it never was.
+ *
+ * It stays private BECAUSE the gate moved into `sendWhatsAppTemplate` below. The
+ * doc-comment on `normalizePhoneNumber` used to tell callers to gate on this function,
+ * which they could not do — it was never exported after 2026-08-19 — and, more to the
+ * point, should not have to. A contract a caller must remember is a contract that gets
+ * forgotten; this one now lives at the send itself.
  */
 function isValidPhone(phone: string): boolean {
   return isValidPhoneStrict(phone);
@@ -67,6 +73,17 @@ function isValidPhone(phone: string): boolean {
 
 /**
  * Send a WhatsApp template message via the Cloud API.
+ *
+ * The number is validated HERE, not by the caller. `sendAndLogTemplate` below already
+ * gated and logged a failed row; this exported entry point did not, and its only external
+ * caller — the admin "send test" action — passes a hand-typed string straight through. An
+ * invalid number was then compacted by `normalizePhoneNumber`'s best-effort fallback and
+ * shipped to Meta rather than refused, so four archived clients whose phone is stored as
+ * the literal `"NA"` would have gone out as `to: "NA"`.
+ *
+ * Two paths, one rule, one of them ungated — the same shape as the tracker whose writer
+ * and reader disagreed (§6). Gating at the send closes it for every caller, present and
+ * future, instead of asking each to remember.
  */
 export async function sendWhatsAppTemplate(
   params: SendTemplateParams,
@@ -77,6 +94,12 @@ export async function sendWhatsAppTemplate(
 
   if (!token || !phoneNumberId) {
     return { success: false, error: "WhatsApp not configured" };
+  }
+
+  // Returned, never thrown: the admin action renders this string, and a thrown message
+  // is replaced by React's digest in production.
+  if (!isValidPhone(params.to)) {
+    return { success: false, error: `Not a sendable phone number: ${params.to}` };
   }
 
   const body = {
