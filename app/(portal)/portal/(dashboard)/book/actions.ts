@@ -9,6 +9,7 @@ import { createCalendarEvent, cancelCalendarEvent } from "@/lib/graph";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { resolvePartnerEmail, sendCouplesPartnerInvite } from "@/lib/couples-invite";
+import { findPartnerName } from "@/lib/partner-link";
 import { formatPrice, escapeHtml } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Currency } from "@/lib/region";
@@ -44,19 +45,20 @@ function parseTimeToMinutes(t: string): number {
   return h * 60 + m;
 }
 
-/** Resolve couples partner name from linked relationship or form input */
+/**
+ * Resolve the couples partner's name from the linked relationship, or the form input.
+ *
+ * Goes through findPartnerName because a relationship row is DIRECTIONAL and is never
+ * written reciprocally — this used to filter on `studentId` alone, so it found the
+ * partner only when the client happened to be the side the row was entered from. Half
+ * the couples in the system are stored the other way round, which made the miss look
+ * random. See lib/partner-link.ts.
+ */
 async function resolveCouplesPartner(
   studentId: string,
   partnerName?: string,
 ): Promise<string | null> {
-  const partnerRel = await prisma.clientRelationship.findFirst({
-    where: { studentId, relationshipType: "partner" },
-    include: { relatedStudent: { select: { firstName: true, lastName: true } } },
-  });
-  if (partnerRel?.relatedStudent) {
-    return `${partnerRel.relatedStudent.firstName} ${partnerRel.relatedStudent.lastName || ""}`.trim();
-  }
-  return partnerName || null;
+  return (await findPartnerName(studentId)) || partnerName || null;
 }
 
 /** Send booking confirmation + admin notification emails */

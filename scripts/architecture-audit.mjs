@@ -2226,6 +2226,35 @@ const ESLINT_TAGS_PROBED = {
     "static read of the config, so this record IS the verification.",
 };
 
+check("relationships: a partner lookup reads both ends of the row", () => {
+  // A ClientRelationship row is DIRECTIONAL and is never written reciprocally —
+  // measured 2026-08-19: nine rows, nine distinct pairs, zero stored both ways. So a
+  // query filtering on `studentId` alone finds the partner only when the client happens
+  // to be the side the row was entered from. It is a coin flip, which is why the miss
+  // looked random rather than like a bug.
+  //
+  // Two of four readers had it right (an OR across both columns) and two did not — one
+  // of them added the same morning a lesson was written about defences that reach some
+  // of their sites. The lookup now lives in lib/partner-link.ts.
+  for (const file of allSource().filter((f) => /\.tsx?$/.test(f))) {
+    if (rel(file) === "lib/partner-link.ts") continue; // the one that does it correctly
+    const src = code(read(file));
+    for (const m of src.matchAll(/clientRelationship\.\w+\(\{[\s\S]{0,400}?\}\)/g)) {
+      const q = m[0];
+      if (!/relationshipType:\s*""|partner/i.test(q) && !/relationshipType/.test(q)) continue;
+      // Reading both columns, or pinning a specific pair, or fetching by row id: fine.
+      if (/relatedStudentId/.test(q) || /\bid:\s/.test(q)) continue;
+      if (!/studentId/.test(q)) continue;
+      fail(
+        "relationships",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        "queries a relationship by studentId only — rows are directional, so this sees the link from one side",
+        "use findPartnerOf()/findPartnerName() from lib/partner-link.ts, or OR across studentId and relatedStudentId",
+      );
+    }
+  }
+});
+
 check("citations: a lesson reference names the ledger that holds it", () => {
   // The ledger lives in dev-standards, in its own repo, and IDs there are two digits.
   // This project's docs/LESSONS.md is a POINTER with no numbered entries at all.

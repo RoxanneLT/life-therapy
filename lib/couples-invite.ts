@@ -21,10 +21,10 @@
  * for a week while everyone examined his mailbox.
  */
 
-import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { isDeliverableEmail } from "@/lib/email-address";
+import { findPartnerOf } from "@/lib/partner-link";
 
 /**
  * Which address the invite should go to.
@@ -44,11 +44,13 @@ export async function resolvePartnerEmail(
   const given = bookingPartnerEmail?.trim() || null;
   if (given) return given;
 
-  const link = await prisma.clientRelationship.findFirst({
-    where: { studentId, relationshipType: "partner" },
-    select: { relatedStudent: { select: { email: true } } },
-  });
-  const linked = link?.relatedStudent?.email ?? null;
+  // findPartnerOf looks at BOTH ends of the relationship row. The first version of this
+  // fallback filtered on `studentId` alone, and relationship rows are directional and
+  // never written reciprocally — so it found the partner only when the booking's client
+  // happened to be the side the row was entered from. For the couple this whole fix was
+  // written for, the row is `Sean → Cassiel` and every booking is made under Cassiel, so
+  // the fallback returned nothing and sent no invite. See lib/partner-link.ts.
+  const linked = (await findPartnerOf(studentId))?.email ?? null;
   // Only if it can actually receive mail. A fallback that inherits a bad address is
   // worse than none, because it reads as deliberate.
   return isDeliverableEmail(linked) ? linked : null;
