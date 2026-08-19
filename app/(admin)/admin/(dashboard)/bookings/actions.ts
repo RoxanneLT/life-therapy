@@ -1397,7 +1397,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
       // series left the second person uninvited to every session in it. The
       // single-booking path had the same gap and was fixed on 2026-08-18; this
       // is the sibling that answers the same question and did not get the fix
-      // (`docs/LESSONS.md` L-21).
+      // (`dev-standards/LESSONS.md` L-21).
       //
       // They get the date list and the Teams link — they are attending these
       // sessions. No portal link, no account, nothing about billing: none of

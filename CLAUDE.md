@@ -31,8 +31,8 @@
         and never call the tags free (they cost context; they are merely quiet).
     E3  CLAUDE.md reaches subagents                — YES, positive-with-
         transcription. An earlier probe reported the opposite and was wrong; see
-        docs/LESSONS.md L-012. They receive it and skim it.
-  Full contract: SPEC_CLAUDE_MD_STANDARD v4.3. Lessons: docs/LESSONS.md.
+        dev-standards/LESSONS.md L-17. They receive it and skim it.
+  Full contract: SPEC_CLAUDE_MD_STANDARD v4.3. Lessons: dev-standards/LESSONS.md (docs/LESSONS.md is the pointer).
 -->
 
 ## 1 · START HERE
@@ -330,7 +330,7 @@ and the count below falls, which is the point.
 - **2026-08-18 · Five schema changes reached production ungated.** Cost: five unreviewed DDL
   statements. The gate matched on how the target appeared in a *command*, and the documented
   path supplies it by reference (`--env-file`), inside a file. → `.claude/hooks/ddl-gate.js` ·
-  general form in `docs/LESSONS.md` L-001
+  general form in `dev-standards/LESSONS.md` L-14
 
 - **Dates: every date bug this codebase has had** came from confusing a calendar *day* with a
   real *instant*. Full doctrine in §9. → three `date-safety:` checks · `npm run test:dates`

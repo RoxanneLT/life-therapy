@@ -1228,7 +1228,7 @@ check("email-safety: the couples partner invite goes through its one helper", ()
   // partner". They disagreed about whether the address was validated, whether the send
   // result was read, and whether a missing address fell back to the linked partner's.
   // One of the four was fixed after an invite was refused by the provider and nobody
-  // found out for a week; the other three kept the bug (docs/LESSONS.md L-21).
+  // found out for a week; the other three kept the bug (dev-standards/LESSONS.md L-21).
   //
   // So the logic lives in lib/couples-invite.ts and the sites call it. A new site that
   // renders the template itself is a fifth divergence waiting to happen.
@@ -2225,6 +2225,62 @@ const ESLINT_TAGS_PROBED = {
     "it, got `Unexpected any. Specify a different type`. Preset-provided rules are invisible to a " +
     "static read of the config, so this record IS the verification.",
 };
+
+check("citations: a lesson reference names the ledger that holds it", () => {
+  // The ledger lives in dev-standards, in its own repo, and IDs there are two digits.
+  // This project's docs/LESSONS.md is a POINTER with no numbered entries at all.
+  //
+  // On 2026-08-19 four citations were written as `docs/LESSONS.md L-21` and `L-22` —
+  // IDs that exist only in the shared ledger and never existed here. Each pointed at
+  // nothing while reading as diligence, which is the class the shared L-07 describes,
+  // and one of them sat in the header of the file whose existence it was justifying.
+  //
+  // Cannot resolve the target: it is another repository, on a path that varies per
+  // machine. What it CAN do is catch the two shapes that were actually wrong — naming
+  // the local pointer with an ID, and using this project's retired three-digit
+  // numbering. Both are format errors, so both are decidable from here.
+  const files = [
+    ...allSource().filter((f) => /\.(ts|tsx|mjs)$/.test(f)),
+    join(ROOT, "CLAUDE.md"),
+    ...walk(join(ROOT, "scripts"), /\.mjs$/),
+  ];
+
+  // Two files are excluded, and the second is the interesting one.
+  //
+  // Citations live in COMMENTS by nature, so this check cannot strip them the way the
+  // marker checks do — which means a file that DOCUMENTS the bad shape is
+  // indistinguishable from one that commits it. This script quotes both wrong forms
+  // above as examples, and the first run duly flagged its own explanation. That is the
+  // fourth time today a check has matched its own documentation; the difference here is
+  // that the usual fix (strip comments) would remove the thing being hunted.
+  const DOCUMENTS_THE_SHAPES = new Set([
+    "docs/LESSONS.md", // the pointer file, which explains the retired numbering
+    "scripts/architecture-audit.mjs", // this check's own prose
+  ]);
+
+  for (const file of [...new Set(files)]) {
+    if (!existsSync(file)) continue;
+    if (DOCUMENTS_THE_SHAPES.has(rel(file))) continue;
+    const src = read(file);
+
+    for (const m of src.matchAll(/docs\/LESSONS\.md`?\s+L-(\d+)/g)) {
+      fail(
+        "citations",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        `cites \`docs/LESSONS.md L-${m[1]}\`, but that file is a pointer with no numbered entries`,
+        "cite `dev-standards/LESSONS.md L-nn` — the ledger that actually holds the entry",
+      );
+    }
+    for (const m of src.matchAll(/dev-standards\/LESSONS\.md`?\s+L-(\d{3,})/g)) {
+      fail(
+        "citations",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        `cites \`L-${m[1]}\` — three-digit IDs were this project's retired local numbering`,
+        "the shared ledger uses two digits (L-01 … L-24); check which entry you mean",
+      );
+    }
+  }
+});
 
 check("claude-md: every marker is well-formed and resolves", () => {
   // Scoped to HTML-comment syntax, so prose ABOUT the marker is not a false positive.

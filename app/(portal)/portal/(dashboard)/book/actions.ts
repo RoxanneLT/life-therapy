@@ -175,7 +175,7 @@ async function sendPortalBookingEmails(opts: {
     // Nobody at Life-Therapy is watching this screen, so the warning is written onto
     // the booking itself, where the admin sees it when they open the session. A
     // console line would be the same mistake as the log table it replaces: recorded
-    // somewhere durable, reaching nobody (`docs/LESSONS.md` L-22).
+    // somewhere durable, reaching nobody (`dev-standards/LESSONS.md` L-22).
     if (warning) {
       await prisma.booking
         .update({

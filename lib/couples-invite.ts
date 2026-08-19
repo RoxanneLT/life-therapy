@@ -9,7 +9,7 @@
  *
  * That divergence is the shape this codebase keeps paying for: a defence added at the
  * site where the bug was found, and absent at the siblings that answer the same question
- * (`docs/LESSONS.md` L-21). Escaping reached one of five substitution helpers; an expiry
+ * (`dev-standards/LESSONS.md` L-21). Escaping reached one of five substitution helpers; an expiry
  * reached one of four credit paths; the calendar removal reached every cancel path but
  * two. Fixing the partner invite at one of four sites would have been the same story
  * told again, so the logic lives here and the sites call it.
