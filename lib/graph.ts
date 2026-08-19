@@ -490,27 +490,6 @@ export async function getEventOnlineMeeting(
 // Test connection
 // ────────────────────────────────────────────────────────────
 
-export async function testGraphConnection(): Promise<{
-  success: boolean;
-  error?: string;
-}> {
-  const config = getGraphConfig();
-  if (!config) {
-    return { success: false, error: "Microsoft Graph credentials not configured" };
-  }
-
-  try {
-    const client = createGraphClient(config);
-    await client.api(`/users/${config.userEmail}`).select("displayName").get();
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
 // ────────────────────────────────────────────────────────────
 // Connection diagnostics — which mailbox are we actually on?
 // ────────────────────────────────────────────────────────────

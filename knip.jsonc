@@ -19,6 +19,13 @@
     "app/**/sitemap.ts",
     "app/**/robots.ts",
     "scripts/**/*.mjs",
+    // .ts scripts too, added 2026-08-19. Only `.mjs` was listed, so every one-off and
+    // maintenance script written in TypeScript was invisible — and anything they alone
+    // imported read as dead. `decrypt` was reported unused while
+    // scripts/normalize-phone-numbers.ts imports it; deleting it on that report would
+    // have broken the script silently, because scripts are not part of the build.
+    // A crawler's blind spot does not show up as a gap, it shows up as a finding.
+    "scripts/**/*.ts",
     "lib/**/*.test.ts"
 
     // REMOVED 2026-08-19, all reported by knip's own configuration hints as
@@ -37,8 +44,18 @@
     "app/**/*.{ts,tsx}",
     "lib/**/*.{ts,tsx}",
     "components/**/*.{ts,tsx}",
-    "scripts/**/*.mjs"
+    "scripts/**/*.{ts,mjs}"
   ],
+
+  // A TYPE used inside its own module is not dead code — it is the module's own
+  // vocabulary, and `ProposedAction`, `EmailAttachment`, `PhoneKind` and friends are
+  // named in exported signatures where a reader needs to be able to say the name.
+  // Unexporting them would be churn that makes the API harder to use.
+  //
+  // Scoped to types and interfaces deliberately: a FUNCTION used only inside its own
+  // module still gets reported, because that one really should lose its `export`. The
+  // distinction cost two broken builds in this pass before it was written down.
+  "ignoreExportsUsedInFile": { "interface": true, "type": true },
 
   "ignore": [
     // shadcn/ui primitives. These arrive as a SET — you install the component and
@@ -92,13 +109,23 @@
   //     the portal has a live file of the same name), date-picker-step.tsx,
   //     time-slot-step.tsx — all deleted, each verified at zero imports first.
   //
-  // STILL OPEN, and left deliberately:
-  //   · the five booking/order email builders in lib/email-templates.ts — no
-  //     callers, and they interpolate client-supplied names UNESCAPED, so they are
-  //     a loaded gun for whoever wires them up. Deleting them is the safer fix,
-  //     but they are a template set someone may intend to use; the escaping is the
-  //     real defect and it should be fixed whether or not they stay.
-  //   · ~57 unused exports and ~31 unused types. Mostly zod-inferred `*Input`
-  //     types that document a schema even where nothing imports them. Low value,
-  //     high noise; not worth a sweep.
+  // SECOND PASS, 2026-08-19. The five booking/order email builders are gone — they
+  // were orphaned duplicates of the live fallbacks in lib/email-render.ts, so the
+  // unescaped interpolation went out with them. So did nine in-memory rate limiters
+  // superseded by lib/rate-limit-db.ts, the server-side Bunny upload path superseded by
+  // direct upload, and seventeen derived `z.infer` aliases.
+  //
+  // No count is recorded here on purpose. `npm run crawl:tier0` prints the current one,
+  // and a number written into a config file is stale the next time somebody acts on it —
+  // the previous version of this comment said "~57 and ~31" within hours of being wrong.
+  //
+  // STILL OPEN, and a decision rather than a cleanup:
+  //   · seven zod schemas — login, siteSettings, availabilityOverride, bookingSettings,
+  //     quizQuestion, coupon, studentLogin. Their paths DO validate, by hand, beside the
+  //     unused schema. The fix is to adopt the schema at the call site, not to delete it,
+  //     and that changes validation behaviour on seven admin forms.
+  //   · a tail of one- and two-export files, each needing its own look. The lesson from
+  //     this pass is that "unused export" and "unused function" are different findings:
+  //     three calendar helpers and one Bunny helper were used INSIDE their own module and
+  //     only needed unexporting. Deleting on the report alone broke the build twice.
 }

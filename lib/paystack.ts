@@ -58,19 +58,6 @@ export async function initializeTransaction(
 
 // --- Verify Transaction ---
 
-export async function verifyTransaction(reference: string) {
-  const res = await fetch(
-    `${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`,
-    { headers: headers() },
-  );
-
-  const data = await res.json();
-  if (!data.status) {
-    throw new Error(`Paystack verify failed: ${data.message}`);
-  }
-  return data.data;
-}
-
 // --- Webhook Signature Verification ---
 
 export function verifyWebhookSignature(

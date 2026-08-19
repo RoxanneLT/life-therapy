@@ -19,13 +19,3 @@ export function logQueryResult(
     console.warn(`[query] ${label} returned null/undefined`, context ?? "");
   }
 }
-
-export function logQueryError(
-  label: string,
-  error: unknown,
-  context?: Record<string, unknown>,
-): void {
-  if (error) {
-    console.error(`[query] ${label} failed:`, error, context ?? "");
-  }
-}

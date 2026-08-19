@@ -13,16 +13,6 @@ export type Currency = (typeof CURRENCIES)[number];
 export const LT_REGION_COOKIE = "lt-region";
 export const LT_CURRENCY_COOKIE = "lt-currency";
 
-export const CURRENCY_CONFIG: Record<
-  Currency,
-  { symbol: string; locale: string; label: string }
-> = {
-  ZAR: { symbol: "R", locale: "en-ZA", label: "ZAR" },
-  USD: { symbol: "$", locale: "en-US", label: "USD" },
-  EUR: { symbol: "€", locale: "en-IE", label: "EUR" },
-  GBP: { symbol: "£", locale: "en-GB", label: "GBP" },
-};
-
 export const REGION_CONFIG: Record<
   Region,
   { defaultCurrency: Currency; currencies: Currency[]; domain: string }

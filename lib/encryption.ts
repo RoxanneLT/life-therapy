@@ -47,11 +47,6 @@ export function decrypt(ciphertext: string): string {
   }
 }
 
-/** Encrypt a nullable string field. Returns null if input is null/undefined. */
-export function encryptOrNull(value: string | null | undefined): string | null {
-  return value ? encrypt(value) : null;
-}
-
 /** Decrypt a nullable string field. Returns null if input is null/undefined. */
 export function decryptOrNull(value: string | null | undefined): string | null {
   return value ? decrypt(value) : null;

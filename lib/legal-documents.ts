@@ -5,9 +5,6 @@ export type LegalDocumentSlug = "commitment" | "terms" | "privacy";
 /** Documents that require client acceptance (portal gate). */
 export const REQUIRED_DOCUMENTS: LegalDocumentSlug[] = ["commitment", "terms"];
 
-/** Documents rendered on public pages (no auth required). */
-export const PUBLIC_DOCUMENTS: LegalDocumentSlug[] = ["terms", "privacy"];
-
 /** Documents shown in onboarding step 3. */
 export const ONBOARDING_DOCUMENTS: LegalDocumentSlug[] = ["commitment", "terms"];
 

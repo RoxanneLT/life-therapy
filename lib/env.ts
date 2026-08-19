@@ -42,6 +42,11 @@ const REQUIRED_IN_PROD = [
  * simply off — but the reader must handle that, never assume presence. Each is
  * surfaced to the admin as an `xConfigured` boolean elsewhere.
  */
+// The array IS the source of `OptionalVar` below, so its TYPE is what does the work and
+// its runtime value is inert by design. It became value-unused when `ALL_SERVER_VARS`
+// was deleted as dead code on 2026-08-19; the list itself is the SSOT CLAUDE.md §9
+// points at, and each entry carries the reason that integration is optional, so it stays.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const OPTIONAL = [
   "RESEND_API_KEY",
   "RESEND_FROM",
@@ -114,7 +119,3 @@ export function isConfigured(...names: ServerVar[]): boolean {
 export function missingRequiredEnv(): RequiredVar[] {
   return REQUIRED_IN_PROD.filter((n) => env(n) === undefined);
 }
-
-/** Every declared server var, required + optional. The union's runtime shadow —
- *  useful for a settings/health view that wants to enumerate them. */
-export const ALL_SERVER_VARS: readonly ServerVar[] = [...REQUIRED_IN_PROD, ...OPTIONAL];

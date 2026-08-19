@@ -1,4 +1,4 @@
-import { addWeeks, addMonths } from "date-fns";
+import { addWeeks } from "date-fns";
 import { isSAPublicHolidayOn } from "@/lib/sa-holidays";
 import { calendarDate } from "@/lib/dates";
 
@@ -60,38 +60,6 @@ function nextMonthSameWeekday(current: Date): Date {
 
   // Should never happen, but safety net
   return new Date(Date.UTC(nextYear, nextMonth, 1));
-}
-
-/**
- * Generate recurring dates from a start date.
- * Returns an array of ISO date strings ("2026-03-01").
- */
-export function generateRecurringDates(
-  startDate: string,
-  pattern: RecurringPattern,
-  months: number = 6,
-): string[] {
-  const dates: string[] = [];
-  const start = calendarDate(startDate);
-  const endLimit = addMonths(start, months);
-  let current = start;
-
-  while (current < endLimit) {
-    dates.push(current.toISOString().split("T")[0]);
-    switch (pattern) {
-      case "weekly":
-        current = addWeeks(current, 1);
-        break;
-      case "bimonthly":
-        current = addWeeks(current, 2);
-        break;
-      case "monthly":
-        current = nextMonthSameWeekday(current);
-        break;
-    }
-  }
-
-  return dates;
 }
 
 /**

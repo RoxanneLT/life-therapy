@@ -93,20 +93,6 @@ export async function resetDripEmailAction(id: string) {
   revalidatePath(`/admin/drip-emails/${id}`);
 }
 
-export async function toggleDripEmailActiveAction(id: string) {
-  await requireRole("super_admin", "marketing");
-
-  const dripEmail = await prisma.dripEmail.findUnique({ where: { id } });
-  if (!dripEmail) throw new Error("Drip email not found");
-
-  await prisma.dripEmail.update({
-    where: { id },
-    data: { isActive: !dripEmail.isActive },
-  });
-
-  revalidatePath("/admin/drip-emails");
-}
-
 export async function sendTestDripEmailAction(id: string) {
   await requireRole("super_admin", "marketing");
 

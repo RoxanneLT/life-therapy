@@ -103,9 +103,3 @@ export function formatPhone(raw: string | null | undefined): string {
   const parsed = parsePhoneNumberFromString(c.e164);
   return parsed ? parsed.formatInternational() : c.e164;
 }
-
-/** The full international number as digits only, no "+" — what WhatsApp / wa.me links expect (e.g. 27821234567). */
-export function phoneToWhatsApp(raw: string | null | undefined): string | null {
-  const e164 = normalizePhone(raw);
-  return e164 ? e164.replace(/\D/g, "") : null;
-}
