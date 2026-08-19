@@ -2412,22 +2412,40 @@ const ESLINT_TAGS_PROBED = {
  * worse than copies that agree, because now two behaviours wear one name.
  */
 const DUPLICATE_BODIES_KNOWN = [
-  // The documented scar. Escaping reached one of these and not the others; the callers
-  // now escape (see `email-safety: every placeholder substituter escapes its variables`),
-  // so this is debt rather than a live hole. Worth collapsing — five near-copies of the
-  // one function that renders client-supplied text into HTML.
-  "lib/birthday-process.ts → replacePlaceholders | lib/campaign-process.ts → replacePlaceholders | lib/campaign-send.ts → replacePlaceholders | lib/drip-emails.ts → replacePlaceholders",
+  // COLLAPSED 2026-08-19. `replacePlaceholders` stood in five identical copies — here
+  // and in four senders — which is exactly how escaping reached one caller and not the
+  // others. Now exported once from lib/email-render.ts. Left as a note rather than
+  // deleted silently: the entry it replaces was the documented scar, and its absence
+  // should read as resolved rather than as never-recorded.
+  //
   // Time arithmetic in three places, one under a different name. This codebase's scars
   // are disproportionately date/time, so these belong in lib/dates.ts.
   "app/(portal)/portal/(dashboard)/book/actions.ts → formatMinutesToTime | app/(public)/book/actions.ts → formatMinutesToTime | lib/availability.ts → formatTime",
   "app/(admin)/admin/(dashboard)/bookings/day-view.tsx → timeToMinutes | app/(admin)/admin/(dashboard)/bookings/week-view.tsx → timeToMinutes",
-  // UI handlers. Real duplication, low blast radius; collapsing them is tidying, not
-  // risk reduction, so they sit at the back of the queue.
-  "components/admin/admin-header.tsx → handleSignOut | components/portal/portal-header.tsx → handleSignOut",
+  // COLLAPSED 2026-08-19. `handleSignOut` was filed here as UI tidying and reclassified
+  // on reading it: the bodies are session teardown, clearing the chunked `sb-*` cookies
+  // Supabase leaves behind, where a stale fragment reads as a partly-valid session. Two
+  // copies meant a fix to that reached one surface. Now lib/auth/sign-out.ts.
+  //
+  // The rest were each opened and given their own verdict rather than judged by name
+  // (dev-standards/LESSONS.md L-27). They are NOT one undifferentiated pile:
+  //
+  // Pure formatters — no state, no security surface. Real duplication, and a divergence
+  // costs a differently-rounded file size or a differently-derived slug: visible at once
+  // and harmful to nobody. Genuinely the back of the queue.
   "components/admin/lecture-form.tsx → formatBytes | components/admin/preview-video-upload.tsx → formatBytes",
+  "components/admin/course-form.tsx → handleTitleChange | components/admin/digital-product-form.tsx → handleTitleChange | components/admin/package-form.tsx → handleTitleChange",
+  // Upload handlers, identical TODAY and expected to diverge: an image dropzone wants
+  // dimension and MIME validation a generic file dropzone must not impose. Collapsing
+  // them would build a shared function with two callers pulling opposite ways, which is
+  // worse than the copy. Kept deliberately — this is a decision, not a backlog item.
   "components/admin/file-upload.tsx → handleDrop | components/admin/image-upload.tsx → handleDrop",
   "components/admin/file-upload.tsx → handleFileSelect | components/admin/image-upload.tsx → handleFileSelect",
-  "components/admin/course-form.tsx → handleTitleChange | components/admin/digital-product-form.tsx → handleTitleChange | components/admin/package-form.tsx → handleTitleChange",
+  // A blank line-item factory shared by the two dialogs that build invoice lines. Small,
+  // but it encodes the SHAPE of a LineItem — add a field to the type and one dialog
+  // starts producing rows without it. Belongs in lib/billing-types.ts, which already owns
+  // the type. Queued rather than urgent: a missing field is a type error, not a silent
+  // one, which is what separates this from the sign-out case above.
   "app/(admin)/admin/(dashboard)/clients/[id]/tabs/payment-request-dialogs.tsx → emptyLine | app/(admin)/admin/(dashboard)/invoices/new-pr-dialog.tsx → emptyLine",
 ];
 

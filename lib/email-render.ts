@@ -283,8 +283,15 @@ const TEMPLATE_TITLES: Record<string, string> = {
 /**
  * Replace all {{variable}} placeholders in a string.
  * Unmatched placeholders are left as-is (empty string replacement if variable exists but is empty).
+ *
+ * The one copy. Five identical versions of this existed — here and in four senders —
+ * which is how escaping reached one caller and not the others: `escapeTemplateVariables`
+ * was added at THIS one, and birthday, campaign, campaign-send and drip each went on
+ * substituting client-supplied text into HTML unescaped. Escaping now happens at the
+ * call sites, so this is the substitution and nothing else; keep it that way, and pass
+ * escaped variables in.
  */
-function replacePlaceholders(
+export function replacePlaceholders(
   template: string,
   variables: Record<string, string>
 ): string {

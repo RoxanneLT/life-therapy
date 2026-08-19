@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { escapeTemplateVariables } from "@/lib/email-render";
+import { escapeTemplateVariables, replacePlaceholders } from "@/lib/email-render";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate, normalizeEmailHtml } from "@/lib/email-templates";
@@ -11,14 +11,6 @@ const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 1200;
 
-function replacePlaceholders(
-  template: string,
-  variables: Record<string, string>
-): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    return key in variables ? variables[key] : match;
-  });
-}
 
 /**
  * Generate a password reset URL for a recipient.

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { createBrowserClient } from "@/lib/supabase";
+import { useSignOut } from "@/lib/auth/use-sign-out";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,9 +25,7 @@ interface PortalHeaderProps {
   readonly certificateCount?: number;
 }
 
-export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, isSessionsClient, certificateCount }: PortalHeaderProps) {
-  const router = useRouter();
-  const pathname = usePathname();
+export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, isSessionsClient, certificateCount }: PortalHeaderProps) {  const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Close mobile sheet on navigation
@@ -36,19 +34,7 @@ export function PortalHeader({ studentName, studentEmail, upcomingSessionCount, 
     setSheetOpen(false);
   }, [pathname]);
 
-  async function handleSignOut() {
-    const supabase = createBrowserClient();
-    await supabase.auth.signOut({ scope: "local" });
-    // Clear ALL Supabase chunked auth cookies to prevent stale fragments
-    document.cookie.split(";").forEach((c) => {
-      const name = c.trim().split("=")[0];
-      if (name.startsWith("sb-")) {
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-      }
-    });
-    router.push("/login");
-    router.refresh();
-  }
+  const handleSignOut = useSignOut();
 
   const initials = studentName
     ? studentName

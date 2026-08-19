@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { escapeTemplateVariables } from "@/lib/email-render";
+import { escapeTemplateVariables, replacePlaceholders } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -20,14 +20,6 @@ export async function getDripPhaseCounts(): Promise<{ onboarding: number; newsle
   return { onboarding, newsletter };
 }
 
-function replacePlaceholders(
-  template: string,
-  variables: Record<string, string>
-): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    return key in variables ? variables[key] : match;
-  });
-}
 
 /**
  * Generate a password reset URL for a student.

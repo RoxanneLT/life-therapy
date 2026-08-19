@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { escapeTemplateVariables } from "@/lib/email-render";
+import { escapeTemplateVariables, replacePlaceholders } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { saToday } from "@/lib/dates";
@@ -19,14 +19,6 @@ function getGenderCategory(gender: string | null | undefined): "female" | "male"
   return "unknown";
 }
 
-function replacePlaceholders(
-  template: string,
-  variables: Record<string, string>
-): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    return key in variables ? variables[key] : match;
-  });
-}
 
 /**
  * Send birthday emails to all eligible clients whose birthday is today.
