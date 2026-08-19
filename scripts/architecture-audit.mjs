@@ -1977,6 +1977,71 @@ check("calendar: removal shape is not inferred from recurringSeriesId", () => {
 // Ask is the floor; absent is the violation.
 // ═══════════════════════════════════════════════════════════════════════════
 
+check("hooks: every hook is registered, and every registration resolves", () => {
+  // The registration gap, found by review of a sibling project and confirmed here: the
+  // twin check below reads `permissions.deny` and `permissions.ask` and never once looks
+  // at `settings.hooks`. So a hook could exist, declare its twins, carry probe records,
+  // ship a passing test suite — and not be wired to any PreToolUse matcher at all. Every
+  // artefact would say the control exists. Nothing would run it.
+  //
+  // Not hypothetical: disabling a gate during the harness experiments was done by
+  // RENAMING its file, and nothing here would have noticed a failure to restore it.
+  //
+  // Two directions, because they fail differently. An unregistered file is a control
+  // that never runs and looks complete. A registration pointing at a missing file is
+  // L-16's shape — the hook errors, the harness reports a non-blocking status nobody
+  // reads, and the rule it alone held degrades in silence.
+  const hookDir = join(ROOT, ".claude/hooks");
+  const settingsPath = join(ROOT, ".claude/settings.json");
+  if (!existsSync(hookDir) || !existsSync(settingsPath)) return; // the twin check reports this
+
+  const settings = JSON.parse(read(settingsPath));
+  const events = Object.entries(settings.hooks ?? {});
+  const commands = [];
+  for (const [event, entries] of events) {
+    for (const entry of entries ?? []) {
+      for (const h of entry.hooks ?? []) {
+        commands.push({ event, matcher: entry.matcher, command: String(h.command ?? "") });
+      }
+    }
+  }
+
+  // 1. Every hook FILE is wired to something.
+  const hookFiles = readdirSync(hookDir).filter((f) => /\.js$/.test(f) && !/\.test\./.test(f));
+  for (const f of hookFiles) {
+    const registered = commands.some((c) => c.command.includes(f));
+    if (!registered) {
+      fail(
+        "hooks",
+        `.claude/hooks/${f}`,
+        "is not registered in settings.json — it exists, tests green, and never runs",
+        "add it under hooks.PreToolUse with a matcher, or delete the file so nothing reads as a control that is not one",
+      );
+    }
+  }
+
+  // 2. Every registration points at a file that is there, and names what it matches.
+  for (const c of commands) {
+    const named = /\.claude[\\/]hooks[\\/]([\w.-]+\.m?js)/.exec(c.command);
+    if (named && !existsSync(join(hookDir, named[1]))) {
+      fail(
+        "hooks",
+        ".claude/settings.json",
+        `${c.event} registers ${named[1]}, which does not exist`,
+        "a hook that cannot start fails non-blocking and silently — restore the file or drop the registration",
+      );
+    }
+    if (!c.matcher) {
+      fail(
+        "hooks",
+        ".claude/settings.json",
+        `a ${c.event} entry has no matcher`,
+        "give it an explicit matcher — an absent one is a scope nobody chose",
+      );
+    }
+  }
+});
+
 check("hooks: every hook declares its twin or why it cannot have one", () => {
   // This check was named "every incident-class gate" and read exactly ONE file. ddl-gate
   // — the gate standing between a script and production DDL — was never in scope, so

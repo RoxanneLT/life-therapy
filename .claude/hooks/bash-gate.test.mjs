@@ -10,8 +10,8 @@
  * WHY IT EXISTS AT ALL. A hook is the one control that reaches every context —
  * subagents included — and the one whose failure is silent: break its path and
  * Claude Code reports a non-blocking status nobody reads, after which every rule
- * it holds degrades without anything going red (LESSONS L-006). Planting a
- * violation and watching a check fail is the standing discipline here (L-002);
+ * it holds degrades without anything going red (dev-standards/LESSONS.md L-16). Planting a
+ * violation and watching a check fail is the standing discipline here (dev-standards/LESSONS.md L-01);
  * this is that discipline pointed at the gate itself.
  */
 import { spawnSync } from "node:child_process";
