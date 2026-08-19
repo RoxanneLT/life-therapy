@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { phoneError } from "@/lib/phone";
-import type { BookingData } from "./booking-widget";
+import type { BookingData } from "./booking-data";
 
 interface BookingFormStepProps {
   readonly initialData: BookingData;

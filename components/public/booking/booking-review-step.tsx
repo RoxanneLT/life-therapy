@@ -15,7 +15,7 @@ import { format, parse } from "date-fns";
 import { formatPrice } from "@/lib/utils";
 import type { Currency } from "@/lib/region";
 import { createBooking } from "@/app/(public)/book/actions";
-import type { BookingData } from "./booking-widget";
+import type { BookingData } from "./booking-data";
 
 interface BookingReviewStepProps {
   readonly data: BookingData;

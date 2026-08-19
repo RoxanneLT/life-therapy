@@ -9,18 +9,10 @@ import { BookingReviewStep } from "./booking-review-step";
 import { SESSION_TYPES, type SessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
 import type { TimeSlot } from "@/lib/availability";
+import type { BookingData } from "./booking-data";
 import type { Currency } from "@/lib/region";
 import { Clock } from "lucide-react";
 
-export interface BookingData {
-  sessionType: SessionTypeConfig | null;
-  date: string | null; // "2026-02-10"
-  slot: TimeSlot | null;
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
-  clientNotes: string;
-}
 
 const STEPS = [
   "Choose Session",
