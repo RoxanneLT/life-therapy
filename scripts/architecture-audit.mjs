@@ -1298,14 +1298,13 @@ check("email-safety: every rendered template key has a hardcoded fallback", () =
 // domain — booking-cancellation links went to .co.za for international clients,
 // and the certificate footer printed .online onto every SA client's certificate.
 //
-// The literal belongs in lib/region.ts / lib/copy.ts (the region → domain map) and
-// nowhere else. Everyone else derives it: getBaseUrl() from the request, or
+// The literal belongs in lib/region.ts (the region → domain map) and nowhere else.
+// Everyone else derives it: getBaseUrl() from the request, or
 // getBaseUrlForCurrency(currency) when emailing someone else's record.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const DOMAIN_LITERAL_ALLOW = new Set([
   "lib/region.ts", // the region → domain map — where the literal is SUPPOSED to live
-  "lib/copy.ts", // per-region marketing copy
   "app/layout.tsx", // hreflang / canonical — legitimately names both domains
   "lib/email-render.ts", // SAMPLE_DATA preview block + the DEFAULT_BASE_URL last-resort fallback
   "lib/email-templates.ts", // hardcoded fallback templates, same last-resort fallback
@@ -1320,7 +1319,7 @@ const DOMAIN_LITERAL_ALLOW = new Set([
 check("dual-domain: no hardcoded life-therapy domain in a client-facing path", () => {
   // Match the domain with an https:// prefix or a "/book"-style path after it —
   // i.e. a URL, not an email address (hello@life-therapy.co.za is a shared inbox,
-  // handled separately in lib/copy.ts).
+  // and the regex below deliberately does not match a bare address).
   const RE = /https?:\/\/life-therapy\.(?:co\.za|online)|life-therapy\.(?:co\.za|online)\/\w/;
   for (const f of allSource()) {
     if (DOMAIN_LITERAL_ALLOW.has(rel(f))) continue;
@@ -2340,6 +2339,32 @@ check("allowlists: every exemption is still load-bearing", () => {
   // whatever gets written into that file next. KNOWN_DEFECTS already fails when
   // an entry stops firing, precisely so a fixed bug cannot linger as a tombstone;
   // an allowlist deserves the same rule and did not have it.
+  // DOMAIN_LITERAL_ALLOW gets the same treatment, and it was NOT covered here until
+  // the tier-0 crawler found why it needed to be: `lib/copy.ts` sat in this list,
+  // exempted "per-region marketing copy", with ZERO imports anywhere in the tree. An
+  // exemption was protecting a dead file — the stale-exemption class in its purest
+  // form, and invisible to a check that only audited one of the two lists.
+  for (const relf of DOMAIN_LITERAL_ALLOW) {
+    const abs = join(ROOT, relf);
+    if (!existsSync(abs)) {
+      fail(
+        "allowlists",
+        relf,
+        "DOMAIN_LITERAL_ALLOW exempts a file that no longer exists",
+        "remove the entry — an exemption pointing at nothing still reads as a considered decision",
+      );
+      continue;
+    }
+    if (!/life-therapy\.co\.za/.test(read(abs))) {
+      fail(
+        "allowlists",
+        relf,
+        "is exempted from the dual-domain rule but no longer contains the literal",
+        "remove the entry — it now covers whatever gets written into this file next",
+      );
+    }
+  }
+
   for (const relf of DATE_ALLOWLIST) {
     const abs = join(ROOT, relf);
     if (!existsSync(abs)) {
