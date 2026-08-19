@@ -104,13 +104,16 @@ process.stdin.on("end", () => {
     // prompts too often, NARROW its pattern — never delete it.
     const DENY = [
       // @twin Bash(git push --force*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — denied  · `git push --force --dry-run`
+      // @probed-sha 8ce32a
       [cmdRe(String.raw`git\s+push\s+[^\n]*(?:--force|-f\b)`), "force push is denied"],
       // @twin Bash(git reset --hard*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — denied  · `git reset --hard HEAD`
+      // @probed-sha f569a9
       [cmdRe(String.raw`git\s+reset\s+--hard`), "hard reset is denied"],
       // @twin Bash(rm -rf /*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
+      // @probed-sha 3c04f7
       // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir
       // cleanup. The dangerous shapes are the rooted ones; the quoted and trailing-space
       // variants stay this layer's job.
@@ -120,7 +123,8 @@ process.stdin.on("end", () => {
       // advisory locks. Denied rather than gated, so nobody burns a session rediscovering it.
       // Schema changes go through the Supabase Management API — see .claude/rules/schema-changes.md.
       // @twin Bash(npx prisma migrate*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — prompted · `npx prisma migrate --help`
+      // @probed-sha 5c3d31
       [
         cmdRe(String.raw`prisma\s+(?:migrate|db\s+push)`),
         "prisma migrate/db push does NOT work on this project — apply DDL via the Supabase Management API, then `npx prisma db pull && npx prisma generate` (see .claude/rules/schema-changes.md)",
@@ -128,18 +132,21 @@ process.stdin.on("end", () => {
     ];
     const ASK = [
       // @twin Bash(git push*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — prompted · `git push --dry-run`
+      // @probed-sha b5a41f
       [cmdRe(String.raw`git\s+push\b`), "pushing to origin requires approval — the user walks the work first"],
       // The Management API is the working path for DDL — but it hits PRODUCTION.
       // @twin Bash(curl*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — prompted · `curl https://example.com` — the same command ran UNPROMPTED with the hook alive
+      // @probed-sha f5ea25
       // The twin is coarser than it looks necessary, on purpose: settings.json cannot
       // match a URL mid-command, so the only reliable floor is the tool that carries it.
       // curl is rare here and its two documented uses (this, and triggering a cron by
       // hand with a live CRON_SECRET) both deserve a prompt anyway.
       [/api\.supabase\.com\/\S*\/database\/query/, "this runs SQL against production — approve the statement"],
       // @twin Bash(vercel*)
-      // @probed never — reaching a twin requires the hook disabled (L-010)
+      // @probed 2026-08-19 hook-disabled: intercepts — prompted · `vercel --version`
+      // @probed-sha 0e37e3
       [/\bvercel\b/, "deploying requires approval"],
     ];
 
