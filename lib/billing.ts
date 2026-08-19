@@ -112,7 +112,7 @@ export interface LineItemCalc {
  *   discount = max(gross × percent / 100,  fixedCents)
  *   net      = gross − discount
  */
-export function calculateLineTotal(item: LineItemCalc): {
+function calculateLineTotal(item: LineItemCalc): {
   gross: number;
   discount: number;
   net: number;

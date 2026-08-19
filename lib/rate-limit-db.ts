@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 
 /** Privacy-preserving bucket key for an identifier (e.g. email) — never store it raw. */
-export function hashIdentifier(value: string): string {
+function hashIdentifier(value: string): string {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex").slice(0, 32);
 }
 

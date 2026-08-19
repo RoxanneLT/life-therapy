@@ -18,7 +18,7 @@ const getCachedPageSeo = unstable_cache(
 );
 
 /** Fetch PageSeo row for a static route. Returns null if not found. */
-export async function getPageSeo(route: string) {
+async function getPageSeo(route: string) {
   return getCachedPageSeo(route);
 }
 

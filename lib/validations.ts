@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const loginSchema = z.object({
   email: z.email("Invalid email address"),
   password: z.string().min(12, "Password must be at least 12 characters"),
@@ -69,6 +75,12 @@ export const testimonialSchema = z.object({
   sortOrder: z.coerce.number().int().default(0),
 });
 
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const siteSettingsSchema = z.object({
   // Branding
   siteName: z.string().min(1, "Site name is required"),
@@ -122,6 +134,12 @@ export const bookingFormSchema = z.object({
   clientNotes: z.string().max(1000).optional(),
 });
 
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const availabilityOverrideSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   isBlocked: z.boolean(),
@@ -130,6 +148,12 @@ export const availabilityOverrideSchema = z.object({
   reason: z.string().max(200).optional(),
 });
 
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const bookingSettingsSchema = z.object({
   bookingMaxAdvanceDays: z.coerce.number().int().min(1).max(365).default(60),
   bookingMinNoticeHours: z.coerce.number().int().min(0).max(168).default(24),
@@ -176,6 +200,12 @@ export const lectureSchema = z.object({
   sortOrder: z.coerce.number().int().min(0).default(0),
 });
 
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const quizQuestionSchema = z.object({
   questionType: z.enum(["multiple_choice", "true_false", "reflection"]),
   questionText: z.string().min(1, "Question text is required"),
@@ -187,6 +217,12 @@ export const quizQuestionSchema = z.object({
 // ============================================================
 // E-Commerce: Coupons / Credit Packs
 // ============================================================
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const couponSchema = z.object({
   code: z.string().min(1, "Code is required").transform((v) => v.toUpperCase()),
   type: z.enum(["percentage", "fixed_amount"]),
@@ -263,6 +299,12 @@ export const studentRegisterSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+/**
+ * @queued Adopt at the call site rather than delete — see the note in knip.jsonc.
+ * The path this describes DOES validate today, by hand, beside this schema. Two
+ * expressions of one rule, and this is the better one; adopting it changes
+ * validation behaviour on an admin form, so it is a decided change of its own.
+ */
 export const studentLoginSchema = z.object({
   email: z.email("Invalid email address"),
   password: z.string().min(1, "Password is required"),

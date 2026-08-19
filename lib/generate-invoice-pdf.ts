@@ -463,7 +463,7 @@ function buildInvoiceDoc(data: InvoiceLayoutData): jsPDF {
 
 // ─── PDF Generator (Invoice) ─────────────────────────────────
 
-export async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
+async function generateInvoicePDF(invoiceId: string): Promise<Buffer> {
   const invoice = await prisma.invoice.findUniqueOrThrow({
     where: { id: invoiceId },
   });

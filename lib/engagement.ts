@@ -39,7 +39,7 @@ export const COLD_THRESHOLD = 5;
  * sessions and return, and treating a six-week gap as disengagement is what the
  * old rule effectively did.
  */
-export const ENGAGEMENT_WINDOW_DAYS = 90;
+const ENGAGEMENT_WINDOW_DAYS = 90;
 
 /**
  * Reasons written by the automatic rule. Matched as a PATTERN, not a fixed string:

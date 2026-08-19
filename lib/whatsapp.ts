@@ -54,8 +54,12 @@ export function normalizePhoneNumber(phone: string): string {
 /**
  * Validate a phone number against the real numbering plan (SA: strict 10 digits;
  * international: that country's plan via libphonenumber).
+ *
+ * Internal. `lib/phone.ts` exports its own `isValidPhone` for callers — same name, a
+ * different module, and the collision is what made this one look externally used when
+ * it never was.
  */
-export function isValidPhone(phone: string): boolean {
+function isValidPhone(phone: string): boolean {
   return isValidPhoneStrict(phone);
 }
 

@@ -39,14 +39,6 @@ export interface AudienceFilters {
   tags?: string[];
 }
 
-// Filter section definitions for the UI
-export interface FilterSection {
-  key: string;
-  label: string;
-  description?: string;
-  type: "checkbox" | "radio" | "range" | "toggle";
-}
-
 // Options for select-style filters
 export const CLIENT_STATUS_OPTIONS = [
   { value: "active", label: "Active" },

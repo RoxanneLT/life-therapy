@@ -57,10 +57,6 @@ export function getRegionFromHostname(hostname: string): Region {
   return "int";
 }
 
-export function isInternational(region: Region): boolean {
-  return region !== "za";
-}
-
 export function isValidCurrency(value: string): value is Currency {
   return ["ZAR", "USD", "EUR", "GBP"].includes(value);
 }

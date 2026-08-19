@@ -57,6 +57,11 @@
   // distinction cost two broken builds in this pass before it was written down.
   "ignoreExportsUsedInFile": { "interface": true, "type": true },
 
+  // Exports carrying a `@queued` JSDoc tag are excluded from the report. Used ONLY by
+  // the seven zod schemas in lib/validations.ts, each of which carries the reason at its
+  // own site. See the note at the foot of this file.
+  "tags": ["-queued"],
+
   "ignore": [
     // shadcn/ui primitives. These arrive as a SET — you install the component and
     // its Radix dependency together — and several are staged ahead of the screens
@@ -119,13 +124,31 @@
   // and a number written into a config file is stale the next time somebody acts on it —
   // the previous version of this comment said "~57 and ~31" within hours of being wrong.
   //
-  // STILL OPEN, and a decision rather than a cleanup:
-  //   · seven zod schemas — login, siteSettings, availabilityOverride, bookingSettings,
-  //     quizQuestion, coupon, studentLogin. Their paths DO validate, by hand, beside the
-  //     unused schema. The fix is to adopt the schema at the call site, not to delete it,
-  //     and that changes validation behaviour on seven admin forms.
-  //   · a tail of one- and two-export files, each needing its own look. The lesson from
-  //     this pass is that "unused export" and "unused function" are different findings:
-  //     three calendar helpers and one Bunny helper were used INSIDE their own module and
-  //     only needed unexporting. Deleting on the report alone broke the build twice.
+  // THIRD PASS, 2026-08-19 — the tail, and the ratchet.
+  //
+  // Every category is now gated by `npm run check`: files, dependencies, unlisted,
+  // unresolved, duplicates, exports and types. That is the point of the cleanup. Exports
+  // were outside the gate, so they regrew silently, which is how the list reached 89.
+  // At zero the next dead export fails the build the day it appears.
+  //
+  // The tail resolved into three kinds, and the FIRST is the one to remember:
+  //   · used inside its own module — only the export was dead. Sixteen of these. An
+  //     unused EXPORT and an unused FUNCTION are different findings, and conflating them
+  //     broke the build three times in these passes.
+  //   · shims and duplicates hidden by NAME COLLISIONS — a `VariableChip` re-export
+  //     nobody used, an `isValidPhone` in whatsapp.ts shadowed by the real one in
+  //     phone.ts, a `FilterSection` interface shadowed by a local component, a
+  //     `getRateLabel` duplicated byte-for-byte in a tab component (now consolidated),
+  //     and an `isInternational` the region store inlines. grep could not see any of
+  //     these; resolving imports is what knip is for.
+  //   · genuinely dead — deleted, each verified at zero references first.
+  //
+  // STILL OPEN, deliberately, and tagged `@queued` at their own sites rather than hidden:
+  //   · seven zod schemas in lib/validations.ts. Their paths DO validate, by hand, beside
+  //     the unused schema — two expressions of one rule, and the schema is the better
+  //     one. Adopt them at the call sites; do not delete them. That changes validation
+  //     behaviour on seven admin forms, so it is a decided change with its own testing.
+  //     The tag is a queue item, not a silencer: adopted, they leave this list because
+  //     they are imported; abandoned, they leave because they are gone. Either way it
+  //     shrinks, and `tags: ["-queued"]` is used by nothing else.
 }

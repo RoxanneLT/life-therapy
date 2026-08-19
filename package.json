@@ -29,7 +29,7 @@
     "secrets": "node scripts/sync-secrets.mjs status",
     "secrets:pull": "node scripts/sync-secrets.mjs pull",
     "secrets:push": "node scripts/sync-secrets.mjs push",
-    "crawl:tier0": "knip --no-progress --include files,dependencies,unlisted,unresolved,duplicates",
+    "crawl:tier0": "knip --no-progress --include files,dependencies,unlisted,unresolved,duplicates,exports,types",
     "crawl:all": "knip --no-progress",
     "test:removal": "tsx --test lib/calendar-removal.test.ts",
     "test:gate": "node .claude/hooks/bash-gate.test.mjs && node .claude/hooks/ddl-gate.test.mjs",

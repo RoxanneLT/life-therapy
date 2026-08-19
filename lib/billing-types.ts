@@ -42,7 +42,7 @@ export interface InvoiceLineItem {
  * Zod rejects NaN and Infinity for `z.number()` by default, which is most of
  * what a broken calculation produces.
  */
-export const invoiceLineItemSchema = z.object({
+const invoiceLineItemSchema = z.object({
   description: z.string().min(1, "a line item needs a description"),
   subLine: z.string().optional(),
   quantity: z.number().positive("quantity must be greater than zero"),
@@ -60,7 +60,7 @@ export const invoiceLineItemSchema = z.object({
   billingNote: z.string().optional(),
 });
 
-export const invoiceLineItemsSchema = z.array(invoiceLineItemSchema);
+const invoiceLineItemsSchema = z.array(invoiceLineItemSchema);
 
 /**
  * Validate line items on the way IN. Throws — the caller's try/catch turns it

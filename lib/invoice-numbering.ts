@@ -30,7 +30,7 @@ export function extractInitials(name: string): string {
  * Format an invoice number from its parts.
  *   (2026-02-20, "LT", "GS", 1) → "20260220-LT-GS-00001"
  */
-export function formatInvoiceNumber(
+function formatInvoiceNumber(
   date: Date,
   prefix: string,
   initials: string,

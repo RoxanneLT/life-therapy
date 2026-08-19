@@ -12,7 +12,7 @@ const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 1200;
 
 /** Get the total number of emails in each drip phase from DB */
-export async function getDripPhaseCounts(): Promise<{ onboarding: number; newsletter: number }> {
+async function getDripPhaseCounts(): Promise<{ onboarding: number; newsletter: number }> {
   const [onboarding, newsletter] = await Promise.all([
     prisma.dripEmail.count({ where: { type: "onboarding" } }),
     prisma.dripEmail.count({ where: { type: "newsletter" } }),

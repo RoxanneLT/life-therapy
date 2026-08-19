@@ -3,6 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useClientInsights } from "../use-client-data";
+// The shared copy, not a local one. This file carried a byte-identical
+// `getRateLabel` while the exported version sat unused in lib/admin/client-insights.ts
+// — two expressions of one banding rule, so a change to "what counts as a high
+// reschedule rate" would have moved the label in one place and not the other.
+import { getRateLabel } from "@/lib/admin/client-insights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,16 +37,6 @@ const RATE_COLORS = {
   amber: "text-amber-600",
   red: "text-red-600",
 } as const;
-
-function getRateLabel(rate: number): {
-  label: string;
-  color: "green" | "amber" | "red";
-} {
-  if (rate <= 10) return { label: "Very low", color: "green" };
-  if (rate <= 20) return { label: "Low", color: "green" };
-  if (rate <= 35) return { label: "Moderate", color: "amber" };
-  return { label: "High", color: "red" };
-}
 
 interface InsightFlag {
   type: string;

@@ -33,7 +33,7 @@ export interface PhoneCheck {
  * with a different country code is FOREIGN and validated against that country's real
  * numbering plan via libphonenumber-js. A bare number with no 0 / + prefix is rejected.
  */
-export function checkPhone(raw: string | null | undefined): PhoneCheck {
+function checkPhone(raw: string | null | undefined): PhoneCheck {
   const v = (raw ?? "").trim();
   if (!v) return { valid: false, kind: "invalid", reason: "Required" };
 

@@ -85,7 +85,7 @@ const LINK_STATUS: Record<string, { status: LinkAuditItem["status"]; note: strin
 /**
  * Get the audit status for a specific URL.
  */
-export function auditLink(url: string, label: string): LinkAuditItem {
+function auditLink(url: string, label: string): LinkAuditItem {
   const known = LINK_STATUS[url];
   if (known) {
     return { url, label, ...known };

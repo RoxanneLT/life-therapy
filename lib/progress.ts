@@ -82,7 +82,7 @@ export async function recalculateProgress(
 /**
  * Generates a certificate for a student-course pair if one doesn't exist.
  */
-export async function generateCertificate(
+async function generateCertificate(
   studentId: string,
   courseId: string
 ): Promise<string> {

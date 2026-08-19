@@ -3,7 +3,6 @@ import { slugify } from "@/lib/utils";
 import { cache } from "react";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 
-export type SiteSettings = SiteSetting;
 
 export interface BusinessHoursDay {
   open: string;
@@ -30,7 +29,7 @@ export interface BranchAddressWithSlug extends BranchAddress {
 }
 
 /** Branch slug derived from the town (e.g. "Cape Town" → "cape-town"). */
-export function branchSlug(town: string): string {
+function branchSlug(town: string): string {
   return slugify(town || "");
 }
 

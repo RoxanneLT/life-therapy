@@ -11,7 +11,7 @@
  */
 
 /** Client inactivity timeout: 14 days */
-export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
 
 /**
  * Admin-specific inactivity timeout (7 days).
