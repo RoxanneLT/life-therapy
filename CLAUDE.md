@@ -264,14 +264,18 @@ into that file next.
 These have **no mechanical net**. Nothing will catch a violation, so they are held by
 attention alone — they are the ones to slow down for. Everything in §4 is enforced; follow it
 and the build disagrees with you if you don't. Mechanise one of these and it moves up to §4,
-and the count below falls, which is the point.
+and the count `npm run audit` prints falls, which is the point.
 
-- **Read the actual source files before writing code.** Don't assume structure — this codebase has specific patterns. Read the component, its imports, and the actions file first. UNENFORCEABLE — and it is the root of most of the rest: every rule here is easy to satisfy once you have read the file and impossible to satisfy reliably from memory. Reading is also what summons the scoped rule files (E1b).
-- **Never create parallel systems when you can extend existing ones.** Manual invoices reuse the pro-forma → Paystack → tax-invoice pipeline; they don't build a second invoicing flow. UNENFORCEABLE — "is this a duplicate system" is a judgement about intent. Ask `grounder` before building.
-- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes through the Supabase Management API. UNENFORCEABLE — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.)
-- **Never auto-fill or guess client data.** If a field needs a value you don't have, leave it empty or show a placeholder. UNENFORCEABLE — a fabricated value is indistinguishable from a real one at the point it is written.
-- **Use `toast` from `sonner` for success and error feedback** on client-side actions. Silence reads as success — a cancelled session sat live in Outlook for five days behind a dialog that closed without a word (§6). UNENFORCEABLE, and measured on 2026-08-18 rather than assumed: "did this report the outcome" has no code shape. 47 of 197 client components import an action without importing `toast`, and most are right to — a form that redirects, a component with inline errors, one that reports via `alert()`. Narrowing to the incident shape (a confirm dialog whose action reports nothing) left 4, of which some were fine. Any check here either misses real cases or flags files that are correct.
-- **Use confirmation dialogs for destructive actions** — cancel, void, delete, send. UNENFORCEABLE, and the census shows why: the count moves from 12 to 18 depending purely on whether a `<Dialog>` counts as a confirmation alongside `<AlertDialog>`, and a two-step button or an inline "are you sure" counts too. A number that unstable is measuring the detector, not the codebase.
+Each carries a pointer into `docs/MECHANISABLE.md` — the build queue, holding what a mechanism
+would have to assert, or the measurement saying why none is worth building. **Two are closed by
+measurement, not open**: a refusal that carries its numbers is a finish.
+
+- **Read the actual source files before writing code.** Don't assume structure — this codebase has specific patterns. Read the component, its imports, and the actions file first. UNENFORCEABLE — nothing in the tree records what was read, and this is the rule most of the others depend on. Reading is also what summons the scoped rule files (E1b). → M-03
+- **Never create parallel systems when you can extend existing ones.** Manual invoices reuse the pro-forma → Paystack → tax-invoice pipeline; they don't build a second invoicing flow. UNENFORCEABLE — "is this a duplicate system" is a judgement about intent. Ask `grounder` before building. → M-04, the most promising of the six
+- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes through the Supabase Management API. UNENFORCEABLE — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.) → M-01
+- **Never auto-fill or guess client data.** If a field needs a value you don't have, leave it empty or show a placeholder. UNENFORCEABLE — a fabricated value is indistinguishable from a real one at the point it is written. → M-02
+- **Use `toast` from `sonner` for success and error feedback** on client-side actions. Silence reads as success — a cancelled session sat live in Outlook for five days behind a dialog that closed without a word (§6). UNENFORCEABLE, and measured rather than assumed: 47 of 197 components match the naive rule and most are right to. → M-05, closed
+- **Use confirmation dialogs for destructive actions** — cancel, void, delete, send. UNENFORCEABLE, and the census shows why: the count moves 12 → 18 on whether a `<Dialog>` counts, which measures the detector rather than the codebase. → M-06, closed
 
 ---
 

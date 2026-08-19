@@ -2237,6 +2237,57 @@ const ESLINT_TAGS_PROBED = {
     "static read of the config, so this record IS the verification.",
 };
 
+check("mechanisable: every unenforceable rule has a queue entry, and vice versa", () => {
+  // The register is a BUILD QUEUE and only shrinks — an entry leaves when its mechanism
+  // ships and the rule swaps UNENFORCEABLE for @enforced. Two ways that goes wrong and
+  // both are silent: a new unenforceable rule with no entry (added without anyone asking
+  // what a mechanism would assert), and an entry whose rule is gone (a queue item for
+  // work nobody needs, indistinguishable from one that matters).
+  //
+  // Set difference, not classification — the same shape as the marker and twin checks.
+  const md = read(join(ROOT, "CLAUDE.md"));
+  const regPath = join(ROOT, "docs/MECHANISABLE.md");
+  if (!existsSync(regPath)) {
+    fail("mechanisable", "docs/MECHANISABLE.md", "the register named by §5 does not exist",
+      "create it, or drop the pointers");
+    return;
+  }
+  const reg = read(regPath);
+
+  // RAW source both sides: the pointers and the headings are literal text.
+  const pointed = new Set([...md.matchAll(/→\s*(M-\d+)/g)].map((m) => m[1]));
+  const defined = new Set([...reg.matchAll(/^###\s+(M-\d+)\s+—/gm)].map((m) => m[1]));
+
+  for (const id of pointed) {
+    if (!defined.has(id)) {
+      fail("mechanisable", "CLAUDE.md", `§5 points at \`${id}\`, which the register does not define`,
+        "add the entry, or correct the pointer");
+    }
+  }
+  for (const id of defined) {
+    if (!pointed.has(id)) {
+      fail("mechanisable", "docs/MECHANISABLE.md", `\`${id}\` is queued but no rule points at it`,
+        "the rule was mechanised or removed — delete the entry; the queue only shrinks");
+    }
+  }
+
+  // Every unenforceable rule must be queued. A rule with no entry is one nobody has
+  // asked "what would a mechanism assert" about.
+  const lines = md.split("\n");
+  let inFive = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{2,3} /.test(lines[i])) inFive = lines[i].trim() === "## 5 · DOCTRINE THE MACHINE CANNOT HOLD";
+    if (!inFive || !/^- \*\*/.test(lines[i])) continue;
+    let body = lines[i];
+    for (let j = i + 1; j < lines.length && !/^[-#]/.test(lines[j]); j++) body += " " + lines[j];
+    if (!/\bUNENFORCEABLE\b/.test(body)) continue;
+    if (/→\s*M-\d+/.test(body)) continue;
+    fail("mechanisable", `CLAUDE.md:${i + 1}`,
+      "an unenforceable rule with no build-queue entry",
+      "add an entry to docs/MECHANISABLE.md and point at it with `→ M-0N` — a sketch, or the measurement saying why none is worth building");
+  }
+});
+
 check("csv: every export goes through the one escaper", () => {
   // Adopted from a sibling project's `check-csv-escaping`, which states the rule as
   // "every CSV we EMIT must go through the one escaper" — and the reason to take it
