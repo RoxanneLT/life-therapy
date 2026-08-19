@@ -27,13 +27,17 @@
  *   node scripts/crawl.mjs crawler-doctrine --scope lib/email        (first runs: scope small)
  *   node scripts/crawl.mjs crawler-doctrine --dry-run                (print the command only)
  */
-import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_FINDINGS = 12; // must match the cap in the agent's spine
+
+/** A headless crawl that has not finished in this long is stuck, not thorough. */
+const TIMEOUT_MS = Number(process.env.CRAWL_TIMEOUT_MS ?? 10 * 60 * 1000);
 
 const args = process.argv.slice(2);
 const agent = args.find((a) => !a.startsWith("--"));
@@ -58,6 +62,45 @@ const intentional = join(ROOT, ".claude/crawlers/INTENTIONAL.md");
 if (!existsSync(intentional)) {
   console.error(`❌ .claude/crawlers/INTENTIONAL.md is missing — refusing to run.`);
   console.error(`   Without it the first run flags deliberate design as defects (D6).`);
+  process.exit(2);
+}
+
+/**
+ * Preflight: is this workspace trusted for headless runs?
+ *
+ * A headless run against an untrusted workspace IGNORES `.claude/settings.json`
+ * permissions, so a tool call that should have been pre-allowed raises a prompt instead —
+ * and there is nobody there to answer it. The run does not fail; it waits, forever, having
+ * printed one line about ignored entries that scrolls past. The first person to try this
+ * reported a stuck terminal, which is exactly what it looks like.
+ *
+ * Detected here rather than diagnosed afterwards, because "hung" is the least informative
+ * symptom a tool can produce.
+ */
+function trustWarning() {
+  try {
+    const cfg = JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
+    const entries = Object.entries(cfg.projects ?? {}).filter(
+      ([p]) => p.replace(/\\/g, "/").toLowerCase() === ROOT.replace(/\\/g, "/").toLowerCase(),
+    );
+    if (!entries.length) return null; // never opened here; the CLI will ask on first run
+    if (entries.some(([, v]) => v?.hasTrustDialogAccepted)) return null;
+    return "untrusted";
+  } catch {
+    return null; // no config to read is not evidence of a problem
+  }
+}
+
+if (!dryRun && trustWarning()) {
+  console.error(`❌ this workspace is not trusted, so a headless run would hang.`);
+  console.error(`\n   Without trust the CLI IGNORES .claude/settings.json permissions, so a tool`);
+  console.error(`   call that should be pre-allowed raises a prompt with nobody to answer it.`);
+  console.error(`   It does not error — it waits.`);
+  console.error(`\n   Fix it once, either way:`);
+  console.error(`     · run \`claude\` interactively in ${ROOT} and accept the trust dialog; or`);
+  console.error(`     · set projects["${ROOT.replace(/\\/g, "/")}"].hasTrustDialogAccepted = true`);
+  console.error(`       in ${join(homedir(), ".claude.json")}`);
+  console.error(`\n   Then re-run. Use --dry-run to check the command without this preflight.\n`);
   process.exit(2);
 }
 
@@ -89,19 +132,88 @@ if (dryRun) {
  * take an explicit override first, then try each candidate through a shell, and say
  * which situation it is when none works.
  */
-const CANDIDATES = process.env.CLAUDE_CLI ? [process.env.CLAUDE_CLI] : ["claude", "claude.cmd"];
+const WIN = process.platform === "win32";
 
-function runCli(bin) {
-  // shell:true so a .cmd/.ps1 shim resolves. Every argument is ours or comes from argv
-  // we constructed — no user string reaches the shell unquoted.
-  return execFileSync(bin, argv, { cwd: ROOT, encoding: "utf8", maxBuffer: 32e6, shell: true });
+/**
+ * Prefer the REAL executable over the shim, because the shim costs a shell and a shell
+ * costs the timeout.
+ *
+ * `shell: true` is needed to resolve a `.cmd`, but then the timeout kills the SHELL while
+ * the actual process survives holding the stdout pipe — so the wrapper waits for a stream
+ * that never closes and hangs exactly as if there were no timeout at all. Measured: a
+ * 2-second limit did not return. Resolving the binary directly removes the shell, and the
+ * timeout then applies to the thing it is meant to stop.
+ *
+ * npm's global package dir sits beside the node binary on Windows and one level up on
+ * unix, so it is derivable without spawning `npm root -g` to find out.
+ */
+function realBinaryCandidates() {
+  const nodeDir = dirname(process.execPath);
+  const pkg = join("@anthropic-ai", "claude-code", "bin", WIN ? "claude.exe" : "claude");
+  return [
+    join(nodeDir, "node_modules", pkg), // Windows: C:\...\nodejs\node_modules\...
+    join(nodeDir, "..", "lib", "node_modules", pkg), // unix: <prefix>/lib/node_modules/...
+  ];
+}
+
+const CANDIDATES = process.env.CLAUDE_CLI
+  ? [{ bin: process.env.CLAUDE_CLI, shell: !existsSync(process.env.CLAUDE_CLI) }]
+  : [
+      ...realBinaryCandidates()
+        .filter(existsSync)
+        .map((bin) => ({ bin, shell: false })),
+      // Shims last: they work, but they reintroduce the shell and with it the timeout hole.
+      { bin: "claude", shell: true },
+      ...(WIN ? [{ bin: "claude.cmd", shell: true }] : []),
+    ];
+
+/**
+ * stderr is INHERITED, not captured, so the CLI's own progress reaches the terminal while
+ * this runs. The first version buffered both streams: an Opus crawl takes minutes and
+ * printed nothing until it finished, which is indistinguishable from a hang — and the
+ * first person to run it reported exactly that. Silence is not a neutral default; it is
+ * a claim that nothing is happening.
+ *
+ * The timeout is the other half. A headless run that stalls — waiting on auth, on a
+ * permission prompt that should not fire, on a network hiccup — must end by itself rather
+ * than sit there until someone gives up.
+ */
+/** "90s" or "10 min" — never "0 min", which is what rounding a short limit produced. */
+const human = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60000)} min`);
+
+function runCli({ bin, shell }) {
+  const started = Date.now();
+  const via = shell ? " (via shell — timeout may not stop it; install resolves this)" : "";
+  console.error(`  running ${bin}${via}\n  timeout ${human(TIMEOUT_MS)} · stderr below\n`);
+  const res = spawnSync(bin, argv, {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 32e6,
+    shell,
+    timeout: TIMEOUT_MS,
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  if (res.error) {
+    if (res.error.code === "ETIMEDOUT") {
+      throw Object.assign(new Error(`timed out after ${human(Date.now() - started)}`), { timedOut: true });
+    }
+    throw Object.assign(res.error, { stderr: res.stderr });
+  }
+  if (res.signal === "SIGTERM" || res.status === null) {
+    const mins = Math.round((Date.now() - started) / 60000);
+    throw Object.assign(new Error(`timed out after ~${mins} min`), { timedOut: true });
+  }
+  if (res.status !== 0) {
+    throw Object.assign(new Error(`exited ${res.status}`), { stdout: res.stdout, stderr: res.stderr });
+  }
+  return res.stdout;
 }
 
 let raw;
 let lastErr;
-for (const bin of CANDIDATES) {
+for (const cand of CANDIDATES) {
   try {
-    raw = runCli(bin);
+    raw = runCli(cand);
     break;
   } catch (err) {
     lastErr = err;
@@ -114,7 +226,14 @@ for (const bin of CANDIDATES) {
 if (raw === undefined) {
   const notFound =
     lastErr?.code === "ENOENT" || /not recognized|command not found/i.test(String(lastErr?.stderr ?? ""));
-  if (notFound) {
+  if (lastErr?.timedOut) {
+    console.error(`❌ the crawler did not finish in time: ${lastErr.message}.`);
+    console.error(`\n   A headless run that stalls is usually waiting on something interactive —`);
+    console.error(`   authentication, or a permission prompt that should not fire under a read-only`);
+    console.error(`   allowlist. Run \`claude\` once interactively to confirm you are logged in,`);
+    console.error(`   then retry. If the scope is genuinely large, raise the limit:`);
+    console.error(`     CRAWL_TIMEOUT_MS=1800000 node scripts/crawl.mjs ${agent}\n`);
+  } else if (notFound) {
     console.error(`❌ the \`claude\` CLI was not found (tried: ${CANDIDATES.join(", ")}).`);
     console.error(`\n   The VS Code extension bundles its own copy and does not put one on PATH,`);
     console.error(`   so this is expected on a machine that has only ever used the extension.`);
