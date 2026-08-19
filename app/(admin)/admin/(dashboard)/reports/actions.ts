@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { csvRow } from "@/lib/csv";
 import { requireRole } from "@/lib/auth";
 import { saToday } from "@/lib/dates";
 
@@ -16,18 +17,13 @@ function formatCurrency(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-function escapeCsv(value: string | null | undefined): string {
-  if (!value) return "";
-  const str = String(value);
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-function toCsvRow(fields: (string | number | null | undefined)[]): string {
-  return fields.map((f) => escapeCsv(f == null ? "" : String(f))).join(",");
-}
+/**
+ * Kept as a thin alias so the call sites below read unchanged. The escaping itself moved
+ * to lib/csv.ts, which was the point: this file's copy and the invoice export's copy were
+ * byte-identical and BOTH missed formula injection, so a fix here would have reached half
+ * the exports (`dev-standards/LESSONS.md` L-21).
+ */
+const toCsvRow = csvRow;
 
 export async function exportInvoiceRegister(
   from: string,
@@ -91,7 +87,7 @@ export async function exportInvoiceRegister(
     ]);
   });
 
-  const csv = [header.join(","), ...rows].join("\n");
+  const csv = [csvRow(header), ...rows].join("\r\n");
   const filename = `invoice-register_${from}_${to}.csv`;
 
   return { csv, filename };
@@ -156,7 +152,7 @@ export async function exportSessionRegister(
     ]);
   });
 
-  const csv = [header.join(","), ...rows].join("\n");
+  const csv = [csvRow(header), ...rows].join("\r\n");
   const filename = `session-register_${from}_${to}.csv`;
 
   return { csv, filename };
@@ -217,7 +213,7 @@ export async function exportClientList(): Promise<
     ])
   );
 
-  const csv = [header.join(","), ...rows].join("\n");
+  const csv = [csvRow(header), ...rows].join("\r\n");
   const filename = `client-list_${saToday()}.csv`;
 
   return { csv, filename };

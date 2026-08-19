@@ -58,6 +58,17 @@ const read = (p) => readFileSync(p, "utf-8");
 const rel = (p) => p.replace(ROOT, "").replaceAll("\\", "/").replace(/^\//, "");
 
 /**
+ * ⚠ THIS BLANKS STRING LITERALS. Read `read()` instead when hunting one.
+ *
+ * The name says `code`, which reads as "the source" and means "the source minus its
+ * string literals and comments". FIVE checks in a single session were written against
+ * it while hunting a literal — `+02:00`, `status: "cancelled"`, a template key, a
+ * `@twin` pattern, `.join(",")` — and every one of them silently could not fire. Each
+ * was caught only by planting a violation and watching nothing happen.
+ *
+ * The rule, stated once: if the thing you are looking for lives inside quotes, this
+ * function has already deleted it.
+ *
  * Strip comments and string/template literals so we match code, not prose.
  *
  * Line structure is PRESERVED: a block comment collapses to its own newlines
@@ -2225,6 +2236,60 @@ const ESLINT_TAGS_PROBED = {
     "it, got `Unexpected any. Specify a different type`. Preset-provided rules are invisible to a " +
     "static read of the config, so this record IS the verification.",
 };
+
+check("csv: every export goes through the one escaper", () => {
+  // Adopted from a sibling project's `check-csv-escaping`, which states the rule as
+  // "every CSV we EMIT must go through the one escaper" — and the reason to take it
+  // rather than reinvent it is that this codebase had exactly the failure it prevents.
+  //
+  // Two escapers existed, in the reports actions and the invoice export, with
+  // byte-identical bodies. Both handled RFC 4180 quoting. NEITHER handled formula
+  // injection, so the duplication was not the bug — it was the reason one fix would
+  // have reached half the exports.
+  //
+  // The risk is the direction: client-supplied strings (their name, the billing name
+  // and email they typed, an EFT reference they chose) land in a spreadsheet on an
+  // admin's machine, where a cell beginning `=`, `+`, `@` or a tab is EXECUTED.
+  const LOCAL_ESCAPER = /(?:const|function)\s+\w*[eE]scape\w*\s*[=(][\s\S]{0,200}?replace\(\s*\/"\/g/;
+  const RAW_JOIN = /\.join\(\s*","\s*\)/;
+
+  // RAW source, not code(). Both patterns hunt for STRING LITERALS — `.join(",")` and
+  // the quote inside an escaper — and code() blanks those, turning `.join(",")` into
+  // `.join("")`. The first version of this check scanned code() and could not fire.
+  //
+  // That is the FIFTH time in one session, and the repetition is the finding: the
+  // helper is named `code()`, which reads as "the code" when it means "the code minus
+  // its string literals". Any check hunting a literal must read raw, and the name does
+  // not warn you. Worth renaming it, or making the selftest fixture louder.
+  for (const file of allSource().filter((f) => /\.tsx?$/.test(f))) {
+    if (rel(file) === "lib/csv.ts") continue; // the one escaper
+    const src = read(file);
+    if (!/csv/i.test(src)) continue; // only files that actually emit CSV
+
+    if (LOCAL_ESCAPER.test(src)) {
+      fail(
+        "csv",
+        `${rel(file)}:${src.slice(0, LOCAL_ESCAPER.exec(src).index).split("\n").length}`,
+        "defines its own CSV escaper",
+        "use csvCell/csvRow/csvDocument from lib/csv.ts — a local copy will miss formula injection, as both previous copies did",
+      );
+    }
+    // A row assembled by joining on a comma, in a CSV-emitting file, is a row that
+    // skipped the escaper.
+    for (const m of src.matchAll(new RegExp(RAW_JOIN.source, "g"))) {
+      const line = src.slice(0, m.index).split("\n").length;
+      const context = src.split("\n")[line - 1] ?? "";
+      if (/csvRow|csvDocument|csvCell/.test(context)) continue;
+      if (!/row|header|csv/i.test(context)) continue;
+      fail(
+        "csv",
+        `${rel(file)}:${line}`,
+        "builds a CSV row by joining on a comma instead of using the escaper",
+        "use csvRow() / csvDocument() from lib/csv.ts",
+      );
+    }
+  }
+});
 
 check("relationships: a partner lookup reads both ends of the row", () => {
   // A ClientRelationship row is DIRECTIONAL and is never written reciprocally —

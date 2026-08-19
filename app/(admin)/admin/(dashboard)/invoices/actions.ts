@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { csvDocument } from "@/lib/csv";
 import { requireRole } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -483,19 +484,11 @@ export async function exportInvoicesCsvAction(
     ];
   });
 
-  const escape = (v: string) => {
-    if (v.includes(",") || v.includes('"') || v.includes("\n")) {
-      return `"${v.replace(/"/g, '""')}"`;
-    }
-    return v;
-  };
-
-  const csv = [
-    headers.map(escape).join(","),
-    ...rows.map((row) => row.map(escape).join(",")),
-  ].join("\n");
-
-  return csv;
+  // One shared escaper, which also neutralises formula leads. These rows carry the
+  // client's name, the billing name and email they typed, and an EFT reference they
+  // chose — all of it lands in a spreadsheet on Roxanne's machine, where a cell
+  // beginning `=` or `@` is executed rather than displayed. See lib/csv.ts.
+  return csvDocument(headers, rows);
 }
 
 // ────────────────────────────────────────────────────────────

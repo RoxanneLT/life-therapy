@@ -13,7 +13,7 @@
     "test:dates": "tsx --test lib/dates.test.ts",
     "audit": "node scripts/architecture-audit.mjs",
     "test:money": "tsx --test lib/billing.test.ts",
-    "test": "tsx --test lib/dates.test.ts lib/billing.test.ts lib/sa-holidays.test.ts lib/recurring-dates.test.ts lib/cron/credit-expiry.test.ts lib/calendar-removal.test.ts lib/email-address.test.ts lib/safe-redirect.test.ts lib/billing-types.test.ts lib/cron/with-cron-run.test.ts lib/email-render.test.ts lib/region.test.ts lib/env.test.ts lib/graph-recurrence.test.ts lib/calendar-classify.test.ts lib/calendar-apply.test.ts lib/graph-payloads.test.ts lib/calendar-lifecycle.test.ts",
+    "test": "tsx --test lib/dates.test.ts lib/billing.test.ts lib/sa-holidays.test.ts lib/recurring-dates.test.ts lib/cron/credit-expiry.test.ts lib/calendar-removal.test.ts lib/email-address.test.ts lib/csv.test.ts lib/safe-redirect.test.ts lib/billing-types.test.ts lib/cron/with-cron-run.test.ts lib/email-render.test.ts lib/region.test.ts lib/env.test.ts lib/graph-recurrence.test.ts lib/calendar-classify.test.ts lib/calendar-apply.test.ts lib/graph-payloads.test.ts lib/calendar-lifecycle.test.ts",
     "test:lifecycle": "tsx --test lib/calendar-lifecycle.test.ts",
     "test:classify": "tsx --test lib/calendar-classify.test.ts",
     "test:apply": "tsx --test lib/calendar-apply.test.ts",
@@ -33,7 +33,8 @@
     "test:removal": "tsx --test lib/calendar-removal.test.ts",
     "test:gate": "node .claude/hooks/bash-gate.test.mjs",
     "audit:selftest": "node scripts/architecture-audit.mjs --selftest",
-    "test:email-address": "tsx --test lib/email-address.test.ts"
+    "test:email-address": "tsx --test lib/email-address.test.ts",
+    "test:csv": "tsx --test lib/csv.test.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
