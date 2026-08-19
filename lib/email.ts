@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
 import { appBaseUrl } from "@/lib/region";
+import { injectTracking } from "@/lib/email-tracking";
 import { requireEnv, isConfigured, envOr } from "@/lib/env";
 
 const DEFAULT_BASE_URL = appBaseUrl();
@@ -27,30 +28,6 @@ interface SendEmailOptions {
   attachments?: EmailAttachment[];
 }
 
-/**
- * Inject a 1x1 tracking pixel and wrap links for click tracking.
- */
-function injectTracking(html: string, trackingId: string, baseUrl: string): string {
-  let tracked = html.replaceAll(
-    /href="(https?:\/\/[^"]+)"/gi,
-    (_match, url: string) => {
-      if (url.includes("/api/unsubscribe") || url.includes("/api/track/")) {
-        return `href="${url}"`;
-      }
-      const encoded = encodeURIComponent(url);
-      return `href="${baseUrl}/api/track/click?t=${trackingId}&url=${encoded}"`;
-    }
-  );
-
-  const pixel = `<img src="${baseUrl}/api/track/open?t=${trackingId}" width="1" height="1" style="display:none;border:0;" alt="" />`;
-  if (tracked.includes("</body>")) {
-    tracked = tracked.replace("</body>", `${pixel}</body>`);
-  } else {
-    tracked += pixel;
-  }
-
-  return tracked;
-}
 
 /** Send via Resend API */
 async function sendViaResend(

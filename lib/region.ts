@@ -39,6 +39,26 @@ export const REGION_CONFIG: Record<
   },
 };
 
+/**
+ * Is this hostname one of ours?
+ *
+ * ONE definition, deliberately, because two sides of the same rule read it and
+ * they must never disagree. The click redirector (`app/api/track/click`) refuses
+ * to forward anywhere else; `injectTracking` in lib/email.ts must therefore not
+ * WRAP anything else. When only the redirector learned the rule, every external
+ * link in every email — the Teams "Join your session" link above all — became a
+ * tracked URL the redirector then rejected, and the client got a page of JSON
+ * reading `{"error":"Untrusted URL"}` instead of their session (§6, 2026-08-19).
+ *
+ * `localhost` is included outside production so tracked links work in dev.
+ */
+export function isOurHost(hostname: string): boolean {
+  const ours = Object.values(REGION_CONFIG).map((r) => r.domain);
+  const hosts =
+    process.env.NODE_ENV === "production" ? ours : [...ours, "localhost"];
+  return hosts.some((h) => hostname === h || hostname.endsWith(`.${h}`));
+}
+
 /** Detect region from hostname (domain-based, not IP). */
 export function getRegionFromHostname(hostname: string): Region {
   if (hostname.includes("life-therapy.co.za")) return "za";

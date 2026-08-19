@@ -1301,6 +1301,52 @@ check("email-safety: the couples partner invite goes through its one helper", ()
   }
 });
 
+check("email-tracking: a tracked link is one the redirector will forward", () => {
+  // The wrapper and the click redirector enforce two halves of ONE rule, and for a
+  // while only one half knew it. `app/api/track/click` was hardened to forward to our
+  // own hosts only — correctly; it had been an open redirector on the practice's own
+  // domain, which is exactly what a phishing link wants to be. But `injectTracking`
+  // went on wrapping EVERY link in every email, so the Teams "Join your session" link
+  // became a tracked URL the redirector then refused, and the client who clicked Join
+  // got a page reading `{"error":"Untrusted URL"}` (§6, 2026-08-19).
+  //
+  // Nothing failed. The email sent, the link rendered, the endpoint answered exactly as
+  // designed. Each half was right on its own, which is why this needs a check rather
+  // than a reviewer: the defect lived in the gap between two files.
+  //
+  // RAW source, not code(): the marker sits inside a template literal, and code() blanks
+  // those wholesale — the same trap that kept the `+02:00` check silent for months.
+  const marker = "/api/track/click?t=";
+
+  for (const file of allSource()) {
+    const src = read(file);
+    if (!src.includes(marker)) continue;
+    if (src.includes("isTrackableTarget")) continue;
+    fail(
+      "email-tracking",
+      `${rel(file)}:${src.slice(0, src.indexOf(marker)).split("\n").length}`,
+      "builds a click-tracking URL without checking the redirector will accept the destination",
+      "gate it on isTrackableTarget() from lib/email-tracking.ts — an external link goes out untracked rather than broken",
+    );
+  }
+
+  // One predicate, one definition. A second copy is how the first one drifted: the
+  // list this replaced named life-therapy.co.za and not life-therapy.online, so the
+  // international domain was the one treated as foreign.
+  for (const file of allSource()) {
+    if (rel(file) === "lib/region.ts") continue; // the SSOT
+    const src = read(file);
+    const m = /function\s+isOurHost\b/.exec(src);
+    if (!m) continue;
+    fail(
+      "email-tracking",
+      `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+      "defines a second isOurHost — the wrapper and the redirector must not be able to disagree",
+      "import isOurHost from lib/region.ts, which derives the list from REGION_CONFIG",
+    );
+  }
+});
+
 check("email-safety: a hardcoded template escapes client-supplied values", () => {
   // The sibling of the placeholder-substituter check below. That one covers the
   // DB-template path; this covers the hardcoded fallbacks, where the same values

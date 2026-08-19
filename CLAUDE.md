@@ -256,6 +256,7 @@ into that file next.
 - **One implementation, not several.** A function body must not appear in two files. Collapse it and import, or record the site list in `DUPLICATE_BODIES_KNOWN` with the reason it must stay. Ten are carried as debt today and the list only shrinks. <!-- @enforced audit:duplication-one-implementation-not-several -->
 - **Never hard-delete an irreplaceable record** — a booking, student, invoice, payment request, credit ledger row, order or admin user. Soft-delete: status flags, `isActive: false`, `archivedAt`. CMS and catalogue rows are not covered; removing a page or a coupon is ordinary admin work. Deliberate exceptions live in `HARD_DELETE_ALLOWED` with the reason each one is different. <!-- @enforced audit:data-safety-an-irreplaceable-record-is-never-hard-deleted -->
 - **Record an audit entry for the audit-worthy mutations** — billing type changes, booking cancellations, payment recording, invoice voiding, client status changes, discount changes. That list is a business judgement nothing can infer, so it is written into the check; extend it rather than re-deriving it. <!-- @enforced audit:audit-trail-an-audit-worthy-action-records-one -->
+- **Only wrap a link for click tracking if the redirector will forward it.** The tracker accepts our own hosts and nothing else, deliberately; wrapping a Teams or Paystack link turns it into `{"error":"Untrusted URL"}` in the client's browser. `isOurHost` has one definition, in `lib/region.ts`, read by both halves. <!-- @enforced audit:email-tracking-a-tracked-link-is-one-the-redirector-will-forward -->
 - **Never send an email, generate a PDF, or create a payment link in a "save" action.** Those happen when the user clicks Send. Where saving and sending genuinely are one act, `SAVE_SIDE_EFFECT_ALLOWED` says why. <!-- @enforced audit:side-effects-a-save-action-does-not-reach-the-outside-world -->
 
 ---
@@ -336,6 +337,17 @@ measurement, not open**: a refusal that carries its numbers is a finish.
   statements. The gate matched on how the target appeared in a *command*, and the documented
   path supplies it by reference (`--env-file`), inside a file. → `.claude/hooks/ddl-gate.js` ·
   general form in `dev-standards/LESSONS.md` L-14
+
+- **2026-08-19 · Hardening one half of a rule broke the other.** Cost: clients clicking
+  "Join your session" in their booking email reached `{"error":"Untrusted URL"}` instead of
+  their session — for every email carrying a Teams link, until a client sent a screenshot.
+  The click redirector had been an open redirector and was correctly closed to our own hosts;
+  nobody told `injectTracking`, which went on wrapping **every** link in every email. Both
+  halves were right in isolation, both files read well, and nothing errored — the email sent,
+  the link rendered, the endpoint answered exactly as designed. The defect existed only in the
+  gap between two files, which is why no reviewer of either diff would see it. →
+  `audit:email-tracking-a-tracked-link-is-one-the-redirector-will-forward` ·
+  `lib/email-tracking.test.ts` · narrative at `lib/email-tracking.ts`
 
 - **Dates: every date bug this codebase has had** came from confusing a calendar *day* with a
   real *instant*. Full doctrine in §9. → three `date-safety:` checks · `npm run test:dates`

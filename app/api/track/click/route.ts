@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { REGION_CONFIG } from "@/lib/region";
+import { isOurHost } from "@/lib/region";
 
 /**
- * Our own hosts, derived from the region config rather than listed again here.
+ * `isOurHost` lives in lib/region.ts, derived from the region config rather than
+ * listed again here, and is shared with `injectTracking` — the code that decides
+ * what to wrap must use the same predicate as the code that decides what to
+ * forward, or the wrapper builds links this endpoint then refuses (§6).
  *
- * The hand-written list had `life-therapy.co.za` and not `life-therapy.online`,
- * so tracked links to the international domain were the ones this endpoint
- * treated as foreign — the dual-domain trap, wearing a security list's clothes.
+ * The hand-written list this replaced had `life-therapy.co.za` and not
+ * `life-therapy.online`, so tracked links to the international domain were the
+ * ones this endpoint treated as foreign — the dual-domain trap, wearing a
+ * security list's clothes.
  */
-const OUR_HOSTS = Object.values(REGION_CONFIG).map((r) => r.domain);
-
-function isOurHost(hostname: string): boolean {
-  const hosts =
-    process.env.NODE_ENV === "production" ? OUR_HOSTS : [...OUR_HOSTS, "localhost"];
-  return hosts.some((h) => hostname === h || hostname.endsWith(`.${h}`));
-}
 
 export async function GET(request: NextRequest) {
   const trackingId = request.nextUrl.searchParams.get("t");
