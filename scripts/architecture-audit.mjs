@@ -75,6 +75,59 @@ function code(src) {
     .replace(/'(?:\\.|[^'\\])*'/g, "''");
 }
 
+/** A check name normalised to a control id. Shared, so the two call sites cannot drift. */
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/**
+ * `--selftest` — a regression suite for the helpers every check is built on.
+ *
+ * These fixtures are not hypothetical: each one is a false positive or an unfailable
+ * check that actually shipped here. They lived only as prose in the comment above the
+ * check that had been burned, which meant the LESSON was recorded and the REGRESSION
+ * was not. A probe you have to remember to run is a probe that rots.
+ *
+ * Runs before any check(), so it exercises the helpers without walking the tree, and
+ * exits — `npm run audit:selftest`, wired into `npm run check`.
+ */
+if (process.argv.includes("--selftest")) {
+  let failed = 0;
+  const t = (label, got, want) => {
+    const ok = got === want;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "✓" : "✗"} ${label}${ok ? "" : `\n      got ${JSON.stringify(got)} want ${JSON.stringify(want)}`}`);
+  };
+
+  // code() blanks STRING LITERALS. The `+02:00` check scanned code() for an offset
+  // that only ever appears inside a string — so it could never fire, and shipped
+  // green for months. Any check hunting a literal must read RAW source.
+  t("code() blanks string literals", /\+02:00/.test(code(`const tz = "+02:00";`)), false);
+  t("...so the raw source still has it", /\+02:00/.test(`const tz = "+02:00";`), true);
+
+  // code() strips comments, which is what stops prose ABOUT a marker matching AS one.
+  t("code() strips a line comment", /@twin/.test(code(`// the @twin design below`)), false);
+  t("code() keeps real code", /cancelCalendarEvent/.test(code(`await cancelCalendarEvent(id);`)), true);
+
+  // Line structure survives, or every finding after a block comment points somewhere innocent.
+  t("code() preserves line count", code(`/*\n\n*/\nconst a = 1;`).split("\n").length, 4);
+
+  // Near-miss by normalisation: a tag written from memory that slugifies CLOSE to a
+  // real check but not to it. This one shipped, and was caught by hand.
+  t("slug() normalises a real check name",
+    slug("date-safety: no hardcoded +02:00 offset"), "date-safety-no-hardcoded-02-00-offset");
+  t("...and the from-memory version does NOT match",
+    slug("date-safety: no hardcoded +02:00 offset") === "date-safety-no-hardcoded-offset", false);
+
+  // A marker is a comment whose ENTIRE body is markers. Scoping to comment syntax
+  // alone flagged this file's own documentation, twice.
+  const isMarker = (body) => /^\s*(?:@enforced\s+\S+\s*)+$/.test(body);
+  t("a marker-only comment is a marker", isMarker(" @enforced audit:foo "), true);
+  t("two markers in one comment", isMarker(" @enforced audit:foo @enforced hook:bar "), true);
+  t("prose ABOUT the marker is not a marker", isMarker(" @enforced <ns:control-id> → an HTML comment"), false);
+
+  console.log(failed ? `\n❌ audit selftest: ${failed} wrong` : `\n✅ audit selftest — the helpers still behave as every check assumes`);
+  process.exit(failed ? 1 : 0);
+}
+
 const APP = join(ROOT, "app");
 const LIB = join(ROOT, "lib");
 const COMPONENTS = join(ROOT, "components");
@@ -2144,7 +2197,6 @@ check("claude-md: every marker is well-formed and resolves", () => {
   // matched the bare token would flag its own documentation (LESSONS L-05).
   const src = read(join(ROOT, "CLAUDE.md"));
   const auditSrc = read(join(ROOT, "scripts/architecture-audit.mjs"));
-  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const checks = [...auditSrc.matchAll(/check\("([^"]+)"/g)].map((m) => slug(m[1]));
   const settings = JSON.parse(read(join(ROOT, ".claude/settings.json")));
   const gated = new Set([
@@ -2271,7 +2323,6 @@ check("claude-md: every rule in a rules section carries its net", () => {
   // names nothing is decoration. One was wrong on the format's first day — written
   // from memory, slugifying near a real check but not to it.
   const auditSrc = read(join(ROOT, "scripts/architecture-audit.mjs"));
-  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const known = [...auditSrc.matchAll(/check\("([^"]+)"/g)].map((m) => slug(m[1]));
 
   for (const m of src.matchAll(/@enforced\s+audit:([^\s>]+)/g)) {

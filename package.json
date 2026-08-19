@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && eslint . --max-warnings 0 && node scripts/architecture-audit.mjs && npm run test:gate && npm run test",
+    "check": "tsc --noEmit && eslint . --max-warnings 0 && npm run audit:selftest && node scripts/architecture-audit.mjs && npm run test:gate && npm run test",
     "postinstall": "prisma generate",
     "test:dates": "tsx --test lib/dates.test.ts",
     "audit": "node scripts/architecture-audit.mjs",
@@ -31,7 +31,8 @@
     "secrets:push": "node scripts/sync-secrets.mjs push",
     "crawl:tier0": "knip --no-progress",
     "test:removal": "tsx --test lib/calendar-removal.test.ts",
-    "test:gate": "node .claude/hooks/bash-gate.test.mjs"
+    "test:gate": "node .claude/hooks/bash-gate.test.mjs",
+    "audit:selftest": "node scripts/architecture-audit.mjs --selftest"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",
