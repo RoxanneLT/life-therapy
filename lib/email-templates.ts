@@ -121,7 +121,7 @@ export function bookingConfirmationEmail(
       : "";
 
   const body = `
-    <p>Hi ${booking.clientName},</p>
+    <p>Hi ${escapeHtml(booking.clientName)},</p>
     <p>Your session has been confirmed! Here are the details:</p>
     <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
       <p style="margin: 4px 0;"><strong>Session:</strong> ${config.label}</p>
@@ -197,7 +197,7 @@ export function bookingReminderEmail(booking: Booking, baseUrl = DEFAULT_BASE_UR
     : "";
 
   const body = `
-    <p>Hi ${booking.clientName},</p>
+    <p>Hi ${escapeHtml(booking.clientName)},</p>
     <p>This is a friendly reminder that your session is <strong>tomorrow</strong>.</p>
     <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
       <p style="margin: 4px 0;"><strong>Session:</strong> ${config.label}</p>
@@ -224,7 +224,7 @@ export function bookingCancellationEmail(booking: Booking, baseUrl = DEFAULT_BAS
   const timeStr = formatTimeRange(booking);
 
   const body = `
-    <p>Hi ${booking.clientName},</p>
+    <p>Hi ${escapeHtml(booking.clientName)},</p>
     <p>Your session has been cancelled. Here were the details:</p>
     <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
       <p style="margin: 4px 0;"><strong>Session:</strong> ${config.label}</p>
@@ -278,7 +278,7 @@ export function orderConfirmationEmail(
       : "";
 
   const body = `
-    <p>Hi ${order.student.firstName},</p>
+    <p>Hi ${escapeHtml(order.student.firstName)},</p>
     <p>Thank you for your purchase! Here are the details of your order:</p>
 
     <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 16px 0;">
@@ -333,7 +333,7 @@ export function accountCreatedEmail(params: {
   html: string;
 } {
   const body = `
-    <p>Hi ${params.firstName},</p>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
     <p>Welcome to Life-Therapy! Your student account has been created successfully.</p>
 
     <div style="text-align: center; margin: 24px 0;">
@@ -367,7 +367,7 @@ export function accountProvisionedEmail(params: {
   html: string;
 } {
   const body = `
-    <p>Hi ${params.firstName},</p>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
     <p>An account has been created for you on Life-Therapy. You can use the credentials below to log in and access your courses.</p>
 
     <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0;">
@@ -400,7 +400,7 @@ export function courseCompletedEmail(params: {
   html: string;
 } {
   const body = `
-    <p>Hi ${params.firstName},</p>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
     <p>Congratulations! You have successfully completed <strong>${params.courseTitle}</strong>.</p>
 
     <div style="background: linear-gradient(135deg, #f0f7f4 0%, #e8f0e6 100%); border-radius: 6px; padding: 24px; margin: 16px 0; text-align: center;">
@@ -434,15 +434,15 @@ export function giftDeliveredToBuyerEmail(params: {
   html: string;
 } {
   const body = `
-    <p>Hi ${params.buyerName},</p>
+    <p>Hi ${escapeHtml(params.buyerName)},</p>
     <p>Just a quick note to let you know that your gift has been delivered!</p>
 
     <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0; text-align: center;">
-      <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280;">Gift for ${params.recipientName}</p>
-      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333;">${params.itemTitle}</p>
+      <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280;">Gift for ${escapeHtml(params.recipientName)}</p>
+      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333;">${escapeHtml(params.itemTitle)}</p>
     </div>
 
-    <p>${params.recipientName} has been sent an email with instructions to redeem their gift.</p>
+    <p>${escapeHtml(params.recipientName)} has been sent an email with instructions to redeem their gift.</p>
 
     <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>
   `;
@@ -472,11 +472,11 @@ export function giftReceivedEmail(params: {
     : "";
 
   const body = `
-    <p>Hi ${params.recipientName},</p>
-    <p>Great news! <strong>${params.buyerName}</strong> has sent you a gift from Life-Therapy:</p>
+    <p>Hi ${escapeHtml(params.recipientName)},</p>
+    <p>Great news! <strong>${escapeHtml(params.buyerName)}</strong> has sent you a gift from Life-Therapy:</p>
 
     <div style="background: #f0f7f4; border-radius: 6px; padding: 20px; margin: 16px 0; text-align: center;">
-      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333;">🎁 ${params.itemTitle}</p>
+      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #333;">🎁 ${escapeHtml(params.itemTitle)}</p>
     </div>
 
     ${messageBlock}
@@ -511,7 +511,7 @@ export function portalWelcomeEmail(params: {
   html: string;
 } {
   const body = `
-    <p>Hi ${params.firstName},</p>
+    <p>Hi ${escapeHtml(params.firstName)},</p>
     <p>Your free consultation is confirmed for <strong>${params.sessionDate}</strong> at <strong>${params.sessionTime}</strong>.</p>
     <p>In the meantime, your personal portal is ready:</p>
 

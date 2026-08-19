@@ -1170,6 +1170,50 @@ check("email-safety: a marketing sender checks consent", () => {
   }
 });
 
+check("email-safety: a hardcoded template escapes client-supplied values", () => {
+  // The sibling of the placeholder-substituter check below. That one covers the
+  // DB-template path; this covers the hardcoded fallbacks, where the same values
+  // are interpolated into HTML by hand.
+  //
+  // The escaping had reached 6 of 22 sites. `giftReceivedEmail` is the shape in
+  // miniature: `params.message` and `params.buyerName` were escaped inside the
+  // quoted-message block — the part someone clearly thought about — and the SAME
+  // `buyerName` sat unescaped in the prose two lines below it.
+  //
+  // SUBJECT LINES ARE EXEMPT, and not as a concession: a subject is plain text, so
+  // escaping one shows the reader a literal `&amp;` in their inbox. The fix would
+  // become the bug. That is why this scans the HTML bodies only.
+  const FIELDS =
+    "clientName|clientEmail|clientPhone|clientNotes|customerName|buyerName|recipientName|" +
+    "senderName|studentName|firstName|lastName|message|giftMessage|note|itemTitle";
+  const RE = new RegExp(String.raw`\$\{([^}]*\b(?:${FIELDS})\b[^}]*)\}`, "g");
+
+  // ONLY the hand-built templates. lib/email-render.ts is deliberately excluded: it
+  // escapes CENTRALLY via escapeTemplateVariables() before a value ever reaches a
+  // template, with RAW_HTML_VARIABLES naming the handful that must stay raw. Its
+  // interpolations therefore look unescaped and are not — flagging them would have
+  // been 19 false positives on the first run, and "fix" would have meant escaping
+  // twice. The placeholder-substituter check below is what covers that path.
+  for (const file of ["lib/email-templates.ts"]) {
+    const abs = join(ROOT, file);
+    if (!existsSync(abs)) continue;
+    const lines = read(abs).split("\n");
+
+    lines.forEach((line, i) => {
+      if (/subject:/.test(line)) return; // plain text — see above
+      for (const m of line.matchAll(RE)) {
+        if (/escapeHtml\s*\(/.test(m[1])) continue;
+        fail(
+          "email-safety",
+          `${file}:${i + 1}`,
+          `interpolates \`${m[1].trim()}\` into HTML without escaping — a client-supplied value`,
+          "wrap it in escapeHtml(); leave subject lines alone, they are plain text",
+        );
+      }
+    });
+  }
+});
+
 check("email-safety: every placeholder substituter escapes its variables", () => {
   // There are FIVE copies of `replacePlaceholders` in lib/. #18 escaped one of
   // them — the one inside email-render — and left campaigns, drip, campaign-send
