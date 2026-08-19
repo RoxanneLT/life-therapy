@@ -20,6 +20,7 @@ import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 import { escapeHtml } from "@/lib/utils";
+import { emailRefusal, isDeliverableEmail } from "@/lib/email-address";
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { parseLineItems, readLineItems } from "@/lib/billing-types";
 
@@ -857,7 +858,7 @@ interface AdminCreateBookingData {
 export async function adminCreateBookingAction(
   data: AdminCreateBookingData,
 ): Promise<
-  | { success: true; bookingId: string; calendarWarning?: string }
+  | { success: true; bookingId: string; calendarWarning?: string; partnerWarning?: string }
   | { success: false; error: string }
 > {
   await requireRole("super_admin", "editor");
@@ -867,6 +868,14 @@ export async function adminCreateBookingAction(
     select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
   });
   if (!student) return { success: false, error: "Client not found." };
+
+  // Refuse an address the provider will reject, BEFORE the booking exists. `type="email"`
+  // does not require a dot in the domain, so `foo@gmailcom` reaches here looking valid.
+  // Refused, not thrown — a thrown message is stripped in production.
+  const partnerRefusal = emailRefusal(data.couplesPartnerEmail, "Partner email");
+  if (partnerRefusal) return { success: false, error: partnerRefusal };
+
+  let partnerWarning: string | undefined;
 
   const config = getSessionTypeConfig(data.sessionType);
   const isPostpaid = student.billingType === "postpaid";
@@ -896,6 +905,31 @@ export async function adminCreateBookingAction(
   const clientName = `${student.firstName} ${student.lastName}`.trim();
   const bookingDate = calendarDate(data.date);
   const confirmationToken = randomUUID();
+
+  /**
+   * Where the partner invite is actually sent.
+   *
+   * A couples booking stores its own `couplesPartnerEmail`, captured on the form — it
+   * does NOT read the partner's client record. That is two sources of truth for one
+   * person's address, and the one an admin can see and edit on the client page is not
+   * the one that sends. Correcting a partner's profile and re-testing therefore proves
+   * nothing, which is exactly how this was chased for a week.
+   *
+   * So: fall back to the LINKED PARTNER'S own email when the booking has none. Of the
+   * two couples sessions on record, one carried a malformed address and the other
+   * carried NULL — and a NULL sends nothing at all, silently, which is the worse half.
+   */
+  let partnerTo = data.couplesPartnerEmail?.trim() || null;
+  if (data.sessionType === "couples" && !partnerTo) {
+    const link = await prisma.clientRelationship.findFirst({
+      where: { studentId: student.id, relationshipType: "partner" },
+      select: { relatedStudent: { select: { email: true } } },
+    });
+    const linked = link?.relatedStudent?.email ?? null;
+    // Only if it can actually receive mail — a fallback that inherits a bad address is
+    // worse than none, because it reads as deliberate.
+    if (isDeliverableEmail(linked)) partnerTo = linked;
+  }
 
   // Create calendar event (in-person: block calendar but no Teams link)
   const calResult = await createCalendarEvent({
@@ -927,7 +961,10 @@ export async function adminCreateBookingAction(
       status: "confirmed",
       adminNotes: data.adminNotes || null,
       couplesPartnerName: data.couplesPartnerName || null,
-      couplesPartnerEmail: data.couplesPartnerEmail || null,
+      // The RESOLVED address, so the row records who was actually written to rather
+      // than what the form happened to hold. A booking whose stored address differs
+      // from the one used is unauditable after the fact.
+      couplesPartnerEmail: partnerTo,
       graphEventId: calResult?.eventId || null,
       teamsMeetingUrl: calResult?.teamsMeetingUrl || null,
       confirmationToken,
@@ -1033,7 +1070,7 @@ export async function adminCreateBookingAction(
     // form only ever collected a name. Half a feature is worse than none here —
     // whether the second person hears about their session depended on which
     // screen it was booked from.
-    if (data.sessionType === "couples" && data.couplesPartnerEmail) {
+    if (data.sessionType === "couples" && partnerTo) {
       const partnerEmail = await renderEmail(
         "couples_partner_invite",
         {
@@ -1046,13 +1083,22 @@ export async function adminCreateBookingAction(
         },
         baseUrl,
       );
-      await sendEmail({
-        to: data.couplesPartnerEmail,
+      // The RESULT IS READ. sendEmail returns { success, error } and never throws, so
+      // discarding it drops the only signal there is. A partner invite refused by the
+      // provider — `seanteres9@gmailcom`, no dot — sat in email_logs for a week reading
+      // to everyone as "he never gets our emails", because nothing surfaced it.
+      const sent = await sendEmail({
+        to: partnerTo,
         ...partnerEmail,
         templateKey: "couples_partner_invite",
         studentId: student.id,
         metadata: { bookingId: booking.id, partnerInvite: true },
       });
+      if (!sent.success) {
+        partnerWarning =
+          `The session is booked, but the invite to ${data.couplesPartnerName || "the partner"} ` +
+          `(${partnerTo}) was not delivered: ${sent.error ?? "unknown error"}. They have not been told about it.`;
+      }
     }
 
     await prisma.booking.update({
@@ -1068,6 +1114,7 @@ export async function adminCreateBookingAction(
     success: true,
     bookingId: booking.id,
     calendarWarning: !calResult ? "Calendar event could not be created — please add it manually in Outlook." : undefined,
+    partnerWarning,
   };
 }
 

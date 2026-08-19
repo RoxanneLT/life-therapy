@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition, useRef, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -334,6 +335,11 @@ export function CreateBookingDialog({
             setError(result.error);
             return;
           }
+          // A warning the action returned and nobody rendered is the same failure as
+          // not returning it. The partner invite is the case that proved it: refused
+          // by the provider, logged, and invisible for a week.
+          if (result.partnerWarning) toast.warning(result.partnerWarning, { duration: 15000 });
+          if (result.calendarWarning) toast.warning(result.calendarWarning, { duration: 15000 });
           handleSetOpen(false);
           resetForm();
           if (result.bookingId) router.push(`/admin/bookings/${result.bookingId}`);
