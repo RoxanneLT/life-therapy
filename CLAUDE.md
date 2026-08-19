@@ -256,6 +256,7 @@ into that file next.
 - **One implementation, not several.** A function body must not appear in two files. Collapse it and import, or record the site list in `DUPLICATE_BODIES_KNOWN` with the reason it must stay. Ten are carried as debt today and the list only shrinks. <!-- @enforced audit:duplication-one-implementation-not-several -->
 - **Never hard-delete an irreplaceable record** — a booking, student, invoice, payment request, credit ledger row, order or admin user. Soft-delete: status flags, `isActive: false`, `archivedAt`. CMS and catalogue rows are not covered; removing a page or a coupon is ordinary admin work. Deliberate exceptions live in `HARD_DELETE_ALLOWED` with the reason each one is different. <!-- @enforced audit:data-safety-an-irreplaceable-record-is-never-hard-deleted -->
 - **Record an audit entry for the audit-worthy mutations** — billing type changes, booking cancellations, payment recording, invoice voiding, client status changes, discount changes. That list is a business judgement nothing can infer, so it is written into the check; extend it rather than re-deriving it. <!-- @enforced audit:audit-trail-an-audit-worthy-action-records-one -->
+- **An email suppression decision names its tier.** Three of them, in `lib/engagement.ts`: **marketing** (campaigns, drip — every suppression binds), **goodwill** (a birthday wish — consent and opt-out bind, an automatic pause does not), **account** (expiring credits, invoices — nothing suppresses mail about the client's own money). Never branch on `emailPaused` at a send site: the flag is set automatically by a cold-contact rule reading a tracking pixel, and it means "we think they stopped reading", not "they asked us to stop". <!-- @enforced audit:email-tiers-a-suppression-decision-goes-through-lib-engagement-ts -->
 - **Only wrap a link for click tracking if the redirector will forward it.** The tracker accepts our own hosts and nothing else, deliberately; wrapping a Teams or Paystack link turns it into `{"error":"Untrusted URL"}` in the client's browser. `isOurHost` has one definition, in `lib/region.ts`, read by both halves. <!-- @enforced audit:email-tracking-a-tracked-link-is-one-the-redirector-will-forward -->
 - **Never send an email, generate a PDF, or create a payment link in a "save" action.** Those happen when the user clicks Send. Where saving and sending genuinely are one act, `SAVE_SIDE_EFFECT_ALLOWED` says why. <!-- @enforced audit:side-effects-a-save-action-does-not-reach-the-outside-world -->
 
@@ -337,6 +338,20 @@ measurement, not open**: a refusal that carries its numbers is a finish.
   statements. The gate matched on how the target appeared in a *command*, and the documented
   path supplies it by reference (`--env-file`), inside a file. → `.claude/hooks/ddl-gate.js` ·
   general form in `dev-standards/LESSONS.md` L-14
+
+- **2026-08-19 · A tracking pixel decided who stopped hearing from us.** Cost: 65 of 181
+  clients — 36% — silently cut off from every campaign, drip and birthday email, and
+  exposed to losing paid-for session credits with no warning. Found only because the
+  practice owner noticed she had not received her own system's birthday wish; she had been
+  auto-paused on 2026-03-16 and nobody, including her, was told. A cold-contact rule paused
+  a client after 5 consecutive "unopened" emails, where unopened meant the 1×1 tracking
+  image never loaded — and Outlook blocks remote images by default. So the rule measured
+  the mail client, not the human: only 33% of 2,230 tracked sends ever registered an open,
+  and every one of the 65 pauses was the rule's, not a person's. Two compounding errors:
+  the signal was wrong, and a flag meaning "we think they stopped reading" was then read at
+  four send sites as "they asked us to stop". Re-scored against clicks and real account
+  activity, 29 of the 65 are not cold at all. → `audit:email-tiers-a-suppression-decision-goes-through-lib-engagement-ts`
+  · `scripts/review-auto-paused.ts` · narrative at `lib/engagement.ts`
 
 - **2026-08-19 · Hardening one half of a rule broke the other.** Cost: clients clicking
   "Join your session" in their booking email reached `{"error":"Untrusted URL"}` instead of

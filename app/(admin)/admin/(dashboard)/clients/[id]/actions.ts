@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { mayReceiveMarketing, isAutoPaused } from "@/lib/engagement";
 import { requireRole } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
@@ -457,14 +458,30 @@ export async function sendReviewRequestAction(
 
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    select: { email: true, firstName: true, branch: true, emailOptOut: true, emailPaused: true },
+    select: {
+      email: true, firstName: true, branch: true,
+      consentGiven: true, emailOptOut: true, emailPaused: true, emailPauseReason: true,
+    },
   });
   if (!student) return { success: false, error: "Client not found." };
   if (!student.branch) {
     return { success: false, error: "Assign this client to an office branch first." };
   }
-  if (student.emailOptOut || student.emailPaused) {
-    return { success: false, error: "This client has opted out of (or paused) emails." };
+  // A review request asks the client to do something for the practice, so it is the
+  // MARKETING tier — see lib/engagement.ts. This used to read `emailPaused` directly
+  // and refuse, which meant an automatic cold-contact pause (a tracking pixel their
+  // mail client never loaded) silently blocked a request Roxanne had deliberately
+  // chosen to send. The refusal now names the condition, because "opted out of (or
+  // paused)" told the admin nothing they could act on.
+  if (!mayReceiveMarketing(student)) {
+    const why = !student.consentGiven
+      ? "has not given marketing consent"
+      : student.emailOptOut
+        ? "has unsubscribed"
+        : isAutoPaused(student)
+          ? "was auto-paused as a cold contact — review it on the Communications tab"
+          : "has email paused";
+    return { success: false, error: `Not sent: this client ${why}.` };
   }
 
   const settings = await getSiteSettings();

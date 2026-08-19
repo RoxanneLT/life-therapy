@@ -20,6 +20,16 @@ export interface CronJobDetail {
    * claims the job broke.
    */
   observed?: number;
+  /**
+   * Clients the cold-contact rule paused during this run.
+   *
+   * Its own field rather than a flavour of `observed`, because it is the one number
+   * here that changes what a CLIENT receives rather than what a job did. 65 clients
+   * were auto-paused over months with nobody informed — the pause was invisible at
+   * both ends, and it took the practice owner noticing her own birthday email had
+   * stopped arriving to surface it, five months late.
+   */
+  autoPaused?: number;
   error?: string;
   durationMs?: number;
 }
@@ -30,7 +40,8 @@ export function isIssue(d: CronJobDetail): boolean {
     d.status === "error" ||
     d.status === "partial" ||
     (d.failed ?? 0) > 0 ||
-    (d.observed ?? 0) > 0
+    (d.observed ?? 0) > 0 ||
+    (d.autoPaused ?? 0) > 0
   );
 }
 
@@ -60,6 +71,12 @@ export async function sendCronDigest(
       // "12 item(s) need review" reads as work waiting for a person.
       if ((d.observed ?? 0) > 0 && d.status !== "error" && d.status !== "failed") {
         return `  ⚠ ${name}: ${d.observed} item(s) need review`;
+      }
+      // Named as what it costs the client, not as a job statistic. "2 auto-paused"
+      // reads as housekeeping; saying they now receive no campaigns is the fact a
+      // person needs in order to decide whether that was right.
+      if ((d.autoPaused ?? 0) > 0) {
+        return `  ⚠ ${name}: ${d.autoPaused} client(s) auto-paused — they will receive no further campaign or drip email until reviewed`;
       }
       return `  ✗ ${name}: ${d.status}${d.error ? ` — ${d.error}` : ""}`;
     })

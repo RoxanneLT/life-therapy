@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { assessEngagement, mayReceiveMarketing } from "@/lib/engagement";
 import { escapeTemplateVariables } from "@/lib/email-render";
 import { getCampaignRecipients } from "@/lib/contacts";
 import { sendEmail } from "@/lib/email";
@@ -10,7 +11,7 @@ import { appBaseUrl } from "@/lib/region";
 const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 1200;
-const COLD_THRESHOLD = 5; // Auto-pause after 5 consecutive unopened emails
+
 
 function replacePlaceholders(
   template: string,
@@ -144,10 +145,9 @@ async function processActiveCampaigns(result: CampaignProcessResult) {
       },
     });
 
-    // Build candidate list for this campaign
-    const candidates = progressRecords.filter(
-      (p) => p.student.consentGiven && !p.student.emailOptOut && !p.student.emailPaused
-    );
+    // Build candidate list for this campaign. Campaigns are marketing, so every
+    // suppression applies — including an automatic pause, which is what it is for.
+    const candidates = progressRecords.filter((p) => mayReceiveMarketing(p.student));
 
     // Process in batches
     for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
@@ -287,15 +287,18 @@ async function processSingleCampaignContact(
 ): Promise<"sent" | "skipped" | "failed" | "auto_paused"> {
   const { student } = progress;
 
-  // Check engagement: auto-pause if last N emails all unopened
-  const isCold = await checkContactEngagement(student.email);
-  if (isCold) {
+  // Auto-pause cold clients. The judgement lives in lib/engagement.ts, shared with
+  // the drip processor — each file used to carry its own copy, keyed differently
+  // (email here, studentId there) and with the threshold named here and hardcoded
+  // there, so a correction to either reached half the senders.
+  const verdict = await assessEngagement(student.id, student.email);
+  if (verdict.cold) {
     await prisma.student.update({
       where: { id: student.id },
       data: {
         emailPaused: true,
         emailPausedAt: new Date(),
-        emailPauseReason: `${COLD_THRESHOLD}_consecutive_unopened`,
+        emailPauseReason: verdict.reason,
       },
     });
     return "auto_paused";
@@ -432,27 +435,3 @@ async function advanceCampaignProgress(
   });
 }
 
-/**
- * Check if a contact is "cold" — last N sent emails all unopened.
- * Returns true if the contact should be auto-paused.
- */
-async function checkContactEngagement(email: string): Promise<boolean> {
-  const recentEmails = await prisma.emailLog.findMany({
-    where: {
-      to: email,
-      status: "sent",
-      trackingId: { not: null }, // Only check tracked emails
-    },
-    orderBy: { sentAt: "desc" },
-    take: COLD_THRESHOLD,
-    select: { openedAt: true },
-  });
-
-  // Need at least COLD_THRESHOLD tracked emails to make a decision
-  if (recentEmails.length < COLD_THRESHOLD) {
-    return false;
-  }
-
-  // Cold if ALL recent emails are unopened
-  return recentEmails.every((e) => e.openedAt === null);
-}

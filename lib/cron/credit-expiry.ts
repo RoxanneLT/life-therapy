@@ -18,14 +18,25 @@
  *      quiet.
  *
  * Not marketing: this tells someone that something they PAID FOR is about to
- * lapse. It respects emailOptOut/emailPaused, and deliberately does not filter
- * on consentGiven — withholding it would be the unkind reading of consent.
+ * lapse. It already declined to filter on consentGiven — withholding it would be
+ * the unkind reading of consent — and that reasoning reaches the other two
+ * suppressions as well, which it used to honour:
+ *
+ *   - An automatic pause is our marketing hygiene. A client whose mail app blocks
+ *     images was auto-paused after five "unopened" emails and would then lose paid
+ *     sessions with no warning, silently at both ends.
+ *   - An opt-out is a request to stop being MARKETED to. Nobody unsubscribing from
+ *     a newsletter is asking not to be told their credits expire on Friday.
+ *
+ * So this is the ACCOUNT tier: see `mayReceiveAccountNotice` in lib/engagement.ts,
+ * where the three tiers and the reasoning behind each live.
  */
 
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { appBaseUrl } from "@/lib/region";
+import { mayReceiveAccountNotice } from "@/lib/engagement";
 import { saDateStr, saFormat, diffSaDays } from "@/lib/dates";
 
 export interface CreditExpiryResult {
@@ -91,8 +102,9 @@ export async function processCreditExpiry(): Promise<CreditExpiryResult> {
         select: {
           firstName: true,
           email: true,
-          emailOptOut: true,
-          emailPaused: true,
+          // emailOptOut/emailPaused deliberately not selected: this is the ACCOUNT
+          // tier and neither changes the answer. Selecting them would invite the
+          // next reader to filter on them again.
           unsubscribeToken: true,
         },
       },
@@ -102,7 +114,9 @@ export async function processCreditExpiry(): Promise<CreditExpiryResult> {
   for (const cb of balances) {
     // ── Warnings ──────────────────────────────────────────────
     const due = warningDue(cb, now);
-    if (due && cb.student && !cb.student.emailOptOut && !cb.student.emailPaused) {
+    // Called with no argument, which is the honest signature: nothing about the
+    // client's consent or pause state can suppress a notice about their own money.
+    if (due && cb.student && mayReceiveAccountNotice()) {
       // Keyed by the EXPIRY DATE, not the month: a new grant pushes the date out
       // and starts a genuinely new cycle that deserves its own warning. Keyed by
       // month, that second cycle would have been silently suppressed.

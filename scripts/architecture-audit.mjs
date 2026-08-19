@@ -1301,6 +1301,45 @@ check("email-safety: the couples partner invite goes through its one helper", ()
   }
 });
 
+check("email-tiers: a suppression decision goes through lib/engagement.ts", () => {
+  // `emailPaused` was consulted directly by four senders, each deciding for itself
+  // what a pause meant. It meant the same thing to all of them — don't send — which
+  // was right for campaigns and wrong for everything else, because the flag is set
+  // AUTOMATICALLY by a cold-contact rule reading a tracking pixel that Outlook
+  // blocks by default. 65 of 181 clients were auto-paused, every one by the rule and
+  // not one by a person; the practice owner stopped receiving her own birthday email
+  // for five months, and clients could lose paid-for session credits with no warning.
+  //
+  // The three tiers (marketing / goodwill / account) and which suppressions bind to
+  // each now live in one file. A sender reading the raw flag is a fifth opinion.
+  const DECIDES_TIERS = new Set([
+    "lib/engagement.ts", // the one file allowed to read the raw flag
+  ]);
+
+  // codeKeepingLiterals: the field name appears in Prisma selects as a bare
+  // identifier, but the surrounding narrative comments name it constantly — this
+  // check would otherwise fire on every file that merely explains itself.
+  for (const file of allSource()) {
+    if (DECIDES_TIERS.has(rel(file))) continue;
+    // `.ts` only. A component branching on the flag is RENDERING it — showing an
+    // admin that a client is paused is the visibility this incident was missing,
+    // not a send decision. Scoped by extension rather than by an allowlist of
+    // component paths, so a new component showing the same badge needs no entry.
+    if (file.endsWith(".tsx")) continue;
+    const src = codeKeepingLiterals(read(file));
+    // A `select`/`include` naming the column is fine — reading it is how a predicate
+    // gets its input. Branching on it is the defect.
+    const m = /(?:!|\bif\s*\(|&&|\|\||\?)\s*[\w.]*\bemailPaused\b(?!\s*:)/.exec(src);
+    if (!m) continue;
+    fail(
+      "email-tiers",
+      `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+      "branches on emailPaused directly instead of asking which tier of email this is",
+      "call mayReceiveMarketing / mayReceiveGoodwill / mayReceiveAccountNotice from lib/engagement.ts — an automatic pause must not suppress a birthday wish or a credit-expiry warning",
+    );
+  }
+});
+
 check("email-tracking: a tracked link is one the redirector will forward", () => {
   // The wrapper and the click redirector enforce two halves of ONE rule, and for a
   // while only one half knew it. `app/api/track/click` was hardened to forward to our

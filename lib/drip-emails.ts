@@ -5,6 +5,7 @@ import { baseTemplate } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 import { appBaseUrl } from "@/lib/region";
+import { assessEngagement } from "@/lib/engagement";
 
 const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
@@ -98,6 +99,12 @@ interface DripResult {
   sent: number;
   skipped: number;
   failed: number;
+  /**
+   * Clients the cold rule paused on this run. Counted apart from `skipped` because
+   * 65 clients were auto-paused with nobody informed — a pause looked exactly like
+   * every other reason for not sending, so it never reached a report.
+   */
+  autoPaused: number;
 }
 
 /**
@@ -105,7 +112,7 @@ interface DripResult {
  * Called daily by the cron job.
  */
 export async function processDripEmails(): Promise<DripResult> {
-  const result: DripResult = { processed: 0, sent: 0, skipped: 0, failed: 0 };
+  const result: DripResult = { processed: 0, sent: 0, skipped: 0, failed: 0, autoPaused: 0 };
 
   // Get dynamic phase counts from DB
   const phaseCounts = await getDripPhaseCounts();
@@ -184,6 +191,7 @@ export async function processDripEmails(): Promise<DripResult> {
         if (res.value === "sent") result.sent++;
         else if (res.value === "skipped") result.skipped++;
         else if (res.value === "failed") result.failed++;
+        else if (res.value === "auto_paused") result.autoPaused++;
       } else {
         result.failed++;
       }
@@ -222,7 +230,7 @@ const FREE_CONSULTATION_INLINE_STEPS: Record<string, number[]> = {
 async function processSingleClient(
   candidate: DripCandidate,
   phaseCounts: { onboarding: number; newsletter: number }
-): Promise<"sent" | "skipped" | "failed"> {
+): Promise<"sent" | "skipped" | "failed" | "auto_paused"> {
   const { currentPhase, currentStep, daysSinceSignup } = candidate;
 
   // ── INTELLIGENCE: Auto-graduate converted clients ──
@@ -306,18 +314,21 @@ async function processSingleClient(
     if (claimed.count !== 1) return "skipped"; // another runner has this step
   }
 
-  // Auto-pause cold clients: check last 5 tracked emails
-  const isCold = await checkClientEngagement(candidate.studentId);
-  if (isCold) {
+  // Auto-pause cold clients. The judgement lives in lib/engagement.ts, shared with
+  // the campaign processor — each file used to carry its own copy, keyed differently
+  // and with the threshold hardcoded here and named there, so a correction to either
+  // reached half the senders.
+  const verdict = await assessEngagement(candidate.studentId, candidate.email);
+  if (verdict.cold) {
     await prisma.student.update({
       where: { id: candidate.studentId },
       data: {
         emailPaused: true,
         emailPausedAt: new Date(),
-        emailPauseReason: "5_consecutive_unopened",
+        emailPauseReason: verdict.reason,
       },
     });
-    return "skipped";
+    return "auto_paused";
   }
 
   // Build and send the email
@@ -407,29 +418,6 @@ async function processSingleClient(
   // Advance progress
   await advanceProgress(candidate, phaseCounts);
   return "sent";
-}
-
-/**
- * Check if a client is "cold" — 5 consecutive tracked emails with no opens.
- * Returns true if the client should be auto-paused.
- */
-async function checkClientEngagement(studentId: string): Promise<boolean> {
-  const recentEmails = await prisma.emailLog.findMany({
-    where: {
-      studentId,
-      status: "sent",
-      trackingId: { not: null },
-    },
-    orderBy: { sentAt: "desc" },
-    take: 5,
-    select: { openedAt: true },
-  });
-
-  // Only check if we have 5+ tracked emails
-  if (recentEmails.length < 5) return false;
-
-  // If all 5 are unopened → cold
-  return recentEmails.every((e) => !e.openedAt);
 }
 
 /**

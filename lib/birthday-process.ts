@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { saToday } from "@/lib/dates";
 import { appBaseUrl } from "@/lib/region";
+import { mayReceiveGoodwill } from "@/lib/engagement";
 
 const DEFAULT_BASE_URL = appBaseUrl();
 
@@ -66,12 +67,18 @@ export async function processBirthdayEmails(): Promise<{
   const [currentYear, todayMonth, todayDay] = saToday().split("-").map(Number);
 
   // Find all students whose birthday is today
+  // Consent and opt-out are filtered in SQL — they are the client's own decisions
+  // and bind here. The PAUSE is filtered in code by `mayReceiveGoodwill`, because
+  // the answer depends on WHY the record is paused: an automatic cold-contact pause
+  // is our marketing hygiene and must not swallow a birthday wish, while a pause a
+  // person applied is honoured. Filtering `emailPaused: false` in SQL, as this did,
+  // could not tell those apart — which is how the practice owner's own birthday
+  // email stopped arriving after an image-blocking mail client got her auto-paused.
   const allStudents = await prisma.student.findMany({
     where: {
       dateOfBirth: { not: null },
       consentGiven: true,
       emailOptOut: false,
-      emailPaused: false,
     },
     select: {
       id: true,
@@ -80,11 +87,16 @@ export async function processBirthdayEmails(): Promise<{
       gender: true,
       dateOfBirth: true,
       unsubscribeToken: true,
+      consentGiven: true,
+      emailOptOut: true,
+      emailPaused: true,
+      emailPauseReason: true,
     },
   });
 
   const birthdayStudents = allStudents.filter((s) => {
     if (!s.dateOfBirth) return false;
+    if (!mayReceiveGoodwill(s)) return false;
     // dateOfBirth is a `@db.Date` held at UTC midnight, so read it with the UTC
     // getters. The local ones would shift it a day on any server west of GMT.
     const dob = new Date(s.dateOfBirth);
