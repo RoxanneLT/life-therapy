@@ -2237,6 +2237,106 @@ const ESLINT_TAGS_PROBED = {
     "static read of the config, so this record IS the verification.",
 };
 
+/**
+ * Duplicated implementations, carried as debt. The list only SHRINKS — an entry leaves
+ * when the copies are collapsed into one, and any NEW duplication fails the build.
+ *
+ * Keyed on the site list rather than the body hash on purpose: if someone edits one copy
+ * the hash moves and it reports as new, which is right — copies that have DIVERGED are
+ * worse than copies that agree, because now two behaviours wear one name.
+ */
+const DUPLICATE_BODIES_KNOWN = [
+  // The documented scar. Escaping reached one of these and not the others; the callers
+  // now escape (see `email-safety: every placeholder substituter escapes its variables`),
+  // so this is debt rather than a live hole. Worth collapsing — five near-copies of the
+  // one function that renders client-supplied text into HTML.
+  "lib/birthday-process.ts → replacePlaceholders | lib/campaign-process.ts → replacePlaceholders | lib/campaign-send.ts → replacePlaceholders | lib/drip-emails.ts → replacePlaceholders",
+  // Time arithmetic in three places, one under a different name. This codebase's scars
+  // are disproportionately date/time, so these belong in lib/dates.ts.
+  "app/(portal)/portal/(dashboard)/book/actions.ts → formatMinutesToTime | app/(public)/book/actions.ts → formatMinutesToTime | lib/availability.ts → formatTime",
+  "app/(admin)/admin/(dashboard)/bookings/day-view.tsx → timeToMinutes | app/(admin)/admin/(dashboard)/bookings/week-view.tsx → timeToMinutes",
+  // A date formatter in two places — same class, same reason to collapse.
+  "app/(admin)/admin/(dashboard)/invoices/page.tsx → formatDate | app/(admin)/admin/(dashboard)/reports/actions.ts → formatDate",
+  // UI handlers. Real duplication, low blast radius; collapsing them is tidying, not
+  // risk reduction, so they sit at the back of the queue.
+  "components/admin/admin-header.tsx → handleSignOut | components/portal/portal-header.tsx → handleSignOut",
+  "components/admin/lecture-form.tsx → formatBytes | components/admin/preview-video-upload.tsx → formatBytes",
+  "components/admin/file-upload.tsx → handleDrop | components/admin/image-upload.tsx → handleDrop",
+  "components/admin/file-upload.tsx → handleFileSelect | components/admin/image-upload.tsx → handleFileSelect",
+  "components/admin/course-form.tsx → handleTitleChange | components/admin/digital-product-form.tsx → handleTitleChange | components/admin/package-form.tsx → handleTitleChange",
+  "app/(admin)/admin/(dashboard)/clients/[id]/tabs/payment-request-dialogs.tsx → emptyLine | app/(admin)/admin/(dashboard)/invoices/new-pr-dialog.tsx → emptyLine",
+];
+
+check("duplication: one implementation, not several", () => {
+  // M-04, and the half of "never create parallel systems" that can actually be decided.
+  //
+  // "Is this a duplicate SYSTEM" is a judgement about intent. Duplicate IMPLEMENTATION
+  // is a fact about bytes, and it is what this codebase has repeatedly paid for: five
+  // copies of the placeholder substituter with escaping on one, two byte-identical CSV
+  // escapers with formula injection on neither, two partner lookups reading opposite
+  // ends of the same row.
+  //
+  // A NAME registry would have caught none of those — every pair used different names.
+  // Hashing the normalised body catches them regardless of what they are called, which
+  // is the whole point.
+  //
+  // STATED LIMIT: exact bodies only. The fifth `replacePlaceholders` copy differs from
+  // the other four by `.replace` vs `.replaceAll` — functionally identical on a global
+  // regex — and is therefore invisible here. Near-duplicates need a reader, and the
+  // number this check reports is a floor, not a census.
+  const normalise = (s) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1").replace(/\s+/g, " ").trim();
+
+  const MIN_BODY = 60; // below this, two functions agreeing is coincidence
+  const byHash = new Map();
+
+  for (const file of allSource().filter((f) => /\.tsx?$/.test(f))) {
+    const src = read(file);
+    const re = /(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\([^)]*\)[^{]*\{|(?:const|let)\s+(\w+)\s*(?::[^=]+)?=\s*(?:async\s*)?\([^)]*\)(?:\s*:\s*[^=]+)?\s*=>\s*\{/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const name = m[1] ?? m[2];
+      const open = src.indexOf("{", m.index + m[0].length - 1);
+      if (open === -1) continue;
+      let depth = 0, end = -1;
+      for (let j = open; j < src.length; j++) {
+        if (src[j] === "{") depth++;
+        else if (src[j] === "}") { depth--; if (depth === 0) { end = j; break; } }
+      }
+      if (end === -1) continue;
+      const body = normalise(src.slice(open + 1, end));
+      if (body.length < MIN_BODY) continue;
+      const h = createHash("sha1").update(body).digest("hex");
+      if (!byHash.has(h)) byHash.set(h, []);
+      byHash.get(h).push(`${rel(file)} → ${name}`);
+    }
+  }
+
+  const seen = new Set();
+  for (const sites of byHash.values()) {
+    if (new Set(sites.map((s) => s.split(" → ")[0])).size < 2) continue;
+    const key = [...sites].sort().join(" | ");
+    if (DUPLICATE_BODIES_KNOWN.includes(key)) { seen.add(key); continue; }
+    fail(
+      "duplication",
+      sites[0].split(" → ")[0],
+      `this function body appears in ${sites.length} places: ${sites.join(", ")}`,
+      "collapse them into one implementation and import it — or add the site list to DUPLICATE_BODIES_KNOWN with the reason it must stay",
+    );
+  }
+  for (const key of DUPLICATE_BODIES_KNOWN) {
+    if (!seen.has(key)) {
+      fail(
+        "duplication",
+        "scripts/architecture-audit.mjs",
+        `DUPLICATE_BODIES_KNOWN carries an entry that no longer duplicates: ${key.slice(0, 90)}…`,
+        "delete the entry — the list only shrinks, and a stale one is indistinguishable from live debt",
+      );
+    }
+  }
+  console.log(`      ↳ ${DUPLICATE_BODIES_KNOWN.length} duplicated implementations carried as debt`);
+});
+
 check("mechanisable: every unenforceable rule has a queue entry, and vice versa", () => {
   // The register is a BUILD QUEUE and only shrinks — an entry leaves when its mechanism
   // ships and the rule swaps UNENFORCEABLE for @enforced. Two ways that goes wrong and

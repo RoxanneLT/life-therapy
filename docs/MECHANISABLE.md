@@ -102,7 +102,33 @@ expected; recorded as the condition rather than a hope.
 
 - **Rule:** "Never create parallel systems when you can extend existing ones." (`CLAUDE.md` §5)
 - **Rung:** check (partial) · **Blast:** other
-- **Status:** **open, and the most promising of the six.**
+- **Status:** **HALF BUILT 2026-08-19.** The implementation half shipped as
+  `audit:duplication-one-implementation-not-several` and moved to §4. This entry now holds the
+  residue: a duplicate *flow*.
+
+**What shipped, and why it is only half.** The check hashes every normalised function body and
+fails when one appears in two files. It does not read names — which is the point, because a *name*
+registry would have caught none of the real cases: `escapeCsv` vs `escape`, `formatMinutesToTime`
+vs `formatTime`, `toSastDateStr` vs `saDateStr`. Every duplication this codebase has paid for used
+different names at each site.
+
+Measured on the first run: **10 duplications across 1,352 function bodies** — 0.7%, low enough to
+be a control rather than noise. All ten are carried in `DUPLICATE_BODIES_KNOWN` as debt, with a
+reason each and a ratchet that fails when an entry stops duplicating. Ranked inside that list:
+the five-copy placeholder substituter and the three time helpers first (this codebase's scars are
+disproportionately date/time), the UI handlers last.
+
+**Stated limit.** Exact bodies only. A fifth copy of the placeholder substituter differs from the
+other four by `.replace` vs `.replaceAll` — functionally identical on a global regex — and is
+invisible to the check. The number it reports is a floor, not a census, and near-duplicates still
+need a reader.
+
+**The residue, which is genuinely unenforceable.** A second invoicing pipeline built out of
+entirely fresh code shares no bodies with the first and would pass. That is the rule's original
+meaning and it stays a judgement.
+
+**Leaves this file when:** never — the residue has no mechanism. Marked half-built rather than
+closed, so the enforced half is visible from here.
 
 **Sketch.** "Is this a duplicate system" is a judgement about intent and cannot be decided. But
 *duplicate implementation* often can, and this codebase has paid for it repeatedly: five copies of
