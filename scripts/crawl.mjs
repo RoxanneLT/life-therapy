@@ -80,12 +80,55 @@ if (dryRun) {
   process.exit(0);
 }
 
+/**
+ * Resolve the CLI.
+ *
+ * On Windows the installed entry point is usually a `.cmd` shim, and `execFileSync` does
+ * NOT resolve those — it looks for a literal executable and fails with ENOENT, which
+ * reads exactly like "not installed". Two different problems, one error message. So:
+ * take an explicit override first, then try each candidate through a shell, and say
+ * which situation it is when none works.
+ */
+const CANDIDATES = process.env.CLAUDE_CLI ? [process.env.CLAUDE_CLI] : ["claude", "claude.cmd"];
+
+function runCli(bin) {
+  // shell:true so a .cmd/.ps1 shim resolves. Every argument is ours or comes from argv
+  // we constructed — no user string reaches the shell unquoted.
+  return execFileSync(bin, argv, { cwd: ROOT, encoding: "utf8", maxBuffer: 32e6, shell: true });
+}
+
 let raw;
-try {
-  raw = execFileSync("claude", argv, { cwd: ROOT, encoding: "utf8", maxBuffer: 32e6 });
-} catch (err) {
-  console.error(`❌ crawler invocation failed: ${err.shortMessage ?? err.message}`);
-  if (err.stdout) console.error(String(err.stdout).slice(0, 2000));
+let lastErr;
+for (const bin of CANDIDATES) {
+  try {
+    raw = runCli(bin);
+    break;
+  } catch (err) {
+    lastErr = err;
+    // ENOENT means this candidate does not exist; anything else means it ran and failed,
+    // which is a real error worth surfacing rather than trying the next name.
+    if (err.code !== "ENOENT" && !/not recognized|command not found/i.test(String(err.stderr ?? ""))) break;
+  }
+}
+
+if (raw === undefined) {
+  const notFound =
+    lastErr?.code === "ENOENT" || /not recognized|command not found/i.test(String(lastErr?.stderr ?? ""));
+  if (notFound) {
+    console.error(`❌ the \`claude\` CLI was not found (tried: ${CANDIDATES.join(", ")}).`);
+    console.error(`\n   The VS Code extension bundles its own copy and does not put one on PATH,`);
+    console.error(`   so this is expected on a machine that has only ever used the extension.`);
+    console.error(`\n   Either:`);
+    console.error(`     · install the CLI, then re-run; or`);
+    console.error(`     · point this at an existing binary:  CLAUDE_CLI="C:/path/to/claude.cmd" node scripts/crawl.mjs ${agent}`);
+    console.error(`\n   Or skip the wrapper entirely: ask the \`${agent}\` agent for a crawl inside an`);
+    console.error(`   interactive session. The agent is the deliverable; this wrapper only exists`);
+    console.error(`   to run it unattended on a schedule.\n`);
+  } else {
+    console.error(`❌ crawler invocation failed: ${lastErr?.shortMessage ?? lastErr?.message}`);
+    if (lastErr?.stdout) console.error(String(lastErr.stdout).slice(0, 2000));
+    if (lastErr?.stderr) console.error(String(lastErr.stderr).slice(0, 2000));
+  }
   process.exit(1);
 }
 
