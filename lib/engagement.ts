@@ -64,6 +64,17 @@ export interface ConsentFlags {
   consentGiven: boolean;
   emailOptOut: boolean;
   emailPaused: boolean;
+  /**
+   * `archived` means the practice no longer wishes to have this person as a client. It is
+   * the strongest signal here and the only one that is OURS rather than theirs — stronger
+   * than a pause, which merely says "we think they stopped reading".
+   */
+  clientStatus: string;
+}
+
+/** The practice has ended the relationship. Not a preference — a decision. */
+function isArchived(s: Pick<ConsentFlags, "clientStatus">): boolean {
+  return s.clientStatus === "archived";
 }
 
 /** What a goodwill decision needs: the flags, plus WHY the record is paused. */
@@ -91,8 +102,18 @@ export function isAutoPaused(s: PauseState): boolean {
  * own marketing hygiene and binds only to marketing.
  */
 
-/** Campaigns, drip, newsletters. An auto-pause is exactly what this is for. */
+/**
+ * Campaigns, drip, newsletters. An auto-pause is exactly what this is for.
+ *
+ * Archived clients are excluded, and that gap was live: enrolment happens ONCE, when a
+ * campaign activates, and never re-checks. Archiving someone removed them from the admin's
+ * active list and left them in every sequence they were already in — so a client the
+ * practice had ended with sat at step 3 of "Welcome Back: Inactive Clients", due two more
+ * invitations to return. Consent, opt-out and pause were all consulted at send time;
+ * `clientStatus` was consulted nowhere.
+ */
 export function mayReceiveMarketing(s: ConsentFlags): boolean {
+  if (isArchived(s)) return false;
   return s.consentGiven && !s.emailOptOut && !s.emailPaused;
 }
 
@@ -103,6 +124,14 @@ export function mayReceiveMarketing(s: ConsentFlags): boolean {
  * why this asks WHY the record is paused rather than whether it is.
  */
 export function mayReceiveGoodwill(s: ConsentState): boolean {
+  // Archived too, and by the tiers' own logic: this framework sorts on WHOSE decision
+  // suppressed the send. Consent and opt-out are the client's. An automatic pause is our
+  // marketing hygiene, so it binds only to marketing. Archiving is also ours — and it is
+  // the strongest thing we can say, that the relationship has ended. A birthday wish from
+  // a practice that has archived you is not goodwill; it is a mailing list that did not
+  // notice. Their MONEY is a different matter, which is why the account tier below is
+  // untouched by this.
+  if (isArchived(s)) return false;
   if (!s.consentGiven || s.emailOptOut) return false;
   return !s.emailPaused || isAutoPaused(s);
 }

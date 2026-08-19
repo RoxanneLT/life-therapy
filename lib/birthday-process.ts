@@ -83,6 +83,7 @@ export async function processBirthdayEmails(): Promise<{
       emailOptOut: true,
       emailPaused: true,
       emailPauseReason: true,
+      clientStatus: true,
     },
   });
 

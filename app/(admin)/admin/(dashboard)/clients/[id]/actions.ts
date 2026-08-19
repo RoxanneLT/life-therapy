@@ -460,7 +460,7 @@ export async function sendReviewRequestAction(
     where: { id: studentId },
     select: {
       email: true, firstName: true, branch: true,
-      consentGiven: true, emailOptOut: true, emailPaused: true, emailPauseReason: true,
+      consentGiven: true, emailOptOut: true, emailPaused: true, emailPauseReason: true, clientStatus: true,
     },
   });
   if (!student) return { success: false, error: "Client not found." };

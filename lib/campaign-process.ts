@@ -133,6 +133,7 @@ async function processActiveCampaigns(result: CampaignProcessResult) {
             consentGiven: true,
             emailOptOut: true,
             emailPaused: true,
+            clientStatus: true,
           },
         },
       },
@@ -217,6 +218,7 @@ type ProgressWithStudent = Awaited<ReturnType<typeof prisma.campaignProgress.fin
     consentGiven: boolean;
     emailOptOut: boolean;
     emailPaused: boolean;
+    clientStatus: string;
   };
 };
 

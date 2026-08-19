@@ -22,11 +22,13 @@ const base = {
   emailOptOut: false,
   emailPaused: false,
   emailPauseReason: null as string | null,
+  clientStatus: "active",
 };
 const autoPaused = { ...base, emailPaused: true, emailPauseReason: "5_consecutive_unopened" };
 const humanPaused = { ...base, emailPaused: true, emailPauseReason: "asked to stop for now" };
 const unsubscribed = { ...base, emailOptOut: true };
 const noConsent = { ...base, consentGiven: false };
+const archived = { ...base, clientStatus: "archived" };
 
 test("an auto-paused client still gets a birthday wish, but no marketing", () => {
   // The incident: the practice owner was auto-paused in March and her own system
@@ -120,4 +122,27 @@ test("the cold reason is the string the pause records", () => {
   // recognise it. If these two drift, an auto-pause reads as a human decision.
   const v = decideCold(facts);
   assert.equal(isAutoPaused({ emailPaused: true, emailPauseReason: v.reason }), true);
+});
+
+test("an archived client receives no marketing and no goodwill", () => {
+  // Archived means the practice has ended the relationship — the strongest signal here,
+  // and the only one that is OURS rather than the client's. One archived client was
+  // sitting at step 3 of "Welcome Back: Inactive Clients", due two more invitations to
+  // return, because enrolment happens once and never re-checks.
+  assert.equal(mayReceiveMarketing(archived), false);
+  assert.equal(mayReceiveGoodwill(archived), false);
+});
+
+test("an archived client is STILL told about their own money", () => {
+  // Ending the relationship does not erase what they paid for. Credits expiring, an
+  // invoice outstanding — those are theirs, and archiving is our decision, not a waiver.
+  assert.equal(mayReceiveAccountNotice(), true);
+});
+
+test("archived beats every other flag, in both directions", () => {
+  // A perfectly consenting, unpaused, opted-in archived client still gets nothing
+  // promotional; and a non-archived client is unaffected by the new condition.
+  assert.equal(mayReceiveMarketing({ ...base, clientStatus: "archived" }), false);
+  assert.equal(mayReceiveMarketing({ ...base, clientStatus: "inactive" }), true);
+  assert.equal(mayReceiveGoodwill({ ...base, clientStatus: "potential" }), true);
 });

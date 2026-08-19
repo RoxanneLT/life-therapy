@@ -118,6 +118,12 @@ export async function processDripEmails(): Promise<DripResult> {
       consentGiven: true,
       emailOptOut: false,
       emailPaused: false,
+      // Archived means the practice has ended the relationship. Filtered in SQL here
+      // rather than through `mayReceiveMarketing` because this query IS the candidate
+      // list — the predicate's job is done by the four conditions in this where clause,
+      // and they must agree with it. If a fifth suppression is ever added to the tiers,
+      // it belongs here too.
+      clientStatus: { not: "archived" },
     },
     include: {
       dripProgress: true,
