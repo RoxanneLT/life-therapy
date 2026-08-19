@@ -25,7 +25,7 @@
         alone. Canary absent, surrounding lines intact; this whole header block is
         absent from the injected copy too. But an inline tag at the END of a prose
         line SURVIVES — verified 2026-08-19 by inspecting the injected copy, which
-        carries all 18 `<!-- @enforced ... -->` tags and none of this block.
+        carries every `<!-- @enforced ... -->` tag and none of this block.
         Two consequences, opposite in sign: never reformat an @enforced tag onto
         its own line (it would vanish while still reading as present in the file),
         and never call the tags free (they cost context; they are merely quiet).

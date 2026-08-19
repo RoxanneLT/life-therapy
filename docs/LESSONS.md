@@ -8,19 +8,20 @@
 > neither reads the other. This file should shrink to entries that are only true of this codebase,
 > plus a pointer. Not done yet; recorded here rather than left to be rediscovered.
 >
-> **Open items from the shared ledger naming this project** — surveyed 2026-08-19. Both are real
-> gaps, deliberately *not* recorded there as a ledger state, because an unapplied lesson is a queue
-> item with an owner and "unapplied" is not one of the two permitted values:
+> **Open items from the shared ledger naming this project** — surveyed 2026-08-19, and **both
+> closed the same day**. Kept here rather than deleted, because what each turned up on the way is
+> the part worth reading:
 >
-> - **L-04 · a marker the parser cannot read is worse than a missing marker.** The `claude-md`
->   check resolves `@enforced audit:<id>` against real checks, but a tag in any other namespace
->   (`eslint:`, `hook:`, `settings:`) is only tested for *shape*. A malformed `eslint:` id would
->   pass the "is it tagged" test, resolve to nothing, and be counted as enforced. Five of the
->   eighteen tags here are in that unverified position.
-> - **L-10 · an enumeration test that can enumerate zero passes while checking nothing.** No check
->   in `scripts/architecture-audit.mjs` asserts a floor on the files it found. If `walk()` returned
->   an empty array — a moved directory, a changed glob — all 43 checks would pass in silence and
->   report a reassuring green. The fix is a realistic floor, never `> 0`.
+> - **L-04 · a marker the parser cannot read is worse than a missing marker.** Now
+>   `claude-md: every marker is well-formed and resolves`. Each namespace resolves against its own
+>   source of truth — `audit:` against real check names, `hook:` against a file, `settings:` against
+>   a permission entry it names. `eslint:` cannot be resolved statically at all, because the rules
+>   that matter arrive from presets and never appear in the config, so that tag carries a **probe
+>   record** instead: the same shape the gate twins use, a manual verification written down rather
+>   than an inferred one.
+> - **L-10 · an enumeration test that can enumerate zero passes while checking nothing.** Now
+>   `audit: the source enumeration has not decayed`, with a floor of 400 against a real count of
+>   542. Deliberately not `> 0` — that still passes when a walk decays from 542 files to one.
 
 Cross-project lessons. An entry qualifies only if it is **stack-independent**: the
 general form must hold for a repo that shares none of this one's tooling.

@@ -2045,6 +2045,131 @@ check("confirm-dialogs: a confirm action is not nested inside the dialog it clos
   }
 });
 
+/**
+ * Every check below walks the tree. If a walk returns nothing — a moved directory,
+ * a renamed group, a glob that decayed — every one of them passes, in silence, and
+ * the run reports green. That is worse than having no checks, because it actively
+ * reports safety.
+ *
+ * The floor is REALISTIC, not `> 0`: `> 0` still passes when an enumeration decays
+ * from 622 files to one. Set well below today's count so ordinary deletion doesn't
+ * trip it, and well above the decay modes that matter.
+ */
+const SOURCE_FLOOR = 400;
+
+check("audit: the source enumeration has not decayed", () => {
+  const n = allSource().length;
+  if (n < SOURCE_FLOOR) {
+    fail(
+      "audit",
+      "scripts/architecture-audit.mjs",
+      `the tree walk found ${n} files, below the floor of ${SOURCE_FLOOR} — every other check is scanning almost nothing and passing`,
+      "check APP/LIB/COMPONENTS still resolve and the extension filter still matches; raise the floor deliberately if the tree really shrank",
+    );
+  }
+});
+
+/**
+ * Namespaces a marker may claim, and how each is resolved. `audit:` is checked
+ * against real check names below; the rest need their own source of truth, because
+ * a tag that resolves to nothing is worse than a missing tag — it passes the "is it
+ * tagged" test, registers no claim, and is counted as enforced.
+ */
+const MARKER_NAMESPACES = ["audit", "eslint", "hook", "settings", "test"];
+
+/** `settings:<slug>` → the permission entry it claims. The entry must exist. */
+const SETTINGS_TAGS = {
+  "ask-git-push": "Bash(git push*)",
+};
+
+/**
+ * `eslint:<rule>` cannot be resolved statically: the rules that matter here arrive
+ * from presets (`eslint-config-next`, the TypeScript plugin) and never appear in
+ * eslint.config.mjs. So the tag carries a PROBE RECORD instead, the same shape the
+ * settings twins use — a manual verification, recorded, rather than an inferred one.
+ */
+const ESLINT_TAGS_PROBED = {
+  "@typescript-eslint/no-explicit-any":
+    "probed 2026-08-18, hook irrelevant: wrote a file containing `const x: any = 1`, ran eslint on " +
+    "it, got `Unexpected any. Specify a different type`. Preset-provided rules are invisible to a " +
+    "static read of the config, so this record IS the verification.",
+};
+
+check("claude-md: every marker is well-formed and resolves", () => {
+  // Scoped to HTML-comment syntax, so prose ABOUT the marker is not a false positive.
+  // The header block discusses `@enforced <ns:control-id>` three times; a check that
+  // matched the bare token would flag its own documentation (LESSONS L-05).
+  const src = read(join(ROOT, "CLAUDE.md"));
+  const auditSrc = read(join(ROOT, "scripts/architecture-audit.mjs"));
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const checks = [...auditSrc.matchAll(/check\("([^"]+)"/g)].map((m) => slug(m[1]));
+  const settings = JSON.parse(read(join(ROOT, ".claude/settings.json")));
+  const gated = new Set([
+    ...(settings.permissions?.deny ?? []),
+    ...(settings.permissions?.ask ?? []),
+  ]);
+
+  for (const c of src.matchAll(/<!--([\s\S]*?)-->/g)) {
+    const body = c[1];
+    if (!/@enforced/.test(body)) continue;
+
+    // A MARKER is a comment whose entire body is markers. Comment syntax alone was
+    // not a tight enough scope: the maintenance block at the top of CLAUDE.md is
+    // itself an HTML comment, and it documents the format three times — so the first
+    // version of this check flagged its own documentation, twice. That is L-05 again
+    // (a metric whose vocabulary appears in the corpus it measures), and the fix is
+    // the same shape as anchoring on the token instead of its neighbourhood.
+    if (!/^\s*(?:@enforced\s+\S+\s*)+$/.test(body)) continue;
+
+    const at = () => src.slice(0, c.index).split("\n").length;
+
+    for (const t of body.matchAll(/@enforced(\S*)\s+(\S+)/g)) {
+      // A malformed marker must fail LOUDLY, never parse to nothing.
+      const m = /^([a-z]+):(.+)$/.exec(t[2]);
+      if (t[1] || !m) {
+        fail(
+          "claude-md",
+          `CLAUDE.md:${at()}`,
+          `malformed marker \`@enforced${t[1]} ${t[2]}\` — it claims nothing, so the rule is counted as enforced while no control is named`,
+          "use `@enforced <namespace>:<control-id>`",
+        );
+        continue;
+      }
+      const [, ns, id] = m;
+      if (!MARKER_NAMESPACES.includes(ns)) {
+        fail("claude-md", `CLAUDE.md:${at()}`, `unknown marker namespace \`${ns}:\``,
+          `use one of: ${MARKER_NAMESPACES.join(", ")}`);
+        continue;
+      }
+      if (ns === "audit") {
+        if (!checks.some((k) => k === id || k.startsWith(id))) {
+          fail("claude-md", `CLAUDE.md:${at()}`, `\`audit:${id}\` names no existing check`,
+            "derive the id by slugifying the check name — never write it from memory");
+        }
+      } else if (ns === "hook") {
+        if (!existsSync(join(ROOT, `.claude/hooks/${id}.js`))) {
+          fail("claude-md", `CLAUDE.md:${at()}`, `\`hook:${id}\` names no file at .claude/hooks/${id}.js`,
+            "point it at a hook that exists");
+        }
+      } else if (ns === "settings") {
+        const claim = SETTINGS_TAGS[id];
+        if (!claim) {
+          fail("claude-md", `CLAUDE.md:${at()}`, `\`settings:${id}\` is not in SETTINGS_TAGS, so nothing resolves it`,
+            "add it, naming the permission entry it claims");
+        } else if (!gated.has(claim)) {
+          fail("claude-md", `CLAUDE.md:${at()}`, `\`settings:${id}\` claims \`${claim}\`, which settings.json no longer carries`,
+            "restore the entry, or retire the marker");
+        }
+      } else if (ns === "eslint") {
+        if (!ESLINT_TAGS_PROBED[id]) {
+          fail("claude-md", `CLAUDE.md:${at()}`, `\`eslint:${id}\` has no probe record`,
+            "preset rules cannot be resolved statically — probe the rule once and record it in ESLINT_TAGS_PROBED");
+        }
+      }
+    }
+  }
+});
+
 check("claude-md: every rule in a rules section carries its net", () => {
   // Defines "rule" by LOCATION, not by content. Prose-parsing to decide what is a
   // rule was tried and produced a 100% false-positive rate on its first run; the
