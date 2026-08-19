@@ -76,7 +76,7 @@ If you find nothing, emit `{"crawler": "crawler-doctrine", "findings": []}`. **A
 valid and useful answer.** Manufacturing a finding to look productive is the single worst thing you
 can do here, because it trains the reader to discount the next real one.
 
-<!-- /SPINE:crawler-doctrine v1 -->
+<!-- /SPINE:crawler-doctrine -->
 
 ---
 

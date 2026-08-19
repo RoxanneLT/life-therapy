@@ -280,7 +280,20 @@ try {
 }
 
 const findings = Array.isArray(report.findings) ? report.findings : [];
-const cost = typeof envelope.total_cost_usd === "number" ? ` · $${envelope.total_cost_usd.toFixed(2)}` : "";
+/**
+ * `total_cost_usd` is an API-EQUIVALENT estimate, not a charge.
+ *
+ * On an OAuth/subscription login — which is how this is normally run — the work draws on
+ * the plan's usage, the same pool as an interactive session, and no dollar amount is
+ * billed for it. Printing a bare "$0.73" reads as money leaving an account and invites
+ * the wrong decision about how often to run this. The number is still worth showing: it
+ * is the best available measure of how much work a run did, and therefore of how much
+ * rate-limit budget it took from everything else.
+ */
+const cost =
+  typeof envelope.total_cost_usd === "number"
+    ? ` · ≈$${envelope.total_cost_usd.toFixed(2)} of work (API-equivalent; on a subscription login this is usage, not a charge)`
+    : "";
 
 console.log(`\n${agent}${scope ? ` · scope ${scope}` : ""} — ${findings.length} finding(s)${cost}\n`);
 
