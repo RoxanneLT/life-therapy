@@ -144,7 +144,8 @@ tsc --noEmit
   && node scripts/architecture-audit.mjs
   && npm run crawl:tier0              ← knip: dead code, unlisted deps, unresolved imports
   && npm run check:cycles             ← import cycles, selftest first
-  && npm run test:gate                ← probes for BOTH gates: bash-gate and ddl-gate
+  && npm run test:gate                ← probes for all three gates: bash-gate, ddl-gate,
+                                        agent-write-scope
   && npm run test:budget              ← probes for the context-budget hook and the statusline
   && npm run test:probes              ← plants violations in real files, asserts the audit fires
   && npm run test                     ← lib/*.test.ts
@@ -201,7 +202,7 @@ attached to no rule fails.
 |---|---|
 | ESLint | `eslint.config.mjs`, `--max-warnings 0` |
 | Audit checks | `scripts/architecture-audit.mjs` — each named after the bug class it catches |
-| Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js` + `.claude/settings.json` |
+| Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js`, `agent-write-scope.js` + `.claude/settings.json` |
 | Token economy | `.claude/settings.json` (`autoCompactWindow`) · `.claude/hooks/context-budget.js` · `.claude/statusline.js` |
 | Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs`, `scripts/check-{statusline,context-budget}.mjs` |
 | Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |
@@ -397,19 +398,31 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 
 | Agent | For | Access |
 |---|---|---|
-| `grounder` | **Before writing any code.** Maps the machinery a task touches so you extend it instead of duplicating it | read-only, sonnet |
-| `census` | Repo-wide counts, find-all-usages, pattern audits — returns **classified** hits, not file dumps | read-only, sonnet |
-| `db-inspector` | Live-data claims against production; every answer carries the query behind it | read-only, SELECT, sonnet |
+| `grounder` | **Before writing any code.** Maps the machinery a task touches so you extend it instead of duplicating it | handoff-only, sonnet |
+| `census` | Repo-wide counts, find-all-usages, pattern audits — returns **classified** hits, not file dumps | handoff-only, sonnet |
+| `db-inspector` | Live-data claims against production; every answer carries the query behind it | handoff-only, SELECT, sonnet |
+| `crawler-doctrine` | The classes no mechanism decides — divergent rule expressions, doctrine the tree contradicts | handoff + `.claude/crawlers`, sonnet |
 | `implementer` | A pre-scoped mechanical transform; returns misfit judgment sites rather than guessing | write, `isolation: worktree`, never commits, sonnet |
-| `walker` | Adversarial pre-push review — tries to **refute** the work. Independent context is the point | read-only, opus |
+| `walker` | Adversarial pre-push review — tries to **refute** the work. Independent context is the point | handoff-only, opus |
 
-Mechanical reading → the read-only three. Mechanical writing → the isolated implementer.
+Mechanical reading → the handoff-only four. Mechanical writing → the isolated implementer.
 Judgment stays in the main session. Proposers get worktrees; verifiers need `node_modules` and
 the main checkout.
 
+**"Handoff-only" and not "read-only", because read-only was never true.** `tools:` frontmatter
+does **not** withhold Write/Edit from a custom spine — the harness appends both to every agent
+whatever the file lists (E8, measured next door in pleks; a harness fact, so it holds here without
+re-measuring). Four spines said read-only, this table said read-only, and none of it bound
+anything. Artefacts now go to `.claude/handoff/<task-slug>/` and a write outside it is **denied at
+the tool call** by `.claude/hooks/agent-write-scope.js`, which discriminates on the `agent_type`
+that PreToolUse carries for a subagent and never for the main session (E7). An agent type with no
+declared scope is **asked**, not refused — ad-hoc delegation stays possible, it just stops being
+silent. <!-- @enforced hook:agent-write-scope -->
+
 Subagents **do** receive this file (E3) — but a narrow-task agent skims it, and rung-4 files
 never reach an edit-blind session (E1b). Presence is not enforcement, which is why the
-incident class lives at hooks and checks.
+incident class lives at hooks and checks. The write-scope gate is that rule applied to the agents
+themselves: their own spine text is prose to them in exactly the way this file is.
 
 **Classify per site, never sweep.** A pattern that looks uniform usually isn't — during the
 date centralisation, two call sites identical to twenty-five others were correct for a reason

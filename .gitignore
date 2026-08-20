@@ -48,6 +48,13 @@ yarn-error.log*
 # binary-ish blob in every diff.
 .claude/.context-budget.state.json
 
+# Subagent artefacts. `.claude/hooks/agent-write-scope.js` confines every read-only
+# agent's writes to this directory, so it fills up with grounding maps and review
+# notes that are working material, not repo content. Ignored deliberately rather
+# than by oversight: the post-run `git status --porcelain` check is only readable
+# if an agent run leaves it empty.
+.claude/handoff/
+
 # vercel
 .vercel
 
