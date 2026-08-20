@@ -1,0 +1,57 @@
+# Line endings are a property of THIS REPOSITORY, not of whoever clones it.
+#
+# WHY THIS EXISTS, and why it landed before the desktop was set up rather than after.
+# Until now the working tree's byte content was a function of ONE machine's `core.autocrlf`
+# — a per-user Git setting this repo has no say over, defaulted to `true` by Git for Windows.
+# With a single machine that is invisible. Add a second and it becomes a variable, and every
+# content-inspecting control here sits downstream of it: `@enforced` marker parsing, the probe
+# harness's plant needles, the CLAUDE.md checker, spine comparison. A defect class that appears
+# on some machines and not others is the worst debugging shape there is, and cloning the repo
+# onto a second machine is exactly the condition that produces it.
+#
+# It is not hypothetical. On 2026-08-20 a routine branch checkout converted this tree to CRLF
+# and two probes in `scripts/probe-checks.mjs` reported PLANT FAILED — LF needles finding
+# nothing — with no line of their subject matter changed. `npm run check` is the LAST step of
+# SETUP-NEW-PC.ps1, so a fresh clone would have ended its bootstrap on a red gate pointing at
+# the wrong file entirely.
+#
+# The cost of pinning is a one-time, visible, reviewable working-tree rewrite. The cost of not
+# pinning recurs, and arrives disguised as something else.
+#
+# NOTE ON THE DIFF: committing this stages no content churn. `core.autocrlf` was already
+# converting CRLF to LF on the way IN, so every blob in history is LF today. What changes is
+# what a checkout WRITES OUT — which is the half that was varying per machine.
+
+# Text is stored LF in the repo and checked out LF everywhere. `auto` still lets Git's own
+# heuristic exclude anything that is actually binary, so this is a floor, not an override.
+* text=auto eol=lf
+
+# Shell scripts are pinned LF regardless of platform: a CRLF line ending becomes part of the
+# shebang argument, and the interpreter fails with a message naming a path that looks correct.
+*.sh text eol=lf
+
+# The one direction that must NOT be LF. cmd.exe requires CRLF and fails obscurely without it.
+# No such file is tracked today; the rule is here so that adding one cannot silently break it,
+# which is the same reason the binary list below is exhaustive rather than as-needed.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets — never normalised, never diffed as text. Enumerated from what this repo
+# actually tracks (jpg, png, docx, pdf, woff, ico) plus the near neighbours of each, because
+# the failure mode of a MISSING entry is a corrupted asset, and it is silent until something
+# tries to open the file.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.zip   binary
