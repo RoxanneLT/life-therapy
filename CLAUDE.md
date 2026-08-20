@@ -424,6 +424,20 @@ never reach an edit-blind session (E1b). Presence is not enforcement, which is w
 incident class lives at hooks and checks. The write-scope gate is that rule applied to the agents
 themselves: their own spine text is prose to them in exactly the way this file is.
 
+**What agents actually cost: `npm run agents:distribution`.** Turn and output budgets live in each
+spine and are UNENFORCEABLE by canon's own grammar — an agent has no reliable turn counter, it
+estimates. So the mechanical half is visibility, not enforcement: the report reads the budgets out
+of `.claude/agents/*.md` (never a second copy here) and prints per-type medians, overruns, spawn
+depth and subagent compactions. Not on the gate — it reads the live transcript tree under
+`~/.claude/projects`, which no CI runner has. Its `--selftest` **is** on the gate, because "runs
+nowhere" and "is checked nowhere" are different failures and only the second is avoidable.
+
+First LT reading, 2026-08-20: 8 runs, grounder ×5 (median 59 turns), db-inspector ×1 (22 turns,
+2,552-token report against a 2k budget — one overrun), census ×2. Every run top-level; no agent has
+spawned an agent. **All 8 predate the budgets**, so they are not evidence about them — the
+re-measure trigger stands at 0/20 under the current spines. Budgets are backstops: an overrun is a
+finding about how the task was scoped, not automatically a fault in the agent.
+
 **Classify per site, never sweep.** A pattern that looks uniform usually isn't — during the
 date centralisation, two call sites identical to twenty-five others were correct for a reason
 invisible to the regex. Blanket codemods break production.
