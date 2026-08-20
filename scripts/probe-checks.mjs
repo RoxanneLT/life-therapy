@@ -141,6 +141,33 @@ const MUTATIONS = [
   },
 ];
 
+/**
+ * The needles above are written with LF. The WORKING TREE's line endings are not this repo's
+ * to choose — `core.autocrlf` decides them at checkout, and Git for Windows defaults it to
+ * true, so a clone rewrites every text file to CRLF. An LF needle then matches nothing, and
+ * the two CLAUDE.md probes report PLANT FAILED against a tree with nothing wrong with it.
+ *
+ * Not hypothetical and not cosmetic: `npm run check` is the LAST step of SETUP-NEW-PC.ps1, so
+ * the documented bootstrap for a new machine ended in a red gate pointing at the wrong thing.
+ * Found on 2026-08-20 when a routine `git checkout` converted this tree and two probes that had
+ * always passed went red without a line of their subject matter changing.
+ *
+ * The harness behaved correctly — it refused to report a pass it could not back, which is the
+ * whole point of the PLANT FAILED path. The defect was the needle's undeclared dependency on a
+ * checkout setting.
+ *
+ * Fixed HERE rather than by pinning line endings repo-wide with .gitattributes. That would work
+ * too, and it is arguably the better fix, but it is a decision about every file in the repo and
+ * every machine that clones it — whereas a probe that only functions under one checkout
+ * configuration is just a bug in the probe. The two are not alternatives; this is the half that
+ * is unambiguously mine to fix.
+ */
+const eolOf = (s) => (/\r\n/.test(s) ? "\r\n" : "\n");
+
+/** A literal needle, tolerant of either line ending. Regex metacharacters are escaped first. */
+const needle = (find) =>
+  new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\n/g, "\r?\n"));
+
 /** Run the audit and return the set of check names that reported a failure. */
 function failedChecks() {
   let out;
@@ -188,13 +215,15 @@ try {
     const abs = join(ROOT, m.path);
     const original = readFileSync(abs, "utf8");
     if (!mutated.has(abs)) mutated.set(abs, original);
-    if (!original.includes(m.find)) {
+    const re = needle(m.find);
+    if (!re.test(original)) {
       console.log(`  ✗ PLANT FAILED — "${m.find.slice(0, 40)}" not found in ${m.path}`);
       console.log(`      the probe proves nothing; fix the needle before trusting this run.`);
       wrong++;
       continue;
     }
-    writeFileSync(abs, original.replace(m.find, m.replace));
+    const planted = m.replace.replace(/\n/g, eolOf(original));
+    writeFileSync(abs, original.replace(re, () => planted));
   }
 
   const { failed } = failedChecks();
