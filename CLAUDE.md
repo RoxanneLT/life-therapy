@@ -1,7 +1,7 @@
 # CLAUDE.md — Life-Therapy Platform
 
 <!--
-  Built from SPEC_CLAUDE_MD_STANDARD v4.3.
+  Built from standards/CLAUDE-MD-STANDARD v4.3.
   BINDING METRIC: the UNENFORCEABLE count — rules whose only control is model
   attention. `npm run audit` prints it. It may only fall.
   ADVISORY: ~250 visible always-loaded lines. A tripwire for a ratchet pass —
@@ -32,7 +32,7 @@
     E3  CLAUDE.md reaches subagents                — YES, positive-with-
         transcription. An earlier probe reported the opposite and was wrong; see
         dev-standards/LESSONS.md L-17. They receive it and skim it.
-  Full contract: SPEC_CLAUDE_MD_STANDARD v4.3. Lessons: dev-standards/LESSONS.md (docs/LESSONS.md is the pointer).
+  Full contract: standards/CLAUDE-MD-STANDARD v4.3. Lessons: dev-standards/LESSONS.md (docs/LESSONS.md is the pointer).
 -->
 
 ## 1 · START HERE
