@@ -41,6 +41,13 @@ yarn-error.log*
 # protection travels with the repo rather than with one laptop.
 .claude/settings.local.json
 
+# The context-budget hook's cumulative counters. Per-session and per-machine: it
+# records byte offsets into ONE transcript path, so another machine's copy is not
+# merely useless, it is wrong — offsets from a file that does not exist there. The
+# hook rewrites it on every prompt, so committing it would also put a churning
+# binary-ish blob in every diff.
+.claude/.context-budget.state.json
+
 # vercel
 .vercel
 

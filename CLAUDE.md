@@ -140,14 +140,19 @@ work before it goes out. This is a standing rule, not a formality.
 ```
 tsc --noEmit
   && eslint . --max-warnings 0        ← warnings are errors; they never accumulate
+  && npm run audit:selftest           ← the audit's own fixtures, in the same gate as the audit
   && node scripts/architecture-audit.mjs
-  && npm run test:gate                ← probes for BOTH hooks: bash-gate and ddl-gate
+  && npm run crawl:tier0              ← knip: dead code, unlisted deps, unresolved imports
+  && npm run check:cycles             ← import cycles, selftest first
+  && npm run test:gate                ← probes for BOTH gates: bash-gate and ddl-gate
+  && npm run test:budget              ← probes for the context-budget hook and the statusline
+  && npm run test:probes              ← plants violations in real files, asserts the audit fires
   && npm run test                     ← lib/*.test.ts
 ```
 
 Pieces: `npm run typecheck` · `npm run lint` · `npm run audit` · `npm run test:dates` ·
-`npm run test:gate` · `npm run test:removal`. Run the whole thing after each logical change,
-not after ten.
+`npm run test:gate` · `npm run test:budget` · `npm run test:removal`. Run the whole thing after
+each logical change, not after ten.
 
 **Hook-denied** (precise patterns — the smart layer, `.claude/hooks/bash-gate.js`):
 `git push --force` · `git reset --hard` · `rm -rf` on `/` or `~` · `prisma migrate` /
@@ -169,6 +174,15 @@ production that way on 2026-08-18 without the gate firing once. Asking at the po
 statement is *written* is also the point a human can still read it. It asks, never denies; a
 `SELECT` through the same endpoint stays quiet.
 
+**`context-budget.js` is the third hook, and it is not a gate.** It runs on `UserPromptSubmit`,
+blocks nothing, and only ever adds a line: the model is told to batch its tool calls and what
+delegation has cost so far, the human is told the context size and that `/compact` exists. Two
+audiences, two texts, because a `UserPromptSubmit` `systemMessage` **renders to nobody** — which is
+also why `.claude/statusline.js` exists. That is the only human-facing surface for the number, it
+costs zero tokens, and it is the one participant who can actually run the slash command. Both were
+ported from the sibling project with their probe suites; every measurement in their headers is that
+project's and says so. `dev-standards/playbooks/3-TOKEN-ECONOMY.md`.
+
 Approval-gated actions sequence to the **end** of a task. The gates are load-bearing — do not
 engineer around them.
 
@@ -188,7 +202,8 @@ attached to no rule fails.
 | ESLint | `eslint.config.mjs`, `--max-warnings 0` |
 | Audit checks | `scripts/architecture-audit.mjs` — each named after the bug class it catches |
 | Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js` + `.claude/settings.json` |
-| Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs` |
+| Token economy | `.claude/settings.json` (`autoCompactWindow`) · `.claude/hooks/context-budget.js` · `.claude/statusline.js` |
+| Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs`, `scripts/check-{statusline,context-budget}.mjs` |
 | Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |
 | Rule files | `.claude/rules/schema-changes.md` — why `prisma migrate` fails here (the pgbouncer pooler) and the Management API path that works |
 
