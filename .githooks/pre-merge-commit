@@ -1,0 +1,21 @@
+#!/bin/sh
+# .githooks/pre-merge-commit — the commit gate for merges, which pre-commit does not cover.
+#
+# MEASURED 2026-08-21 in a throwaway repo whose hooks logged their own invocation (the same method
+# pleks used; re-run here rather than inherited, because this one decides which files exist):
+#
+#   git merge  →  pre-merge-commit, prepare-commit-msg, post-commit     ← NO pre-commit
+#
+# Without this file, "blocks a commit that fails the check chain" would be narrower than it reads by
+# exactly the size of every merge commit — and a merge is how a feature branch lands.
+set -e
+if [ -n "$LT_PRECOMMIT_CMD" ] && [ "$LT_HOOK_PROBE" = "1" ]; then
+  CMD="$LT_PRECOMMIT_CMD"
+else
+  CMD="npm run check"
+fi
+echo "pre-merge-commit → $CMD"
+$CMD
+
+# Same marker contract as pre-commit — see that file. Written only on success.
+git write-tree > "$(git rev-parse --git-path lt-gate-ok)"

@@ -126,11 +126,25 @@ Two domains, **one deployment**, region decided per-request from the hostname:
 
 ## 3 · THE GATES
 
-| Gate | Command |
-|---|---|
-| Before every commit | `npm run check` |
-| Before every push | `npm run check`, then wait to be asked |
-| Before every deploy | Vercel builds from `master`; there is no separate deploy step |
+| Gate | Command | Held by |
+|---|---|---|
+| Before every commit | `npm run check` | `.githooks/pre-commit` — and `prepare-commit-msg` for the paths git skips it on |
+| Before every push | `npm run check`, then wait to be asked | `.githooks/pre-push` |
+| Before every deploy | Vercel builds from `master`; there is no separate deploy step | — |
+
+**These are git hooks now, not requests.** Until 2026-08-21 the first two rows were prose: no
+`core.hooksPath`, `.git/hooks/` full of `.sample` files, and a CI job running `lint` + `tsc` — a
+two-step subset. So the audit, the plant probes, the four gate suites and the budget probes ran in
+exactly one place: when a human or a model chose to type the command. `npm run prepare` wires
+`core.hooksPath`, and npm runs `prepare` on `npm ci`, so a fresh clone is gated by the install
+`SETUP-NEW-PC.ps1` already performs. Probes: `scripts/check-git-hooks.mjs`.
+
+**`git rebase` is the one carve-out, and it is measured.** A rebase fires `prepare-commit-msg` once
+per replayed commit — 3 commits, 3 firings — against intermediate trees that are not meant to be
+green. Gating those would block a legitimate operation, so the hook skips while git's rebase state
+directory exists. `$2` cannot tell a rebase replay from a cherry-pick: both report `message`, as
+does a plain commit. The rebase's *result* is still gated, at pre-push and at the next ordinary
+commit. Full table in `.githooks/prepare-commit-msg`.
 
 **Push policy: never push.** Commit, report, and wait. Stéan walks and visually checks the
 work before it goes out. This is a standing rule, not a formality.
@@ -144,8 +158,8 @@ tsc --noEmit
   && node scripts/architecture-audit.mjs
   && npm run crawl:tier0              ← knip: dead code, unlisted deps, unresolved imports
   && npm run check:cycles             ← import cycles, selftest first
-  && npm run test:gate                ← probes for all three gates: bash-gate, ddl-gate,
-                                        agent-write-scope
+  && npm run test:gate                ← probes for all four gates: bash-gate, ddl-gate,
+                                        agent-write-scope, git-hooks
   && npm run test:budget              ← probes for the context-budget hook and the statusline
   && npm run test:probes              ← plants violations in real files, asserts the audit fires
   && npm run test                     ← lib/*.test.ts
@@ -203,6 +217,7 @@ attached to no rule fails.
 | ESLint | `eslint.config.mjs`, `--max-warnings 0` |
 | Audit checks | `scripts/architecture-audit.mjs` — each named after the bug class it catches |
 | Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js`, `agent-write-scope.js` + `.claude/settings.json` |
+| Git hooks | `.githooks/{pre-commit,pre-merge-commit,pre-push,prepare-commit-msg}` — wired by `npm run prepare`. A different layer from `.claude/hooks/`: those gate one *tool call*, these gate a *commit* |
 | Token economy | `.claude/settings.json` (`autoCompactWindow`) · `.claude/hooks/context-budget.js` · `.claude/statusline.js` |
 | Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs`, `scripts/check-{statusline,context-budget}.mjs` |
 | Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |

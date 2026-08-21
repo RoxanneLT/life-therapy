@@ -1,0 +1,71 @@
+#!/bin/sh
+# .githooks/prepare-commit-msg — the gate for every commit-creating path git does NOT run
+# pre-commit or pre-merge-commit on.
+#
+# MEASURED 2026-08-21, throwaway repo, hooks logging their own invocation. Counts are per operation:
+#
+#   git commit           → pre-commit, prepare-commit-msg, post-commit
+#   git commit --amend   → pre-commit, prepare-commit-msg, post-commit
+#   git merge            → pre-merge-commit, prepare-commit-msg           ← no pre-commit
+#   git cherry-pick      →                  prepare-commit-msg, post-commit   ← NO pre-* AT ALL
+#   git revert           →                  prepare-commit-msg, post-commit   ← NO pre-* AT ALL
+#   git merge --squash   → (nothing — it only stages; the follow-up commit is an ordinary commit)
+#   git rebase (3 cmts)  →                  prepare-commit-msg ×3, post-commit ×3
+#   git rebase --continue→                  prepare-commit-msg, post-commit
+#
+# So cherry-pick and revert create commits that never see `npm run check`. Both are ordinary work —
+# this repo cherry-picked d68b172 onto master a day before this hook existed — and neither is exotic
+# enough to rely on nobody using it.
+#
+# WHY NOT ENUMERATE THEM: the fix is not "also gate cherry-pick and revert". prepare-commit-msg runs
+# on EVERY path that creates a commit, so the honest question is "did the gate already run for THIS
+# commit?" — which covers whichever path git adds next without anyone noticing it was added.
+# pre-commit and pre-merge-commit write a marker naming the tree they approved; this hook consumes it.
+#
+# THE TREE HASH MATTERS. An ABORTED commit (message editor closed empty) leaves a marker behind, and
+# without the tree comparison a cherry-pick minutes later would consume it and skip the gate. A
+# different tree cannot be the tree that was approved.
+#
+# ── THE REBASE CARVE-OUT, and why it is not a hole ───────────────────────────────────────────────
+# The table above is why this file diverges from the pleks original it was ported from. A rebase
+# fires this hook ONCE PER REPLAYED COMMIT, so a 10-commit rebase would run the full chain ten times
+# — on ten intermediate trees, most of which are not meant to be green. A commit that only compiles
+# alongside its successor is ordinary and correct; failing the rebase on it would mean the gate
+# blocks a legitimate operation, and a gate people route around is worse than no gate because it
+# still reads as protection.
+#
+# `$2` cannot tell a rebase replay from a cherry-pick — MEASURED: both report `message`, as does a
+# plain commit. The discriminator that DOES hold is git's rebase state directory, present on all
+# three replays above and absent on cherry-pick, revert, plain commit and merge.
+#
+# What still gates the rebase's OUTPUT: pre-push, before anything leaves the machine, and the next
+# ordinary commit. The skipped trees are intermediate states that were never shipped — the final one
+# is checked. If that ever stops being true, the tell is a push whose pre-push run goes red.
+set -e
+
+GITDIR="$(git rev-parse --git-dir)"
+
+if [ -d "$GITDIR/rebase-merge" ] || [ -d "$GITDIR/rebase-apply" ]; then
+  echo "prepare-commit-msg: rebase in progress — intermediate trees are not gated (pre-push gates the result)"
+  exit 0
+fi
+
+MARKER="$(git rev-parse --git-path lt-gate-ok)"
+TREE="$(git write-tree)"
+
+if [ -f "$MARKER" ] && [ "$(cat "$MARKER")" = "$TREE" ]; then
+  rm -f "$MARKER"
+  exit 0
+fi
+rm -f "$MARKER"
+
+if [ -n "$LT_PRECOMMIT_CMD" ] && [ "$LT_HOOK_PROBE" = "1" ]; then
+  CMD="$LT_PRECOMMIT_CMD"
+else
+  CMD="npm run check"
+fi
+# The reason first, the command last: the probe reads the FINAL `→` line as the resolved command,
+# so nothing may follow $CMD on that line.
+echo "prepare-commit-msg: no pre-commit ran for this commit (cherry-pick / revert / other)"
+echo "prepare-commit-msg → $CMD"
+$CMD

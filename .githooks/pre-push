@@ -1,0 +1,31 @@
+#!/bin/sh
+# .githooks/pre-push — blocks a push that fails the check chain.
+#
+# ONE TIER, DELIBERATELY. The pleks original this was ported from reads git's stdin, derives the
+# pushed refs, and picks `check` or `check:full` from whether the diff touches its DB surface —
+# machinery that exists because its full chain takes over ten minutes and paying that on a docs push
+# trains people to reach for --no-verify. LT has ONE chain. Porting the scope logic here would be
+# 300 lines deciding between one option, so the refs are not read and the tier is not computed.
+#
+# THE REDUNDANCY WITH pre-commit IS INTENDED. A push usually follows a commit that just ran this
+# same chain, so this often re-runs a green result. That cost lands on the RAREST operation in this
+# repo — CLAUDE.md §3's standing rule is "never push; commit, report, and wait", and every push is a
+# deliberate human act after a visual walk — and it buys the cases pre-commit cannot see: a commit
+# made with --no-verify, a rebase whose intermediate trees this tier skips by design (see
+# prepare-commit-msg), and anything that arrived by `git pull`.
+#
+# LT_PREPUSH_CMD is a probe seam and, like the commit hooks', is INERT without LT_HOOK_PROBE=1
+# alongside it. See .githooks/pre-commit for why that second variable exists.
+#
+# Git feeds this hook `<local ref> <local sha> <remote ref> <remote sha>` on stdin. It is read and
+# discarded rather than left unread: an unconsumed stdin can leave git writing into a closed pipe.
+set -e
+cat > /dev/null
+
+if [ -n "$LT_PREPUSH_CMD" ] && [ "$LT_HOOK_PROBE" = "1" ]; then
+  CMD="$LT_PREPUSH_CMD"
+else
+  CMD="npm run check"
+fi
+echo "pre-push → $CMD"
+$CMD

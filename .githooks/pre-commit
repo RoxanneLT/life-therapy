@@ -1,0 +1,30 @@
+#!/bin/sh
+# .githooks/pre-commit — blocks a commit that fails the local check chain.
+#
+# CLAUDE.md §3 has said "Before every commit: npm run check" since the file existed, and until now
+# NOTHING enforced it: `core.hooksPath` was unset, `.git/hooks/` held fourteen `.sample` files, and
+# CI ran `npm run lint` plus `tsc --noEmit` — a two-step subset. So the audit, the plant probes, the
+# three gate suites and the budget probes ran in exactly one place: when a human or a model chose to
+# type the command. That is the rung-1 twin CLAUDE.md's own cost table asks for, and it was missing.
+#
+# Ported from pleks/.githooks/pre-commit (M-007 there), with the rebase carve-out in
+# prepare-commit-msg added here — see that file's header for what was measured.
+#
+# LT_PRECOMMIT_CMD is a probe seam so `check-git-hooks.mjs` can drive both directions without a
+# multi-minute run. It is INERT unless LT_HOOK_PROBE=1 is set alongside it: with one variable it
+# would be `--no-verify` with extra steps, which is a bypass this repo does not want to own. Two
+# variables is not security — it is the difference between a deliberate act and a convenient one.
+set -e
+if [ -n "$LT_PRECOMMIT_CMD" ] && [ "$LT_HOOK_PROBE" = "1" ]; then
+  CMD="$LT_PRECOMMIT_CMD"
+else
+  CMD="npm run check"
+fi
+echo "pre-commit → $CMD"
+$CMD
+
+# Record that THIS tree passed. `prepare-commit-msg` runs on every commit-creating path — including
+# the cherry-pick and revert ones git skips this hook for — and consumes the marker so an ordinary
+# commit does not run the chain twice. Written only on success: `set -e` means a failing $CMD never
+# reaches this line, so a failed gate cannot donate a pass.
+git write-tree > "$(git rev-parse --git-path lt-gate-ok)"
