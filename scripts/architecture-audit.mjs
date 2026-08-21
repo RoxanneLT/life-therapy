@@ -2307,6 +2307,70 @@ check("hooks: every hook declares its twin or why it cannot have one", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 8b. THE TEST SUITE'S OWN SIZE
+//
+// A passing suite proves the tests that RAN passed. It proves nothing about
+// how many ran. `npm test` does not glob — it names 23 files by hand, and a
+// new `lib/whatever.test.ts` is therefore not "failing", it is ABSENT: the
+// author writes it, watches the suite go green, and the file is never
+// executed again by anything. Nothing distinguishes that from a passing test.
+//
+// The inverse is worse in one specific way. A path listed but deleted makes
+// `tsx --test` exit non-zero, so it fails loudly — but it fails at the RUNNER
+// with a path error, which reads like a broken toolchain rather than a stale
+// list, and the fix people reach for is deleting the entry rather than asking
+// where the test went.
+//
+// Both directions asserted here, where the tree is already being walked, so
+// the list cannot drift from the disk in either direction. Measured at the
+// time of writing: 23 on disk, 23 listed, no drift — which is exactly when to
+// install it, because a check adopted while the count is already wrong starts
+// life with an allowlist.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check("test-floor: every test file on disk is in the suite the gate runs", () => {
+  const pkg = JSON.parse(read(join(ROOT, "package.json")));
+  const script = pkg.scripts?.test ?? "";
+  const listed = new Set(script.split(/\s+/).filter((a) => a.endsWith(".test.ts")));
+
+  if (listed.size === 0) {
+    fail(
+      "test-floor",
+      "package.json",
+      'the `test` script names no .test.ts files — this check cannot see what the suite runs',
+      "if the suite moved to a globbing runner, delete this check; it exists because the list is manual",
+    );
+    return;
+  }
+
+  const onDisk = walk(LIB)
+    .filter((p) => p.endsWith(".test.ts"))
+    .map((p) => rel(p)); // rel() already normalises separators, so this compares like-for-like
+
+  for (const f of onDisk) {
+    if (!listed.has(f)) {
+      fail(
+        "test-floor",
+        f,
+        "is a test file that `npm test` does not run — it went green once and has not executed since",
+        "add it to the `test` script in package.json",
+      );
+    }
+  }
+
+  for (const f of listed) {
+    if (!onDisk.includes(f)) {
+      fail(
+        "test-floor",
+        "package.json",
+        `the \`test\` script names \`${f}\`, which is not on disk — the runner fails on a path error that reads like a broken toolchain`,
+        "if the test was deleted on purpose, drop the entry; if it was moved, point at the new path",
+      );
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 9. THE RULES THAT USED TO BE HELD BY ATTENTION ALONE
 //
 // Each of these was an UNENFORCEABLE bullet in CLAUDE.md — a rule with no net,

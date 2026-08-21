@@ -106,6 +106,23 @@ export async function cancelBookingProbeAction(id: string) {
       "server-action-auth: every mutating action is guarded for its route group",
     ],
   },
+  {
+    // The absent-from-the-suite direction. This plant is a TEST FILE, which most checks skip
+    // by design (`isTest`) — that is the point: the file is invisible to the rest of the audit
+    // and to `npm test` alike, which is exactly the condition the check exists to name. Its
+    // body is a real passing test, because a test file that cannot run would be caught by the
+    // runner and this class is about one that runs fine and is simply never invoked.
+    path: "lib/__probe-floor.test.ts",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+test("a test nobody runs still passes", () => {
+  assert.equal(1, 1);
+});
+`,
+    expects: ["test-floor: every test file on disk is in the suite the gate runs"],
+  },
 ];
 
 /**
@@ -138,6 +155,24 @@ const MUTATIONS = [
     find: "// @probed",
     replace: "// probed-not",
     expects: ["hooks: every hook declares its twin or why it cannot have one"],
+  },
+  {
+    // The OTHER direction of the test floor: a path the suite names that is not on disk. It
+    // needs its own probe because it is a different branch, and because its real-world failure
+    // is misread — `tsx --test` dies on a path error that looks like a broken toolchain, so
+    // the instinct is to delete the entry rather than ask where the test went.
+    //
+    // ⚠ THIS IS THE FIRST ENTRY TO SHARE AN `expects` NAME WITH ANOTHER, AND THE RUNNER CANNOT
+    // TELL THEM APART. Every plant is applied before ONE audit run, and the assertion is
+    // `failed.has(name)` — so two entries naming the same check both read green when only one
+    // of them actually trips it, and a dead plant is indistinguishable from a live one. Both
+    // were verified in isolation when they were added (each alone fires the check; each alone
+    // goes quiet when removed). If a third direction is added here, isolate it the same way —
+    // the suite will not do it for you.
+    path: "package.json",
+    find: '"test": "tsx --test ',
+    replace: '"test": "tsx --test lib/__probe-vanished.test.ts ',
+    expects: ["test-floor: every test file on disk is in the suite the gate runs"],
   },
 ];
 
