@@ -159,7 +159,9 @@ tsc --noEmit
   && npm run crawl:tier0              ← knip: dead code, unlisted deps, unresolved imports
   && npm run check:cycles             ← import cycles, selftest first
   && npm run test:gate                ← probes for all four gates: bash-gate, ddl-gate,
-                                        agent-write-scope, git-hooks
+                                        agent-write-scope, git-hooks — plus handoff-contract,
+                                        which is not a gate: it validates the artefacts §7's
+                                        agents leave behind, selftest first, then the live tree
   && npm run test:budget              ← probes for the context-budget hook and the statusline
   && npm run test:probes              ← plants violations in real files, asserts the audit fires
   && npm run test                     ← lib/*.test.ts
@@ -458,6 +460,18 @@ a write under it is never auto-approved in any mode a pipeline runs in, and prot
 prompt by design — the sibling project spent three days and two wrong write-ups finding that. The
 protected list is enumerated, not exemplary, and there is no dotfile wildcard, so a root `.handoff/`
 is clear where `.claude/.handoff/` would not have been.
+
+**The artefact's shape is checked too, and that is the point of writing one.** Five spines close
+with a labelled `Agent / Verdict / Summary / Artefact / Promote` block; the *reply* carrying it is a
+transcript nothing can inspect afterwards, so the same block is required as the artefact's final
+section, on disk, where `scripts/check-handoff-contract.mjs` reaches it. A missing `Promote` line is
+a finding and `Promote    none` is not — collapsing those two would delete the only signal the file
+carries. `crawler-doctrine` is exempt because its stdout is parsed as one JSON object and a fenced
+block breaks the parse; that exemption is written into its own spine, and the check **names every
+artefact it skipped on every run**, because a boundary widened by hand gets forgotten. Since
+`.handoff/` is task-scoped scratch, the live pass normally validates **zero** files and says so out
+loud — the both-directions fixtures in `--selftest` are what make it a check rather than a green
+light.
 
 **What the hook does NOT match: `Bash`.** So "the implementer never commits" is a rule it follows,
 not a fence it is inside — `git commit` from a subagent is ungated here. Stated rather than assumed,
