@@ -416,23 +416,52 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 | `grounder` | **Before writing any code.** Maps the machinery a task touches so you extend it instead of duplicating it | handoff-only, sonnet |
 | `census` | Repo-wide counts, find-all-usages, pattern audits — returns **classified** hits, not file dumps | handoff-only, sonnet |
 | `db-inspector` | Live-data claims against production; every answer carries the query behind it | handoff-only, SELECT, sonnet |
-| `crawler-doctrine` | The classes no mechanism decides — divergent rule expressions, doctrine the tree contradicts | handoff + `.claude/crawlers`, sonnet |
-| `implementer` | A pre-scoped mechanical transform; returns misfit judgment sites rather than guessing | write, `isolation: worktree`, never commits, sonnet |
+| `crawler-doctrine` | The classes no mechanism decides — divergent rule expressions, doctrine the tree contradicts | handoff-only, opus |
+| `implementer` | A pre-scoped mechanical transform; returns misfit judgment sites rather than guessing | write, **main checkout**, never commits, sonnet |
 | `walker` | Adversarial pre-push review — tries to **refute** the work. Independent context is the point | handoff-only, opus |
 
-Mechanical reading → the handoff-only four. Mechanical writing → the isolated implementer.
-Judgment stays in the main session. Proposers get worktrees; verifiers need `node_modules` and
-the main checkout.
+Mechanical reading → the handoff-only four. Mechanical writing → the implementer. Judgment stays
+in the main session.
+
+**Nobody gets a worktree, and the line that used to say otherwise was wrong.** `isolation:
+"worktree"` bases the agent's tree on the **default branch**, not your HEAD — so on any feature
+branch the implementer transforms a different tree and its green `npm run check` is a true
+statement about a tree your session does not have. It also arrives without `node_modules` and
+without the handoff artefact, so the agent can neither read its input nor run the gate. Two
+independent disqualifications (E10, measured next door). It stays available for the one case it
+fits — parallel implementers on disjoint files, on `master`, artefact paths absolute — chosen
+explicitly, never inherited from a recommendation.
+
+**`census` may fan out; nothing else may.** It holds the `Agent` tool, capped at 4 children one
+layer deep, and that cap is only real because `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` sits beside
+`autoCompactWindow` in `.claude/settings.json` — a width cap on an uncapped depth is prose. The two
+land together or neither lands. **A child inherits nothing**: not the parent's brief, not the task,
+not the concept behind the string. The partition, the spellings, the output shape and a known
+positive per slice ride in the child's brief or do not exist — and an underbriefed child does not
+fail, it returns a fluent report answering a slightly different question, which the parent cannot
+detect because not reading the slice is why it delegated.
 
 **"Handoff-only" and not "read-only", because read-only was never true.** `tools:` frontmatter
 does **not** withhold Write/Edit from a custom spine — the harness appends both to every agent
 whatever the file lists (E8, measured next door in pleks; a harness fact, so it holds here without
 re-measuring). Four spines said read-only, this table said read-only, and none of it bound
-anything. Artefacts now go to `.claude/handoff/<task-slug>/` and a write outside it is **denied at
-the tool call** by `.claude/hooks/agent-write-scope.js`, which discriminates on the `agent_type`
-that PreToolUse carries for a subagent and never for the main session (E7). An agent type with no
-declared scope is **asked**, not refused — ad-hoc delegation stays possible, it just stops being
-silent. <!-- @enforced hook:agent-write-scope -->
+anything. Artefacts go to **`.handoff/<task-slug>/` at the repo root** and a write outside it is
+**denied at the tool call** by `.claude/hooks/agent-write-scope.js`, which discriminates on the
+`agent_type` that PreToolUse carries for a subagent and never for the main session (E7). An agent
+type with no declared scope is **asked**, not refused — ad-hoc delegation stays possible, it just
+stops being silent. <!-- @enforced hook:agent-write-scope -->
+
+**The root placement is a permissions fact, not filing taste.** `.claude` is a *protected path*:
+a write under it is never auto-approved in any mode a pipeline runs in, and protection is evaluated
+**before** `permissions.allow`, so no settings entry can pre-approve one. This gate scoped agents to
+`.claude/handoff/` when it shipped on 2026-08-21, which would have stalled every artefact write on a
+prompt by design — the sibling project spent three days and two wrong write-ups finding that. The
+protected list is enumerated, not exemplary, and there is no dotfile wildcard, so a root `.handoff/`
+is clear where `.claude/.handoff/` would not have been.
+
+**What the hook does NOT match: `Bash`.** So "the implementer never commits" is a rule it follows,
+not a fence it is inside — `git commit` from a subagent is ungated here. Stated rather than assumed,
+because isolation never enforced it either: a worktree relocates the commit, it does not prevent it.
 
 Subagents **do** receive this file (E3) — but a narrow-task agent skims it, and rung-4 files
 never reach an edit-blind session (E1b). Presence is not enforcement, which is why the

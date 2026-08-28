@@ -53,7 +53,19 @@ yarn-error.log*
 # notes that are working material, not repo content. Ignored deliberately rather
 # than by oversight: the post-run `git status --porcelain` check is only readable
 # if an agent run leaves it empty.
-.claude/handoff/
+#
+# AT THE REPO ROOT, NOT UNDER `.claude/`, and that is a permissions fact rather than
+# a filing preference — `.claude` is a protected path and a write under it is never
+# auto-approved, so an unattended pipeline stalls per artefact. See the header of
+# agent-write-scope.js. Do not tidy it back inside `.claude/`.
+.handoff/
+
+# Agent worktrees. `isolation: "worktree"` leaves a FULL SECOND COPY of the tree here
+# if it is not removed, and every check that walks the repo then finds it — the sibling
+# project got four phantom findings naming paths inside a leftover copy. Ignored here
+# and excluded from the audit's walk, because either alone leaves the other reporting
+# on a tree nobody is working in.
+.claude/worktrees/
 
 # vercel
 .vercel
