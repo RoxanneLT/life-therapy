@@ -1,11 +1,23 @@
 /**
  * Boundary tests for lib/dates.ts.
  *
+ * @kit dates-test v1 — tracked. Edit it in dev-standards and re-adopt.
+ *
  * Every fixture probes a specific edge and says which side of it it sits on.
  * The point is not coverage — it's that a future green run proves the *spec*
  * still holds, so nobody "simplifies" a guard back into a silent Invalid Date.
  *
- * Run: npm run test:dates   (runs under several server timezones)
+ * SHIPS WITH THE MODULE OR THE MODULE DOES NOT SHIP. A tracked file whose tests
+ * stay behind in one project leaves every other adopter holding code it cannot
+ * check, which is the state the kit exists to end.
+ *
+ * The assertions below are written against `Africa/Johannesburg`. A project that
+ * changes the timezone KIT:CONFIG region changes these fixtures with it — they
+ * are a spec for the arithmetic, not for South Africa, and the two must agree.
+ *
+ * Run under several server timezones. The whole module exists because a value
+ * can be right on one host and wrong on another, so a suite that only ever runs
+ * in one zone is testing half of it.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,6 +26,7 @@ import {
   saInstant,
   saDayStart,
   saDayEnd,
+  saToday,
   calendarDate,
   addSaDays,
   diffSaDays,
@@ -21,7 +34,7 @@ import {
   saFormat,
   isSameSaDay,
   isSaDateStr,
-  bookingStartsAt,
+  TIMEZONE,
 } from "./dates";
 
 const TZ = process.env.TZ ?? "(host default)";
@@ -66,8 +79,8 @@ test(`[${TZ}] strings that DO carry a zone are accepted`, () => {
 // ── Fail closed: never hand back an Invalid Date ─────────────────────────────
 
 test(`[${TZ}] malformed calendar dates throw rather than yielding Invalid Date`, () => {
-  // An Invalid Date compares false both ways, so a Prisma `where` built from one
-  // silently matches nothing — a failure that reads exactly like "no results".
+  // An Invalid Date compares false both ways, so a range built from one silently
+  // matches nothing — a failure that reads exactly like "no results".
   assert.throws(() => calendarDate("2026-7-8"), /YYYY-MM-DD/); // unpadded
   assert.throws(() => calendarDate("08-07-2026"), /YYYY-MM-DD/); // wrong order
   assert.throws(() => calendarDate(""), /YYYY-MM-DD/);
@@ -116,16 +129,25 @@ test(`[${TZ}] saInstant validates the time, and pads a single-digit hour`, () =>
 
 // ── saFormat takes a Date, so it can't render a carrier as a time ────────────
 
-test(`[${TZ}] saFormat renders in SAST regardless of the server timezone`, () => {
+test(`[${TZ}] saFormat renders in the business zone regardless of the server's`, () => {
   // 22:00Z on 28 Feb is 1 March in SAST. A server-local format() would say "Feb".
   assert.equal(saFormat(saMonthStart(2025, 3), "MMM"), "Mar");
   assert.equal(saFormat(saMonthStart(2025, 3), "yyyy-MM"), "2025-03");
   assert.throws(() => saFormat(new Date("nonsense"), "MMM"), /not a real date/);
 });
 
+test(`[${TZ}] a calendar date formats as its own day, on any host`, () => {
+  // The display case: a day, rendered. calendarDate puts it at UTC midnight,
+  // which is inside the same day in any zone at or east of UTC — and saFormat
+  // resolves through TIMEZONE rather than the host, so the host cannot move it.
+  assert.equal(saFormat(calendarDate("2026-08-30"), "d MMMM yyyy"), "30 August 2026");
+  assert.equal(saFormat(calendarDate("2026-01-01"), "d MMMM yyyy"), "1 January 2026");
+  assert.equal(saFormat(calendarDate("2024-02-29"), "d MMMM yyyy"), "29 February 2024");
+});
+
 // ── Day boundaries ──────────────────────────────────────────────────────────
 
-test(`[${TZ}] saDayStart/saDayEnd bracket the SAST day`, () => {
+test(`[${TZ}] saDayStart/saDayEnd bracket the local day`, () => {
   assert.equal(saDayStart("2026-07-08").toISOString(), "2026-07-07T22:00:00.000Z");
   assert.equal(saDayEnd("2026-07-08").toISOString(), "2026-07-08T21:59:59.000Z");
   assert.equal(saDateStr(saDayStart("2026-07-08")), "2026-07-08");
@@ -171,7 +193,7 @@ test(`[${TZ}] diffSaDays counts calendar days, not 24-hour spans`, () => {
 
 // ── Month boundaries ────────────────────────────────────────────────────────
 
-test(`[${TZ}] saMonthStart is a SAST boundary and normalises month overflow`, () => {
+test(`[${TZ}] saMonthStart is a local boundary and normalises month overflow`, () => {
   assert.equal(saMonthStart(2025, 3).toISOString(), "2025-02-28T22:00:00.000Z");
   assert.equal(saDateStr(saMonthStart(2026, 13)), "2027-01-01"); // Dec + 1
   assert.equal(saDateStr(saMonthStart(2026, 0)), "2025-12-01"); // Jan - 1
@@ -190,24 +212,50 @@ test(`[${TZ}] a financial year's months tile with no gap and no overlap`, () => 
     end: saMonthStart(2025, 4 + i),
   }));
   for (let i = 1; i < 12; i++) {
-    assert.equal(months[i - 1].end.getTime(), months[i].start.getTime());
+    assert.equal(months[i - 1]!.end.getTime(), months[i]!.start.getTime());
   }
-  assert.equal(months[11].end.getTime(), saMonthStart(2026, 3).getTime());
+  assert.equal(months[11]!.end.getTime(), saMonthStart(2026, 3).getTime());
 
   // A payment at 00:30 SAST on 1 Mar 2026 belongs to the NEXT financial year.
   const paidAt = new Date("2026-02-28T22:30:00Z");
   assert.equal(saDateStr(paidAt), "2026-03-01");
-  assert.equal(paidAt >= months[11].start && paidAt < months[11].end, false);
+  assert.equal(paidAt >= months[11]!.start && paidAt < months[11]!.end, false);
 });
 
-// ── @db.Date columns and bookings ───────────────────────────────────────────
+// ── Date-only columns ───────────────────────────────────────────────────────
 
-test(`[${TZ}] a @db.Date value (UTC midnight) lands inside its own SAST day`, () => {
-  const stored = calendarDate("2026-07-08"); // how Prisma holds a @db.Date
+test(`[${TZ}] a date-only value (UTC midnight) lands inside its own local day`, () => {
+  const stored = calendarDate("2026-07-08"); // how a @db.Date column holds a day
   assert.equal(stored >= saDayStart("2026-07-08"), true);
   assert.equal(stored < saDayStart("2026-07-09"), true);
   assert.equal(saDateStr(stored), "2026-07-08");
 });
+
+// ── The module's own invariants ─────────────────────────────────────────────
+
+test(`[${TZ}] TIMEZONE is a real IANA zone, not an offset`, () => {
+  // "+02:00" would satisfy a naive string check and then be wrong the first time
+  // a zone gains DST or the business moves. Intl rejects an offset outright.
+  assert.doesNotThrow(() => new Intl.DateTimeFormat("en", { timeZone: TIMEZONE }));
+  assert.equal(TIMEZONE.includes("/"), true);
+});
+
+test(`[${TZ}] saToday agrees with saDateStr(now) and is a valid calendar date`, () => {
+  const today = saToday();
+  assert.equal(isSaDateStr(today), true);
+  assert.equal(today, saDateStr(new Date()));
+  // And it round-trips: the day named is the day you get back.
+  assert.equal(saDateStr(calendarDate(today)), today);
+});
+
+/* KIT:CONFIG domain-tests — tests for the project's own shapes, matching the
+   KIT:CONFIG domain region in dates.ts. Empty when that region is empty. */
+// A SECOND import statement, deliberately, rather than adding one name to the list at the top:
+// that list is canon's bytes and appending to it would be a fork of a `tracked` file to gain one
+// identifier. ESM allows two imports of the same module and the bundler folds them, so the cost is
+// a line and the benefit is that this region stays self-contained — which is what makes it
+// deletable by a project that has no domain shapes.
+import { bookingStartsAt } from "./dates";
 
 test(`[${TZ}] bookingStartsAt matches the "+02:00" form it replaced`, () => {
   const booking = { date: calendarDate("2026-07-08"), startTime: "14:15" };
@@ -223,3 +271,4 @@ test(`[${TZ}] bookingStartsAt is unfazed by an accidental real instant in .date`
   const booking = { date: new Date("2026-07-08T22:30:00Z"), startTime: "09:00" };
   assert.equal(bookingStartsAt(booking).toISOString(), "2026-07-09T07:00:00.000Z");
 });
+/* KIT:CONFIG /domain-tests */
