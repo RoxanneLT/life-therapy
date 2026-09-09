@@ -25,7 +25,16 @@
         alone. Canary absent, surrounding lines intact; this whole header block is
         absent from the injected copy too. But an inline tag at the END of a prose
         line SURVIVES — verified 2026-08-19 by inspecting the injected copy, which
-        carries every `<!-- @enforced ... -->` tag and none of this block.
+        carries every inline `@enforced` tag, HTML comment delimiters and all, and
+        none of this block. ⚠ THE CLOSING DELIMITER IS DESCRIBED HERE, NEVER SPELLED.
+        It was spelled once, and it CLOSED THIS BLOCK AT THIS LINE — a comment ends at
+        its first terminator, so E3 and the contract pointer below sat outside any
+        comment and the `-->` at the foot was stray. The entry documenting comment-
+        stripping was the one broken by it, and it read correctly to a human for weeks.
+        Found 2026-09-09 by canon's check-claude-md, which scans line by line and so
+        saw a complete comment here; this repo's own audit scans the whole file and
+        missed it, because non-greedy matching swallowed the split rather than
+        reporting it. Do not "restore" the literal.
         Two consequences, opposite in sign: never reformat an @enforced tag onto
         its own line (it would vanish while still reading as present in the file),
         and never call the tags free (they cost context; they are merely quiet).
@@ -131,6 +140,14 @@ Lagging deliberately behind a kit row is the same: send the row id, the version,
 review date. A pin means *read, classified and deliberately behind* — never *exempt* — so the reason
 has to argue it, and someone else writes it into the register.
 
+**Take kit bytes from canon's HISTORY, never its working tree.** `git -C <canon> show HEAD:<path>`,
+not `cp`. A sibling checkout is a live workspace: the file you copy may be mid-edit, and it will
+carry a version number that no commit anywhere has. Adopting from it produces a project copy that is
+byte-correct for as long as that session doesn't revert, and unattributable afterwards — the same
+class as the incident above, in the other direction. It happened here on 2026-09-09:
+`check-claude-md` was taken at v14 from canon's uncommitted tree. It was committed identical within
+the hour, so the copy is honest, and the honesty was luck rather than method.
+
 ---
 
 ## 2 · WHAT THIS PROJECT IS, AND HOW TO REACH ITS SYSTEMS
@@ -186,6 +203,10 @@ tsc --noEmit
   && eslint . --max-warnings 0        ← warnings are errors; they never accumulate
   && npm run audit:selftest           ← the audit's own fixtures, in the same gate as the audit
   && node scripts/architecture-audit.mjs
+  && npm run check:claude-md          ← canon's checker, on THIS file: every @enforced marker
+                                        resolves to a live control and is claimed once, every
+                                        bullet in §4/§5 is tagged, every M-pointer resolves, and
+                                        the unenforceable count may only fall. Selftest first
   && npm run crawl:tier0              ← knip: dead code, unlisted deps, unresolved imports
   && npm run check:cycles             ← import cycles, selftest first
   && npm run test:gate                ← probes for all four gates: bash-gate, ddl-gate,
@@ -254,6 +275,7 @@ attached to no rule fails.
 | Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs` (this project's scar cases) + `bash-gate.probe.mjs` (canon's 65-case decision table, 7 verdicts tightened here), `scripts/check-{statusline,context-budget}.mjs` |
 | Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |
 | Rule files | `.claude/rules/schema-changes.md` — why `prisma migrate` fails here (the pgbouncer pooler) and the Management API path that works |
+| **This file itself** | `scripts/check-claude-md.mjs` (kit, canon's) + `scripts/check-claude-md.ceiling.json`. It resolves the `@enforced` markers below through the thing that *invokes* each control — a `check()` call in the audit, a hook registered in settings, a pattern in `permissions.ask` — never through a file existing. Two namespaces are this project's own, in its `KIT:CONFIG resolvers` region, and one of them **overrides** canon: `audit:` ids here are slugged check names, and canon's literal substring test resolved 1 of 21, the 1 a false positive |
 
 `.claude/rules/*.md` carries `paths:` frontmatter and is **guidance only, never the sole
 holder of incident-class content** — E1b: read-triggered, so an edit-blind session gets none
@@ -338,12 +360,12 @@ Each carries a pointer into `docs/MECHANISABLE.md` — the build queue, holding 
 would have to assert, or the measurement saying why none is worth building. **Two are closed by
 measurement, not open**: a refusal that carries its numbers is a finish.
 
-- **Read the actual source files before writing code.** Don't assume structure — this codebase has specific patterns. Read the component, its imports, and the actions file first. UNENFORCEABLE — nothing in the tree records what was read, and this is the rule most of the others depend on. Reading is also what summons the scoped rule files (E1b). → M-03
-- **Never create parallel systems when you can extend existing ones.** Manual invoices reuse the pro-forma → Paystack → tax-invoice pipeline; they don't build a second invoicing flow. UNENFORCEABLE — a duplicate *flow* is a judgement about intent. The duplicate *implementation* half is now enforced in §4; this is the residue. Ask `grounder` before building. → M-04
-- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes through the Supabase Management API. UNENFORCEABLE — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.) → M-01
-- **Never auto-fill or guess client data.** If a field needs a value you don't have, leave it empty or show a placeholder. UNENFORCEABLE — a fabricated value is indistinguishable from a real one at the point it is written. → M-02
-- **Use `toast` from `sonner` for success and error feedback** on client-side actions. Silence reads as success — a cancelled session sat live in Outlook for five days behind a dialog that closed without a word (§6). UNENFORCEABLE, and closed by measurement rather than by assumption — the census, and the share of matching components that are right to match, are recorded at M-05. → M-05, closed
-- **Use confirmation dialogs for destructive actions** — cancel, void, delete, send. UNENFORCEABLE, and the census shows why: the count moves 12 → 18 on whether a `<Dialog>` counts, which measures the detector rather than the codebase. → M-06, closed
+- **Read the actual source files before writing code.** Don't assume structure — this codebase has specific patterns. Read the component, its imports, and the actions file first. **UNENFORCEABLE** — nothing in the tree records what was read, and this is the rule most of the others depend on. Reading is also what summons the scoped rule files (E1b). → M-03
+- **Never create parallel systems when you can extend existing ones.** Manual invoices reuse the pro-forma → Paystack → tax-invoice pipeline; they don't build a second invoicing flow. **UNENFORCEABLE** — a duplicate *flow* is a judgement about intent. The duplicate *implementation* half is now enforced in §4; this is the residue. Ask `grounder` before building. → M-04
+- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes through the Supabase Management API. **UNENFORCEABLE** — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.) → M-01
+- **Never auto-fill or guess client data.** If a field needs a value you don't have, leave it empty or show a placeholder. **UNENFORCEABLE** — a fabricated value is indistinguishable from a real one at the point it is written. → M-02
+- **Use `toast` from `sonner` for success and error feedback** on client-side actions. Silence reads as success — a cancelled session sat live in Outlook for five days behind a dialog that closed without a word (§6). **UNENFORCEABLE** — and closed by measurement rather than by assumption — the census, and the share of matching components that are right to match, are recorded at M-05. → M-05, closed
+- **Use confirmation dialogs for destructive actions** — cancel, void, delete, send. **UNENFORCEABLE** — and the census shows why: the count moves 12 → 18 on whether a `<Dialog>` counts, which measures the detector rather than the codebase. → M-06, closed
 
 ---
 

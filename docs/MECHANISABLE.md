@@ -33,7 +33,9 @@ nobody (`dev-standards/LESSONS.md` L-18).
 
 - **Rule:** "Never modify the Prisma schema without being explicitly told to." (`CLAUDE.md` §5)
 - **Rung:** none possible for the asking · **Blast:** schema
-- **Status:** **partly built, and the built half is the half that matters.**
+- **Status:** built 2026-08-18 — the dangerous half only. The permission half is not owed work,
+  it is unbuildable: no artefact records whether a change was asked for. `partly` was the token
+  here and is not a state; the nuance it carried is this sentence, where it can be read.
 
 The dangerous path *is* mechanised: `prisma migrate` and `prisma db push` are denied outright by
 `hook:bash-gate` (with a `settings:ask` twin) and by
@@ -102,7 +104,7 @@ expected; recorded as the condition rather than a hope.
 
 - **Rule:** "Never create parallel systems when you can extend existing ones." (`CLAUDE.md` §5)
 - **Rung:** check (partial) · **Blast:** other
-- **Status:** **HALF BUILT 2026-08-19.** The implementation half shipped as
+- **Status:** built 2026-08-19 — the implementation half shipped as
   `audit:duplication-one-implementation-not-several` and moved to §4. This entry now holds the
   residue: a duplicate *flow*.
 
@@ -155,7 +157,8 @@ rule's original meaning. Half the rule, mechanically — and the half with the e
 
 - **Rule:** "Use `toast` from `sonner` for success and error feedback." (`CLAUDE.md` §5)
 - **Rung:** none that is worth its noise · **Blast:** other
-- **Status:** **closed by measurement, 2026-08-19.**
+- **Status:** closed 2026-08-19 — by measurement, and the measurement is below. No control was
+  added: 47 of 197 matching components, and the share of those right to match, is what refused it.
 
 **The numbers.** 47 of 197 client components import a server action without importing `toast`, and
 **most are correct to** — a form that redirects, a component with inline errors, one that reports
@@ -178,7 +181,8 @@ now reading its send result.
 
 - **Rule:** "Use confirmation dialogs for destructive actions." (`CLAUDE.md` §5)
 - **Rung:** none · **Blast:** other
-- **Status:** **closed by measurement, 2026-08-19.**
+- **Status:** closed 2026-08-19 — by measurement, and the measurement is below. No control was
+  added: the count moves 12 → 18 on the detector's own definition, so it measures the detector.
 
 **The number moves with the detector, which is the finding.** The count is **12 or 18** depending
 purely on whether a `<Dialog>` counts as a confirmation alongside `<AlertDialog>` — and a two-step

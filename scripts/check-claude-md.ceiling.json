@@ -1,0 +1,6 @@
+{
+  "maxN": 6,
+  "minD": 25,
+  "seeded": "2026-09-09",
+  "note": "N may only fall; D may only rise. Lowering maxN is part of a mechanisation, not a follow-up. minD stops N being lowered by MOVING a rule out of the tagged sections."
+}

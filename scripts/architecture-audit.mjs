@@ -865,7 +865,13 @@ const MONEY_FORMAT_ALLOW = new Set([
   "app/(admin)/admin/(dashboard)/reports/page.tsx",
 ]);
 
-check("money: no local currency formatter — use formatPrice(cents, currency)", () => {
+// Named for the bug class alone. It used to carry `— use formatPrice(cents, currency)`, which is
+// the REMEDY and is already the fourth argument of both fail() calls below, where the person who
+// hit it will read it. As part of the name it made the id `money-no-local-currency-formatter-use-
+// formatprice-cents-currency`, so CLAUDE.md's marker named a prefix of the control rather than the
+// control — invisible to this repo's own marker check, which matches loosely, and caught by
+// canon's `check-claude-md`, which does not.
+check("money: no local currency formatter", () => {
   // The SSOT is formatPrice(cents, currency) in lib/utils.ts, with 33 importers.
   // What rots is the TAIL: a local `formatCurrency`/`formatR`/`formatCents` that
   // hardcodes "R" or pins en-ZA grouping. The portal's own invoice page did this —

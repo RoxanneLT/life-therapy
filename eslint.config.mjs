@@ -9,6 +9,14 @@ const eslintConfig = [
       react: { version: "detect" },
     },
     rules: {
+      // WRITTEN HERE RATHER THAN INHERITED, and the reason is ownership, not style.
+      // `next/typescript` already sets this, so the rule was in force and the gate was
+      // green — but CLAUDE.md's §4 claims it as this project's own rule under
+      // `@enforced eslint:@typescript-eslint/no-explicit-any`, and nothing in this repo
+      // held it. The day the preset changes its mind, the claim goes on reading as true
+      // with nothing behind it, which is the exact overclaim the @enforced markers exist
+      // to prevent. A preset is a dependency; a rule this file names is a decision.
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
