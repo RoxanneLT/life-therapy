@@ -43,19 +43,25 @@ Each folder carries its own `README.md` indexing its files.
 
 ## What is NOT here, and why
 
-`docs/` still exists and is not a second brief. Three files there are **addressed by name from
-code or config** and cannot move without breaking the thing that reads them:
+`docs/` still exists and is not a second brief. Four files there are **addressed by name from code,
+config or `CLAUDE.md`** and cannot move without breaking the thing that reads them:
 
 | File | Read by |
 |---|---|
 | `docs/MECHANISABLE.md` | `scripts/check-claude-md.mjs` — its `REGISTER_PATH`, and every `M-NN` pointer in `CLAUDE.md` §5 |
 | `docs/LESSONS.md` | the pointer to `dev-standards/LESSONS.md`, named in `CLAUDE.md` §1 |
 | `docs/DEPENDENCY-ADVISORIES.md` | named in the commit that carries the four declined advisories |
+| `docs/SESSION_HANDOVER_2026-08-17.md` | `CLAUDE.md` §1, **Session state** — named by path, so a move edits §1 |
 
-The rest of `docs/` is dated handover material from before this brief existed
-(`SESSION_HANDOVER_2026-08-17.md`, the two calendar handovers, `AUDIT_CENTRALISATION_2026-07-12.md`).
-Moving them is a migration with its own decision, not a side effect of adopting this row — they are
-listed at `G-02` rather than left to be noticed.
+That fourth row was missing when this file was seeded: the table said three, and the handover it
+omitted is the one a session is told to read first. It is also one of the four documents `G-02` was
+about, which is how the omission surfaced — the gate made someone enumerate them.
+
+The rest of `docs/` is dated handover material from before this brief existed, and **it stays
+there** — `G-02`, closed 2026-09-09. All four are listed with their dates and what each settles in
+`build/INDEX.md`, under *Before this brief existed*, with the reason: a handover is accurate as of
+its date, and holding one to `EVIDENCE.md` would force its numbers forward and destroy exactly what
+it is for.
 
 ## Build order
 

@@ -14,6 +14,10 @@
 
 **Just done**
 
+- `G-02` closed: the four pre-brief handovers **stay in `docs/`**, indexed at `build/INDEX.md` under
+  *Before this brief existed* rather than migrated. `CALENDAR_PIPELINE_HANDOVER.md` renamed to carry
+  the date it had only in git. Enumerating the four exposed a fourth reader `README.md` had not
+  listed: `CLAUDE.md` §1 names `SESSION_HANDOVER_2026-08-17.md` by path.
 - `brief` v1 + `check-brief` v4 seeded and wired. This file, and the four spine files beside it.
 - `check-claude-md` v14 adopted and on the gate. Its first run found this project's own `CLAUDE.md`
   header comment closing 8 lines early, on a `-->` inside backticks in the entry that documents
@@ -25,9 +29,15 @@
 - `bash-gate-probe` v3 with 7 verdicts tightened here; `dates` / `dates-test`;
   `agent-write-scope` trio; `check-handoff-contract` v3.
 
-**Next action** — decide `G-02`: whether the four dated handover documents in `docs/` move into
-role folders here or stay as closed history. Nothing else in the kit is blocked; `claude-md-ratio`
-is superseded and must never be installed.
+**Next action** — nothing in the kit is blocked. The remaining rows are `check-claude-md` v15, held
+at v14 until canon commits it (finding ⑨: the drift tool reads canon's *working* tree, so a mid-edit
+file makes every project look stale), and whatever canon adds next. `claude-md-ratio` is superseded
+and must never be installed.
+
+`G-01` and `G-03` are open and **deliberately not being chased** — Stéan set them aside on
+2026-09-09. G-01 cannot close until the desktop exists to point at; G-03 stays open because "don't
+worry about it" is a deferral, and writing it into the Closed table as an answer would be putting
+words in someone's mouth. The **open since** column is doing its job on both.
 
 **Decided mid-build, not yet in DECISIONS.md** — nothing.
 

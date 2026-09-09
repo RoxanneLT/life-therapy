@@ -1,8 +1,16 @@
 # Calendar repair pipeline — handover for review
 
+**Date:** 2026-07-21 — added 2026-09-09 with the filename, and *derived, not assumed*: both SHAs
+below are `git log`-dated 2026-07-21, as is the commit that first added this file. It was the one
+handover in `docs/` carrying no date at all, so it could not be sorted beside its siblings.
 **Branch:** `master`, 2 commits ahead of origin (`d7edbb1`, `d11be06`) — **not pushed**
 **Gate:** `npm run check` green — 25 audit checks, **139 tests**
 **Replaces:** the "Check & Auto-Fix" button, per the propose → review → apply brief
+
+> **Read this as of its date.** The two commits above landed long ago; the counts on the Gate line
+> were true that day and are not maintained — `npm run check` reads 62 audit checks and 231 tests as
+> of 2026-09-09. That staleness is the point of leaving this in `docs/` rather than moving it into
+> `brief/`, where every claim answers to `EVIDENCE.md`. See `brief/GATES.md`, G-02, closed.
 
 ---
 

@@ -10,10 +10,10 @@
 |---|---|---|
 | B-1 | pass | 6 spine files present |
 | B-2 | pass | 3 documents, all indexed |
-| B-3 | pass | 3 open gates, all complete |
-| B-4 | pass | 11 rows, 4.8 KB |
+| B-3 | pass | 2 open gates, all complete |
+| B-4 | pass | 12 rows, 5.4 KB |
 | B-5 | skipped | no unresolved markers |
-| B-6 | FAIL | stale — newer since generated: CURRENT.md, DECISIONS.md, EVIDENCE.md, GATES.md, README.md, runbooks\README.md |
+| B-6 | FAIL | stale — newer since generated: build\INDEX.md, CURRENT.md, DECISIONS.md, GATES.md, README.md |
 | B-7 | pass | 2 numbered documents, no collisions · 1 name(s) B-7 CANNOT READ and did not check: build/INDEX.md — teach it their shape in the `names` config region |
 | B-8 | pass | CURRENT.md + build/INDEX.md within budget, no reserved names |
 | B-9 | pass | 6 spine files + 7 role folders, nothing unfiled |
@@ -22,27 +22,26 @@
 
 | File | Size | Last commit |
 |---|---|---|
-| `CURRENT.md` | 2.5 KB | — |
-| `DECISIONS.md` | 4.8 KB | — |
-| `EVIDENCE.md` | 4.5 KB | — |
-| `GATES.md` | 1.9 KB | — |
-| `README.md` | 3.4 KB | — |
-| `STATUS.md` | 0.2 KB | — |
-| `build\INDEX.md` | 0.2 KB | — |
-| `build\README.md` | 0.5 KB | — |
-| `design\README.md` | 0.1 KB | — |
-| `legal\README.md` | 0.1 KB | — |
-| `product\README.md` | 0.2 KB | — |
-| `research\README.md` | 0.1 KB | — |
-| `runbooks\01-bunny-cdn-setup.md` | 7.6 KB | — |
-| `runbooks\02-supabase-auth-email-templates.md` | 10.7 KB | — |
-| `runbooks\README.md` | 1.1 KB | — |
-| `vendors\README.md` | 0.1 KB | — |
+| `CURRENT.md` | 3.3 KB | 2026-09-09 |
+| `DECISIONS.md` | 5.4 KB | 2026-09-09 |
+| `EVIDENCE.md` | 4.5 KB | 2026-09-09 |
+| `GATES.md` | 2.4 KB | 2026-09-09 |
+| `README.md` | 3.9 KB | 2026-09-09 |
+| `STATUS.md` | 1.7 KB | 2026-09-09 |
+| `build\INDEX.md` | 2.6 KB | 2026-09-09 |
+| `build\README.md` | 0.5 KB | 2026-09-09 |
+| `design\README.md` | 0.1 KB | 2026-09-09 |
+| `legal\README.md` | 0.1 KB | 2026-09-09 |
+| `product\README.md` | 0.2 KB | 2026-09-09 |
+| `research\README.md` | 0.1 KB | 2026-09-09 |
+| `runbooks\01-bunny-cdn-setup.md` | 7.6 KB | 2026-09-09 |
+| `runbooks\02-supabase-auth-email-templates.md` | 10.7 KB | 2026-09-09 |
+| `runbooks\README.md` | 1.1 KB | 2026-09-09 |
+| `vendors\README.md` | 0.1 KB | 2026-09-09 |
 
 ## Open gates, by age
 
 | id | Owner | Open since | Age |
 |---|---|---|---|
 | G-01 | Stéan | 2026-08-17 | 23 d |
-| G-02 | Stéan | 2026-09-09 | 0 d |
 | G-03 | Stéan | 2026-09-09 | 0 d |
