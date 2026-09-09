@@ -418,7 +418,7 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 | `grounder` | **Before writing any code.** Maps the machinery a task touches so you extend it instead of duplicating it | handoff-only, sonnet |
 | `census` | Repo-wide counts, find-all-usages, pattern audits — returns **classified** hits, not file dumps | handoff-only, sonnet |
 | `db-inspector` | Live-data claims against production; every answer carries the query behind it | handoff-only, SELECT, sonnet |
-| `crawler-doctrine` | The classes no mechanism decides — divergent rule expressions, doctrine the tree contradicts | handoff-only, opus |
+| `crawler-doctrine` | The classes no mechanism decides — divergent rule expressions, doctrine the tree contradicts | **writes nothing**, opus |
 | `implementer` | A pre-scoped mechanical transform; returns misfit judgment sites rather than guessing | write, **main checkout**, never commits, sonnet |
 | `walker` | Adversarial pre-push review — tries to **refute** the work. Independent context is the point | handoff-only, opus |
 
@@ -434,10 +434,18 @@ independent disqualifications (E10, measured next door). It stays available for 
 fits — parallel implementers on disjoint files, on `master`, artefact paths absolute — chosen
 explicitly, never inherited from a recommendation.
 
-**`census` may fan out; nothing else may.** It holds the `Agent` tool, capped at 4 children one
-layer deep, and that cap is only real because `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` sits beside
-`autoCompactWindow` in `.claude/settings.json` — a width cap on an uncapped depth is prose. The two
-land together or neither lands. **A child inherits nothing**: not the parent's brief, not the task,
+**`census` may fan out; nothing else may — and since 2026-09-09 that is a fence, not a rule.**
+`SPAWNERS` in `.claude/hooks/agent-write-scope.config.mjs` holds `census` and nothing else, and the
+hook now matches `Agent` as well, so an `implementer` spawning implementers is denied at the tool
+call. It had been held by the belief that "no spine lists `Agent`, therefore none can spawn" — the
+same false mechanism E8 demolished for `Write`/`Edit`, resting on 27 transcripts with zero `Agent`
+calls and an explanation that did not follow from them. **Depth** is capped at 2 by
+`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` beside `autoCompactWindow` in `.claude/settings.json`, so a
+child cannot fan out again. **Width — 4 children per run — is still unheld**, and it cannot be held
+here: a `PreToolUse` hook sees one call and keeps no state across a run, so it cannot count
+children. What stands in for it is visibility, `npm run agents:distribution` reading `spawnDepth`
+per run, so a fan-out is reported as a fan-out rather than arriving as inflated per-type counts.
+<!-- @enforced hook:agent-write-scope --> **A child inherits nothing**: not the parent's brief, not the task,
 not the concept behind the string. The partition, the spellings, the output shape and a known
 positive per slice ride in the child's brief or do not exist — and an underbriefed child does not
 fail, it returns a fluent report answering a slightly different question, which the parent cannot
@@ -452,6 +460,15 @@ anything. Artefacts go to **`.handoff/<task-slug>/` at the repo root** and a wri
 `agent_type` that PreToolUse carries for a subagent and never for the main session (E7). An agent
 type with no declared scope is **asked**, not refused — ad-hoc delegation stays possible, it just
 stops being silent. <!-- @enforced hook:agent-write-scope -->
+
+The scope table lives in `.claude/hooks/agent-write-scope.config.mjs`, split out of the hook so the
+probe can import the same module the hook reads — a probe that hard-codes the table it verifies
+fails when you edit the table, which is the one thing the table exists for. **Derive it from the
+spines, never from this file's prose**: `crawler-doctrine` was granted `.handoff` in the table above
+for weeks while its own spine said "Emits JSON findings only, never prose, never edits", and the
+harness advertises it as holding `Write, Edit` regardless (E8, readable in the live agent list). Its
+scope is now `[]`, which produces its own distinct refusal rather than a path comparison that can
+never match.
 
 **The root placement is a permissions fact, not filing taste.** `.claude` is a *protected path*:
 a write under it is never auto-approved in any mode a pipeline runs in, and protection is evaluated
@@ -473,9 +490,27 @@ artefact it skipped on every run**, because a boundary widened by hand gets forg
 loud — the both-directions fixtures in `--selftest` are what make it a check rather than a green
 light.
 
-**What the hook does NOT match: `Bash`.** So "the implementer never commits" is a rule it follows,
-not a fence it is inside — `git commit` from a subagent is ungated here. Stated rather than assumed,
-because isolation never enforced it either: a worktree relocates the commit, it does not prevent it.
+**The hook DOES match `Bash` now, and "the implementer never commits" stopped being a rule it
+follows.** Until 2026-09-09 this section said the opposite and was right at the time: the matcher
+was `Write|Edit|MultiEdit|NotebookEdit`, so a subagent's `git commit` reached git ungated, and
+isolation never enforced it either — a worktree relocates a commit, it does not prevent one. Kit
+v4 extends the matcher to `Write|Edit|MultiEdit|NotebookEdit|Bash|Agent` and denies
+`commit|merge|rebase|cherry-pick|revert|am|push` from any subagent. An agent can still dirty the
+tree; it cannot land anything, which is the property §8's "the main session commits" always
+assumed.
+
+**And `null` no longer means ungated.** The `implementer`'s unrestricted scope is refined per run
+by `.handoff/write-manifest.json` — a 2-hour mtime-bounded declaration of what this run may touch —
+so it means "bounded by whatever the caller declared", and with no declaration it means **ask**.
+Three controls now sit where one hedge used to: the manifest, the commit denial above, and the
+caller reading `git status` before committing that tree. Canon's adoption note says to check whether
+your CLAUDE.md carries a registered residue for the implementer's edits, because it becomes
+closeable here — LT never wrote one, and the `Access` column's bare `write` was the whole of what
+this file said about it. Recorded because "no entry to close" and "did not look" are the same
+absence in a diff.
+
+**What the hook still does NOT hold:** the width of a `census` fan-out, for the reason given
+above — a per-call hook cannot count a run's children.
 
 Subagents **do** receive this file (E3) — but a narrow-task agent skims it, and rung-4 files
 never reach an edit-blind session (E1b). Presence is not enforcement, which is why the

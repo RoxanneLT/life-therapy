@@ -34,6 +34,18 @@
  * though a broken PATH still would not. Stated because an unstated single point of failure reads
  * as a covered one.
  */
+// The machine-readable declarations. The @event/@matcher pair was MISSING until 2026-09-09 and
+// nothing noticed, because the check that asks for it — `scripts/check-hook-registration.mjs` —
+// arrived with the kit that day. Without them nothing can reconcile this file against the
+// settings.json entry that invokes it, so a matcher edited in settings and not here (or the
+// reverse) would leave the gate registered for calls it does not gate, silently.
+// @event PreToolUse
+// @matcher Write|Edit|MultiEdit
+// @no-twin settings matches on TOOL and PATH; this gate's question is about CONTENT — does the
+//   text being written carry a Management API endpoint AND a DDL keyword. No path identifies a
+//   DDL script, because the documented pattern is an ordinary `.ts` file anywhere in the tree,
+//   so a path twin would prompt on every file write and be switched off within an hour. The
+//   full argument, and the single-layer exposure it leaves, is in the header above.
 const chunks = [];
 process.stdin.on("data", (c) => chunks.push(c));
 process.stdin.on("end", () => {

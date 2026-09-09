@@ -15,6 +15,9 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+// One caller: the `handoff:` check asks git whether `.handoff/` is ignored. Reading .gitignore
+// as text would answer a different question — see the comment there.
+import { spawnSync } from "node:child_process";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
@@ -2249,6 +2252,41 @@ check("hooks: every hook declares its twin or why it cannot have one", () => {
       continue;
     }
 
+    // TWO BINDINGS, because the kit layout separates a twin from the rule it backs.
+    //
+    // Adopting kit `bash-gate v2` on 2026-09-09 moved canon's rules into CANON_DENY/CANON_ASK and
+    // the twins that back them into a `KIT:CONFIG twins` region — deliberately not adjacent. The
+    // sha above hashes the next non-comment lines, so for those twins it began hashing whatever
+    // code happened to sit below the region: `Bash(vercel*)` was binding to
+    // `const PROTECTED_BRANCH`. It did not go stale, it started measuring the wrong thing, and it
+    // reported that as seven confident findings naming a fix that would not have helped.
+    //
+    // So a twin backing CANON's bytes binds to the KIT VERSION instead. Those bytes are
+    // byte-reconciled against canon by `check-kit-drift.mjs`, so the only way such a rule can
+    // change is a canon version bump — and that is precisely when to re-probe. A twin backing one
+    // of THIS PROJECT's own rules still binds by sha, because those live inline in the
+    // `KIT:CONFIG deny`/`ask` regions where the marker sits beside its rule and adjacency is real.
+    const kitBound = /@probed-kit\s+(\S+)\s+v(\d+)/.exec(block);
+    if (kitBound) {
+      const live = /@kit\s+(\S+)\s+v(\d+)/.exec(src);
+      if (!live) {
+        fail(
+          "hooks",
+          `${rel(hookPath)}:${i + 1}`,
+          `twin \`${t[1]}\` binds to kit \`${kitBound[1]} v${kitBound[2]}\` but the file carries no @kit marker`,
+          "restore the `@kit <id> vN` marker, or bind the twin by sha instead",
+        );
+      } else if (live[1] !== kitBound[1] || live[2] !== kitBound[2]) {
+        fail(
+          "hooks",
+          `${rel(hookPath)}:${i + 1}`,
+          `twin \`${t[1]}\` was probed against kit ${kitBound[1]} v${kitBound[2]}, but this file is now ${live[1]} v${live[2]}`,
+          "re-probe with the hook disabled, then update the date and the @probed-kit version",
+        );
+      }
+      continue;
+    }
+
     const recorded = /@probed-sha\s+([0-9a-f]{6})/.exec(block);
     if (!recorded) {
       fail(
@@ -2295,13 +2333,88 @@ check("hooks: every hook declares its twin or why it cannot have one", () => {
 
   // The reverse direction: a gate with no twin declared at all. Counts the rule
   // entries structurally rather than trusting the marker count.
-  const ruleLines = [...src.matchAll(/^\s*\[\s*(?:cmdRe|\/)/gm)].length;
-  if (twins.length < ruleLines) {
+  //
+  // THE SPELLING IS THE CHECK, and this one silently stopped matching. It counted
+  // `[cmdRe(` and `[/`, the two shapes this project's own rules used before adopting
+  // kit `bash-gate v2` on 2026-09-09. After the adoption a rule is `[isHardReset,` or
+  // `[(t) => …`, so the count fell to 1 and `twins.length < ruleLines` could never be
+  // true again: the check passed by matching nothing, which is the exact failure
+  // CLAUDE.md §4 names — a never-matching pattern and a clean tree are the same output.
+  // It was found by adopting the kit, not by reading the check.
+  //
+  // Counted per ARRAY ENTRY at the two-space indent the rule tables use, which is
+  // spelling-independent: a function reference, an arrow, or a regex literal all match.
+  const ruleLines = [...src.matchAll(/^ {2}\[(?:isHardReset|\(t\)|\/|cmdRe|[A-Za-z_$])/gm)].length;
+  // `@no-twin` counts toward the total, because the rule the check states is "names its twin OR
+  // is annotated as deliberately hook-only" and only the first half was ever counted. It went
+  // unnoticed while every rule happened to have a twin; adopting kit v2 brought two rules that
+  // legitimately cannot have one (the seam assignment, and the two-step .env decision), and the
+  // check then demanded twins that would have been WRONG to write — a coarse pattern that reads
+  // as a floor and is not one is the failure this whole layer exists to avoid.
+  const noTwins = [...src.matchAll(/^\s*\/\/\s*@no-twin\s+\S/gm)].length;
+  if (twins.length + noTwins < ruleLines) {
     fail(
       "hooks",
       ".claude/hooks/bash-gate.js",
-      `${ruleLines} gate rules but only ${twins.length} @twin declarations`,
+      `${ruleLines} gate rules but only ${twins.length} @twin and ${noTwins} @no-twin declarations`,
       "every gate names its settings twin, or is annotated as deliberately hook-only",
+    );
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8a-bis. THE PREMISE THE HANDOFF MACHINERY REASONS FROM
+//
+// `.handoff/` being gitignored is not filing taste — three separate controls
+// are built on top of it, and none of them checks it:
+//
+//   • §7's pipeline protocol closes each agent run with `git status --porcelain`
+//     read by a human. Un-ignored artefacts turn that into a wall of untracked
+//     noise, and a status control nobody reads is not a control.
+//   • `check-handoff-contract.mjs` states the premise OUT LOUD as the reason its
+//     live pass normally validates zero files ("`.handoff/` is gitignored, so on
+//     a clean tree this validates ZERO"). If the premise breaks, the sentence
+//     explaining a zero becomes an explanation of the wrong thing.
+//   • agent-write-scope points every read-only spine's one artefact there, so
+//     the volume is by design, not incidental.
+//
+// It was asserted, once — inside `scripts/check-agent-write-scope.mjs`, LT's own
+// 125-line write-scope probe, retired on 2026-09-09 when the kit's 57-case suite
+// replaced it. Canon's probe cannot hold this: it builds its fixtures in temp
+// directories precisely so a run never depends on the checkout it started from,
+// which is the right call for a portable probe and the exact reason the claim has
+// to live somewhere repo-shaped. Moved here rather than dropped, because "the kit
+// version covers more" was true of 56 of the 57 cases and silently false of this
+// one. Filed against canon too — every adopter loses it the same way.
+// ═══════════════════════════════════════════════════════════════════════════
+
+check("handoff: the artefact directory the agents write to is gitignored", () => {
+  // Asked of GIT, not of .gitignore's text. The claim is "would git ignore an artefact",
+  // and a text match answers a different question: it cannot see a later `!` negation, a
+  // nested .gitignore, or core.excludesFile, so it can report ignored on a tree where the
+  // artefact is staged anyway. Probed against a path that will never exist — check-ignore
+  // decides from the rules, not from the disk.
+  const r = spawnSync("git", ["check-ignore", "-q", ".handoff/probe-task/01-grounder.md"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  // 0 = ignored · 1 = not ignored · anything else (128, or a spawn error) = git could not answer,
+  // which is a failure of this check and not a pass. Every other gate step needs git too.
+  if (r.error || (r.status !== 0 && r.status !== 1)) {
+    fail(
+      "handoff",
+      ".gitignore",
+      `git could not answer whether \`.handoff/\` is ignored (${r.error?.code ?? `exit ${r.status}`})`,
+      "this check needs git on PATH and a repository — it does not get to pass by being unable to look",
+    );
+    return;
+  }
+  if (r.status === 1) {
+    fail(
+      "handoff",
+      ".gitignore",
+      "`.handoff/` is not ignored — agent artefacts land as untracked files in every `git status`",
+      "add `.handoff/` to .gitignore; three controls in §7 are built on it being there",
     );
   }
 });

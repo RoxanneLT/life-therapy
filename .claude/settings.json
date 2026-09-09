@@ -35,12 +35,16 @@
     ],
     "ask": [
       "Bash(git push*)",
+      "Bash(git commit --no-verify*)",
+      "Bash(git push --no-verify*)",
       "Bash(npx prisma migrate*)",
       "Bash(npx prisma db push*)",
       "Bash(vercel*)",
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~*)",
       "Bash(curl*)",
+      "Bash(git merge*)",
+      "Bash(git clean*)",
       "mcp__claude_ai_Vercel__deploy_to_vercel"
     ]
   },
@@ -65,7 +69,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|Agent",
         "hooks": [
           {
             "type": "command",
