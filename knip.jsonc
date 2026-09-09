@@ -88,8 +88,25 @@
     // Used only by components/ui/form.tsx, which is ignored above as part of the
     // shadcn set. Listed here so the dependency and the file it serves are
     // suppressed for the SAME stated reason rather than two unrelated ones.
+    //
+    // `@hookform/resolvers` USED TO BE ON THIS LIST and was removed 2026-09-09,
+    // along with the dependency itself. It was grouped here under the reason above,
+    // and that reason was true of `react-hook-form` and false of it: form.tsx imports
+    // `Controller`, `FormProvider`, `useFormContext` and three types, and nothing in
+    // this repo has ever imported a resolver. Grouping an unverified entry with a
+    // verified one under a single sentence is how the sentence stops being a reason.
+    //
+    // It was found while tracing `fast-uri`'s SSRF advisories, and the trace was
+    // WRONG — worth recording, because the mistake is repeatable. `npm ls fast-uri`
+    // printed `@hookform/resolvers → ajv@8 → fast-uri` and that read as the only
+    // path. It was not a path at all: `@hookform/resolvers` declares ajv as an
+    // OPTIONAL PEER, npm installs peers, and `npm ls` attributes a hoisted package
+    // to one dependent rather than listing every requirer. Uninstalling removed
+    // exactly one package and left the advisory count at 7 — `ajv@8` is really
+    // required by prisma → @prisma/dev → @prisma/streams-local. **A single `npm ls`
+    // path is a hypothesis, not a provenance**; the disproof was the advisory count
+    // not moving. The removal is kept on the unused-dependency ground alone.
     "react-hook-form",
-    "@hookform/resolvers",
     "@radix-ui/react-collapsible",
     "@radix-ui/react-popover",
     "@radix-ui/react-tooltip"
