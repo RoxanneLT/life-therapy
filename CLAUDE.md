@@ -207,6 +207,9 @@ tsc --noEmit
                                         resolves to a live control and is claimed once, every
                                         bullet in §4/§5 is tagged, every M-pointer resolves, and
                                         the unenforceable count may only fall. Selftest first
+  && npm run check:brief              ← B-1..B-9 on `brief/`: the spine is present, every
+                                        document is indexed and reachable, every gate row is
+                                        complete, STATUS.md is not stale. Selftest first
   && npm run crawl:tier0              ← knip: dead code, unlisted deps, unresolved imports
   && npm run check:cycles             ← import cycles, selftest first
   && npm run test:gate                ← probes for all four gates: bash-gate, ddl-gate,
@@ -275,6 +278,7 @@ attached to no rule fails.
 | Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs` (this project's scar cases) + `bash-gate.probe.mjs` (canon's 65-case decision table, 7 verdicts tightened here), `scripts/check-{statusline,context-budget}.mjs` |
 | Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |
 | Rule files | `.claude/rules/schema-changes.md` — why `prisma migrate` fails here (the pgbouncer pooler) and the Management API path that works |
+| **The brief** | `brief/` — the project's document tree, **tracked in git, never synced**. Spine: `EVIDENCE.md` (every fact with its source — nothing anywhere may state a fact it does not carry) · `DECISIONS.md` · `GATES.md` (**what is waiting on a person**) · `CURRENT.md` (≤ 8 KB, written every step) · `STATUS.md` (generated, `npm run brief:status`). Seven role folders sorted by what you *do* with a document. Checked by `scripts/check-brief.mjs`. `docs/` is not a second brief — `brief/README.md` says which three files there are addressed by name and cannot move |
 | **This file itself** | `scripts/check-claude-md.mjs` (kit, canon's) + `scripts/check-claude-md.ceiling.json`. It resolves the `@enforced` markers below through the thing that *invokes* each control — a `check()` call in the audit, a hook registered in settings, a pattern in `permissions.ask` — never through a file existing. Two namespaces are this project's own, in its `KIT:CONFIG resolvers` region, and one of them **overrides** canon: `audit:` ids here are slugged check names, and canon's literal substring test resolved 1 of 21, the 1 a false positive |
 
 `.claude/rules/*.md` carries `paths:` frontmatter and is **guidance only, never the sole
