@@ -14,6 +14,15 @@
 
 **Just done**
 
+- **M-KIT-17 answered here**: `.claude/package.json` declares `"type": "module"` for that subtree,
+  and `context-budget.js` + `statusline.js` converted. Canon left this fix open as Stéan's call and
+  weighed two options; this is a third it had not considered, so it goes back as a finding along
+  with ⑩ — `typelessHooks()` reads only the ROOT `package.json`, so it still reports this project as
+  typeless after the fix, and would SKIP a project whose root says `module` while a nested file says
+  `commonjs`. That second direction is the silent one.
+- `bash-gate` v3 + probe v4 + the new `bash-gate.config.mjs`. `apply-kit` now reports **nothing to
+  do** — the first time this project has been level with canon.
+
 - `check-claude-md` **v15** adopted (canon `671b269`, taken from history), and the `dates-test`
   splice repaired by hand — canon repaired its own copy and cannot deliver that repair, because the
   damage is inside a `KIT:CONFIG` region and `apply-kit` carries a project's region rather than

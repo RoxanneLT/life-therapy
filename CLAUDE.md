@@ -272,7 +272,8 @@ attached to no rule fails.
 |---|---|
 | ESLint | `eslint.config.mjs`, `--max-warnings 0` |
 | Audit checks | `scripts/architecture-audit.mjs` — each named after the bug class it catches |
-| Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js`, `agent-write-scope.js` + `.claude/settings.json` |
+| Hooks + twins | `.claude/hooks/bash-gate.js`, `ddl-gate.js`, `agent-write-scope.js` + `.claude/settings.json`. The branch every gate treats as the deployment is **one value in one file**, `.claude/hooks/bash-gate.config.mjs`, imported by both the hook and its probe — it was two regions bound by a sentence, and the silent direction was a green probe over the wrong branch |
+| Module kind of `.claude/*.js` | `.claude/package.json` — `"type": "module"`, scoped to that subtree and nothing else. Not a package: no name, no version, never installed. Without it these files are CommonJS and the two that use `import` load only because Node ≥22.7 reparses them, which is a SyntaxError at load on an older Node — and a hook that fails to load gates nothing. `M-KIT-17@dev-standards` / L-94 — qualified, because the entry lives in canon's register and an unqualified citation fires check 2c on a TRUE claim |
 | Git hooks | `.githooks/{pre-commit,pre-merge-commit,pre-push,prepare-commit-msg}` — wired by `npm run prepare`. A different layer from `.claude/hooks/`: those gate one *tool call*, these gate a *commit* |
 | Token economy | `.claude/settings.json` (`autoCompactWindow`) · `.claude/hooks/context-budget.js` · `.claude/statusline.js` |
 | Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs` (this project's scar cases) + `bash-gate.probe.mjs` (canon's 65-case decision table, 7 verdicts tightened here), `scripts/check-{statusline,context-budget}.mjs` |

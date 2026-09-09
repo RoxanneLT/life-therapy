@@ -64,8 +64,15 @@
 // @no-twin settings permissions match TOOLS, and this gates no tool — it annotates a prompt with a
 // measurement. There is no permission rule that can express "tell me how big the context is", so
 // the coarse layer has nothing to fall back to and the gap is recorded rather than implied.
-const { openSync, readSync, closeSync, statSync, existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } = require("node:fs");
-const { join, dirname, basename } = require("node:path");
+// ESM, and by declaration rather than by the runtime's guess. Converted 2026-09-09 alongside
+// `package.json` in this directory, which sets `"type": "module"` for `.claude/hooks/` only. This
+// file was the one CommonJS holdout here, so it is the whole cost of that declaration — the two
+// hooks that already used `import` (agent-write-scope since v1, bash-gate since v3) stop depending
+// on Node >= 22.7 reparsing them, which is version-dependent and fails at LOAD on an older Node.
+// dev-standards M-KIT-17 / L-94.
+import { openSync, readSync, closeSync, statSync, existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname, basename } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // ── thresholds ───────────────────────────────────────────────────────────────────────────────
 // WARN sits deliberately BELOW the 300k --autocompact threshold this repo recommends. If the two
@@ -380,12 +387,19 @@ function adviseAgent(m) {
     + `Do not suggest /compact — you cannot run it and the user has already been told separately.`;
 }
 
-// Only consume stdin when this file IS the process. `.claude/statusline.js` requires it as a
-// library, and without this guard that require would register a stdin handler which then prints the
+// Only consume stdin when this file IS the process. `.claude/statusline.js` imports it as a
+// library, and without this guard that import would register a stdin handler which then prints the
 // hook's JSON onto the statusline's stdout — corrupting the status bar with a hook payload. The
 // same collision made this hook's own RSS probe pass vacuously before it was caught, so the
 // failure mode is demonstrated rather than hypothetical.
-if (require.main === module) {
+//
+// ⚠ `require.main === module` IS THE CJS SPELLING AND IT SURVIVED THE 2026-09-09 CONVERSION BY A
+// WHOLE STEP. The grep that found this file's CommonJS was `require\(|module\.exports`, and
+// `require.main` has no parenthesis — so the imports and the export were converted, the file
+// loaded, and it threw `require is not defined in ES module scope` at THIS line instead. A
+// module-kind conversion is not a search for two spellings; the bare globals (`require.main`,
+// `module`, `__dirname`, `__filename`, `exports`) have no punctuation to grep for.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   let raw = "";
   process.stdin.on("data", (c) => (raw += c));
   process.stdin.on("end", () => {
@@ -409,7 +423,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
+export {
   adviseUser, adviseAgent, measure, readMain, readAgents, readRange, contextNow, loadState,
   WARN, STOP, CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, STATE_FILE,
 };

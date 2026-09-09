@@ -165,9 +165,11 @@ const ok = (cond, label, detail = "") => { if (!cond) failed++; console.log(`  $
   // marker, and hence the explicit "rss is a positive number" assertion below it.
   const driver = join(tmp, "rss-driver.mjs")
   writeFileSync(driver, [
-    `import { createRequire } from "node:module"`,
-    `const require = createRequire(${JSON.stringify(`file:///${process.cwd().replace(/\\/g, "/")}/`)})`,
-    `const h = require(${JSON.stringify(`./${HOOK}`)})`,
+    // `import`, not `createRequire`, since the hook became ESM on 2026-09-09. The driver must load
+    // it the way the RUNTIME will — a probe that reaches its subject through a channel the real
+    // caller does not use is measuring its own harness.
+    `import { pathToFileURL } from "node:url"`,
+    `const h = await import(pathToFileURL(${JSON.stringify(join(process.cwd(), HOOK))}).href)`,
     `const t0 = Date.now()`,
     `h.measure(process.argv[2], process.argv[3])`,
     `console.log("RSSPROBE:" + JSON.stringify({ rss: process.memoryUsage().rss, ms: Date.now() - t0 }))`,
