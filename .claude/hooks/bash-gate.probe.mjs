@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v3 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v4 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -27,18 +27,13 @@ import { dirname, join } from "node:path";
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), "bash-gate.js");
 
-/* KIT:CONFIG branches — the two branch names this project's ASK gate turns on.
- * WORKING is the everyday branch, which must never prompt; PROTECTED is whatever
- * the deployment runs from, and must match the hook's KIT:CONFIG branch region. */
-// PROTECTED must match bash-gate.js's own KIT:CONFIG branch region: `master`, because Vercel
-// builds from it and there is no separate deploy step (§3).
-// WORKING is a synthetic stand-in for "any branch that is not the deployment" — deliberately not
-// a branch this repo currently has, since branches come and go and a probe input that names one
-// would start failing for a reason that has nothing to do with the gate. `feature/x` is the
-// spelling canon's own per-segment case already uses.
-const WORKING_BRANCH = "feature/x";
-const PROTECTED_BRANCH = "master";
-/* KIT:CONFIG /branches */
+// THE BRANCH NAMES COME FROM THE HOOK'S OWN CONFIG MODULE, which is the entire point.
+//
+// They used to be declared here, in a KIT:CONFIG region whose comment asked the reader to keep them
+// equal to the hook's — prose doing a check's job on the one value every project changes. A probe
+// that reads its subject's configuration from a SECOND copy is a probe that can go green over the
+// wrong subject, and that is the failure this file exists to prevent. M-KIT-07, closed 2026-09-09.
+import { PROTECTED_BRANCH, WORKING_BRANCH } from "./bash-gate.config.mjs";
 
 /**
  * `raw` sends bytes verbatim. The first malformed-input probe passed a STRING

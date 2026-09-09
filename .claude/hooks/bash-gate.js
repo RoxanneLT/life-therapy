@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v2 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v3 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -91,17 +91,30 @@
 // it now backs, and the settings patterns themselves are UNCHANGED — so the 2026-08-19
 // interception measurements, which are statements about settings.json and not about the hook,
 // still stand. What could not be inherited is recorded as `never`.
+//
+// v3, later the same day, invalidated the two dated records again — and this time the re-verification
+// is a MEASUREMENT rather than a reading. `diff` of this file at v2 against v3, with comments and
+// blank lines excluded, yields exactly four deletions and one addition, all of them the branch
+// config becoming an `import` from `bash-gate.config.mjs`. `isForcePush`, `LETHAL_TARGET` and the
+// whole of CANON_DENY — everything these two twins back — are byte-identical across the version
+// bump. So the coverage argument below is not merely still plausible, it is unchanged by
+// construction, and `@probed-kit` moves to v3.
+//
+// ⚠ THE DATES DELIBERATELY DO NOT MOVE. `@probed` records WHEN THE INTERCEPTION WAS OBSERVED, and
+// no new observation was made — the hook was not disabled and no force push was attempted. Bumping
+// the date to today would manufacture a measurement out of a version bump, which is the precise
+// failure this whole record format exists to prevent.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v2
+// @probed-kit bash-gate v3
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v2
+// @probed-kit bash-gate v3
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -129,15 +142,24 @@
 // Their `@twin`/`@probed`/`@probed-sha` records live inline there, not here, so the sha binds.
 /* KIT:CONFIG /twins */
 
-/* KIT:CONFIG branch — the ASK gate every project needs: whatever act constitutes
- * the DEPLOYMENT. Name the protected branch and say, in the reason, what is on the
- * other side of it — "this targets main" teaches nothing; "there is no staging step
- * between this and the live site" stops the hand. */
-const PROTECTED_BRANCH = "master";
-const PROTECTED_REASON =
-  "Vercel builds from `master` and there is no separate deploy step, so this IS the deploy — " +
-  "it reaches clients' booking pages and their money without anything in between";
-/* KIT:CONFIG /branch */
+// THE BRANCH CONFIG IS A MODULE, NOT A REGION HERE, and the reason is the probe.
+//
+// Until 2026-09-09 `PROTECTED_BRANCH` was declared in a KIT:CONFIG region of THIS file and again
+// in one of `bash-gate.probe.mjs`, bound only by a sentence in the probe's region asking a human to
+// keep them equal. Set the probe to `master` and leave this at `main` and the probe fails — loud
+// and safe. Set THIS to `master` and leave the probe at `main` and the probe PASSES, exercising a
+// branch nothing protects while the branch that is protected is never tested. M-KIT-07.
+//
+// This hook consumes stdin at top level and exports nothing, so the probe cannot import it. A value
+// two artefacts must agree on therefore lives in a module they BOTH import — the shape
+// `agent-write-scope` reached first (M-KIT-06).
+//
+// ⚠ PORTING NOTE. This makes the file ESM. If YOUR project has no `"type": "module"`, a `.js` here
+// is CommonJS and `import` is a syntax error — Node ≥22.7 reparses it as ESM and prints a
+// MODULE_TYPELESS_PACKAGE_JSON warning to stderr on EVERY hook invocation, which is a compensation,
+// not a fix, and it is version-dependent. Set `"type": "module"`, or convert this file. Do not
+// assume either way. → M-KIT-17.
+import { PROTECTED_BRANCH, PROTECTED_REASON } from "./bash-gate.config.mjs";
 
 /* KIT:CONFIG seams — shell variables that, set as a leading assignment, bypass this
  * project's git hooks (a `.githooks` probe seam: `X_HOOK_PROBE=1 git commit …`). An
