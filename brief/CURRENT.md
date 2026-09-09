@@ -14,6 +14,11 @@
 
 **Just done**
 
+- `check-claude-md` **v15** adopted (canon `671b269`, taken from history), and the `dates-test`
+  splice repaired by hand — canon repaired its own copy and cannot deliver that repair, because the
+  damage is inside a `KIT:CONFIG` region and `apply-kit` carries a project's region rather than
+  overwriting it. Same reason `POINTER`'s v15 widening had to be taken by hand; the four probes that
+  fail without it are named in the region.
 - `G-02` closed: the four pre-brief handovers **stay in `docs/`**, indexed at `build/INDEX.md` under
   *Before this brief existed* rather than migrated. `CALENDAR_PIPELINE_HANDOVER.md` renamed to carry
   the date it had only in git. Enumerating the four exposed a fourth reader `README.md` had not
@@ -29,10 +34,16 @@
 - `bash-gate-probe` v3 with 7 verdicts tightened here; `dates` / `dates-test`;
   `agent-write-scope` trio; `check-handoff-contract` v3.
 
-**Next action** — nothing in the kit is blocked. The remaining rows are `check-claude-md` v15, held
-at v14 until canon commits it (finding ⑨: the drift tool reads canon's *working* tree, so a mid-edit
-file makes every project look stale), and whatever canon adds next. `claude-md-ratio` is superseded
-and must never be installed.
+**Next action** — `bash-gate` v2 → v3 and `bash-gate.probe` v3 → v4, the only two rows still behind.
+Both are `✗ conflict`, not merely stale: this project holds `KIT:CONFIG` regions canon does not
+(`branch`, `branches`), so installing would delete configuration canon cannot express. Canon's
+`671b269` ships a `✚ fresh` row that looks like the intended exit — `bash-gate-config`
+(`.claude/hooks/bash-gate.config.mjs`), the same split `agent-write-scope` already took here. Read
+that row before touching either file. **A conflict blocks the whole plan**, so nothing else can
+install until these two are settled.
+
+`claude-md-ratio` is retired in canon as of `671b269` — the row and the file are gone, and it was
+never installed here.
 
 `G-01` and `G-03` are open and **deliberately not being chased** — Stéan set them aside on
 2026-09-09. G-01 cannot close until the desktop exists to point at; G-03 stays open because "don't

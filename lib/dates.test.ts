@@ -248,15 +248,15 @@ test(`[${TZ}] saToday agrees with saDateStr(now) and is a valid calendar date`, 
   assert.equal(saDateStr(calendarDate(today)), today);
 });
 
-/* KIT:CONFIG domain-tests
+/* KIT:CONFIG domain-tests — tests for the project's own shapes, matching the `domain` region in
+ * dates.ts. Empty when that region is empty.
  *
- * ⚠ A SECOND IMPORT INSIDE THIS REGION IS LEGAL, and say so rather than leaving the reader to
- * infer it. The import list above is canon's bytes, so a project adding a domain helper appears to
+ * ⚠ A SECOND IMPORT INSIDE THIS REGION IS LEGAL, and it is said here rather than left to be
+ * inferred. The import list above is canon's bytes, so a project adding a domain helper appears to
  * face a choice between forking that list and going without. It faces neither: an `import` written
  * INSIDE this region is yours, travels with your cases, and survives every re-adopt. Reported by
  * the life-therapy session, 2026-09-09, which had already worked it out and noted that the fork
- * was the obvious move. — tests for the project's own shapes, matching the
-   KIT:CONFIG domain region in dates.ts. Empty when that region is empty. */
+ * was the obvious move. */
 import { bookingStartsAt } from "./dates";
 
 test(`[${TZ}] bookingStartsAt matches the "+02:00" form it replaced`, () => {

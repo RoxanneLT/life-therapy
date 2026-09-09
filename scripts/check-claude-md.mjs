@@ -2,7 +2,7 @@
 /**
  * scripts/check-claude-md.mjs — the marker audit for CLAUDE.md and .claude/rules/*.md
  *
- * @kit check-claude-md v14 — tracked OUTSIDE its `KIT:CONFIG` regions. Improve it in
+ * @kit check-claude-md v15 — tracked OUTSIDE its `KIT:CONFIG` regions. Improve it in
  * dev-standards and re-adopt; a local change here is a fork and `check-kit-drift.mjs` says so.
  * Imports `hookRegistrations` from `check-hook-registration.mjs`, which is a kit item too and
  * must be installed beside it — the `hook:` namespace resolves through registration, not presence,
@@ -90,10 +90,26 @@ const RULES_SECTIONS = [
  * the suffix does not MISS `### M-068b`; it has no right anchor, so it captures `M-068` and the
  * entry is silently filed under its sibling's id — one register's status read for another's, and
  * a distinct-id count one short (measured in pleks: 106 headings, 105 ids). Widen the default
- * before a project meets it, not after. */
+ * before a project meets it, not after.
+ *
+ * ⚠ THE `@repo` SUFFIX IN `POINTER` IS CANON'S v15 DEFAULT, TAKEN BY HAND. It had to be: the line
+ * lives inside this region, so `apply-kit` CARRIES this project's copy and the v15 grammar cannot
+ * arrive by adoption. The half of v15 that acts on the suffix — `p.indexOf("@")`, and the
+ * `🔗 delegated register pointers` line — is canon's bytes outside the region and DID arrive, so a
+ * carried v13 grammar leaves the two halves disagreeing: the resolver waits for a token the regex
+ * can never produce. That is not silent, and the design is why — the selftest reads `POINTER` from
+ * this region, so adopting v15 without this edit fails four probes BY NAME (`XREPO …
+ * got [M-KIT-13], want [M-KIT-13@dev-standards]`). Measured here on 2026-09-09: installed the
+ * merge, ran `--selftest`, got exactly those four, then made this edit. Do not re-narrow it.
+ *
+ * What the suffix buys THIS project: nothing yet, and it is taken anyway. LT's §5 pointers are all
+ * local (`M-01`…`M-06` in `docs/MECHANISABLE.md`). The day §4 or §5 needs to cite an entry that
+ * lives in canon's register — `M-KIT-09`, say, whose closed Status enum this file already obeys —
+ * the honest citation is an address, and without this the check fires on a TRUE one. yoros hit that
+ * and reworded around it, trading an address for a description. */
 const REGISTER_PATH = "docs/MECHANISABLE.md"
 const REGISTER_HEADING = /^### (M-(?:KIT-)?\d{2,3}[a-z]?)/gm
-const POINTER = /\bM-(?:KIT-)?\d{2,3}[a-z]?\b/g
+const POINTER = /\bM-(?:KIT-)?\d{2,3}[a-z]?(?:@[A-Za-z0-9_.-]+)?\b/g
 
 /**
  * THREE IDS IN THIS PROJECT'S GRAMMAR, for the fixtures — [resolves, duplicated, absent].
@@ -866,7 +882,7 @@ export function refuteOpen(entries, state, resolve, knownNamespaces) {
 }
 
 /** Audit one markdown file. Returns findings. */
-function auditFile(path, text, claims, root = ".", advisory = new Set(), delegated = new Map()) {
+function auditFile(path, text, claims, root = ".", advisory = new Set(), delegated = new Map(), delegatedPointers = new Map()) {
   const out = []
   // FENCED CONTENT IS BLANKED FOR EVERY SCAN, not just the tag regex.
   //
@@ -948,6 +964,23 @@ function auditFile(path, text, claims, root = ".", advisory = new Set(), delegat
       const count = {}
       for (const m of readFileSync(regPath, "utf8").matchAll(new RegExp(REGISTER_HEADING.source, "gm"))) count[m[1]] = (count[m[1]] ?? 0) + 1
       for (const p of pointers) {
+        // A POINTER INTO ANOTHER REPO'S REGISTER. Same grammar as a delegated marker, same
+        // treatment: parsed, named, and DELIBERATELY NOT RESOLVED, because verifying the far side
+        // means reading another repo and canon has already refused that for controls.
+        //
+        // Reported by the yoros session, 2026-09-09, against v13. `M-KIT-13` is an entry in
+        // CANON's kit register; yoros cited it by name in §4 and this check fired on a TRUE
+        // citation. It is the gap `@repo` closed for markers, one level up: a control enforced by
+        // another repo needed a qualifier before it could be stated truthfully, and a pointer into
+        // another repo's register needed the same and had none.
+        //
+        // Both local answers were worse than the finding, which is why the fix is here and not
+        // there. A local copy of canon's register is the drift this estate warns about in five
+        // places; suppressing the check disarms a real control for one true citation. yoros worked
+        // around it by rewording §4 to DESCRIBE the entry instead of addressing it — and paid for
+        // that in the row: a reader gets a description where they used to get an address.
+        const at = p.indexOf("@")
+        if (at > 0) { delegatedPointers.set(p, p.slice(at + 1)); continue }
         if (!count[p]) out.push(`${path}: ${p} resolves to no entry in ${REGISTER_PATH}`)
         else if (count[p] > 1) out.push(`${path}: ${p} resolves to ${count[p]} entries in ${REGISTER_PATH} — an ambiguous pointer sends the reader to whichever heading came first`)
       }
@@ -1052,6 +1085,11 @@ const FIXTURES = [
   // statement never has to be broken apart to satisfy the checker.
   ["KNOWN-GOOD: marker below the old 3-line window", `${SEC}\n- A rule that runs on\n  several continuation\n  lines before its\n  marker appears.\n  **UNENFORCEABLE** — nothing scans for this; it is a human judgement call.\n`, false],
   ["M-pointer resolving to no register entry", `${SEC}\n- A rule.\n  **UNENFORCEABLE** — MECHANISABLE → **${SAMPLE_IDS[2]}**, which does not exist.\n`, true],
+  // yoros, 2026-09-09: the SAME id, the SAME absent register entry, and the only difference is the
+  // repo qualifier. The pair is the whole claim — without the first line the second proves nothing,
+  // because a check that never fires on the unqualified form is not being silenced by the qualifier.
+  ["KNOWN-GOOD: the same absent id, QUALIFIED with the repo whose register holds it, is silent",
+    `${SEC}\n- A rule.\n  **UNENFORCEABLE** — MECHANISABLE → **${SAMPLE_IDS[2]}@dev-standards**, which lives in canon's register.\n`, false],
   ["KNOWN-GOOD: M-pointer that resolves", `${SEC}\n- A rule.\n  **UNENFORCEABLE** — MECHANISABLE → **${SAMPLE_IDS[0]}**, which exists in the register.\n`, false],
   // AMBIGUOUS is a distinct failure from ABSENT, and the one the register actually had: marking an
   // item BUILT added a second `### M-0NN` heading instead of folding the original into the
@@ -1362,6 +1400,43 @@ if (process.argv.includes("--selftest")) {
   }
 
 
+
+  /* ── M-KIT-13, one level up: a POINTER into another repo's register ───────────────────
+   * yoros, 2026-09-09, against v13: `M-KIT-13` is an entry in CANON's kit register. yoros cited
+   * it by name in §4 and this check fired on a TRUE citation — `M-KIT-13 resolves to no entry in
+   * docs/MECHANISABLE.md`, correctly, because it is not in yoros's register and never will be.
+   * Both local answers were worse than the finding: a local copy of canon's register is the drift
+   * this estate warns about in five places, and suppressing the check disarms a real control for
+   * one true citation. So the pointer takes the same qualifier a delegated MARKER takes, and gets
+   * the same treatment — parsed, named, deliberately not resolved. */
+  {
+    const P = () => new RegExp(POINTER.source, "g")
+    const hits = (t) => [...t.matchAll(P())].map((m) => m[0])
+    const cases = [
+      ["a bare pointer still parses as one — the grammar was widened, not replaced",
+        hits("see M-KIT-13 for why"), ["M-KIT-13"]],
+      ["a QUALIFIED pointer parses as ONE token, repo included — not as a bare id with trailing text",
+        hits("see M-KIT-13@dev-standards for why"), ["M-KIT-13@dev-standards"]],
+      ["a 3-digit id qualifies too — the estate's other grammar is not a special case",
+        hits("M-068@pleks"), ["M-068@pleks"]],
+      ["a suffixed id qualifies — the two extensions compose",
+        hits("M-068b@pleks"), ["M-068b@pleks"]],
+      ["KNOWN-GOOD: an @ that is not a repo qualifier does not swallow the next word",
+        hits("M-KIT-13 @ dev-standards"), ["M-KIT-13"]],
+    ]
+    for (const [why, got, want] of cases) {
+      const okc = got.length === want.length && got.every((g, i) => g === want[i])
+      if (!okc) failed++
+      console.log(`  ${okc ? "✓" : "✗"} ${okc ? "" : "XREPO "}${why}${okc ? "" : ` — got [${got.join(", ")}], want [${want.join(", ")}]`}`)
+    }
+    // AND THE SPLIT THE RESOLVER MAKES, which is the half that decides a finding.
+    const split = (p) => { const at = p.indexOf("@"); return at > 0 ? { id: p.slice(0, at), repo: p.slice(at + 1) } : { id: p, repo: null } }
+    const s1 = split("M-KIT-13@dev-standards"), s2 = split("M-KIT-13")
+    const sOk = s1.repo === "dev-standards" && s1.id === "M-KIT-13" && s2.repo === null
+    if (!sOk) failed++
+    console.log(`  ${sOk ? "✓" : "✗"} a qualified pointer yields its repo and an unqualified one yields null — the finding turns on exactly this${sOk ? "" : ` — got ${JSON.stringify([s1, s2])}`}`)
+  }
+
   // ── the ratio, and the one invariant that makes it a ratchet ─────────────────────────────────
   //
   // yoros, 2026-09-09, against v10. The delegated fix reached the printed line and not the ratchet,
@@ -1554,11 +1629,12 @@ function runAudit(root) {
   }
   const advisory = new Set()
   const delegated = new Map()
+  const delegatedPointers = new Map()
   // ⚠ auditResolvers IS NOT CALLED HERE. It validates the project's resolvers against the LIVE
   // tree, once, at the entry point below — see the note there. Calling it with `root` bound to a
   // fixture made every resolver worth writing fail 12 known-good fixtures.
   const findings = []
-  findings.push(...auditFile("CLAUDE.md", readFileSync(`${root}/CLAUDE.md`, "utf8"), claims, root, advisory, delegated))
+  findings.push(...auditFile("CLAUDE.md", readFileSync(`${root}/CLAUDE.md`, "utf8"), claims, root, advisory, delegated, delegatedPointers))
   const dir = `${root}/.claude/rules`
   // ABSENT and EMPTY are different states and were the same crash. A project with no path-scoped
   // rules at all is a SKIP; a directory that exists and yields nothing is a decayed glob and must
@@ -1571,10 +1647,10 @@ function runAudit(root) {
   else if (files.length === 0) findings.push(`${dir}: no rule files found — glob decayed?`)
   for (const f of files) {
     // Rule files have no RULES_SECTIONS headings; only directions 1-3 apply to them.
-    findings.push(...auditFile(`.claude/rules/${f}`, readFileSync(`${dir}/${f}`, "utf8"), claims, root, advisory, delegated)
+    findings.push(...auditFile(`.claude/rules/${f}`, readFileSync(`${dir}/${f}`, "utf8"), claims, root, advisory, delegated, delegatedPointers)
       .filter((x) => !x.includes("rules section vanished")))
   }
-  return { findings, claims, skipped, advisory, delegated }
+  return { findings, claims, skipped, advisory, delegated, delegatedPointers }
 }
 
 // ── The real audit ───────────────────────────────────────────────────────────────────────────────
@@ -1601,7 +1677,7 @@ const resolverFindings = auditResolvers(PROJECT_RESOLVERS, {
   json: (rel) => JSON.parse(readFileSync(`./${rel}`, "utf8")),
 })
 
-const { findings: auditFindings, absent, skipped, advisory, delegated } = runAudit(".")
+const { findings: auditFindings, absent, skipped, advisory, delegated, delegatedPointers } = runAudit(".")
 const findings = [...resolverFindings, ...auditFindings]
 
 // The metric reads CLAUDE.md a SECOND time, at module top level, and the guard inside runAudit
@@ -1813,6 +1889,14 @@ if (!ratchet.length) console.log(`🔒 ratchet — N at its ceiling (${ceiling.m
         `🔗 delegated controls — ${delegated.size} marker(s) name another repo as the invoker and are ` +
           `NOT verified here: ${[...delegated.entries()].map(([k, r]) => `${k} (${r})`).join(", ")}. ` +
           `They count as unenforceable in this tree, because nothing in this tree checks them.`,
+      )
+    }
+    if (delegatedPointers && delegatedPointers.size) {
+      console.log(
+        `🔗 delegated register pointers — ${delegatedPointers.size} pointer(s) name an entry in ` +
+          `ANOTHER repo's M-register and are NOT resolved here: ` +
+          `${[...delegatedPointers.entries()].map(([k, r]) => `${k} (${r})`).join(", ")}. ` +
+          `Verifying the far side means reading another repo, which canon already refuses for controls.`,
       )
     }
     if (advisory && advisory.size) {
