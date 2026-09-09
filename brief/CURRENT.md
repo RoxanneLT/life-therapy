@@ -43,16 +43,23 @@
 - `bash-gate-probe` v3 with 7 verdicts tightened here; `dates` / `dates-test`;
   `agent-write-scope` trio; `check-handoff-contract` v3.
 
-**Next action** — `bash-gate` v2 → v3 and `bash-gate.probe` v3 → v4, the only two rows still behind.
-Both are `✗ conflict`, not merely stale: this project holds `KIT:CONFIG` regions canon does not
-(`branch`, `branches`), so installing would delete configuration canon cannot express. Canon's
-`671b269` ships a `✚ fresh` row that looks like the intended exit — `bash-gate-config`
-(`.claude/hooks/bash-gate.config.mjs`), the same split `agent-write-scope` already took here. Read
-that row before touching either file. **A conflict blocks the whole plan**, so nothing else can
-install until these two are settled.
+**Next action** — none in the kit. **The adoption is finished.** `apply-kit --project life-therapy`
+reports *"Nothing to do: every requested row is already canon's, pinned, or a template already
+present"*, and `check-kit-drift` reports this project with **no findings at all** — its one
+life-therapy line is the positive `◈ asserted — settings — 2 of 2 claim(s) held`. `brief` and
+`check-brief` were declared in canon's ledger on 2026-09-09, which cleared the last `UNRECONCILED`
+row; that declaration is the dev-standards session's to write and was never this project's to fix.
 
-`claude-md-ratio` is retired in canon as of `671b269` — the row and the file are gone, and it was
-never installed here.
+Two estate-wide tallies went to zero in the same pass, and neither is only about this project:
+`🧩 typeless hooks — 7 examined, 0 rely on Node's module-syntax detection` and `🎯 adopted probes —
+5 reached from their gate, 0 NOT reached`.
+
+`claude-md-ratio` is retired in canon — the row and the file are gone, and it was never installed
+here. **Do not install it if an older manifest is ever read.**
+
+What this project should watch for next is not a queue but a signal: canon pushing again. The check
+is `node tools/apply-kit.mjs --project life-therapy` (dry run — `--write` is never run from here)
+and `node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree.
 
 `G-01` and `G-03` are open and **deliberately not being chased** — Stéan set them aside on
 2026-09-09. G-01 cannot close until the desktop exists to point at; G-03 stays open because "don't
