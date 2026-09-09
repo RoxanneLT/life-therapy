@@ -1,7 +1,7 @@
 /**
  * Boundary tests for lib/dates.ts.
  *
- * @kit dates-test v1 — tracked. Edit it in dev-standards and re-adopt.
+ * @kit dates-test v2 — tracked. Edit it in dev-standards and re-adopt.
  *
  * Every fixture probes a specific edge and says which side of it it sits on.
  * The point is not coverage — it's that a future green run proves the *spec*
@@ -248,13 +248,15 @@ test(`[${TZ}] saToday agrees with saDateStr(now) and is a valid calendar date`, 
   assert.equal(saDateStr(calendarDate(today)), today);
 });
 
-/* KIT:CONFIG domain-tests — tests for the project's own shapes, matching the
+/* KIT:CONFIG domain-tests
+ *
+ * ⚠ A SECOND IMPORT INSIDE THIS REGION IS LEGAL, and say so rather than leaving the reader to
+ * infer it. The import list above is canon's bytes, so a project adding a domain helper appears to
+ * face a choice between forking that list and going without. It faces neither: an `import` written
+ * INSIDE this region is yours, travels with your cases, and survives every re-adopt. Reported by
+ * the life-therapy session, 2026-09-09, which had already worked it out and noted that the fork
+ * was the obvious move. — tests for the project's own shapes, matching the
    KIT:CONFIG domain region in dates.ts. Empty when that region is empty. */
-// A SECOND import statement, deliberately, rather than adding one name to the list at the top:
-// that list is canon's bytes and appending to it would be a fork of a `tracked` file to gain one
-// identifier. ESM allows two imports of the same module and the bundler folds them, so the cost is
-// a line and the benefit is that this region stays self-contained — which is what makes it
-// deletable by a project that has no domain shapes.
 import { bookingStartsAt } from "./dates";
 
 test(`[${TZ}] bookingStartsAt matches the "+02:00" form it replaced`, () => {

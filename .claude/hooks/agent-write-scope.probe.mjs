@@ -1,7 +1,7 @@
 /**
  * Probes for agent-write-scope.js — BOTH DIRECTIONS, per dev-standards LESSONS L-01.
  *
- * @kit agent-write-scope-probe v3 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit agent-write-scope-probe v4 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * This gate has a second failure mode the other two do not, and the probe list is shaped around it.
  * `agent_type` is absent in the main session (E7), so a hook that read the field wrongly — a typo, a
@@ -30,18 +30,20 @@ const HOOK = join(dirname(fileURLToPath(import.meta.url)), "agent-write-scope.js
 import { SCOPES, SPAWNERS } from "./agent-write-scope.config.mjs";
 /* KIT:CONFIG cwd — the absolute project root the synthesised payloads claim to come from.
  * It only has to be internally consistent: the hook resolves `file_path` against it, so the
- * absolute-path cases below must be built from the same string. Set it to your checkout.
+ * absolute-path cases below must be built from the same string.
  *
- * ⚠ DELIBERATELY NOT THIS MACHINE'S CHECKOUT, and the deviation is from canon's instruction
- * rather than from its code. CLAUDE.md §1: "Don't hardcode `C:\dev` anywhere, and don't guess
- * the desktop's" — the repo moved off OneDrive in 2026-08 and the second machine's drive is
- * still undecided, so a real path written here would be this laptop's, silently. Nothing
- * needs it to be real: the region's own text says internally consistent is the whole
- * requirement, no payload here touches the disk, and a synthetic root makes that legible to
- * the next reader instead of leaving them to check whether the probe writes where it says.
- * Verified by grep: the only `C:\dev` literals in this tree are §1's rule and its own table.
- */
-const CWD = "C:/probe-root/life-therapy";
+ * ⚠ IT IS NEVER RESOLVED AGAINST THE DISK, so use any absolute path in your platform's shape —
+ * it does not have to be, and should not be, where this repo actually sits. The default used to
+ * read `C:/dev/your-project` and the sentence here used to say "Set it to your checkout", which
+ * asked for a value STRONGER than the requirement two lines after conceding the requirement. The
+ * extra strength is a machine identity written into a tracked file, which then travels to every
+ * clone and to every other machine. Reported by the life-therapy session, 2026-09-09, whose own
+ * CLAUDE.md forbids hardcoding that path because the repo has already moved once.
+ *
+ * It must stay a LITERAL. Deriving it from `process.cwd()` would make the absolute-path cases pass
+ * for a different reason on every host — they would stop testing the hook's path resolution and
+ * start testing that two calls to `cwd()` agree. */
+const CWD = "/synthetic-root/project";
 /* KIT:CONFIG /cwd */
 
 /**
