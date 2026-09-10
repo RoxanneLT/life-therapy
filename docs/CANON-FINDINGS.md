@@ -75,6 +75,7 @@ COMMAND    In life-therapy, each file clean at HEAD, one mutant at a time, resto
              scripts/check-claude-md.mjs          (v15, lines 1692, 1925)      → selftest exit 0
              scripts/check-handoff-contract.mjs   (v3,  line 406)              → selftest exit 0
              scripts/check-hook-registration.mjs  (v2,  line 367)              → selftest exit 0
+                                                  (v3,  line 364, re-measured at adoption) → exit 0
              scripts/check-brief.mjs              (v5,  `failed.length ? 1 : 0`) → exit 0,
                                                   "selftest: all probes green (both directions)"
              scripts/check-install-platform.mjs   (v1,  `v.level === "fail" ? 1 : 0`) → exit 0,
@@ -128,6 +129,7 @@ never *exempt*, so the reason has to argue it.
 |---|---|---|---|
 | `check-brief` | v5 | adopted 2026-09-10, from canon's history at `6a0f5ed`, `names` region carried | `bafd9e3` · `apply-kit --project life-therapy` → `= identical check-brief` · live run `brief: conformant · 1 of 9 not measured` |
 | `canon-findings` | v1 | adopted 2026-09-10 — this file, a template, copied from canon's history at `6a0f5ed` | the commit that adds this file |
+| `check-hook-registration` | v3 | adopted 2026-09-10, from canon's history at `69d6111` (handover §6). Comment-only: LT's copy was byte-identical to v2 with no `KIT:CONFIG` region, so there was nothing to splice. **Canon's v2 pin on this row is now finished work: drop it from `ledgers/projects.json`** | the commit that adds this row · `git -C <canon> show HEAD:kit/project-kit/scripts/check-hook-registration.mjs \| cmp - scripts/check-hook-registration.mjs` → identical · `--selftest` → `✅ probes green`, and the live run is green · `check-kit-drift` → `life-therapy: the check-hook-registration pin is STALE IN THE AHEAD DIRECTION — the pin says v2 and scripts/check-hook-registration.mjs is at v3`. `apply-kit --project life-therapy` still prints `📌 pinned … an argued lag`: the pin returns before any bytes are compared, so that tool cannot confirm this adoption until the pin goes |
 | `settings` | v3 | the M-KIT-22 claim is now committed here — `"PowerShell"` in `permissions.deny`. Nothing to record in `kitAdopted` (the row is asserted, not adopted); listed so canon sees the claim is held by a commit and not by a working tree | `2ea2ca6` |
 
 No pins.
