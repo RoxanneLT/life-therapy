@@ -81,14 +81,24 @@ is worth keeping:
 - **L-41 — an agent can cite the dispatcher's own in-flight edit as independent evidence.** The
   agents here share the main session's working tree, and the main session keeps working while they
   run. Measured 2026-09-10: 8 LT subagent runs on this machine (grounder 5, census 2, db-inspector
-  1). Each artefact opens with `commit=<short SHA> · utc=<time>` (the `census`, `grounder` and
-  `db-inspector` spines), and `grounder` forbids a working-tree claim it did not read from `git
+  1). Each artefact opens with `commit=<short SHA> · utc=<time>` (five of the six spines;
+  `crawler-doctrine` returns bare JSON), and `grounder` forbids a working-tree claim it did not read from `git
   status`. So the materials for the tell are recorded, but nothing compares them. A cited file that
   differs from the anchor commit, or changed after the anchor time, reads exactly like one that did
   not. The work: `check-handoff-contract` reads each artefact's cited paths and marks any file dirty
   against `commit=`, or with an mtime past `utc=`, as **quarantined**. It is not failed, because the
   conclusion may stand on another source; the report has to name which. Probe: an artefact citing
   a file edited after its anchor must be marked, and one citing a clean file must not.
+
+- **L-68 — the host layer forbids the agent pipeline, and only Stéan can lift it.** Observed
+  2026-09-10: the session that triaged this arrived with *"Do not use the Agent tool, workflows or
+  deep-research unless requested"*, from above `CLAUDE.md` and in no file in this repo. It honoured
+  it. Six spines are installed, `grounder`'s and `census`'s descriptions say to use them
+  PROACTIVELY, and the session spawned none. `/walk` is unaffected, because invoking a command is the request. The text
+  is conditional, so it is satisfied by a request rather than removed by a setting. The carry is a
+  **standing authorisation in `CLAUDE.md` §7, in Stéan's words and dated**, with the bounds on how
+  far it reaches (yoros's carries five rules of discretion from canon's `4-AGENT-PIPELINES.md`
+  §3.1). A session must not write that authorisation for the owner; it waits for Stéan to give it.
 
 When an entry in the shared ledger gains a `life-therapy` line, or should have one and does not,
 this is where the work is tracked. **An unapplied lesson is an open item here — not an `n/a:`

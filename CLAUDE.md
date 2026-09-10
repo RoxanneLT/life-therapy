@@ -243,6 +243,14 @@ when it is dead): every gate above names its twin inline as `// @twin`. Reconcil
 `hooks: every hook declares its twin or why it cannot have one`, which also checks each twin's probe
 record and fails if the rule it covers has been edited since.
 
+**A hook gates only a session that loaded it.** Hooks are read at session start, from the folder
+the session was launched in. So a hook added mid-session passes its probes and gates nothing until a
+restart. A session opened at the parent folder this repo shares with its siblings loads none of
+them. Open the session at the repo root, and restart after changing a hook. Then send a call no
+settings rule covers, such as `cd scripts && ls`: a loaded `bash-gate` allows it without a prompt.
+Only the operator can see a prompt. The model gets the same result from an allowed call and an
+approved one, so it cannot confirm its own hooks. dev-standards/ledgers/LESSONS.md L-64.
+
 `ddl-gate.js` is the second hook, on `Write|Edit`. It **asks** before a file is written that
 applies DDL to production. `bash-gate` already asks when that URL appears in a *command* — but
 the documented way to run anything needing real credentials puts the URL in a file and leaves
