@@ -27,7 +27,7 @@ const AUDIT = join(ROOT, "scripts/architecture-audit.mjs");
 
 /**
  * Each entry is one temporary file and the checks it must trip. Grouped by file so the
- * whole set costs ONE audit run: the audit takes ~3s and 13 runs is a minute nobody
+ * whole set costs ONE audit run: the audit takes ~5s and 13 runs is a minute nobody
  * spends, which is how probe suites stop being run.
  */
 const PLANTED_FILES = [
@@ -288,6 +288,17 @@ export async function probeSetPasswordAction(userId: string, password: string) {
 }
 `,
     expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // A file the parser can only recover from. `code()` reads the recovery (L-49), so the audit
+    // must say so rather than let every check report it clean. In isolation, named by this check
+    // and by no other.
+    path: "lib/__probe-parse.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+export const broken = (;
+`,
+    expects: ["audit: every source file parses"],
   },
   {
     // A real throttle, but the per-instance in-memory one, which resets on a cold start. Without

@@ -18,6 +18,9 @@ import { createHash } from "node:crypto";
 // One caller: the `handoff:` check asks git whether `.handoff/` is ignored. Reading .gitignore
 // as text would answer a different question — see the comment there.
 import { spawnSync } from "node:child_process";
+// The TypeScript parser, which the build already carries. `code()` and `codeKeepingLiterals()` ask
+// it where the comments and literals are. See `stripRanges()` for why they no longer guess.
+import ts from "typescript";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const findings = [];
@@ -57,7 +60,12 @@ function walk(dir, ext = /\.(tsx?|mjs)$/) {
   return out;
 }
 
-const read = (p) => readFileSync(p, "utf-8");
+// Records each file's parse kind by extension, so `parse()` does not have to guess. See there.
+const read = (p) => {
+  const text = readFileSync(p, "utf-8");
+  KIND_BY_TEXT.set(text, /\.[jt]sx$/.test(p) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  return text;
+};
 const rel = (p) => p.replace(ROOT, "").replaceAll("\\", "/").replace(/^\//, "");
 
 /**
@@ -80,13 +88,101 @@ const rel = (p) => p.replace(ROOT, "").replaceAll("\\", "/").replace(/^\//, "");
  * than not reporting them, because it sends the reader somewhere innocent.
  */
 function code(src) {
-  const keepLines = (m) => "\n".repeat((m.match(/\n/g) || []).length);
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, keepLines)
-    .replace(/(^|[^:])\/\/[^\n]*/g, "$1")
-    .replace(/`(?:\\.|[^`\\])*`/g, keepLines)
-    .replace(/"(?:\\.|[^"\\])*"/g, '""')
-    .replace(/'(?:\\.|[^'\\])*'/g, "''");
+  return strip(src, true);
+}
+
+/**
+ * Where the comments and literals are, from the TypeScript parser, as [start, end, kind] ranges.
+ *
+ * WHY A PARSER (dev-standards/ledgers/LESSONS.md L-35, L-49). Until 2026-09-10 `code()` was five
+ * regexes, and a regex cannot tell a quote that opens a string from one inside a regex literal, a
+ * `'"'` character literal or an apostrophe in JSX text. Where it paired wrongly it blanked
+ * everything to the next quote, and every check reading the result reported "no findings" about
+ * code it could not see. Measured with this parser as the oracle: 8 of 546 source files lost real
+ * code, 700 identifiers, 475 of them in one component, and 6 came back with the wrong number of
+ * lines, so findings after the damage pointed at the wrong line. `codeKeepingLiterals()` was not
+ * clean either: it cut a string at any `//` not preceded by `:` and ended a "comment" at a `*\/`
+ * inside a string, and disagreed with the parser's comments in 5 files.
+ *
+ * WHAT IS KEPT, deliberately, from the regex version, so that a check reads the same text it was
+ * written against: a string collapses to its quotes (`""`, `''`), a block or line comment to its
+ * newlines, and a template literal, `${}` expressions included, to its newlines. JSX text and
+ * regex literals stay: they were never meant to be blanked, only mangled by accident. Swapped in,
+ * the audit's output was byte-identical, so no check depended on the damage.
+ *
+ * Callers pass text, not a path. `read()` records each file's kind by extension; text it never saw
+ * (a slice, a fixture) is parsed as TS and then TSX, and the one with fewer errors wins. That is
+ * only a fallback because it costs a second full parse for every component (326 of the 569 `.ts`/`.tsx` files, tests included), most
+ * of the parser's share of the audit's run time. A syntax error does not stop the parser, which
+ * recovers and still tokenises, so a slice of a function body works too. Whole files that fail to
+ * parse cleanly are named by `audit: every source file parses`, because a stripper that guessed is
+ * the thing L-49 is about. Cached per text: 55 call sites read the same files over and over.
+ *
+ * COST, measured 2026-09-10: the audit went from about 3.1 s to 4.5–5.6 s. Of that, 0.5 s is
+ * parsing 612 texts, 0.4 s is walking their tokens and 0.2 s is loading TypeScript. That is what
+ * it costs to stop checks reporting clean on code they cannot see.
+ */
+const STRIP_CACHE = new Map();
+const KIND_BY_TEXT = new Map();
+const SK = ts.SyntaxKind;
+
+function parse(src) {
+  const as = (kind) => ts.createSourceFile("x", src, ts.ScriptTarget.Latest, false, kind);
+  const known = KIND_BY_TEXT.get(src);
+  const first = as(known ?? ts.ScriptKind.TS);
+  if (first.parseDiagnostics.length === 0) return first;
+  const other = as(first.languageVariant === ts.LanguageVariant.JSX ? ts.ScriptKind.TS : ts.ScriptKind.TSX);
+  return other.parseDiagnostics.length < first.parseDiagnostics.length ? other : first;
+}
+
+function stripRanges(src) {
+  const hit = STRIP_CACHE.get(src);
+  if (hit) return hit;
+  const sf = parse(src);
+  const comments = new Map(); // start → end. A comment is trivia to exactly one token, but asked twice.
+  const literals = [];
+  const trivia = (pos) => {
+    // The braces are load-bearing. Both iterators STOP at the first callback that returns a
+    // truthy value, and `Map.set` returns the map — so the arrow-expression form recorded only the
+    // first comment of every run, and the rest of a comment block survived as "code".
+    const add = (s, e) => { comments.set(s, e); };
+    // Trailing picks up a comment on the previous token's line; leading picks up the rest.
+    ts.forEachTrailingCommentRange(src, pos, add);
+    ts.forEachLeadingCommentRange(src, pos, add);
+  };
+  (function visit(node) {
+    const k = node.kind;
+    if (k === SK.StringLiteral) literals.push([node.getStart(sf), node.end, "q"]);
+    else if (k === SK.NoSubstitutionTemplateLiteral || k === SK.TemplateExpression) {
+      literals.push([node.getStart(sf), node.end, "t"]);
+    }
+    const kids = node.getChildren(sf);
+    // JSX text has no trivia: a `//` in it is text, and asking for comments there would blank it.
+    if (!kids.length && k !== SK.JsxText && node.getStart(sf) > node.pos) trivia(node.pos);
+    for (const c of kids) visit(c);
+  })(sf);
+  const ranges = [
+    ...[...comments].map(([s, e]) => [s, e, "c"]),
+    ...literals,
+  ].sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const result = { ranges, clean: sf.parseDiagnostics.length === 0 };
+  STRIP_CACHE.set(src, result);
+  return result;
+}
+
+function strip(src, literalsToo) {
+  const newlines = (s) => "\n".repeat((s.match(/\n/g) || []).length);
+  let out = "";
+  let at = 0;
+  for (const [s, e, kind] of stripRanges(src).ranges) {
+    if (s < at) continue; // inside a range already blanked: a comment within a template's `${}`
+    if (kind !== "c" && !literalsToo) continue;
+    out += src.slice(at, s);
+    const text = src.slice(s, e);
+    out += kind === "q" ? text[0] + newlines(text) + text[0] : newlines(text);
+    at = e;
+  }
+  return out + src.slice(at);
 }
 
 /**
@@ -97,18 +193,17 @@ function code(src) {
  * whenever the thing being hunted lives in quotes — five checks were written against it
  * while hunting a literal and silently could not fire.
  *
- * A sixth found the opposite failure: `code()`'s literal-blanking is regex-based, so an
- * apostrophe or quote it pairs wrongly swallows everything to the next match. On one file
+ * A sixth found the opposite failure: `code()`'s literal-blanking was regex-based, so an
+ * apostrophe or quote it paired wrongly swallowed everything to the next match. On one file
  * it deleted the entire tail, and a check scanning it reported clean on a planted
- * violation. That is not a bug worth chasing in a heuristic stripper — it is a reason to
- * stop asking it for something it was never for.
+ * violation. The answer then was to stop asking it for something it was never for. Closed
+ * 2026-09-10: both helpers now read the parser (`stripRanges()`), so neither guesses.
  *
  * Use this when the target is a literal or a member access and prose must still be
  * excluded; use `code()` only when literals genuinely must not match.
  */
 function codeKeepingLiterals(src) {
-  const keepLines = (m) => "\n".repeat((m.match(/\n/g) || []).length);
-  return src.replace(/\/\*[\s\S]*?\*\//g, keepLines).replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  return strip(src, false);
 }
 
 /** A check name normalised to a control id. Shared, so the two call sites cannot drift. */
@@ -161,7 +256,7 @@ if (process.argv.includes("--selftest")) {
   t("prose ABOUT the marker is not a marker", isMarker(" @enforced <ns:control-id> → an HTML comment"), false);
 
   // The SIXTH code() incident, and the one that is not "it blanked my literal". Its
-  // literal-stripping is regex-based, so a quote it pairs wrongly swallows everything to
+  // literal-stripping was regex-based, so a quote it paired wrongly swallowed everything to
   // the next match — on one real file it deleted the whole tail, and a check scanning it
   // reported CLEAN on a planted violation. codeKeepingLiterals() is the safe reach when
   // the target is a literal or a member access.
@@ -169,6 +264,24 @@ if (process.argv.includes("--selftest")) {
   t("codeKeepingLiterals keeps a member access", /toLocaleDateString/.test(codeKeepingLiterals(swallowed)), true);
   t("codeKeepingLiterals still strips comments", /secret/.test(codeKeepingLiterals("// secret\nconst a = 1;")), false);
   t("...and keeps the literal a check might hunt", /"en-ZA"/.test(codeKeepingLiterals(swallowed)), true);
+
+  // L-35, L-49: each shape below made the regex code() delete real code on a real file in this
+  // tree, measured 2026-09-10. `after` is the code that went missing; the trailing literal is
+  // what the mispaired quote ran on to.
+  const survives = (label, src) => t(`code() survives ${label}`, /\bafter\b/.test(code(src)), true);
+  survives("a '\"' character literal", `const q = '"';\nconst after = 1;\nconst s = "x";`);
+  survives("a regex literal holding a quote", `const re = /"/;\nconst after = 1;\nconst s = "x";`);
+  survives("an apostrophe in JSX text", `const el = <p>Don't</p>;\nconst after = 1;\nconst s = 'x';`);
+  survives("a // inside a string", `const u = "a//b"; const after = 1;`);
+  survives("a /* inside a string", `const g = "src/*"; const after = 1;\nconst h = "*/";`);
+  t("codeKeepingLiterals keeps a string holding //", /"https:\/\/x\.y\/a\/\/b"/.test(codeKeepingLiterals(`const u = "https://x.y/a//b";`)), true);
+  t("codeKeepingLiterals strips a comment inside ${}", /secret/.test(codeKeepingLiterals("const t = `${a /* secret */}`;")), false);
+  // Both comment iterators stop at the first truthy callback return. Written as an arrow
+  // expression around `Map.set`, the stripper kept every comment after the first of a run.
+  t("code() strips every comment of a run", /two|three/.test(code("// one\n// two\n/* three */\nconst a = 1;")), false);
+  t("code() preserves line count across a continued string", code(`const s = "a\\\nb";\nconst after = 1;`).split("\n").length, 3);
+  t("stripRanges() reports a file that does not parse", stripRanges("const = ;").clean, false);
+  t("...and one that does", stripRanges("const a = 1;").clean, true);
 
   console.log(failed ? `\n❌ audit selftest: ${failed} wrong` : `\n✅ audit selftest — the helpers still behave as every check assumes`);
   process.exit(failed ? 1 : 0);
@@ -2894,6 +3007,22 @@ check("audit: the source enumeration has not decayed", () => {
       "scripts/architecture-audit.mjs",
       `the tree walk found ${n} files, below the floor of ${SOURCE_FLOOR} — every other check is scanning almost nothing and passing`,
       "check APP/LIB/COMPONENTS still resolve and the extension filter still matches; raise the floor deliberately if the tree really shrank",
+    );
+  }
+});
+
+// `code()` and `codeKeepingLiterals()` read the parser's tree, and on a file with syntax errors
+// that tree is the parser's recovery: a guess. Most checks read through them, so a file that does
+// not parse is a file those checks may be reporting clean without seeing (L-49). `tsc` would name
+// it too, but a second net costs nothing, because the parse is cached for the checks already.
+check("audit: every source file parses", () => {
+  for (const file of allSource()) {
+    if (stripRanges(read(file)).clean) continue;
+    fail(
+      "audit",
+      rel(file),
+      "does not parse cleanly, so every check reading it through code() is reading the parser's recovery, not the file",
+      "fix the syntax error; `npx tsc --noEmit` names the line",
     );
   }
 });
