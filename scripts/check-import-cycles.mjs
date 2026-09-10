@@ -29,7 +29,12 @@ import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..").replace(/\\/g, "/");
+// `--root` exists for the selftest alone, so it can spawn THIS file against a fixture tree and
+// read the exit code the gate reads (L-51). Without it the root is fixed to this repo.
+const rootArg = process.argv.indexOf("--root");
+const ROOT = (
+  rootArg > 0 ? resolve(process.argv[rootArg + 1]) : join(dirname(fileURLToPath(import.meta.url)), "..")
+).replace(/\\/g, "/");
 const SCANNED = ["app", "lib", "components"];
 const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "generated"]);
 
@@ -176,6 +181,37 @@ if (process.argv.includes("--selftest")) {
     if (!ok) failed++;
     console.log(`  ${ok ? "✓" : "✗"} ${sane ? "must pass " : "must fire "} — ${name}`);
   }
+
+  // The PROCESS, not the module — L-51. Every fixture above calls a function; the gate calls
+  // this FILE and reads only its exit status. Until 2026-09-10 no probe executed the entry
+  // block below, so `process.exit(1)` edited to `exit(0)` on the cycle path would have printed
+  // the cycle in red and passed the gate. One spawn per distinct exit path.
+  const { spawnSync } = await import("node:child_process");
+  const { rmSync } = await import("node:fs");
+  const SELF = fileURLToPath(import.meta.url);
+  const treeOf = (name, count, extra = {}) => {
+    for (let i = 0; i < count; i++) write(`${name}/lib/f${i}.ts`, `export const f${i} = ${i};\n`);
+    for (const [rel, body] of Object.entries(extra)) write(`${name}/${rel}`, body);
+    return join(tmp, name);
+  };
+  for (const [name, root, want] of [
+    ["KNOWN-GOOD: the process exits 0 on a clean tree", treeOf("clean", FLOOR), 0],
+    [
+      "the process exits 1 on a cycle",
+      treeOf("cyclic", FLOOR, {
+        "lib/x.ts": `import { y } from "./y";\nexport const x = () => y;\n`,
+        "lib/y.ts": `import { x } from "./x";\nexport const y = () => x;\n`,
+      }),
+      1,
+    ],
+    ["the process exits 1 when the walk finds fewer files than the floor", treeOf("thin", 3), 1],
+  ]) {
+    const got = spawnSync(process.execPath, [SELF, "--root", root], { encoding: "utf8" }).status;
+    const ok = got === want;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "✓" : "✗"} ${want === 0 ? "must pass " : "must fire "} — ${name} (exit ${got})`);
+  }
+  rmSync(tmp, { recursive: true, force: true });
 
   console.log(failed ? `\n❌ ${failed} fixture(s) wrong` : `\n✅ fixtures green — fires on a cycle, quiet on a plain dependency`);
   process.exit(failed ? 1 : 0);

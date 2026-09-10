@@ -131,13 +131,50 @@ test("a test nobody runs still passes", () => {
     // The path is built by interpolation so THIS file does not commit the violation it plants
     // — the check reads scripts/, and a literal here would fail the audit on the probe's own
     // source, which is the check-matching-its-documentation trap its comment already records.
+    //
+    // One plant per tree the check reads beyond source, because the scope was widened to those
+    // trees the same day and a `must fire` on the check NAME cannot see a walk being deleted —
+    // the other plants still trip it (L-54: the mutant for a widening is "narrow it again").
+    // So these carry `named: true`, which requires the audit to print THIS path under a ✗.
+    // That is what makes four plants for one check four probes rather than one.
     path: "lib/__probe-citation.ts",
+    named: true,
     content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
 // A lesson cited at the ledger's old path (${"dev-standards"}/LESSONS.md L-21).
 export {};
 `,
     expects: ["citations: a lesson reference names the ledger that holds it"],
   },
+  // The check's other two shapes, and the known-good case its narrowing exists for. Built by
+  // interpolation for the same reason as above. The `quiet` plant is an HONEST three-digit
+  // citation: the zero-padding detector used to match `\d{3,}`, and the mutant "widen it back"
+  // survives every plant that only asks the check to fire.
+  {
+    path: "lib/__probe-cite-pointer.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\n// Cites the local pointer with an ID (${"docs"}/LESSONS.md L-21).\nexport {};\n`,
+    expects: ["citations: a lesson reference names the ledger that holds it"],
+  },
+  {
+    path: "lib/__probe-cite-padded.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\n// Cites the retired local numbering (dev-standards/ledgers/LESSONS.md L-${"007"}).\nexport {};\n`,
+    expects: ["citations: a lesson reference names the ledger that holds it"],
+  },
+  {
+    path: "lib/__probe-cite-honest.ts",
+    quiet: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\n// An honest citation past L-99 (dev-standards/ledgers/LESSONS.md L-100).\nexport {};\n`,
+    expects: [],
+  },
+  ...["docs", ".claude", "brief"].map((tree) => ({
+    path: `${tree}/__probe-citation.md`,
+    named: true,
+    content: `Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+A lesson cited at the ledger's old path (${"dev-standards"}/LESSONS.md L-21).
+`,
+    expects: ["citations: a lesson reference names the ledger that holds it"],
+  })),
 ];
 
 /**
@@ -218,13 +255,23 @@ const eolOf = (s) => (/\r\n/.test(s) ? "\r\n" : "\n");
 const needle = (find) =>
   new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\n/g, "\r?\n"));
 
-/** Run the audit and return the set of check names that reported a failure. */
+/**
+ * Run the audit and return the set of check names that reported a failure, AND the exit status.
+ *
+ * The status was discarded until 2026-09-10, and that was a hole in the gate (L-51). The gate is
+ * an `&&` chain: it reads the audit's exit code and nothing else, while this suite read the ✗
+ * lines and nothing else. Demonstrated by mutation, not by reading — the audit's final
+ * `process.exit(1)` edited to `exit(0)` left all 15 `must fire` probes green and this script
+ * exiting 0. The audit would have printed every violation and let the commit through.
+ */
 function failedChecks() {
   let out;
+  let status = 0;
   try {
     out = execFileSync("node", [AUDIT], { cwd: ROOT, encoding: "utf8" });
   } catch (e) {
     out = `${e.stdout ?? ""}${e.stderr ?? ""}`; // non-zero exit is the normal case here
+    status = e.status ?? 1; // null means killed by a signal — still not a clean exit
   }
   // A check that prints a note ("↳ 6 unenforceable of 24 rules") pushes its ✓/✗ onto the
   // FOLLOWING line. The first version of this parser only looked at the line carrying the
@@ -240,7 +287,7 @@ function failedChecks() {
     const verdict = /[✓✗]/.test(tail) ? tail : (lines[i + 1] ?? "");
     if (verdict.includes("✗")) failed.add(m[1]);
   }
-  return { failed, out };
+  return { failed, out, status };
 }
 
 const created = [];
@@ -276,7 +323,14 @@ try {
     writeFileSync(abs, original.replace(re, () => planted));
   }
 
-  const { failed } = failedChecks();
+  const { failed, status, out } = failedChecks();
+  const exitedRed = status !== 0;
+  if (!exitedRed) wrong++;
+  console.log(`  ${exitedRed ? "✓" : "✗"} must exit non-zero — the audit, with violations planted (exit ${status})`);
+  if (!exitedRed) {
+    console.log(`      the audit printed its findings and exited 0. The gate reads the exit code,`);
+    console.log(`      not the report, so every violation below would have been committed.`);
+  }
   if (process.argv.includes("--verbose")) {
     const asserted = new Set(PLANTED_FILES.flatMap((f) => f.expects));
     const extra = [...failed].filter((n) => !asserted.has(n));
@@ -292,6 +346,16 @@ try {
         console.log(`      wrong shape or scope, or the check cannot fire at all. Both matter.`);
       }
     }
+    if (f.named) {
+      const namedIt = out.includes(`✗ ${f.path}`);
+      if (!namedIt) wrong++;
+      console.log(`  ${namedIt ? "✓" : "✗"} must name  — ${f.path}, by path, under a ✗`);
+    }
+    if (f.quiet) {
+      const spared = !out.includes(`✗ ${f.path}`);
+      if (!spared) wrong++;
+      console.log(`  ${spared ? "✓" : "✗"} must spare — ${f.path}, a known-good plant, named by no check`);
+    }
   }
 } finally {
   for (const abs of created) rmSync(abs, { force: true });
@@ -301,7 +365,10 @@ try {
 
 // The known-good half, and the restore check in one: with the plants gone the tree must
 // be clean again. A probe suite that leaves its fixtures behind is worse than none.
-const { failed: afterFailed } = failedChecks();
+const { failed: afterFailed, status: afterStatus } = failedChecks();
+const exitedClean = afterStatus === 0;
+if (!exitedClean) wrong++;
+console.log(`  ${exitedClean ? "✓" : "✗"} must exit 0     — the audit, plants removed (exit ${afterStatus})`);
 const expectedNames = [...PLANTED_FILES, ...MUTATIONS].flatMap((f) => f.expects);
 for (const name of expectedNames) {
   const quiet = !afterFailed.has(name);

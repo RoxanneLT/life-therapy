@@ -3107,9 +3107,9 @@ check("citations: a lesson reference names the ledger that holds it", () => {
   // Scope widened the same day to `.claude/`, `docs/` and `brief/`. The stale path lived
   // in hooks, the handover index and the pointer file — the instruction sites — and the
   // check read none of them. It had never been probed either: `scripts/probe-checks.mjs`
-  // plants the third shape now, and the first two were verified by hand on 2026-09-10,
-  // each alone against the real audit, because the runner cannot tell two plants for one
-  // check apart.
+  // plants the third shape in each of the four trees, and requires each plant to be NAMED
+  // in the output, so deleting any one walk kills a probe. The first two shapes were
+  // verified by hand on 2026-09-10, each alone against the real audit.
   const files = [
     ...allSource().filter((f) => /\.(ts|tsx|mjs)$/.test(f)),
     join(ROOT, "CLAUDE.md"),
