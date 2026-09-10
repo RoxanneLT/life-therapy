@@ -200,15 +200,23 @@ const allSource = () =>
 // `format()` from date-fns renders in the SERVER's timezone.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Files allowed to touch raw date primitives — the SSOT itself, and the two
-// Graph call sites that legitimately slice a datetime string because the request
-// sends a `Prefer: outlook.timezone` header (Graph then returns SAST-local
-// strings). Those are correct; a codemod over them would have broken production.
+// Files exempt from the two date rules below: local-midnight constructors, and ISO-slicing a
+// real instant. EMPTY since 2026-09-10, and the history is the point.
+//
+// It held four entries: the SSOT (lib/dates.ts), its test file, and the two Graph call sites
+// (lib/graph.ts, lib/calendar-reconcile.ts), which slice SAST-local strings because the request
+// sends `Prefer: outlook.timezone`. Measured against the two checks' own detectors, none of the
+// four needed exempting. The Graph sites slice STRINGS, which neither rule looks at, and the
+// test file is outside allSource() altogether. They survived because the liveness arm in
+// `allowlists` asked a different question from the two checks. It also accepted a wider slice
+// pattern, and a third rule's `+02:00` detector run over raw text. What kept the Graph entries
+// alive was the comments explaining why those files do NOT write "+02:00" (L-53: borrowing
+// another control's criterion borrows its admissions). All along, each entry was blanket cover
+// for the next local-midnight constructor written into its file. probe-checks now plants one
+// in lib/graph.ts.
+//
+// Every entry is removed for the same reason: an allowlist entry is a place bugs hide.
 const DATE_ALLOWLIST = new Set([
-  "lib/dates.ts",
-  "lib/dates.test.ts",
-  "lib/graph.ts", // Prefer: outlook.timezone header — returns SAST strings
-  "lib/calendar-reconcile.ts", // same
   // NOTE: lib/sa-public-holidays.ts used to sit here. It was a SECOND holiday list
   // answering the same question in string form, without the s2A proclamations — so
   // a proclaimed holiday was refused by the reschedule guard and accepted by series
@@ -278,17 +286,20 @@ check("date-safety: no local-midnight Date constructors", () => {
   }
 });
 
+// .toISOString().slice(0,10) / .split("T")[0] on new Date() or a *At field. A module constant
+// because `allowlists` asks the same question of DATE_ALLOWLIST's entries, and a second copy
+// of the question is how that arm drifted into asking a different one.
+const ISO_SLICE_OF_AN_INSTANT = [
+  /new Date\(\)\s*\.toISOString\(\)\s*\.(slice|substring)\(\s*0\s*,\s*10\s*\)/g,
+  /new Date\(\)\s*\.toISOString\(\)\s*\.split\(\s*""\s*\)/g,
+  /\b\w*(?:createdAt|paidAt|updatedAt|sentAt|activatedAt)\w*\s*\.toISOString\(\)\s*\.(slice|substring|split)\(/g,
+];
+
 check("date-safety: no ISO-slicing a real instant", () => {
   for (const f of allSource()) {
     if (DATE_ALLOWLIST.has(rel(f))) continue;
     const src = code(read(f));
-    // .toISOString().slice(0,10) / .split("T")[0] on new Date() or a *At field.
-    const patterns = [
-      /new Date\(\)\s*\.toISOString\(\)\s*\.(slice|substring)\(\s*0\s*,\s*10\s*\)/g,
-      /new Date\(\)\s*\.toISOString\(\)\s*\.split\(\s*""\s*\)/g,
-      /\b\w*(?:createdAt|paidAt|updatedAt|sentAt|activatedAt)\w*\s*\.toISOString\(\)\s*\.(slice|substring|split)\(/g,
-    ];
-    for (const re of patterns) {
+    for (const re of ISO_SLICE_OF_AN_INSTANT) {
       const m = src.match(re);
       if (m) {
         fail(
@@ -3619,8 +3630,9 @@ check("allowlists: every exemption is still load-bearing", () => {
   // The inverted probe.
   //
   // Every check here is proven by planting a violation and watching it fail. The
-  // SUPPRESSORS have never been tested at all — DATE_ALLOWLIST asserts that four
-  // files need exempting, and nothing has ever confirmed any of them still does.
+  // SUPPRESSORS have never been tested at all — DATE_ALLOWLIST asserted that four
+  // files need exempting, and nothing had ever confirmed any of them still did. When
+  // this arm finally asked the right question, on 2026-09-10, none of them did.
   //
   // A stale exemption is worse than a missing one. It reads as a considered
   // decision, it is quoted in the comment above it, and it silently covers
@@ -3664,15 +3676,15 @@ check("allowlists: every exemption is still load-bearing", () => {
       );
       continue;
     }
-    // Would this file actually be flagged without its exemption? Run the same two
-    // detections the date checks use.
+    // Would this file actually be flagged without its exemption? The two detections the date
+    // checks run, and ONLY those. Until 2026-09-10 this line said the same and did otherwise:
+    // it ORed in a wider slice pattern and the `+02:00` rule's detector over raw text, and that
+    // kept four dead entries green (see DATE_ALLOWLIST). Any rule not exempted by the list is
+    // the wrong criterion for its liveness.
     const src = code(read(abs));
-    const raw = read(abs);
     const wouldFlag =
       newDateCalls(src).some((c) => c.args.length >= 3) ||
-      /new Date\(\)\s*\.toISOString\(\)\s*\.(slice|substring)\(/.test(src) ||
-      /\.toISOString\(\)\s*\.(slice|substring|split)\(/.test(src) ||
-      /\+02:?00/.test(raw);
+      ISO_SLICE_OF_AN_INSTANT.some((re) => src.match(re));
 
     if (!wouldFlag) {
       fail(

@@ -250,6 +250,27 @@ export async function probeVerify(factorId: string, code: string) {
 `,
     expects: ["abuse: an MFA/OTP verify is rate-limited"],
   },
+  // The ISO-slice check had no plant until 2026-09-10, when its patterns moved into a constant
+  // that DATE_ALLOWLIST's liveness arm shares. Dropping any one pattern survived every probe
+  // (L-54), so there is one plant per pattern. The fourth file is a real slice that an entry
+  // planted into DATE_ALLOWLIST (below) exempts. The slice is the only thing keeping that entry
+  // live, so the file must be spared: named by neither the date check nor `allowlists`.
+  ...[
+    ["lib/__probe-iso-now.ts", "export const day = new Date().toISOString().slice(0, 10);"],
+    ["lib/__probe-iso-split.ts", 'export const day = new Date().toISOString().split("T")[0];'],
+    ["lib/__probe-iso-instant.ts", "export const day = (row: { paidAt: Date }) => row.paidAt.toISOString().slice(0, 10);"],
+  ].map(([path, line]) => ({
+    path,
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\n${line}\n`,
+    expects: ["date-safety: no ISO-slicing a real instant"],
+  })),
+  {
+    path: "lib/__probe-iso-exempt.ts",
+    quiet: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\nexport const day = new Date().toISOString().slice(0, 10);\n`,
+    expects: [],
+  },
   {
     // A real throttle, but the per-instance in-memory one, which resets on a cold start. Without
     // this plant, dropping the check's `durable` filter survived every probe (L-54).
@@ -329,6 +350,36 @@ const MUTATIONS = [
     find: "dateOfBirth: { not: null },\n",
     replace: "dateOfBirth: { not: null },\n      emailPaused: false,\n",
     expects: ["email-tiers: a suppression decision goes through lib/engagement.ts"],
+  },
+  {
+    // A local-midnight constructor in a file DATE_ALLOWLIST used to exempt, for a different
+    // reason: it slices Graph's SAST strings. Until 2026-09-10 this left the audit at exit 0,
+    // with the entry kept alive by a comment about "+02:00" (L-53).
+    path: "lib/graph.ts",
+    named: true,
+    find: 'import { formatInTimeZone } from "date-fns-tz";\n',
+    replace: 'import { formatInTimeZone } from "date-fns-tz";\nexport const PROBE_LOCAL_MIDNIGHT = new Date(2026, 0, 1);\n',
+    expects: ["date-safety: no local-midnight Date constructors"],
+  },
+  // DATE_ALLOWLIST is empty, so its liveness arm has nothing to judge, and reverting it to the
+  // wrong question would survive every probe. Two former entries are planted back. Each is
+  // stale under the right question and green under one specific wrong one: calendar-reconcile
+  // under a `+02:00` test over raw text (its only hit is a comment), and dates.ts under the
+  // wider `.toISOString()` slice (it slices twice, never an instant).
+  ...["lib/calendar-reconcile.ts", "lib/dates.ts"].map((entry) => ({
+    path: "scripts/architecture-audit.mjs",
+    named: `✗ ${entry}`,
+    find: "const DATE_ALLOWLIST = new Set([\n",
+    replace: `const DATE_ALLOWLIST = new Set([\n  "${entry}",\n`,
+    expects: ["allowlists: every exemption is still load-bearing"],
+  })),
+  {
+    // The live direction: an entry whose file really does slice an instant. Asserted by the
+    // `quiet` plant lib/__probe-iso-exempt.ts. Without this, dropping the arm's slice half survived.
+    path: "scripts/architecture-audit.mjs",
+    find: "const DATE_ALLOWLIST = new Set([\n",
+    replace: 'const DATE_ALLOWLIST = new Set([\n  "lib/__probe-iso-exempt.ts",\n',
+    expects: [],
   },
   {
     // A throttle THROTTLES trusts, renamed out from under it. The list would otherwise go on
@@ -460,9 +511,12 @@ try {
       }
     }
     if (f.named) {
-      const namedIt = out.includes(`✗ ${f.path}`);
+      // `true` means the planted file itself. A string names the finding when the plant's file
+      // is not the file judged — an entry planted into a list inside the audit.
+      const line = typeof f.named === "string" ? f.named : `✗ ${f.path}`;
+      const namedIt = out.includes(line);
       if (!namedIt) wrong++;
-      console.log(`  ${namedIt ? "✓" : "✗"} must name  — ${f.path}, by path, under a ✗`);
+      console.log(`  ${namedIt ? "✓" : "✗"} must name  — "${line}" (planted in ${f.path})`);
     }
     if (f.quiet) {
       const spared = !out.includes(`✗ ${f.path}`);

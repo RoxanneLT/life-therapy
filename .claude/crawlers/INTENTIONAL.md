@@ -48,9 +48,11 @@ real **instant** (`createdAt`, `paidAt`), where the SAST day turns over at 22:00
 ### Two Graph call sites slice a datetime string
 
 `lib/graph.ts` and `lib/calendar-reconcile.ts` send `Prefer: outlook.timezone="Africa/Johannesburg"`,
-so Graph returns SAST-local strings and slicing them is correct. Both are named in the audit's
-`DATE_ALLOWLIST` with this reason, and that allowlist is itself probed — an entry that stops
-suppressing anything fails the build.
+so Graph returns SAST-local strings and slicing them is correct. Neither needs an exemption: the
+date checks look for an instant's `.toISOString()` being sliced, and a Graph string is not one.
+Both sat in the audit's `DATE_ALLOWLIST` until 2026-09-10. A liveness test asking a different
+question from the checks kept them green, and they were blanket cover for any local-midnight
+constructor written into either file. The list's comment has the measurement.
 
 ---
 
