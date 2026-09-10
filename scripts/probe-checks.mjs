@@ -272,6 +272,24 @@ export async function probeVerify(factorId: string, code: string) {
     expects: [],
   },
   {
+    // PASSWORD_SETTERS (L-72): the shape registration had until 2026-09-10. A pre-session action
+    // that sets an existing login's password.
+    path: "app/(public)/__probe-password/actions.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+"use server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+
+export async function probeSetPasswordAction(userId: string, password: string) {
+  await supabaseAdmin.auth.admin.updateUserById(userId, {
+    password,
+  });
+  return { success: true };
+}
+`,
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
     // A real throttle, but the per-instance in-memory one, which resets on a cold start. Without
     // this plant, dropping the check's `durable` filter survived every probe (L-54).
     path: "app/__probe-mfa/verify-in-memory.ts",
@@ -380,6 +398,24 @@ const MUTATIONS = [
     find: "const DATE_ALLOWLIST = new Set([\n",
     replace: 'const DATE_ALLOWLIST = new Set([\n  "lib/__probe-iso-exempt.ts",\n',
     expects: [],
+  },
+  {
+    // A second setter in a file PASSWORD_SETTERS already lists: the file's entry must not cover it.
+    path: "app/(portal)/portal/(dashboard)/settings/actions.ts",
+    named: true,
+    find: "  // Update password\n",
+    replace: "  // Update password\n  await supabase.auth.updateUser({ password: currentPassword });\n",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // The other direction: a listed file that stops setting a password.
+    path: "lib/gift.ts",
+    named: true,
+    // The whole call has to go. Renaming the key leaves `recipientInfo.password` inside it, which
+    // still matches, so the count stays 1 and nothing fires. That was this probe's first draft.
+    find: "supabaseAdmin.auth.admin.updateUserById(",
+    replace: "supabaseAdmin.auth.admin.getUserById(",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {
     // A throttle THROTTLES trusts, renamed out from under it. The list would otherwise go on

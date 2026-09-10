@@ -34,23 +34,34 @@ export async function registerStudent(formData: FormData) {
 
   const { firstName, lastName, email, password } = parsed.data;
 
-  // Check if student already exists WITH auth (i.e. already has login)
+  // THIS FORM NEVER BINDS A CREDENTIAL TO AN ACCOUNT THAT ALREADY EXISTS. Nothing here proves the
+  // caller owns `email`: there is no session, and `email_confirm: true` skips Supabase's own
+  // confirmation. Until 2026-09-10 two branches did bind one, on knowledge of an address alone.
+  // A Supabase login with no linked student (an admin's, for one) had its password overwritten
+  // with whatever was typed. A student record with no login yet (from a booking, the newsletter
+  // or an import) was linked to a new login with the typed password, bringing its sessions and
+  // invoices with it (dev-standards/ledgers/LESSONS.md L-72: authorise a credential mint on the
+  // state of the ACCOUNT). An existing account now gets a password only through Forgot
+  // password, which emails a link to the address. That covers both cases: it creates and links
+  // a login for a student who has none, and links an unlinked one.
+  const USE_RESET =
+    "We already have an account for this email. To set your password, use “Forgot password” on the sign-in page — we'll email you a secure link.";
+
   const existing = await prisma.student.findUnique({ where: { email } });
-  if (existing?.supabaseUserId) {
-    // Verify the auth user still exists (could have been deleted from Supabase)
-    const { data: authCheck } = await supabaseAdmin.auth.admin.getUserById(existing.supabaseUserId);
-    if (authCheck?.user) {
-      return { error: "An account with this email already exists" };
+  if (existing) {
+    if (existing.supabaseUserId) {
+      // A reference to a deleted auth user is cleared, so that Forgot password can create and link
+      // a new one. Clearing binds nothing: the caller still leaves with no credential.
+      const { data: authCheck } = await supabaseAdmin.auth.admin.getUserById(existing.supabaseUserId);
+      if (!authCheck?.user) {
+        await prisma.student.update({ where: { id: existing.id }, data: { supabaseUserId: null } });
+      }
     }
-    // Auth user was deleted — clear the stale reference so we can re-link below
-    await prisma.student.update({
-      where: { id: existing.id },
-      data: { supabaseUserId: null },
-    });
+    return { error: USE_RESET };
   }
 
-  // Create Supabase auth user
-  let supabaseUserId: string;
+  // No student record: the one case where this form mints. createUser refuses an address that
+  // already has a login, and that refusal is final. Never look the login up and set its password.
   const { data: authData, error: authError } =
     await supabaseAdmin.auth.admin.createUser({
       email,
@@ -60,71 +71,37 @@ export async function registerStudent(formData: FormData) {
 
   if (authError) {
     if (authError.message?.includes("already been registered")) {
-      // Auth user exists but student isn't linked — find and link
-      const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
-      const authMatch = users?.find(
-        (u) => u.email?.toLowerCase() === email,
-      );
-      if (!authMatch) {
-        return { error: "An account with this email already exists" };
-      }
-      supabaseUserId = authMatch.id;
-      // Update password since they're registering fresh
-      await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, {
-        password,
-      });
-    } else {
-      return { error: authError.message };
+      return { error: USE_RESET };
     }
-  } else {
-    supabaseUserId = authData.user.id;
+    return { error: authError.message };
   }
+  const supabaseUserId = authData.user.id;
 
-  // Link existing student record or create new one
-  if (existing) {
-    // Student exists from booking/newsletter/import — link to auth account
-    await prisma.student.update({
-      where: { id: existing.id },
+  // The race: a booking or import can create this student between the check above and here. The
+  // unique email settles it. This used to re-check and LINK the login to whatever record had
+  // appeared, which is the bind this form must never make. Refusing is not enough on its own:
+  // the login just created would be left unlinked, with the typed password, and Forgot password
+  // links an unlinked login to its student. So the login this request created is rolled back.
+  // It is milliseconds old and referenced by nothing, so this is an undo, not a hard delete.
+  try {
+    await prisma.student.create({
       data: {
         supabaseUserId,
+        email,
         firstName,
         lastName,
-        source: existing.source === "newsletter" ? "website" : existing.source,
+        source: "website",
         consentGiven: true,
         consentDate: new Date(),
         consentMethod: "registration",
       },
     });
-  } else {
-    // Race condition guard: re-check before create
-    const existingStudent = await prisma.student.findUnique({ where: { email } });
-    if (existingStudent) {
-      await prisma.student.update({
-        where: { id: existingStudent.id },
-        data: {
-          supabaseUserId,
-          firstName,
-          lastName,
-          source: existingStudent.source === "newsletter" ? "website" : existingStudent.source,
-          consentGiven: true,
-          consentDate: new Date(),
-          consentMethod: "registration",
-        },
-      });
-    } else {
-      await prisma.student.create({
-        data: {
-          supabaseUserId,
-          email,
-          firstName,
-          lastName,
-          source: "website",
-          consentGiven: true,
-          consentDate: new Date(),
-          consentMethod: "registration",
-        },
-      });
-    }
+  } catch (err) {
+    // Any failure, not only the race: an unlinked login carrying a typed password is exactly what
+    // a later booking under this address would let Forgot password link.
+    await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+    if ((err as { code?: string })?.code === "P2002") return { error: USE_RESET };
+    throw err;
   }
 
   // Send welcome email (non-blocking)

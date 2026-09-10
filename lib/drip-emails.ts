@@ -64,7 +64,10 @@ async function generatePasswordResetUrl(
       return null;
     }
 
-    return `${DEFAULT_BASE_URL}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
+    // Straight to the reset page, never through /auth/callback: the callback spends the token on a
+    // GET (so a mail scanner can burn it) and arrives with a bare session, which updatePasswordAction
+    // no longer accepts as authority to set a password (L-72).
+    return `${DEFAULT_BASE_URL}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
   } catch (err) {
     console.error(`[drip] Password reset URL error for ${student.email}:`, err);
     return null;

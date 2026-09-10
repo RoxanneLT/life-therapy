@@ -203,20 +203,31 @@ export async function updatePasswordAction(
 
   const supabase = await createSupabaseServerClient();
 
+  // THE TOKEN IS THE ONLY AUTHORITY HERE (dev-standards/ledgers/LESSONS.md L-72). Until
+  // 2026-09-10 a submit with no token fell through to `updateUser` on whatever session was
+  // signed in: a password set with no current password, on a session alone. That existed for
+  // links routed through /auth/callback, which spends the token and arrives with a bare session.
+  // Every sender now links straight here with its token (forgot-password, admin invites,
+  // campaigns, drip). An old callback-routed link that is still valid gets the refusal below,
+  // and one request from Forgot password replaces it. Signed-in changes go through Settings,
+  // which verifies the current password.
+  if (!tokenHash) {
+    return {
+      error: "This reset link has expired or already been used. Please request a new one.",
+    };
+  }
+
   // Verify the recovery token NOW — on the user's submit, not on a GET — so an
   // email-link scanner that pre-fetched the link couldn't have consumed it first.
-  // (Logged-in self-service password changes carry no token and use the session.)
-  if (tokenHash) {
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: "recovery",
-    });
-    if (verifyError) {
-      console.error("[password-reset] verifyOtp failed:", verifyError.message);
-      return {
-        error: "This reset link has expired or already been used. Please request a new one.",
-      };
-    }
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: "recovery",
+  });
+  if (verifyError) {
+    console.error("[password-reset] verifyOtp failed:", verifyError.message);
+    return {
+      error: "This reset link has expired or already been used. Please request a new one.",
+    };
   }
 
   const { error } = await supabase.auth.updateUser({

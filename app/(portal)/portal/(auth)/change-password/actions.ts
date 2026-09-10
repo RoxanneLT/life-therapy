@@ -9,6 +9,16 @@ import { renderEmail } from "@/lib/email-render";
 export async function changeStudentPassword(formData: FormData) {
   const { user, student } = await getAuthenticatedStudent();
 
+  // Authorised by the ACCOUNT, not the session (dev-standards/ledgers/LESSONS.md L-72). This form
+  // takes no current password, because it exists for one case: a login created with a temporary
+  // password nobody was told, flagged mustChangePassword. Until 2026-09-10 it asked nothing more
+  // than a signed-in session. So anyone holding a session (a copied cookie, a shared machine)
+  // could set a password the owner does not know, and keep the account after the session ended.
+  // Settings → Password is the path for everyone else, and it verifies the current password.
+  if (!student.mustChangePassword) {
+    return { error: "Your password is already set. To change it, use Settings, which asks for your current password." };
+  }
+
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 

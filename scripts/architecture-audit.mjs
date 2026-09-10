@@ -776,6 +776,60 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
   }
 });
 
+// Every call that SETS A PASSWORD on a login, keyed by file with the count it holds and the
+// thing that authorises it. dev-standards/ledgers/LESSONS.md L-72: an operation that mints a
+// credential is authorised on the state of the ACCOUNT, meaning a token sent to its address, its
+// current password, or a flag set when a temporary password was issued. Never on a session
+// alone, and never on knowing an address. On 2026-09-10 three setters here had none of those:
+// public registration overwrote the password of any login not yet linked to a student; the
+// forced-change form accepted any signed-in session; and the reset form fell back to the
+// session when no token came with it. All three are fixed at their sites. This list makes the
+// next setter somebody's decision. The count is there because a file-level entry would
+// otherwise cover the next setter written into the same file.
+const PASSWORD_SETTERS = new Map([
+  ["app/(admin)/admin/(dashboard)/users/actions.ts", [1, "an admin's own password, behind requireRole, which passes the 2FA gate: the session is AAL2"]],
+  ["app/(portal)/portal/(auth)/change-password/actions.ts", [1, "only while mustChangePassword is set: the account holds a temporary password nobody was told"]],
+  ["app/(portal)/portal/(dashboard)/settings/actions.ts", [1, "after the current password is verified by signing in with it"]],
+  ["app/(public)/forgot-password/actions.ts", [1, "after the recovery token, emailed to the address, is verified on submit; there is no path without one"]],
+  ["lib/gift.ts", [1, "only on a login created in the same call (isNew): no prior account, so nothing to take over"]],
+]);
+const SETS_PASSWORD = [
+  /auth\.admin\.updateUserById\s*\((?:[^()]|\([^()]*\))*?\bpassword\b/g,
+  /auth\.updateUser\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\bpassword\b/g,
+];
+
+check("auth: every place that sets a password is classified by what authorises it", () => {
+  const seen = new Map();
+  for (const f of allSource()) {
+    const src = code(read(f));
+    const n = SETS_PASSWORD.reduce((k, re) => k + (src.match(re)?.length ?? 0), 0);
+    if (!n) continue;
+    const path = rel(f);
+    seen.set(path, n);
+    const entry = PASSWORD_SETTERS.get(path);
+    if (!entry) {
+      fail(
+        "auth",
+        path,
+        `sets a password (${n}) and is not in PASSWORD_SETTERS, so nothing records what authorises it`,
+        "authorise it on the ACCOUNT (a token sent to the address, the verified current password, a temporary-password flag), then add the file with that reason. Never a session alone, never knowing an address (L-72)",
+      );
+    } else if (entry[0] !== n) {
+      fail(
+        "auth",
+        path,
+        `sets a password ${n} time(s); PASSWORD_SETTERS classified ${entry[0]}`,
+        "classify the new setter: each one needs its own authority, and an entry for the file is not one",
+      );
+    }
+  }
+  for (const [path] of PASSWORD_SETTERS) {
+    if (!seen.has(path)) {
+      fail("auth", path, "PASSWORD_SETTERS lists a file that no longer sets a password", "delete the entry");
+    }
+  }
+});
+
 check("mutation-revalidate: every mutating action calls revalidatePath", () => {
   for (const f of walk(APP, /actions\.ts$/)) {
     const raw = read(f);
