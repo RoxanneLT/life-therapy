@@ -604,7 +604,13 @@ invisible to the regex. Blanket codemods break production.
 
 **Anchor grounding claims** to the SHA read. *Does X* → anchor, past tense. *Should X* → no
 anchor. An unanchored observation is itself a finding. An anchored one killed its own author's
-wrong diagnosis here: a commit SHA disproved a claim that a code path was broken.
+wrong diagnosis here: a commit SHA disproved a claim that a code path was broken. **A *does*
+claim is anchored to the code, never to a document about it.** A spec, a plan or a ruling saying
+the code does X records intent, and the claim is labelled that until someone reads the site. **To
+verify a claim, change the method**: resolve the type, follow the call, run the code. Re-running
+the same search reproduces its blind spot with more confidence. An absence claim is the dangerous
+shape, so state the search space and ask what could reach it from outside (a type, a spread, a
+re-export). dev-standards/ledgers/LESSONS.md L-42, L-43.
 
 **Whole-file reconciliation** on any status correction — grep `awaiting`, `TODO`, `- [ ]`,
 and settle all of them or say why not. A partially-fixed file looks reviewed, which is worse
