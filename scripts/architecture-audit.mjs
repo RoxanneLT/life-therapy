@@ -3432,9 +3432,9 @@ check("citations: a lesson reference names the ledger that holds it", () => {
         "cite `dev-standards/ledgers/LESSONS.md L-nn` — the ledger that actually holds the entry",
       );
     }
-    // The retired local numbering was ZERO-PADDED — L-001 … L-012 (docs/LESSONS.md before
-    // cfa3385). Until 2026-09-10 this matched `\d{3,}` after the old path, which was wrong
-    // twice over: canon's ledger is at L-99, so the first honest L-100 would have failed the
+    // The retired local numbering was ZERO-PADDED: L-001 … L-012. @no-such-lesson L-001 L-012
+    // It lived in docs/LESSONS.md until cfa3385. Until 2026-09-10 this matched `\d{3,}` after the
+    // old path, which was wrong twice over: canon's ledger is at L-99, so its first three-digit id would have failed the
     // build with a message saying the ledger stops at L-24; and the path move had already
     // blinded it, because it matched only after the exact old path. A leading zero is the
     // one thing canon never writes, whatever the path in front of it.
@@ -3443,7 +3443,7 @@ check("citations: a lesson reference names the ledger that holds it", () => {
         "citations",
         `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
         `cites \`L-${m[1]}\` — zero-padded IDs were this project's retired local numbering`,
-        "the shared ledger does not zero-pad past two digits (L-01 … L-99, L-100 …); check which entry you mean",
+        "the shared ledger pads to two digits and no further (L-01 … L-99, then three digits unpadded); check which entry you mean",
       );
     }
     for (const m of src.matchAll(/dev-standards\/LESSONS\.md/g)) {

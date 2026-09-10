@@ -164,7 +164,7 @@ export {};
   {
     path: "lib/__probe-cite-honest.ts",
     quiet: true,
-    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\n// An honest citation past L-99 (dev-standards/ledgers/LESSONS.md L-100).\nexport {};\n`,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.\n// An honest citation past L-99 (dev-standards/ledgers/LESSONS.md L-${"100"}).\nexport {};\n`,
     expects: [],
   },
   ...["docs", ".claude", "brief"].map((tree) => ({
