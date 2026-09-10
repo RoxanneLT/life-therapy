@@ -19,7 +19,7 @@ pleks, yoros and sterreveld, not life-therapy, which deploys from the repo owner
 is public, so the details are in the session report and nowhere else. L-72 stays off the outbox
 until Stéan says the review is done.
 
-**Committed since the push, not pushed:**
+**Pushed 2026-09-10, at Stéan's request: `46b8221..fb1c669`.** Nothing was on origin ahead of it.
 
 - `a599577`: the audit's `code()` and `codeKeepingLiterals()` read the TypeScript parser
   (L-35 · L-49). Against the parser as oracle over 546 files, the regex version lost 700
@@ -32,7 +32,7 @@ until Stéan says the review is done.
 - `a1376ac`: four lesson citations canon cannot resolve. The two for the retired zero-padded ids
   carry `@no-such-lesson`. The two for L-100 are rephrased so they no longer read as citations.
   Canon's `check-lessons` now finds 0.
-- The kit move: the eight rows canon pinned with review 2026-09-24, moved by each pin's route to
+- `fb1c669`, the kit move: the eight rows canon pinned with review 2026-09-24, moved by each pin's route to
   canon `efbf834` (M-KIT-28). Each file's diff equals canon's own diff for it. The two dated
   `@probed-kit` twin records in `bash-gate` move to v4 with their dates kept. The one rewrite they
   back was measured equivalent. `check-kit-drift` reports all eight pins overtaken, and §3 of the
@@ -48,8 +48,7 @@ CF-2 (kit checks don't carry L-51), CF-3 (no spine version in the anchor), CF-4 
 - **L-68**: only Stéan can carry it: a standing authorisation in §7, in Stéan's own words, for the
   agent pipeline the host layer forbids "unless requested". Not to be written for them.
 
-**Next action: wait.** Stéan decides whether to push the four commits above, and whether to write
-the L-68 authorisation. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
+**Next action: wait.** Stéan decides whether to write the L-68 authorisation. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
 move to **Filed**. Before re-running `--emit-open`, check `git -C <canon> status --short tools`: if
 it is dirty, run from `git archive HEAD` (CF-1).
 
