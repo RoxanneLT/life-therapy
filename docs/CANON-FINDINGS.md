@@ -63,6 +63,34 @@ FIX        in its own repo is non-empty: the output is from an uncommitted state
            on any gate may start depending on it.
 ```
 
+### CF-2 · Canon's kit checks do not carry canon's L-51 — no selftest runs the process the gate runs
+
+```
+OBSERVED   Every kit check life-therapy runs keeps a green --selftest with its main-path failure
+           exit edited to 0: none spawns its own file, so the exit code the gate's `&&` chain reads
+           is on no probe's path — L-51, in canon's own shipped bytes.
+COMMAND    In life-therapy, each file clean at HEAD, one mutant at a time, restored with git checkout:
+           the literal main-path `process.exit(1)` → `exit(0)` (selftests exit via `failed ? 1 : 0`,
+           untouched), or the main-path ternary → `exit(0)` where there is no literal:
+             scripts/check-claude-md.mjs          (v15, lines 1692, 1925)      → selftest exit 0
+             scripts/check-handoff-contract.mjs   (v3,  line 406)              → selftest exit 0
+             scripts/check-hook-registration.mjs  (v2,  line 367)              → selftest exit 0
+             scripts/check-brief.mjs              (v5,  `failed.length ? 1 : 0`) → exit 0,
+                                                  "selftest: all probes green (both directions)"
+             scripts/check-install-platform.mjs   (v1,  `v.level === "fail" ? 1 : 0`) → exit 0,
+                                                  "✅ probes green — reads both tree shapes, …"
+           The same mutant on this project's own audit left all 15 of its planted probes green
+           until be03bc4; it dies now.
+WHY IT IS  The bytes are canon's outside KIT:CONFIG and identical in every adopter, so every project
+CANON'S    running these rows has a gate member whose failure path is unprobed — and cannot add the
+           probe without forking the row. A report that prints ✗ and exits 0 passes any `&&` chain,
+           on any stack.
+SMALLEST   Per check, one spawn of the file itself against a fixture root per distinct exit path,
+FIX        asserting `status` — check-brief already spawns itself for `--status` (line 776), so the
+           seam exists there. It must not spawn the real gate chain (L-34), and must not read the
+           adopting project's tree, or a clean fixture stops being clean in some adopter.
+```
+
 ---
 
 ## 2 · Lesson answers
@@ -74,6 +102,13 @@ off this table and it stays open.
 
 | Lesson | Answer — `YYYY-MM-DD` or `n/a: <reason>` | Evidence — SHA, path or command |
 |---|---|---|
+| L-34 | 2026-08-21 | `7ca62aa` — `scripts/check-git-hooks.mjs` proves each hook's seam inert by letting the hook resolve AND invoke `npm run check` against an `npm` shimmed first on `PATH`, never the real chain, and asserts the shim was reached (`:168-206`), so a hook that echoes the right command and runs another fails |
+| L-40 | 2026-08-19 | `6478de1` — `audit: a check that says it scans raw actually scans raw` turns the audit on its own source, reconciling each check's stated raw/`code()` choice against the read it performs; `check-claude-md --selftest` runs the marker audit over its own file. **Not a clean bill**, as pleks's line says of pleks: no survey has run every control here against its own rule. One member is live and reasoned: the citations check exempts its own file, because it documents the shapes it hunts (`scripts/architecture-audit.mjs`, `DOCUMENTS_THE_SHAPES`) |
+| L-44 | 2026-08-21 | `7ca62aa` — a mutation test found a live mutant: deleting `git write-tree` from `pre-commit` left every probe green, because each supplied the marker itself. The producer-side probe was added in response, and the finding is recorded at `scripts/check-git-hooks.mjs:95` |
+| L-50 | 2026-09-10 | verified present, measured by pattern across `scripts/` and `.claude/`: `ok(` with an emptiness test left of `\|\|`/`&&` → 0 hits; empty `catch {}` → 0; single-line `for … of … ok(` → 0. The one `ok(A \|\| B)` (`scripts/check-context-budget.mjs:237`) takes the OR over a fixture's output, not live state, and the next line pins the exact count. `check-handoff-contract` names its zero-file live pass on every run rather than printing a bare tick |
+| L-51 | 2026-09-10 | `be03bc4` — found by this triage and **demonstrated by mutation**: with the audit's final `exit(1)` changed to `exit(0)`, all 15 planted probes stayed green. `probe-checks` now asserts the exit code both ways. `check-import-cycles` spawns itself once per exit path; flipping both of its failure exits turns two probes red. The five canon-owned kit checks carry the same gap and cannot be fixed here: CF-2 |
+| L-54 | 2026-09-10 | `be03bc4` — mutants enumerated from `52af865`'s DIFF, not its commit message: each of the three widened walks dropped, each of three detectors disabled, and the narrowed one widened back to `\d{3,}`. Seven killed, of seven. Before that, the three walk mutants had survived. Two runner features came out of it: `named` plants (a plant must be named under a ✗) and `quiet` plants (a plant must not be). Held by attention, as at pleks — no mechanism enumerates a diff's hunks |
+| L-73 | n/a: no member of this gate reads build output. Every check reads source, the working tree or git, so the rendering strategy cannot narrow what any of them sees. The content rules here (money, dual-domain, dates) walk `app/`, `lib/` and `components/` as source, and that includes every dynamic route | `git grep -nE "\.next/\|dist/\|out/\|build-manifest\|prerender-manifest" -- scripts .githooks package.json` → 3 hits, none a build artefact: `checkout/route.ts` twice (substring `out/`) and `timeout/` once |
 
 ---
 
