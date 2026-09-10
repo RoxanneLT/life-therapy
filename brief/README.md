@@ -49,7 +49,7 @@ config, `CLAUDE.md` or canon** and cannot move without breaking the thing that r
 | File | Read by |
 |---|---|
 | `docs/MECHANISABLE.md` | `scripts/check-claude-md.mjs` — its `REGISTER_PATH`, and every `M-NN` pointer in `CLAUDE.md` §5 |
-| `docs/LESSONS.md` | the pointer to `dev-standards/LESSONS.md`, named in `CLAUDE.md` §1 |
+| `docs/LESSONS.md` | the pointer to `dev-standards/ledgers/LESSONS.md`, named in `CLAUDE.md` §1 |
 | `docs/DEPENDENCY-ADVISORIES.md` | named in the commit that carries the four declined advisories |
 | `docs/SESSION_HANDOVER_2026-08-17.md` | `CLAUDE.md` §1, **Session state** — named by path, so a move edits §1 |
 | `docs/CANON-FINDINGS.md` | **canon**, from outside this repo: the estate session lifts it with `git -C <project> show HEAD:docs/CANON-FINDINGS.md`. Nothing here would fail if it moved — the reader that breaks is in another repo, which is why this row matters more than the other four |

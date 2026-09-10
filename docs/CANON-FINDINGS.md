@@ -33,7 +33,35 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-*None.*
+### CF-1 · The session-start query runs canon's working tree — the one place "take it from history" does not reach
+
+```
+OBSERVED   CLAUDE-MD-STANDARD (line 859) and CLAUDE_TEMPLATE §1 (line 95) tell every project to run
+           `node <canon>/tools/check-lessons.mjs --emit-open`, which executes whatever is on disk in
+           canon — and on 2026-09-10, while life-therapy's handover prescribed exactly that command,
+           that file carried 42 uncommitted lines changing `--emit-open`'s output.
+COMMAND    $ git -C C:/dev/dev-standards status --short
+            M tools/check-lessons.mjs
+           $ git -C C:/dev/dev-standards diff --stat tools/check-lessons.mjs
+            tools/check-lessons.mjs | 42 ++++++++++++++++++++++++++++++++++++++++++
+           $ git -C C:/dev/dev-standards archive HEAD tools ledgers | tar -x -C <scratch>/canon-head
+           $ (cd <scratch>/canon-head && node tools/check-lessons.mjs --emit-open life-therapy) | wc -l
+           79
+           $ node C:/dev/dev-standards/tools/check-lessons.mjs --emit-open life-therapy | wc -l
+           129
+           Same 36 lesson IDs in both. The working tree adds what the other projects answered.
+WHY IT IS  Canon's rule for kit bytes is "take them from HISTORY, never the working tree", because a
+CANON'S    sibling checkout is a live workspace. Its session-start instruction runs a tool from that
+           same workspace, on every project, on every stack. Today the difference was additive and the
+           answer set agreed, so nothing was wrong — but nothing could have SAID so without a second
+           run from HEAD, which is the 2026-09-09 incident's word: unattributable. Same class as
+           finding ⑨ (drift reading canon's working tree), reached through a different tool.
+SMALLEST   `check-lessons.mjs` prints one stderr line when `git status --porcelain -- tools ledgers`
+FIX        in its own repo is non-empty: the output is from an uncommitted state, and the archive
+           command to get the committed one. It must NOT refuse to run — canon's own session edits
+           it legitimately, and a project session reading a warning is the whole fix — and nothing
+           on any gate may start depending on it.
+```
 
 ---
 

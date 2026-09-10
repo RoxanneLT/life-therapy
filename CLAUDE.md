@@ -40,8 +40,8 @@
         and never call the tags free (they cost context; they are merely quiet).
     E3  CLAUDE.md reaches subagents                — YES, positive-with-
         transcription. An earlier probe reported the opposite and was wrong; see
-        dev-standards/LESSONS.md L-17. They receive it and skim it.
-  Full contract: standards/CLAUDE-MD-STANDARD v4.3. Lessons: dev-standards/LESSONS.md (docs/LESSONS.md is the pointer).
+        dev-standards/ledgers/LESSONS.md L-17. They receive it and skim it.
+  Full contract: standards/CLAUDE-MD-STANDARD v4.3. Lessons: dev-standards/ledgers/LESSONS.md (docs/LESSONS.md is the pointer).
 -->
 
 ## 1 · START HERE
@@ -67,8 +67,12 @@ npm run secrets     # are .env.local etc. in sync with OneDrive?
 `git status` first is not a formality: a second machine may have pushed, and a stale local
 copy here silently reintroduces fixed bugs.
 
-**Then skim `docs/LESSONS.md` for open items naming this project.** A propagation ledger
-nobody reads where the work happens is a status line with extra distance.
+**Then ask canon what this project still owes it** — a query, a few KB, never a read of the ledger:
+`node <dev-standards>/tools/check-lessons.mjs --emit-open life-therapy`. Answer each item in
+`docs/CANON-FINDINGS.md` §2 with a date or a reasoned `n/a:`; canon writes the `Applied:` line.
+The session runs it, never the gate — a gate must not depend on a sibling checkout's path — and
+`docs/LESSONS.md` says what to do when canon's `tools/` is dirty. A propagation ledger nobody
+reads where the work happens is a status line with extra distance.
 
 **Session state:** `docs/SESSION_HANDOVER_2026-08-17.md` — what was fixed, the DDL already
 live in production, the open TODO list in priority order, and which claims were reasoned
@@ -126,8 +130,10 @@ underneath it, so its result was not attributable to any state of the tree — n
 both projects' findings were correct and are now in canon; what was lost was the ability to say what
 had been measured.
 
-**A finding about canon is worth more than a fix to canon.** Report it and let the estate session
-make the change:
+**A finding about canon is worth more than a fix to canon.** Write it to `docs/CANON-FINDINGS.md`
+§1 — the outbox, which the estate session lifts from this repo's committed HEAD — and let that
+session make the change. A finding carried in a chat report goes undelivered; pleks's did, for a
+session, before its outbox existed. The format:
 
     OBSERVED   what happened, in one sentence
     COMMAND    what you ran, and its output verbatim
@@ -429,7 +435,7 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 - **2026-08-18 · Five schema changes reached production ungated.** Cost: five unreviewed DDL
   statements. The gate matched on how the target appeared in a *command*, and the documented
   path supplies it by reference (`--env-file`), inside a file. → `.claude/hooks/ddl-gate.js` ·
-  general form in `dev-standards/LESSONS.md` L-14
+  general form in `dev-standards/ledgers/LESSONS.md` L-14
 
 - **2026-08-19 · A tracking pixel decided who stopped hearing from us.** Cost: 65 of 181
   clients — 36% — silently cut off from every campaign, drip and birthday email, and

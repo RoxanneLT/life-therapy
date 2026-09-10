@@ -1,8 +1,21 @@
 # LESSONS — pointer, and this project's open items
 
-**The ledger lives in `dev-standards/LESSONS.md`** — its own git repo, with
+**The ledger lives in `dev-standards/ledgers/LESSONS.md`** — its own git repo, with
 `check-lessons.mjs` enforcing that every `Applied:` line is a date or a reasoned `n/a:`.
-Read it at session start and look for open items naming **life-therapy**.
+**Query it; never read it** — it is 240 KB. At session start:
+
+    node <dev-standards>/tools/check-lessons.mjs --emit-open life-therapy
+
+It prints every lesson with no `Applied:` line naming this project, its triggers, and the line it
+starts on. Read each entry from that line, about 40 lines, never the whole file. An answer — a date
+with evidence, or `n/a:` with a reason that argues it — goes to `docs/CANON-FINDINGS.md` §2, and
+canon writes the `Applied:` line. The **session** runs this, never the gate: a gate must not depend
+on the path of a sibling checkout.
+
+⚠ **First, `git -C <dev-standards> status --short tools`.** If the tool shows as modified, canon's
+session is mid-edit and its output comes from code no commit contains — `docs/CANON-FINDINGS.md`
+CF-1. Run the committed one instead:
+`git -C <dev-standards> archive HEAD tools ledgers | tar -x -C <scratch>`, and run it from there.
 
 This file used to hold twelve entries of its own. Every one has been promoted to the shared
 ledger, because every one passed its admission test — a failure with a stated cost that would
@@ -17,17 +30,26 @@ can answer.
 > the shared L-07 describes.
 >
 > **How to cite from now on.** A lesson lives in one place, so name that place:
-> `dev-standards/LESSONS.md L-21`. Never `docs/LESSONS.md L-nn` — there are no numbered entries
+> `dev-standards/ledgers/LESSONS.md L-21`. Never `docs/LESSONS.md L-nn` — there are no numbered entries
 > in this file, and the audit fails a citation that names it with an ID.
 
 ---
 
 ## Open items from the shared ledger naming this project
 
-Surveyed 2026-08-19 against L-01…L-13; L-14…L-24 were contributed by this project or written
-alongside it. **Nothing is currently outstanding.** The two that were — L-04 (a marker the parser
-cannot read) and L-10 (an enumeration that can enumerate zero) — were closed the same day they
-were found, and what each turned up on the way is worth keeping:
+**2026-09-10: 36 of 99 open** (`--emit-open`, run from canon's HEAD `6a0f5ed`). Answered in
+`docs/CANON-FINDINGS.md` §2 as they are measured; one that applies and is **not** carried here is
+real work, and is queued in this file or in `docs/MECHANISABLE.md` — never answered there.
+
+⚠ **Until 2026-09-10 this section said "Nothing is currently outstanding."** That was true of the
+survey it described — L-01…L-13 on 2026-08-19, with L-14…L-24 contributed by this project or
+written alongside it — and it went on reading as a current state while the ledger grew to L-99 and
+nothing re-ran the survey. A survey's result written as a state is a status line with no clock. The
+count above carries its date and its command so the next reader can tell how old it is.
+
+The two open on 2026-08-19 — L-04 (a marker the parser cannot read) and L-10 (an enumeration that
+can enumerate zero) — were closed the same day they were found, and what each turned up on the way
+is worth keeping:
 
 - **L-04** — every marker namespace now resolves against its own source of truth: `audit:` a check
   name, `hook:` a file, `settings:` the permission entry it names. `eslint:` cannot be resolved

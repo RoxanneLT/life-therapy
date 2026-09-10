@@ -15,7 +15,7 @@
  * payload piped to the hook is byte-identical either way; only the file on disk is inert.
  * Same principle as bash-gate's fixtures living on disk rather than on a command line: a
  * probe cannot travel through the channel the control inspects
- * (`dev-standards/LESSONS.md` L-20).
+ * (`dev-standards/ledgers/LESSONS.md` L-20).
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

@@ -21,7 +21,7 @@ function formatCurrency(cents: number): string {
  * Kept as a thin alias so the call sites below read unchanged. The escaping itself moved
  * to lib/csv.ts, which was the point: this file's copy and the invoice export's copy were
  * byte-identical and BOTH missed formula injection, so a fix here would have reached half
- * the exports (`dev-standards/LESSONS.md` L-21).
+ * the exports (`dev-standards/ledgers/LESSONS.md` L-21).
  */
 const toCsvRow = csvRow;
 

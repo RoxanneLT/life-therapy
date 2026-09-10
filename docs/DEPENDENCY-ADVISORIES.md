@@ -51,7 +51,7 @@ listing every requirer. Uninstalling it removed exactly one package and left the
 
 **A single `npm ls` path is a hypothesis, not a provenance.** What disproved it was the
 advisory count not moving — a measurement, taken because the fix was expected to show. The
-general form is in `dev-standards/LESSONS.md` territory: a tool that answers "which dependent"
+general form is in `dev-standards/ledgers/LESSONS.md` territory: a tool that answers "which dependent"
 when the real question is "which dependents" gives a confident singular answer to a plural
 question.
 

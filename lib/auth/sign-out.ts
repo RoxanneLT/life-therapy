@@ -9,7 +9,7 @@
  * other holding fragments of a session the user believes they ended.
  *
  * Classified up from "UI tidying" on 2026-08-19 by reading it rather than its name
- * (dev-standards/LESSONS.md L-27): two identical `handleSignOut` bodies look like
+ * (dev-standards/ledgers/LESSONS.md L-27): two identical `handleSignOut` bodies look like
  * boilerplate in a duplication report and are session teardown in the file.
  */
 import { createBrowserClient } from "@/lib/supabase";

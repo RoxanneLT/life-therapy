@@ -10,7 +10,7 @@
  * So: plant a violation where the check will see it, run the real audit, and require
  * that check to fail. Probes travel the full pipeline — file on disk, real discovery,
  * real preprocessing — because a fixture handed straight to a matcher skips the three
- * layers that actually broke (dev-standards/LESSONS.md L-06, L-33).
+ * layers that actually broke (dev-standards/ledgers/LESSONS.md L-06, L-33).
  *
  * The known-good half is the audit's own green run, asserted at the end: plant nothing,
  * everything passes. Without it a matcher that flags everything would look perfect here.
@@ -122,6 +122,21 @@ test("a test nobody runs still passes", () => {
 });
 `,
     expects: ["test-floor: every test file on disk is in the suite the gate runs"],
+  },
+  {
+    // The citations check went unprobed from 2026-08-19 to 2026-09-10, and in that time both
+    // of its detectors went blind or wrong without anything going red (see the check). This
+    // plants the shape added last: the ledger named at the path it had before it moved.
+    //
+    // The path is built by interpolation so THIS file does not commit the violation it plants
+    // — the check reads scripts/, and a literal here would fail the audit on the probe's own
+    // source, which is the check-matching-its-documentation trap its comment already records.
+    path: "lib/__probe-citation.ts",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+// A lesson cited at the ledger's old path (${"dev-standards"}/LESSONS.md L-21).
+export {};
+`,
+    expects: ["citations: a lesson reference names the ledger that holds it"],
   },
 ];
 

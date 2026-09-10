@@ -1280,7 +1280,7 @@ check("email-safety: the couples partner invite goes through its one helper", ()
   // partner". They disagreed about whether the address was validated, whether the send
   // result was read, and whether a missing address fell back to the linked partner's.
   // One of the four was fixed after an invite was refused by the provider and nobody
-  // found out for a week; the other three kept the bug (dev-standards/LESSONS.md L-21).
+  // found out for a week; the other three kept the bug (dev-standards/ledgers/LESSONS.md L-21).
   //
   // So the logic lives in lib/couples-invite.ts and the sites call it. A new site that
   // renders the template itself is a fifth divergence waiting to happen.
@@ -2791,7 +2791,7 @@ const DUPLICATE_BODIES_KNOWN = [
   // copies meant a fix to that reached one surface. Now lib/auth/sign-out.ts.
   //
   // The rest were each opened and given their own verdict rather than judged by name
-  // (dev-standards/LESSONS.md L-27). They are NOT one undifferentiated pile:
+  // (dev-standards/ledgers/LESSONS.md L-27). They are NOT one undifferentiated pile:
   //
   // Pure formatters — no state, no security surface. Real duplication, and a divergence
   // costs a differently-rounded file size or a differently-derived slug: visible at once
@@ -2937,7 +2937,7 @@ check("mechanisable: every unenforceable rule has a queue entry, and vice versa"
  * `toLocale*` sites that are genuinely safe, each classified against the value it
  * formats — NOT baselined from a first run. Three of the four were resolved by opening
  * the file and asking what the date IS, which is the difference between a debt record
- * and a record of the author's ignorance (`dev-standards/LESSONS.md` L-27).
+ * and a record of the author's ignorance (`dev-standards/ledgers/LESSONS.md` L-27).
  */
 const LOCALE_FORMAT_ALLOWED = [
   {
@@ -3092,13 +3092,31 @@ check("citations: a lesson reference names the ledger that holds it", () => {
   // and one of them sat in the header of the file whose existence it was justifying.
   //
   // Cannot resolve the target: it is another repository, on a path that varies per
-  // machine. What it CAN do is catch the two shapes that were actually wrong — naming
-  // the local pointer with an ID, and using this project's retired three-digit
-  // numbering. Both are format errors, so both are decidable from here.
+  // machine. What it CAN do is catch the three shapes that were actually wrong — naming
+  // the local pointer with an ID, using this project's retired zero-padded numbering,
+  // and naming the ledger at the path it had before it moved. All three are format
+  // errors, so all three are decidable from here.
+  //
+  // The third was added 2026-09-10, and it is L-99 in this file. Canon moved the ledger
+  // to `ledgers/LESSONS.md` on 2026-08-20 (dev-standards `beba446`); this check went on
+  // teaching the old path in its own remediation text for three weeks, and 23 sites
+  // across 16 files followed it — the instructions among them sending a session to a
+  // file that was not there. A fix text is a control: the detector beside it now fails
+  // the form it used to teach, so the tree cannot hold two forms at once.
+  //
+  // Scope widened the same day to `.claude/`, `docs/` and `brief/`. The stale path lived
+  // in hooks, the handover index and the pointer file — the instruction sites — and the
+  // check read none of them. It had never been probed either: `scripts/probe-checks.mjs`
+  // plants the third shape now, and the first two were verified by hand on 2026-09-10,
+  // each alone against the real audit, because the runner cannot tell two plants for one
+  // check apart.
   const files = [
     ...allSource().filter((f) => /\.(ts|tsx|mjs)$/.test(f)),
     join(ROOT, "CLAUDE.md"),
     ...walk(join(ROOT, "scripts"), /\.mjs$/),
+    ...walk(join(ROOT, ".claude"), /\.(js|mjs|md)$/),
+    ...walk(join(ROOT, "docs"), /\.md$/),
+    ...walk(join(ROOT, "brief"), /\.md$/),
   ];
 
   // Two files are excluded, and the second is the interesting one.
@@ -3124,15 +3142,29 @@ check("citations: a lesson reference names the ledger that holds it", () => {
         "citations",
         `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
         `cites \`docs/LESSONS.md L-${m[1]}\`, but that file is a pointer with no numbered entries`,
-        "cite `dev-standards/LESSONS.md L-nn` — the ledger that actually holds the entry",
+        "cite `dev-standards/ledgers/LESSONS.md L-nn` — the ledger that actually holds the entry",
       );
     }
-    for (const m of src.matchAll(/dev-standards\/LESSONS\.md`?\s+L-(\d{3,})/g)) {
+    // The retired local numbering was ZERO-PADDED — L-001 … L-012 (docs/LESSONS.md before
+    // cfa3385). Until 2026-09-10 this matched `\d{3,}` after the old path, which was wrong
+    // twice over: canon's ledger is at L-99, so the first honest L-100 would have failed the
+    // build with a message saying the ledger stops at L-24; and the path move had already
+    // blinded it, because it matched only after the exact old path. A leading zero is the
+    // one thing canon never writes, whatever the path in front of it.
+    for (const m of src.matchAll(/LESSONS\.md`?\s+L-(0\d{2})\b/g)) {
       fail(
         "citations",
         `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
-        `cites \`L-${m[1]}\` — three-digit IDs were this project's retired local numbering`,
-        "the shared ledger uses two digits (L-01 … L-24); check which entry you mean",
+        `cites \`L-${m[1]}\` — zero-padded IDs were this project's retired local numbering`,
+        "the shared ledger does not zero-pad past two digits (L-01 … L-99, L-100 …); check which entry you mean",
+      );
+    }
+    for (const m of src.matchAll(/dev-standards\/LESSONS\.md/g)) {
+      fail(
+        "citations",
+        `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
+        "names `dev-standards/LESSONS.md`, a path canon has not had since 2026-08-20",
+        "cite `dev-standards/ledgers/LESSONS.md L-nn` — where the ledger moved",
       );
     }
   }

@@ -5,7 +5,7 @@
  * `escapeCsv` in the reports actions and `escape` in the invoice export. Both handled
  * RFC 4180 quoting correctly. Neither handled FORMULA INJECTION, so the duplication was
  * not the bug — it was the reason one fix would have reached half the exports
- * (`dev-standards/LESSONS.md` L-21).
+ * (`dev-standards/ledgers/LESSONS.md` L-21).
  *
  * THE RISK, concretely. Excel, LibreOffice and Google Sheets treat a cell beginning with
  * `=`, `+`, `-`, `@`, tab or carriage return as a FORMULA, not text. Every export here

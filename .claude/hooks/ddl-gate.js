@@ -29,7 +29,7 @@
  *
  * So this gate is genuinely single-layer, and that is a real exposure rather than an oversight:
  * if this file's path breaks, DDL authoring goes unprompted with no backstop, and the failure is
- * silent (`dev-standards/LESSONS.md` L-16). What stands in for a twin is the probe suite —
+ * silent (`dev-standards/ledgers/LESSONS.md` L-16). What stands in for a twin is the probe suite —
  * ddl-gate.test.mjs, 16 cases, in `npm run check` — so a broken matcher fails the build even
  * though a broken PATH still would not. Stated because an unstated single point of failure reads
  * as a covered one.

@@ -23,7 +23,7 @@ otherwise a matter of whoever last got annoyed.
 **A measured refusal is a result.** Two entries below close as *will not build*, and they carry
 the numbers that say so rather than an opinion. That is a finish, not a gap — an unmeasured
 "cannot be mechanised" is unfalsifiable, so it gets re-litigated by everyone and acted on by
-nobody (`dev-standards/LESSONS.md` L-18).
+nobody (`dev-standards/ledgers/LESSONS.md` L-18).
 
 ---
 
