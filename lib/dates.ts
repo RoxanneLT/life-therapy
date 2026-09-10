@@ -1,7 +1,7 @@
 /**
  * lib/dates.ts — the single place that knows about the business timezone.
  *
- * @kit dates v1 — tracked. Edit it in dev-standards and re-adopt; a local change
+ * @kit dates v2 — tracked. Edit it in dev-standards and re-adopt; a local change
  * here is a fork, and `check-kit-drift.mjs` will say so.
  *
  * Two rules, and every bug in this area comes from confusing them:
@@ -76,7 +76,22 @@ function assertInteger(n: number, fn: string, name: string): number {
 function isRealCalendarDay(dateStr: string): boolean {
   const d = new Date(`${dateStr}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return false; // month 0/13, day 32
-  return d.toISOString().slice(0, 10) === dateStr; // Feb 30 -> "03-02", rejected
+  return carrierDateStr(d) === dateStr; // Feb 30 -> "03-02", rejected
+}
+
+/**
+ * A UTC-midnight carrier as "YYYY-MM-DD", read from its UTC fields.
+ *
+ * NOT `toISOString().slice(0, 10)`. That gives the same string here and the wrong
+ * one on a real instant, and no linter can tell the two uses apart. pleks's
+ * `no-adhoc-dates` flags every one, because the idiom has shipped a legal-date bug
+ * there. Spelling out the UTC fields says which kind of Date this is (v2).
+ */
+function carrierDateStr(d: Date): string {
+  const y = String(d.getUTCFullYear()).padStart(4, "0");
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /**
@@ -207,7 +222,7 @@ export function addSaDays(dateStr: string, days: number): string {
   assertInteger(days, "addSaDays", "days");
   const d = calendarDate(dateStr);
   d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+  return carrierDateStr(d);
 }
 
 /**

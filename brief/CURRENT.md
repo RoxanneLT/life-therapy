@@ -26,9 +26,17 @@ until Stéan says the review is done.
   identifiers in 8 files; the new one loses 0, and agrees on all 4,381 comments. The audit's output
   was byte-identical after the swap. New check `audit: every source file parses`, probed. The cost:
   the audit runs about 1.5 s slower.
-- The records commit after it: §2 rows L-35 and L-49, L-57's row re-tensed, CF-4 (L-41's tell
-  belongs in canon's `check-handoff-contract`), and `docs/LESSONS.md` corrected. That entry's first
-  measurement, 904 in 10, included 204 phantom losses from a lone `\r` in two files.
+- `428ae56`, the records commit after it: §2 rows L-35 and L-49, L-57's row re-tensed, CF-4
+  (L-41's tell belongs in canon's `check-handoff-contract`), and `docs/LESSONS.md` corrected. That
+  entry's first measurement, 904 in 10, included 204 phantom losses from a lone `\r` in two files.
+- `a1376ac`: four lesson citations canon cannot resolve. The two for the retired zero-padded ids
+  carry `@no-such-lesson`. The two for L-100 are rephrased so they no longer read as citations.
+  Canon's `check-lessons` now finds 0.
+- The kit move: the eight rows canon pinned with review 2026-09-24, moved by each pin's route to
+  canon `efbf834` (M-KIT-28). Each file's diff equals canon's own diff for it. The two dated
+  `@probed-kit` twin records in `bash-gate` move to v4 with their dates kept. The one rewrite they
+  back was measured equivalent. `check-kit-drift` reports all eight pins overtaken, and §3 of the
+  outbox asks canon to drop them.
 
 **Triage** (2026-09-10): 36 of 36 answered, queued or held. Batches `ba1cf4b`, `cb80e5d`,
 `731682a`, `46b8221`. Findings to canon: CF-1 (the session-start query runs canon's working tree),
@@ -40,8 +48,8 @@ CF-2 (kit checks don't carry L-51), CF-3 (no spine version in the anchor), CF-4 
 - **L-68**: only Stéan can carry it: a standing authorisation in §7, in Stéan's own words, for the
   agent pipeline the host layer forbids "unless requested". Not to be written for them.
 
-**Next action: wait.** Stéan decides whether to push `a599577` and the records commit, and whether
-to write the L-68 authorisation. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
+**Next action: wait.** Stéan decides whether to push the four commits above, and whether to write
+the L-68 authorisation. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
 move to **Filed**. Before re-running `--emit-open`, check `git -C <canon> status --short tools`: if
 it is dirty, run from `git archive HEAD` (CF-1).
 

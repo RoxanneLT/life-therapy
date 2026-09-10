@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v3 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v4 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -104,17 +104,25 @@
 // no new observation was made — the hook was not disabled and no force push was attempted. Bumping
 // the date to today would manufacture a measurement out of a version bump, which is the precise
 // failure this whole record format exists to prevent.
+//
+// v4 (2026-09-10, canon M-KIT-28) touched one thing these twins back: `SHORT_CLUSTER_WITH_F`, which
+// `isForcePush` reads, was rewritten from `[A-Za-z]*f` to `[A-Za-eg-z]*f` to stop it backtracking.
+// Equivalence was MEASURED, not read: both forms against every string of length 0-7 over
+// `- f F a u z e g 1 = _` gave 21,435,888 strings, 81,270 matches and 0 disagreements. The three `\w`
+// rewrites are equal to `[A-Za-z0-9_]` on every BMP character (0 disagreements). `LETHAL_TARGET`
+// and CANON_DENY are byte-identical. The heredoc masker's loop was restructured; the gate's two
+// bash-gate suites exercise it. `@probed-kit` moves to v4 and the dates stay, as at v3.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v3
+// @probed-kit bash-gate v4
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v3
+// @probed-kit bash-gate v4
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -338,7 +346,7 @@ const WRAPPERS = new Set(["sudo", "env", "command", "exec", "nohup", "nice", "ti
 /** Index of the command word in a segment: past leading `VAR=x` assignments and wrappers. */
 function commandWordIndex(tokens) {
   let i = 0;
-  while (i < tokens.length && (WRAPPERS.has(tokens[i]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i]))) i++;
+  while (i < tokens.length && (WRAPPERS.has(tokens[i]) || /^[A-Za-z_]\w*=/.test(tokens[i]))) i++;
   return i < tokens.length ? i : -1;
 }
 
@@ -370,7 +378,7 @@ function maskSinkHeredocs(command) {
   const lines = command.split("\n");
   const bare = new Map(); // ID → ascending line numbers where the line is exactly that ID
   for (let j = 0; j < lines.length; j++) {
-    const m = /^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*$/.exec(lines[j]);
+    const m = /^[ \t]*([A-Za-z_]\w*)[ \t]*$/.exec(lines[j]);
     if (m) (bare.get(m[1]) ?? bare.set(m[1], []).get(m[1])).push(j);
   }
   const firstAfter = (list, i) => {
@@ -384,23 +392,27 @@ function maskSinkHeredocs(command) {
     return lo < list.length ? list[lo] : -1;
   };
   const out = [];
-  for (let i = 0; i < lines.length; i++) {
+  // Emits line i, and a sink heredoc's masked body if one opens there. Returns the last line
+  // consumed — the terminator, or i itself — so the loop never reassigns its own counter.
+  const consume = (i) => {
     const line = lines[i];
     out.push(line);
-    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
-    if (!m) continue;
+    const m = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(line);
+    if (!m) return i;
     const before = line.slice(0, m.index);
     const seg = before.split(/[;&|]+/).pop() ?? "";
     const tokens = seg.split(/\s+/).map(normToken).filter(Boolean);
     const cw = commandWordIndex(tokens);
     const receiver = cw === -1 ? "" : tokens[cw].replace(/^.*\//, "");
-    if (!HEREDOC_SINKS.has(receiver)) continue;
+    if (!HEREDOC_SINKS.has(receiver)) return i;
     const j = firstAfter(bare.get(m[2]) ?? [], i);
-    if (j === -1) continue; // unterminated: keep the body
+    if (j === -1) return i; // unterminated: keep the body
     for (let k = i + 1; k < j; k++) out.push("");
     out.push(lines[j]);
-    i = j;
-  }
+    return j;
+  };
+  let i = 0;
+  while (i < lines.length) i = consume(i) + 1;
   return out.join("\n");
 }
 
@@ -462,7 +474,9 @@ function maskMessageText(command) {
 // that separate a gate from a wall.
 const LETHAL_TARGET = /^(?:[/~][/*]*|[A-Za-z]:[/\\]?[/*]*|\$\{?HOME\}?[/*]*)$/;
 const FORCE_LONG = /^--force(?:=.*)?$/;
-const SHORT_CLUSTER_WITH_F = /^-[A-Za-z]*f[A-Za-z]*$/;
+// Everything before the FIRST `f` is a letter other than `f`, so there is one way to match and
+// nothing to backtrack over. `[A-Za-z]*f` accepted the same strings in quadratic time.
+const SHORT_CLUSTER_WITH_F = /^-[A-Za-eg-z]*f[A-Za-z]*$/;
 
 function isDestructiveRm(tokens) {
   return atCommand(tokens, "rm") && argsOf(tokens).some((t) => LETHAL_TARGET.test(t));

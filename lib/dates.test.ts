@@ -1,7 +1,7 @@
 /**
  * Boundary tests for lib/dates.ts.
  *
- * @kit dates-test v2 — tracked. Edit it in dev-standards and re-adopt.
+ * @kit dates-test v3 — tracked. Edit it in dev-standards and re-adopt.
  *
  * Every fixture probes a specific edge and says which side of it it sits on.
  * The point is not coverage — it's that a future green run proves the *spec*
@@ -91,8 +91,12 @@ test(`[${TZ}] malformed calendar dates throw rather than yielding Invalid Date`,
 test(`[${TZ}] an overflowing day is rejected, not silently rolled forward`, () => {
   // THE trap: V8 does not return Invalid Date for a day that overflows its month.
   // It rolls over. A NaN guard cannot see this; only a round-trip can.
-  assert.equal(new Date("2026-02-30T00:00:00Z").toISOString().slice(0, 10), "2026-03-02");
-  assert.equal(new Date("2025-02-29T00:00:00Z").toISOString().slice(0, 10), "2025-03-01");
+  const utcDay = (s: string) => {
+    const d = new Date(s);
+    return [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
+  };
+  assert.deepEqual(utcDay("2026-02-30T00:00:00Z"), [2026, 3, 2]);
+  assert.deepEqual(utcDay("2025-02-29T00:00:00Z"), [2025, 3, 1]);
 
   assert.throws(() => calendarDate("2026-02-30"), /not a real date/);
   assert.throws(() => calendarDate("2025-02-29"), /not a real date/); // 2025 isn't a leap year

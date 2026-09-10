@@ -2,7 +2,7 @@
 /**
  * scripts/check-claude-md.mjs — the marker audit for CLAUDE.md and .claude/rules/*.md
  *
- * @kit check-claude-md v15 — tracked OUTSIDE its `KIT:CONFIG` regions. Improve it in
+ * @kit check-claude-md v16 — tracked OUTSIDE its `KIT:CONFIG` regions. Improve it in
  * dev-standards and re-adopt; a local change here is a fork and `check-kit-drift.mjs` says so.
  * Imports `hookRegistrations` from `check-hook-registration.mjs`, which is a kit item too and
  * must be installed beside it — the `hook:` namespace resolves through registration, not presence,
@@ -640,7 +640,12 @@ function expandScript(scripts, name, seen = new Set()) {
  */
 const STATES = ["open", "built", "closed", "pointer"]
 const DATED = new Set(["built", "closed"])
-const STATUS_LINE = /^\s*(?:[-*]\s*)?\*\*Status:\*\*\s*(.+?)\s*$/
+// Matched against the line with its trailing whitespace already gone, so the value can start at
+// its first non-space and run to the end with nothing left to backtrack over. v15's `(.+?)\s*$`
+// overlapped at every trailing space (sonarjs/super-linear-regex, found through pleks's lint).
+// The value is OPTIONAL so an empty status is a finding. v15 flagged `**Status:** ` and skipped
+// `**Status:**`, one trailing space apart — an accident of the old pattern, not a rule.
+const STATUS_LINE = /^\s*(?:[-*]\s*)?\*\*Status:\*\*\s*(\S.*)?$/
 
 /** Split a register into entries: id, and the lines between its heading and the next. */
 export function registerEntries(text, headingSource) {
@@ -669,12 +674,12 @@ export function registerStatus(entries, ids) {
   let marked = 0
   const state = {}
   for (const e of entries) {
-    const hit = e.body.map((l, i) => [l.match(STATUS_LINE), i]).find(([m]) => m)
+    const hit = e.body.map((l, i) => [l.trimEnd().match(STATUS_LINE), i]).find(([m]) => m)
     if (!hit) continue
     marked++
     const [m, off] = hit
     const at = `${e.id} (line ${e.line + off + 1})`
-    const raw = m[1].replace(/\*\*/g, "").trim()
+    const raw = (m[1] ?? "").replace(/\*\*/g, "").trim()
     const word = raw.split(/[\s,.]+/)[0]?.toLowerCase() ?? ""
     if (!STATES.includes(word)) {
       findings.push(
@@ -757,7 +762,8 @@ export function registerDepth(text, headingSource, closedHeading = "## Closed") 
     re.lastIndex = 0
     const m = re.exec(l)
     if (!m) return
-    ;(cut === -1 || i < cut ? above : below).push(m[1])
+    const side = cut === -1 || i < cut ? above : below
+    side.push(m[1])
   })
   // `closedIds` is what reconcileClosure needs: an entry asserting `open` while sitting below
   // the closed heading is the 33-entry defect, and neither number alone can see it.
@@ -855,7 +861,7 @@ export function auditResolvers(resolvers, io) {
  * That is a convention and not a mechanism, deliberately: a check on it would have to know which
  * cases a control contains, which is this same problem one rung up.
  */
-const SATISFIED = /^\s*(?:[-*]\s*)?\*\*Satisfied when:\*\*\s*(.+?)\s*$/
+const SATISFIED = /^\s*(?:[-*]\s*)?\*\*Satisfied when:\*\*\s*(\S.*)$/ // on a trimEnd()ed line, as STATUS_LINE
 const CONTROL_REF = /\b([a-z]+):([A-Za-z0-9/_.@-]+)/g
 
 export function refuteOpen(entries, state, resolve, knownNamespaces) {
@@ -863,7 +869,7 @@ export function refuteOpen(entries, state, resolve, knownNamespaces) {
   const ns = new Set(knownNamespaces)
   for (const e of entries) {
     if (state[e.id] !== "open") continue
-    const line = e.body.map((l) => l.match(SATISFIED)).find(Boolean)
+    const line = e.body.map((l) => l.trimEnd().match(SATISFIED)).find(Boolean)
     if (!line) continue
     for (const m of line[1].matchAll(CONTROL_REF)) {
       if (!ns.has(m[1])) continue
@@ -1331,6 +1337,10 @@ if (process.argv.includes("--selftest")) {
         st("- **Status:** RULED"), { findings: 1, marked: 1 }],
       ["`partial` is refused like any other invented token — split the entry instead",
         st("- **Status:** partial"), { findings: 1, marked: 1 }],
+      ["an EMPTY status fires, bare or with trailing space — v15 caught only the second (v16)",
+        st("- **Status:**", "- **Status:**   "), { findings: 2, marked: 2 }],
+      ["KNOWN-GOOD: a CRLF line reads its state — the value stops before the carriage return",
+        st("- **Status:** open\r"), { findings: 0, marked: 1 }],
       ["`built` with no date fires — the date is when the claim became true",
         st("- **Status:** built"), { findings: 1, marked: 1 }],
       ["`closed` with a date and NO REASON fires — the reason is the whole disposition half",

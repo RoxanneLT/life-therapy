@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @kit check-install-platform v1 — tracked. Edit it in dev-standards and re-adopt; a local
+// @kit check-install-platform v2 — tracked. Edit it in dev-standards and re-adopt; a local
 // change is a fork, and the next project starts from the worse version without knowing it.
 /**
  * Is `node_modules` built for the machine that is about to run it?
@@ -27,7 +27,7 @@
  *
  * Run: node scripts/check-install-platform.mjs [<projectDir>] [--selftest]
  */
-import { existsSync, readdirSync, lstatSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, lstatSync, mkdirSync, mkdtempSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -80,11 +80,14 @@ export function verdict({ shape, platform }) {
 
 function selftest() {
   let failed = 0;
-  const ok = (cond, label) => { if (!cond) failed++; console.log(`  ${cond ? "✓" : "✗"} ${label}`); };
+  const ok = (cond, label) => {
+    if (!cond) failed++;
+    console.log(`  ${cond ? "✓" : "✗"} ${label}`);
+  };
 
   // Fixtures go to disk and travel the real discovery path — a hand-built object would prove the
   // predicate and not the reader, and the reader is where the platform difference actually lives.
-  const root = join(tmpdir(), `install-probe-${Math.random().toString(36).slice(2)}`);
+  const root = mkdtempSync(join(tmpdir(), "install-probe-"));
   const mk = (name, build) => {
     const d = join(root, name, ".bin");
     mkdirSync(d, { recursive: true });

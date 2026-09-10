@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // check-brief — conformance for `brief/`, per standards/BRIEF-STANDARD.md v1.1
 //
-// @kit check-brief v5 — tracked. Edit it in dev-standards and re-adopt; a local change
+// @kit check-brief v6 — tracked. Edit it in dev-standards and re-adopt; a local change
 // here is a fork, and `check-kit-drift.mjs` will say so.
 //
 // Nine checks (B-1…B-9), one generator (--status), one probe (--selftest).
@@ -33,7 +33,7 @@
 // Exit 0 = pass. Exit 1 = a check failed. Exit 2 = the tool could not run.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, mkdirSync, rmSync, utimesSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { join, relative, dirname, isAbsolute } from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -567,7 +567,7 @@ const GOOD = {
 };
 
 function fixture(files) {
-  const root = join(tmpdir(), `brief-probe-${Math.random().toString(36).slice(2)}`);
+  const root = mkdtempSync(join(tmpdir(), "brief-probe-"));
   for (const [rel, body] of Object.entries(files)) {
     if (body === undefined) continue;   // a fixture removing a file GOOD ships
     const full = join(root, rel);

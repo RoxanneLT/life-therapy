@@ -2,7 +2,7 @@
 /**
  * scripts/check-hook-registration.mjs — a hook file is not a hook until settings wires it.
  *
- * @kit check-hook-registration v3 — tracked. Edit it in dev-standards and re-adopt; a local
+ * @kit check-hook-registration v4 — tracked. Edit it in dev-standards and re-adopt; a local
  * change here is a fork, and `check-kit-drift.mjs` will say so.
  *
  * WHAT IT CATCHES. Delete the `hooks` block from `.claude/settings.json` and every gate goes inert
@@ -36,9 +36,50 @@ import { fileURLToPath } from "node:url";
 const HOOK_DIR = ".claude/hooks";
 const SETTINGS = ".claude/settings.json";
 
-/** A dedicated `// @twin <pattern>` comment line. Anchored: prose about twins is not a twin. */
-const TWIN = /^\s*\/\/\s*@twin\s+(\S.*?)\s*$/gm;
-const NO_TWIN = /^\s*\/\/\s*@no-twin\s+(\S.*?)\s*$/m;
+/**
+ * A dedicated `// @<tag> <value>` comment line. Anchored: prose about twins is not a twin.
+ *
+ * Read ONE LINE AT A TIME since v4. As whole-file `/m` patterns, `\s` could cross a newline: `^\s*`
+ * restarted at every line of a blank run (quadratic, which pleks's lint found), and `\s+` after the
+ * tag reached the NEXT line, so a bare `// @twin` took whatever followed it as its pattern.
+ */
+const TWIN = /^\s*\/\/\s*@twin\s+(\S.*)$/;
+const NO_TWIN = /^\s*\/\/\s*@no-twin\s+(\S.*)$/;
+const EVENT = /^\s*\/\/\s*@event\s+(\S+)/;
+const MATCHER = /^\s*\/\/\s*@matcher\s+(\S.*)$/;
+const NON_BLOCKING = /^\s*\/\/\s*@non-blocking\s+(\S.*)$/;
+
+/** Every value `re` declares in `src`, in file order, trailing whitespace trimmed. */
+export function directives(src, re) {
+  return src.split(/\r\n?|\n/).map((l) => re.exec(l)?.[1].trimEnd()).filter((v) => v !== undefined);
+}
+
+/** A path with everything through its LAST `hooks` directory removed — the file under it. */
+const underHooks = (p) => {
+  const i = p.replaceAll("\\", "/").lastIndexOf("/hooks/");
+  return i === -1 ? p : p.slice(i + "/hooks/".length);
+};
+
+/**
+ * The hook file a command names, read as v3's `([\w./\\$-]*\.claude[/\\]hooks[/\\][\w.-]+\.js)`
+ * read it: the first path-shaped word holding a `.claude/hooks/<name>.js`, the LAST such in that
+ * word, and the name up to its last `.js`. Scanned rather than matched: the class in front
+ * of `\.claude` also holds `.`, so that pattern backtracked from every start position.
+ */
+export function namedHookFile(cmd) {
+  const AT = /\.claude[/\\]hooks[/\\]([\w.-]+)/y;
+  for (const word of cmd.match(/[\w./\\$-]+/g) ?? []) {
+    let file = null;
+    for (let i = word.indexOf(".claude"); i !== -1; i = word.indexOf(".claude", i + 1)) {
+      AT.lastIndex = i;
+      const m = AT.exec(word);
+      const js = m ? m[1].lastIndexOf(".js") : -1;
+      if (js >= 1) file = m[1].slice(0, js + 3);
+    }
+    if (file) return file;
+  }
+  return null;
+}
 
 /**
  * THE SHIPPED PLACEHOLDER IS NOT A REASON.
@@ -112,7 +153,7 @@ export function registrations(settings) {
           /(?:^|\s)(?:node|npx|sh|bash)\s+["']?([^"'\s]*[/\\]\.claude[/\\]hooks[/\\][\w.-]+\.js)["']?/,
         );
         if (!m) continue;
-        out.push({ event, matcher: entry.matcher, file: m[1].replace(/.*[/\\]hooks[/\\]/, ""), command: h.command });
+        out.push({ event, matcher: entry.matcher, file: underHooks(m[1]), command: h.command });
       }
     }
   }
@@ -140,10 +181,8 @@ export function registrationFindings(settings, root, existsFn) {
         out.push(`${SETTINGS}: a ${event} entry has no matcher — it declares a scope nobody chose`);
       }
       for (const h of entry.hooks ?? []) {
-        const cmd = typeof h.command === "string" ? h.command : "";
-        const m = cmd.match(/([\w./\\$-]*\.claude[/\\]hooks[/\\][\w.-]+\.js)/);
-        if (!m) continue;
-        const file = m[1].replace(/.*[/\\]hooks[/\\]/, "");
+        const file = namedHookFile(typeof h.command === "string" ? h.command : "");
+        if (!file) continue;
         if (!existsFn(join(root, HOOK_DIR, file))) {
           out.push(`${SETTINGS}: ${event} registers ${file}, which does not exist in ${HOOK_DIR} — the registration resolves to nothing`);
         }
@@ -188,8 +227,8 @@ export function audit(root = ".") {
     if (mine.length === 0) {
       out.push(`${HOOK_DIR}/${f}: no ${SETTINGS} entry EXECUTES it — the file exists and nothing invokes it`);
     } else {
-      const wantEvent = (/^\s*\/\/\s*@event\s+(\S+)/m.exec(src) ?? [])[1];
-      const wantMatcher = (/^\s*\/\/\s*@matcher\s+(\S.*?)\s*$/m.exec(src) ?? [])[1];
+      const wantEvent = directives(src, EVENT)[0];
+      const wantMatcher = directives(src, MATCHER)[0];
       if (!wantEvent || !wantMatcher) {
         out.push(`${HOOK_DIR}/${f}: declares no "// @event <Event>" and "// @matcher <pattern>" — without them nothing can check it is registered for the calls it gates`);
       } else {
@@ -201,7 +240,7 @@ export function audit(root = ".") {
         }
         // A hook on a non-blocking event cannot refuse anything. That is a defect for a GATE and
         // correct for an ANNOTATOR, so the file declares which it is: `// @non-blocking <why>`.
-        const nonBlocking = /^\s*\/\/\s*@non-blocking\s+(\S.*?)\s*$/m.exec(src);
+        const nonBlocking = directives(src, NON_BLOCKING)[0];
         for (const r of mine) {
           if (!BLOCKING_EVENTS.has(r.event) && !nonBlocking) {
             out.push(`${HOOK_DIR}/${f}: registered under ${r.event}, which cannot refuse a call — only PreToolUse blocks. If that is deliberate, declare "// @non-blocking <why>".`);
@@ -211,12 +250,12 @@ export function audit(root = ".") {
     }
 
     // 2 — TWIN DECLARATION.
-    const twins = [...src.matchAll(TWIN)].map((m) => m[1]);
-    const noTwin = NO_TWIN.exec(src);
-    if (twins.length === 0 && !noTwin) {
+    const twins = directives(src, TWIN);
+    const noTwin = directives(src, NO_TWIN)[0];
+    if (twins.length === 0 && noTwin === undefined) {
       out.push(`${HOOK_DIR}/${f}: declares neither a settings twin nor @no-twin with a reason — add "// @twin <settings pattern>" per rule, or "// @no-twin <why settings cannot express it>"`);
-    } else if (noTwin && isPlaceholderReason(noTwin[1])) {
-      out.push(`${HOOK_DIR}/${f}: its @no-twin reason is the kit's unfilled placeholder — "${noTwin[1]}". A project that installed and configured nothing reads as configured, which is worse than reading as unconfigured`);
+    } else if (noTwin !== undefined && isPlaceholderReason(noTwin)) {
+      out.push(`${HOOK_DIR}/${f}: its @no-twin reason is the kit's unfilled placeholder — "${noTwin}". A project that installed and configured nothing reads as configured, which is worse than reading as unconfigured`);
     }
 
     // 3 — TWIN RECONCILIATION. Ask is the floor; absent is the violation.
@@ -234,7 +273,10 @@ const isEntry = process.argv[1] && realpathSync(process.argv[1]) === realpathSyn
 
 if (isEntry && process.argv.includes("--selftest")) {
   let failed = 0;
-  const ok = (c, l) => { if (!c) failed++; console.log(`  ${c ? "✓" : "✗"} ${l}`); };
+  const ok = (c, l) => {
+    if (!c) failed++;
+    console.log(`  ${c ? "✓" : "✗"} ${l}`);
+  };
 
   ok(registrations({ hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: 'node "$D/.claude/hooks/g.js"' }] }] } }).length === 1,
     "registrations finds a PreToolUse command that EXECUTES a hook file");
@@ -329,6 +371,39 @@ if (isEntry && process.argv.includes("--selftest")) {
     "KNOWN-GOOD: a matcher-less SessionStart entry is not a finding — that event takes no matcher");
 
   rmSync(tmp, { recursive: true, force: true });
+
+  // ── v4: directives are read one line at a time ──────────────────────────────────────────
+  // v3's `\s+` after the tag could cross a newline, so an EMPTY `// @twin` took the next line's
+  // text as its pattern and reconciled a twin nobody declared.
+  ok(directives("// @twin\nBash(git push:*)\n", /^\s*\/\/\s*@twin\s+(\S.*)$/).length === 0,
+    "a bare `// @twin` does not borrow the next line as its pattern (v3 did)");
+  ok(directives("// @matcher\n\nBash\n", /^\s*\/\/\s*@matcher\s+(\S.*)$/).length === 0,
+    "…nor does a bare `// @matcher`, across a blank line");
+  ok(JSON.stringify(directives("// @twin  A  \r\n  // @twin B\r\n", /^\s*\/\/\s*@twin\s+(\S.*)$/)) === '["A","B"]',
+    "KNOWN-GOOD: every twin, in order, trailing space and CRLF trimmed");
+
+  // ── v4: the named hook file, read the way v3's backtracking pattern read it ────────────
+  const nameCases = [
+    ['node "$CLAUDE_PROJECT_DIR/.claude/hooks/bash-gate.js"', "bash-gate.js"],
+    ["node C:\\dev\\p\\.claude\\hooks\\g.js", "g.js"],
+    ["node x/.claude/hooks/a.js.bak", "a.js"],
+    ["node x/.claude/hooks/a.claude/hooks/b.js", "b.js"],
+    ["node x/.claude/hooks/a.js/.claude/hooks/b.js", "b.js"],
+    ["echo .claude/hooks/ then node .claude/hooks/c.js", "c.js"],
+    ["node .claude/hooks/.js", null],
+    ["node scripts/g.js", null],
+  ];
+  for (const [cmd, want] of nameCases) {
+    const got = namedHookFile(cmd);
+    ok(got === want, `namedHookFile(${JSON.stringify(cmd)}) → ${JSON.stringify(want)} (got ${JSON.stringify(got)})`);
+  }
+  const nested = registrations({ hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "node /x/hooks/y/.claude/hooks/g.js" }] }] } });
+  ok(nested.length === 1 && nested[0].file === "g.js",
+    `a registration's file is what follows the LAST hooks/ in its path (got ${JSON.stringify(nested[0]?.file)})`);
+  const win = registrations({ hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "node C:\\dev\\p\\.claude\\hooks\\g.js" }] }] } });
+  ok(win.length === 1 && win[0].file === "g.js",
+    `…and a Windows path's too, backslashes and all (got ${JSON.stringify(win[0]?.file)})`);
+
   // ── the shipped placeholder, both directions ────────────────────────────────────────────
   // The KNOWN-GOOD is load-bearing: a placeholder test that fires on real prose would make every
   // configured project red, and a check that cries wolf gets deleted rather than fixed.

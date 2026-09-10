@@ -2,7 +2,7 @@
 /**
  * scripts/check-handoff-contract.mjs — every handoff artefact carries a well-formed contract block.
  *
- * @kit check-handoff-contract v3 — tracked. Edit it in dev-standards and re-adopt; a local
+ * @kit check-handoff-contract v4 — tracked. Edit it in dev-standards and re-adopt; a local
  * change here is a fork, and `check-kit-drift.mjs` will say so.
  *
  * PORTED FROM `pleks/scripts/check-handoff-contract.mjs`. It arrives because of dev-standards
@@ -221,7 +221,10 @@ const isEntry = process.argv[1] && realpathSync(process.argv[1]) === realpathSyn
 
 if (isEntry && process.argv.includes("--selftest")) {
   let failed = 0;
-  const ok = (c, l) => { if (!c) failed++; console.log(`  ${c ? "✓" : "✗"} ${l}`); };
+  const ok = (c, l) => {
+    if (!c) failed++;
+    console.log(`  ${c ? "✓" : "✗"} ${l}`);
+  };
 
   const GOOD = [
     "anchor: task=redirect-map · agent=grounder · utc=2026-08-30T09:14:02Z · commit=93b9437",
