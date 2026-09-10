@@ -9,11 +9,16 @@
 > decisions go to `DECISIONS.md`, finished steps to `build/INDEX.md`, the rest nowhere.
 
 **Active**: canon's handover of 2026-09-10 (`dev-standards/docs/handovers/2026-09-10-life-therapy.md`,
-committed at canon `6a0f5ed`). §1 and §3–§5 are done; §2, the lesson triage, is half done.
+committed at canon `6a0f5ed`, §6 added at `69d6111`). §1 and §3–§6 are done; §2, the lesson
+triage, is half done.
 
-**Held with Stéan, not written here.** Triaging L-72 turned up an auth-flow finding. The repo is
-public, so the details are in the session report and nowhere in the tree. Ask before touching
-auth code, and leave L-72 off the outbox until it is decided.
+**Fixed, not pushed: waiting on Stéan's review.** Triaging L-72 turned up an auth-flow finding. It is
+fixed in `1396829`, and the audit now classifies every password setter (`PASSWORD_SETTERS`).
+Production runs the old code until that commit is pushed. The repo is public, so the details are in
+the session report and nowhere else. L-72 stays off the outbox until Stéan has reviewed the fix.
+
+**§6 done** (`05f544b`): `check-hook-registration` v3 adopted from canon's history, comment-only.
+The outbox's §3 asks canon to drop its v2 pin.
 
 **Triage so far** (2026-09-10, none pushed). Outbox at `cb80e5d`. **12 dated · 1 n/a · 2 queued (one item) · L-72
 held**: 16 of 36 handled.

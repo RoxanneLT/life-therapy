@@ -22,7 +22,7 @@
 
 | File | Size | Last commit |
 |---|---|---|
-| `CURRENT.md` | 4.0 KB | 2026-09-10 |
+| `CURRENT.md` | 4.3 KB | 2026-09-10 |
 | `DECISIONS.md` | 6.5 KB | 2026-09-09 |
 | `EVIDENCE.md` | 4.5 KB | 2026-09-09 |
 | `GATES.md` | 2.4 KB | 2026-09-09 |
