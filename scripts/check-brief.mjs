@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // check-brief — conformance for `brief/`, per standards/BRIEF-STANDARD.md v1.1
 //
-// @kit check-brief v4 — tracked. Edit it in dev-standards and re-adopt; a local change
+// @kit check-brief v5 — tracked. Edit it in dev-standards and re-adopt; a local change
 // here is a fork, and `check-kit-drift.mjs` will say so.
 //
 // Nine checks (B-1…B-9), one generator (--status), one probe (--selftest).
@@ -34,7 +34,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, mkdirSync, rmSync, utimesSync } from "node:fs";
-import { join, relative, dirname } from "node:path";
+import { join, relative, dirname, isAbsolute } from "node:path";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -45,7 +45,14 @@ const SELF = fileURLToPath(import.meta.url);
 const SPINE = ["README.md", "EVIDENCE.md", "DECISIONS.md", "GATES.md", "CURRENT.md", "STATUS.md"];
 const FOLDERS = ["product", "build", "design", "runbooks", "legal", "research", "vendors"];
 const ROTATE_ROWS = 40;
-const ROTATE_BYTES = 25 * 1024;
+// ⚠ `ROTATE_BYTES = 25 * 1024` WAS HERE AND IS WITHDRAWN — 2026-09-10, reported by the pleks
+// session. It was a size limit on `DECISIONS.md`, which is not one of the two files read at session
+// start, and the next four lines of this very file say that may not exist. The rule and its own
+// violation sat four lines apart. BRIEF-STANDARD §7 is the argument: "No size limit except on the
+// two files read at session start. The binding constraint elsewhere is whether the index is honest,
+// not whether a file is long." A decisions log costs nothing per session because nothing reads it
+// per session; its only real failure is DEAD ROWS crowding live ones, and that is what B-4 now
+// measures. See the B-4 block below for the other two legs.
 // B-8. Ceilings apply ONLY to the two files a session is told to read before starting;
 // everywhere else length is not the binding constraint (BRIEF-STANDARD §7).
 const CEILINGS = { "CURRENT.md": 8 * 1024, "build/INDEX.md": 40 * 1024 };
@@ -64,6 +71,26 @@ function tableRows(text) {
     .map((l) => l.trim().slice(1, -1).split("|").map((c) => c.trim()))
     .filter((cells) => !cells.every((c) => /^:?-{2,}:?$/.test(c) || c === ""))
     .filter((cells) => !/^(id|date|file|#)$/i.test(cells[0] ?? ""));
+}
+
+/**
+ * Every BODY row of every table — the rows after a `|---|` separator, whatever their first cell
+ * holds. `tableRows` drops a header by its first cell's NAME, which suits files whose tables share
+ * one shape; a decision log does not. pleks's carries three (`| Date |`, `| # |`, `| Decision |`),
+ * and the third header reads as a row to `tableRows` while the second table's rows read as nothing
+ * to a date filter. Position is the only header test that holds for every shape.
+ */
+function tableBodyRows(text) {
+  const out = [];
+  let inBody = false;
+  for (const raw of text.split("\n")) {
+    const l = raw.trim();
+    if (!(l.startsWith("|") && l.endsWith("|"))) { inBody = false; continue; }
+    const cells = l.slice(1, -1).split("|").map((c) => c.trim());
+    if (cells.every((c) => /^:?-{2,}:?$/.test(c))) { inBody = true; continue; }
+    if (inBody) out.push(cells);
+  }
+  return out;
 }
 
 /**
@@ -254,18 +281,103 @@ export function checkBrief(projectDir, { strictMarkers = false } = {}) {
   add("B-3", bad.length === 0,
     bad.length ? `incomplete: ${bad.map((r) => r[0]).join(", ")}` : `${gateRows.length} open gates, all complete`);
 
-  // B-4 · the decision log is under the rotation threshold
+  // B-4 · THE DECISION LOG HAS BEEN SWEPT, AND NOTHING DEAD IS STILL IN IT.
+  //
+  // ── v2, 2026-09-10, and the old rule was UNSATISFIABLE. Three legs, reported by pleks. ──
+  //
+  // ① THE REMEDY MADE THE FILE BIGGER. pleks applied §2.4's own binding test to all 52 rows of a
+  //   log over the threshold. Fifty-one still bound something in the tree — `009_security.sql`
+  //   holds `get_rls_audit()` because of one row, `vercel.json` has no `crons` array because of
+  //   another, a column is a `date` because of a third. Exactly one row was archivable. The file
+  //   went 29,527 → 30,470 bytes. **Doing what the mandatory rule demanded made it breach harder.**
+  //   (52 is the REPORTED count. Measured in the tree: 50 in the log + 1 archived = 51 — the
+  //   Standing section was counted one high. The leg holds either way; BRIEF-STANDARD §2.4 says so.)
+  //
+  // ② §6 GUARANTEES THIS STATE ON DAY ONE. "Existing projects migrate by filing, not rewriting —
+  //   no content is lost and no document is re-authored, which is the only kind of migration that
+  //   reliably finishes." A migrating project therefore files its ENTIRE decision history in one
+  //   act. The row count is a proxy for elapsed time — *enough history has accumulated that some of
+  //   it has died* — and a seeded file arrives at full history with ZERO elapsed time. Nothing has
+  //   died yet. This is not a young-repo edge case; it is the first-run state of every project that
+  //   follows §6, and it is provable by reading §6 against §2.4 rather than by asserting anything
+  //   about repos in general.
+  //
+  // ③ THE BYTE HALF CONTRADICTED §7, four lines from where this file restates §7. See the
+  //   withdrawal note at ROTATE_BYTES.
+  //
+  // ── what it measures now, and why this is not diligence ─────────────────────────────────
+  //
+  // The rejected repair was "the threshold triggers a mandatory re-SWEEP, recorded". That is
+  // satisfiable by sweeping, archiving nothing, writing that you archived nothing, and passing —
+  // **it measures whether someone remembered, not what is true of the file**, which is the shape
+  // this estate has now named in `audit.mjs`'s green tick meaning "I had no credentials" and in a
+  // ✅ that means a box was pasted.
+  //
+  // So the trigger prompts a sweep and the VERDICT is about the file: **dead rows that are still
+  // in it**. A log of 52 live rows is not a defect, it is 52 binding decisions, and archiving them
+  // would destroy what the tree depends on. A log of 52 rows where 9 are dead is the failure the
+  // rule was always for.
+  //
+  // THE SWEEP RECORD IS SELF-INVALIDATING against the file's own content, not against a calendar:
+  // a sweep dated before the newest decision row cannot have covered it. No reviewer has to
+  // remember a review date, and a record cannot rot quietly while rows are appended above it
+  // (`unrun`'s obligation, taken from the file instead of from a promise).
+  //
+  // NOT BUILT, deliberately: splitting a genuinely unwieldy all-live log by band. It is the right
+  // escalation — `build/INDEX.md` was split that way at 762 lines, on the argument that "band is
+  // the only axis with no state transition to maintain: a row is born in `40-auth` and dies there",
+  // and a decision row has that property. But no log in the estate is in that state, and a remedy
+  // written for a condition nobody is in is a remedy nobody tests. §2.4 names it as the option.
+  //
+  // ── WHAT COUNTS AS A ROW, and what `N of M` means — both fixed before v5 shipped ──────────
+  //
+  // v5 as first written counted only rows whose first cell was a date. Run against pleks's own log,
+  // the file this rule was rewritten for, it saw 33 rows: 32 dated decisions plus pleks's
+  // sweep-record row, and none of the 19 rows in its two undated tables. So the sweep logic never
+  // engaged on the file that motivated it — pleks passed as "under the trigger", which is the
+  // scar-§6 shape: **a check satisfiable by deleting its subject**, where the subject is a date
+  // cell. A row is now every body row of every table, and the date is used only for the sweep's
+  // expiry — an undated row added after a sweep still invalidates it, through the count.
+  //
+  // And `N of M rows still bind` had to be read one way for the record to be satisfiable at all.
+  // The first v5 required the log to hold M rows AND N === M, so the standard's own example —
+  // `51 of 52` — could never pass: before archiving it fired "dead rows still in the log", after
+  // archiving "the record describes a different file". **The standard taught a record the checker
+  // rejects**, which is the template-marker scar again. M is what the sweep tested, N what still
+  // bound, and after archival the log holds exactly N. That is the whole comparison.
   const decPath = join(briefDir, "DECISIONS.md");
   const dec = read(decPath) ?? "";
-  const decRows = tableRows(dec).filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r[0] ?? ""));
-  const decBytes = dec.length;
-  const overRows = decRows.length > ROTATE_ROWS;
-  const overBytes = decBytes > ROTATE_BYTES;
-  if (!existsSync(decPath)) add("B-4", true, "no DECISIONS.md — B-1 owns the absence", true); else
-  add("B-4", !overRows && !overBytes,
-    overRows || overBytes
-      ? `rotate: ${decRows.length} rows / ${(decBytes / 1024).toFixed(1)} KB (limit ${ROTATE_ROWS} / ${ROTATE_BYTES / 1024} KB)`
-      : `${decRows.length} rows, ${(decBytes / 1024).toFixed(1)} KB`);
+  const decRows = tableBodyRows(dec);
+  const sweep = dec.match(/\*\*Swept:\*\*\s*(\d{4}-\d{2}-\d{2})\s*[—-]\s*(\d+)\s+of\s+(\d+)\s+rows?\s+still\s+bind/i);
+  const newest = decRows.map((r) => (r[0] ?? "").match(/\d{4}-\d{2}-\d{2}/)?.[0]).filter(Boolean).sort().at(-1) ?? null;
+  const overTrigger = decRows.length > ROTATE_ROWS;
+  const [bind, tested] = sweep ? [Number(sweep[2]), Number(sweep[3])] : [0, 0];
+  if (!existsSync(decPath)) add("B-4", true, "no DECISIONS.md — B-1 owns the absence", true);
+  else if (!overTrigger) add("B-4", true, `${decRows.length} rows, under the ${ROTATE_ROWS}-row sweep trigger`);
+  else if (!sweep) {
+    add("B-4", false,
+      `${decRows.length} rows is over the ${ROTATE_ROWS}-row sweep trigger and no sweep is recorded. ` +
+      `Apply §2.4's test to every row — does any file in the tree today behave the way it does because of this row? ` +
+      `— archive the rows that fail it, and record \`**Swept:** YYYY-MM-DD — N of M rows still bind\` (M tested, N kept).`);
+  } else if (bind > tested) {
+    add("B-4", false,
+      `the sweep claims ${bind} of ${tested} rows still bind — more than it tested. It describes no file.`);
+  } else if (newest && sweep[1] < newest) {
+    add("B-4", false,
+      `the sweep is dated ${sweep[1]} and the newest decision is ${newest} — a sweep cannot have ` +
+      `covered a row added after it. Re-sweep.`);
+  } else if (decRows.length === bind) {
+    add("B-4", true,
+      `${decRows.length} rows, all still binding — swept ${sweep[1]}${tested > bind ? `, ${tested - bind} archived` : ""}`);
+  } else if (decRows.length === tested) {
+    add("B-4", false,
+      `the sweep found ${tested - bind} row(s) that no longer bind and they are STILL IN THE LOG — ` +
+      `move them to decisions/ARCHIVE-<YYYY-MM>.md. That is the whole of the rule.`);
+  } else {
+    add("B-4", false,
+      `the sweep kept ${bind} of ${tested} rows and the log now holds ${decRows.length} — ` +
+      `the record describes a different file. Re-sweep.`);
+  }
 
   // B-5 · unresolved markers.
   // SKIPPED unless --strict-markers: what counts as publishable is project-local
@@ -292,8 +404,20 @@ export function checkBrief(projectDir, { strictMarkers = false } = {}) {
       .filter((f) => f !== statusPath && f.endsWith(".md"))
       .filter((f) => statSync(f).mtimeMs > statusAt + 1000)
       .map((f) => relative(briefDir, f));
+    // THE FIX IS DERIVED, NOT WRITTEN (L-99). A failure a human acts on states its remedy — and a
+    // remedy spelled as a literal path goes stale the day the file moves, with no test to notice.
+    // So the command is built from the script actually running and the directory it was given.
+    // FORWARD SLASHES, because the first version printed win32 separators and the command it gave
+    // FAILED when pasted into Git Bash, which eats backslashes — measured by running it. Node takes
+    // `/` in every shell on every platform; a path outside the cwd is shown absolute, not as `../..`.
+    const shown = (p) => {
+      const r = relative(process.cwd(), p);
+      return (r === "" ? "." : r.startsWith("..") || isAbsolute(r) ? p : r).replaceAll("\\", "/");
+    };
     add("B-6", newer.length === 0,
-      newer.length ? `stale — newer since generated: ${newer.join(", ")}` : "current");
+      newer.length
+        ? `stale — newer since generated: ${newer.join(", ")}. Regenerate: node ${shown(SELF)} ${shown(projectDir)} --status`
+        : "current");
   }
 
   // B-7 · no two documents claim the same band or amendment number
@@ -505,6 +629,41 @@ function selftest() {
     ["B-3 gate owned by 'the team'", { ...GOOD, "brief/GATES.md": GOOD["brief/GATES.md"].replace("Stéan", "the team") }, "B-3"],
     ["B-3 gate with a bad date", { ...GOOD, "brief/GATES.md": GOOD["brief/GATES.md"].replace("2026-01-01", "January") }, "B-3"],
     ["B-4 log over the row limit", { ...GOOD, "brief/DECISIONS.md": bigLog(ROTATE_ROWS + 1) }, "B-4"],
+
+    // ── B-4 v2 · the sweep, and the state the OLD rule could not express ────
+    // The first case is the one that matters: it is pleks's file, and the rule it replaces FAILED
+    // it while its own mandatory remedy made the file larger. A log of all-binding rows is not a
+    // defect; it is that many binding decisions.
+    ["KNOWN-GOOD: over the trigger, swept, and every row still binds — the state §6 guarantees on day one",
+      { ...GOOD, "brief/DECISIONS.md": swept(ROTATE_ROWS + 12, ROTATE_ROWS + 12, "2026-12-31") }, null],
+    ["B-4 over the trigger with NO sweep recorded fires — the trigger prompts the sweep",
+      { ...GOOD, "brief/DECISIONS.md": bigLog(ROTATE_ROWS + 12) }, "B-4"],
+    ["B-4 a sweep that found dead rows STILL IN THE LOG fires — that is the whole of the rule",
+      { ...GOOD, "brief/DECISIONS.md": swept(ROTATE_ROWS + 12, ROTATE_ROWS + 3, "2026-12-31") }, "B-4"],
+    ["B-4 a sweep whose kept count matches neither the log nor what it tested fires — the record describes another file",
+      { ...GOOD, "brief/DECISIONS.md": swept(ROTATE_ROWS + 12, ROTATE_ROWS + 5, "2026-12-31", ROTATE_ROWS + 5) }, "B-4"],
+    ["B-4 a sweep claiming more rows bind than it tested fires — it describes no file",
+      { ...GOOD, "brief/DECISIONS.md": swept(ROTATE_ROWS + 12, ROTATE_ROWS + 12, "2026-12-31", ROTATE_ROWS + 5) }, "B-4"],
+    // THE STANDARD'S OWN EXAMPLE, as a regression guard. §2.4 shows `51 of 52 rows still bind`; the
+    // first v5 rejected that record in both states it can describe. A standard must teach a record
+    // its checker accepts.
+    ["KNOWN-GOOD: `51 of 52` over a 51-row log passes — the sweep tested 52, archived 1, and the log holds the 51 it kept",
+      { ...GOOD, "brief/DECISIONS.md": swept(ROTATE_ROWS + 11, ROTATE_ROWS + 11, "2026-12-31", ROTATE_ROWS + 12) }, null],
+    // WHAT COUNTS AS A ROW. Measured on pleks's log: 33 rows seen of 52, because 19 had no date.
+    ["B-4 UNDATED rows count — 30 dated + 15 undated is 45 rows, and hiding a date must not hide the row",
+      { ...GOOD, "brief/DECISIONS.md": bigLog(30) + "\n## Standing\n\n| Decision | Source |\n|---|---|\n" +
+        Array.from({ length: 15 }, (_, i) => `| **Standing ${i}.** Why. | here |`).join("\n") + "\n" }, "B-4"],
+    ["KNOWN-GOOD: a table headed `| Decision | Source |` counts its 40 body rows, not 41 — a header is not a decision",
+      { ...GOOD, "brief/DECISIONS.md": "# Decisions\n\n| Decision | Source |\n|---|---|\n" +
+        Array.from({ length: ROTATE_ROWS }, (_, i) => `| **Row ${i}.** Why. | here |`).join("\n") + "\n" }, null],
+    ["B-4 a sweep dated BEFORE the newest row fires — it cannot have covered a row added after it.\n      SELF-INVALIDATING against the file, not a calendar: no one has to remember a review date",
+      { ...GOOD, "brief/DECISIONS.md": swept(ROTATE_ROWS + 12, ROTATE_ROWS + 12, "2025-01-01") }, "B-4"],
+    // THE WITHDRAWN BYTE TRIGGER, kept as a permanent regression guard. §7: no size limit except on
+    // the two files read at session start. A 60 KB all-binding log under the row trigger is FINE,
+    // and the rule that said otherwise sat four lines from this file's own restatement of §7.
+    ["KNOWN-GOOD: a 60 KB decision log under the row trigger passes — the 25 KB limit is WITHDRAWN (§7)",
+      { ...GOOD, "brief/DECISIONS.md": "# Decisions\n\n| Date | Decision |\n|---|---|\n" +
+        Array.from({ length: 20 }, (_, i) => `| 2026-01-01 | **Row ${i}.** ${"why ".repeat(800)} |`).join("\n") + "\n" }, null],
     ["B-6 STATUS older than a document", GOOD, "B-6", { touchAfter: "brief/build/10-foundation.md" }],
 
     // ── vacuity: an absent subject must SKIP, never pass ────────────────────
@@ -630,6 +789,10 @@ function selftest() {
 }
 
 const omit = (obj, key) => Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key));
+/** A log of `n` rows carrying a sweep dated `date` that tested `tested` rows and kept `bind`. */
+const swept = (n, bind, date, tested = n) =>
+  bigLog(n) + `\n**Swept:** ${date} — ${bind} of ${tested} rows still bind\n`;
+
 const bigLog = (n) =>
   "# Decisions\n\n| Date | Decision |\n|---|---|\n" +
   Array.from({ length: n }, (_, i) => `| 2026-01-${String((i % 28) + 1).padStart(2, "0")} | **Row ${i}.** Why. |`).join("\n") + "\n";
