@@ -3,16 +3,19 @@ description: Adversarial walk of the current work before pushing — verify agai
 ---
 
 Walk the work just completed as an adversarial reviewer. You are trying to REFUTE the done-report,
-not confirm it. For an independent pass, spawn the `walker` agent on the diff and fold its findings
-in — its fresh context catches what the author's context cannot.
+not confirm it. Spawn the `walker` agent on the diff in the background first, then work steps 1–3
+yourself while it runs, and fold its findings in when it returns. Its fresh context catches what the
+author's context cannot.
 
 1. **Origin, not working tree.** `git fetch origin` and diff every claim against the pushed state.
    Uncommitted work that a report calls "done" IS a finding.
 
 2. **Verify claims in the artefacts.** Every "done" claim gets checked in the actual files. Live-data
-   claims ("58 bookings have a stale link") require an actual query — send them to the `db-inspector`
-   agent. Repo-wide pattern claims ("no naive date slices remain") go to the `census` agent, with
-   synonym spellings, and a zero only counts if the probe demonstrably fires on a known positive.
+   claims ("58 bookings have a stale link") require an actual query. Repo-wide pattern claims ("no
+   naive date slices remain") require a census. Spawn one `db-inspector` per live-data claim and one
+   `census` per pattern claim, all in a single message so they run concurrently. Brief each census
+   with the synonym spellings and a known positive, since a zero only counts if the probe
+   demonstrably fires on one.
 
 3. **Fail-open hunt on the diff.** For every guard, check, or computation touched: if this input is
    malformed, missing, stale, or out of range, does the code fail toward "looks valid"? Precedents

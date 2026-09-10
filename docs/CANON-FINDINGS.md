@@ -92,6 +92,35 @@ FIX        asserting `status` — check-brief already spawns itself for `--statu
            adopting project's tree, or a clean fixture stops being clean in some adopter.
 ```
 
+### CF-3 · The spines' anchor carries no spine version, so L-39's cheap tell is out of reach
+
+```
+OBSERVED   Every spine states its version in a marker, and none of the five anchor templates asks
+           the agent to copy it into the artefact. So an artefact cannot say which file its agent
+           ran, and L-39 names exactly that as the first question to ask before diagnosing
+           "disobedience".
+COMMAND    $ grep -H "SPINE:" .claude/agents/*.md | grep -v "/SPINE"
+           .claude/agents/census.md:<!-- SPINE:census v9 -->
+           .claude/agents/crawler-doctrine.md:<!-- SPINE:crawler-doctrine v3 -->
+           .claude/agents/db-inspector.md:<!-- SPINE:db-inspector v4 -->
+           .claude/agents/grounder.md:<!-- SPINE:grounder v6 -->
+           .claude/agents/implementer.md:<!-- SPINE:implementer v4 -->
+           .claude/agents/walker.md:<!-- SPINE:walker v7 -->
+           $ grep -n "^anchor:" <canon>/kit/agents/census.spine.md     (kit/agents clean at 69d6111)
+           268:anchor: task=<slug> · agent=census · utc=<YYYY-MM-DDTHH:MM:SSZ> · commit=<short SHA>
+           The same four fields in db-inspector, grounder, implementer and walker; crawler-doctrine
+           has no anchor (its stdout is one JSON object).
+WHY IT IS  The spines are canon's bytes and `check-agent-spines` verifies them against canon, so no
+CANON'S    adopter can add the field without forking the row. The trap is the harness's, not a
+           stack's: every project that edits a spine and spawns within the same turn meets it.
+SMALLEST   Add `spine=<name> v<N>` to the anchor template, copied from the file's own SPINE marker.
+FIX        That is L-39's refinement exactly: a version the agent must write as part of work it
+           already does, not an aside it can skip as noise. `check-handoff-contract` can then
+           compare the stamped version with the spine at the anchor's commit. It must NOT fail an
+           artefact written before the field existed (they have none), and must not read the spine
+           from the working tree: an in-turn edit is the case it exists to expose.
+```
+
 ---
 
 ## 2 · Lesson answers

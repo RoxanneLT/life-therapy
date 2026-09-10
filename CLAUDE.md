@@ -415,7 +415,8 @@ measurement, not open**: a refusal that carries its numbers is a finish.
   A wrapped line in a commit message began with a gated command, and `\n` is a command
   separator — so a heredoc *describing* the rule read as invoking it. The scar records this
   being fixed once, for the inline case; the multi-line door stayed open and the same bug came
-  back through it a day later. → `.claude/hooks/bash-gate.test.mjs`
+  back through it a day later. Closed 2026-09-09 in `ad48fa2`: kit bash-gate v3 masks a heredoc
+  body fed to `git` before any rule runs. → `.claude/hooks/bash-gate.test.mjs`
   · narrative at `.claude/hooks/bash-gate.js`
 
 - **2026-08-19 · The partner invite the provider refused.** Cost: a client's partner uninvited to
@@ -579,6 +580,14 @@ Subagents **do** receive this file (E3) — but a narrow-task agent skims it, an
 never reach an edit-blind session (E1b). Presence is not enforcement, which is why the
 incident class lives at hooks and checks. The write-scope gate is that rule applied to the agents
 themselves: their own spine text is prose to them in exactly the way this file is.
+
+**A spine edit takes effect at the next turn, not the next spawn.** The harness reads agent
+definitions at the turn boundary, so every spawn inside the turn that made the edit runs the old
+file, while hooks in the same folder reload at once. That is a harness fact measured in pleks (E9),
+so it holds here without re-measuring. An agent that seems to ignore a fresh edit is a version
+question before it is a wording question: find out which file it ran before rewording anything.
+The artefact cannot say yet, because the anchor carries no spine version (`docs/CANON-FINDINGS.md`
+CF-3). dev-standards/ledgers/LESSONS.md L-39.
 
 **What agents actually cost: `npm run agents:distribution`.** Turn and output budgets live in each
 spine and are UNENFORCEABLE by canon's own grammar — an agent has no reliable turn counter, it
