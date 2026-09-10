@@ -8,23 +8,32 @@
 > so its size is a per-session tax. Anything older than the current step is history: finished
 > decisions go to `DECISIONS.md`, finished steps to `build/INDEX.md`, the rest nowhere.
 
-**Active** — canon's handover of 2026-09-10 (`dev-standards/docs/handovers/2026-09-10-life-therapy.md`,
-committed at canon `6a0f5ed`). Five sections; four are done, the lesson triage is not started.
+**Active**: canon's handover of 2026-09-10 (`dev-standards/docs/handovers/2026-09-10-life-therapy.md`,
+committed at canon `6a0f5ed`). §1 and §3–§5 are done; §2, the lesson triage, is half done.
 
-**Just done** (2026-09-10, none pushed)
+**Held with Stéan, not written here.** Triaging L-72 turned up an auth-flow finding. The repo is
+public, so the details are in the session report and nowhere in the tree. Ask before touching
+auth code, and leave L-72 off the outbox until it is decided.
 
-- `2ea2ca6` — `"PowerShell"` denied in `.claude/settings.json` (M-KIT-22). Stéan's edit, confirmed
-  theirs before committing. Every command gate here matches `Bash`; that tool walked around all of them.
-- `bafd9e3` — `check-brief` v5, from canon's history, `names` region carried. Brief unchanged.
-- `6009d55` — the outbox, `docs/CANON-FINDINGS.md` (template row `canon-findings`). §3 reports both
-  adoptions. `brief/README.md`: five `docs/` files are addressed by name, one of them by canon.
-- `52af865` — the ledger's path. Canon moved it to `ledgers/LESSONS.md` on 2026-08-20 and this tree
-  taught the old one at 23 sites, including the audit's own fix text (L-99). The citations check got a
-  detector for the old path, a narrowed zero-padding detector (the old one would have failed an honest
-  `L-100`), a wider scope, and its first probe. `CLAUDE.md` §1 now says to query canon at session start
-  rather than read the ledger. CF-1 filed: that query runs canon's working tree, which today was dirty.
+**Triage so far** (2026-09-10, none pushed). Outbox at `cb80e5d`. **12 dated · 1 n/a · 2 queued (one item) · L-72
+held**: 16 of 36 handled.
 
-**Next action — §2, the lesson triage: 36 of 99 open, L-34…L-73.** For each one:
+- Batch 1 (`ba1cf4b`): L-34, 40, 44, 50, 51, 54 dated; L-73 n/a. CF-2 filed: canon's kit checks
+  don't carry L-51.
+- Batch 2 (`cb80e5d`): L-48, 52, 53, 57, 69, 70 dated. L-35 and L-49 are queued as one item in
+  `docs/LESSONS.md` (the audit's `code()` deletes real code in 10 files).
+- Three of those dates are fixes the triage found: `b87ffe3` (email-tiers blind to SQL filters),
+  `2afcb7a` (rate limits read off text), `ba98288` (`DATE_ALLOWLIST` exempted nothing, and its
+  liveness test said otherwise). Each was measured against the old version with plants, and each
+  diff's mutants are killed.
+
+**Earlier the same day**: `2ea2ca6` PowerShell denied (M-KIT-22) · `bafd9e3` check-brief v5 ·
+`6009d55` the outbox · `52af865` the ledger's new path, swept · `be03bc4` probe-checks asserts the
+audit's exit code (L-51).
+
+**Next action: batches 3 and 4.** Reading-a-result and delegating: L-36, 41, 42, 43, 45, 55, 59, 60,
+61, 66. Then carrying-debt, writing-a-rule, environment and installing: L-39, 46, 47, 56, 58, 64,
+65, 67, 68, 71. For each one:
 
 1. Check `git -C <canon> status --short tools` first. **It was dirty today**, so the list came from
    `git archive HEAD tools ledgers` extracted to the scratchpad (CF-1). The HEAD run and the dirty run
