@@ -8,35 +8,42 @@
 > so its size is a per-session tax. Anything older than the current step is history: finished
 > decisions go to `DECISIONS.md`, finished steps to `build/INDEX.md`, the rest nowhere.
 
-**Active**: canon's handover of 2026-09-10 (`dev-standards/docs/handovers/2026-09-10-life-therapy.md`,
-committed at canon `6a0f5ed`, §6 added at `69d6111`). **Every section is done.** Nothing is pushed.
+**Active**: the lesson queue in `docs/LESSONS.md`, after canon's handover of 2026-09-10
+(`dev-standards/docs/handovers/2026-09-10-life-therapy.md`, canon `6a0f5ed`, §6 at `69d6111`). Every
+section of that handover is done.
 
-**Fixed, not pushed: waiting on Stéan's review.** Triaging L-72 turned up an auth-flow finding. It is
-fixed in `1396829`, and the audit now classifies every password setter (`PASSWORD_SETTERS`).
-Production runs the old code until that commit is pushed. The repo is public, so the details are in
-the session report and nowhere else. L-72 stays off the outbox until Stéan has reviewed the fix.
+**Pushed 2026-09-10, at Stéan's request: `1101e1f..46b8221`.** That carries the auth-flow fix
+`1396829`, found while triaging L-72; the audit classifies every password setter
+(`PASSWORD_SETTERS`). The deploy was **not verified from here**: this session's Vercel team lists
+pleks, yoros and sterreveld, not life-therapy, which deploys from the repo owner's account. The repo
+is public, so the details are in the session report and nowhere else. L-72 stays off the outbox
+until Stéan says the review is done.
 
-**§6** (`05f544b`): `check-hook-registration` v3 adopted from canon's history, comment-only. The
-outbox's §3 asks canon to drop its v2 pin.
+**Committed since the push, not pushed:**
 
-**Triage finished** (2026-09-10). **26 dated · 5 n/a · 4 queued (three items) · L-72 held**: 36 of 36.
+- `a599577`: the audit's `code()` and `codeKeepingLiterals()` read the TypeScript parser
+  (L-35 · L-49). Against the parser as oracle over 546 files, the regex version lost 700
+  identifiers in 8 files; the new one loses 0, and agrees on all 4,381 comments. The audit's output
+  was byte-identical after the swap. New check `audit: every source file parses`, probed. The cost:
+  the audit runs about 1.5 s slower.
+- The records commit after it: §2 rows L-35 and L-49, L-57's row re-tensed, CF-4 (L-41's tell
+  belongs in canon's `check-handoff-contract`), and `docs/LESSONS.md` corrected. That entry's first
+  measurement, 904 in 10, included 204 phantom losses from a lone `\r` in two files.
 
-- Batch 1 (`ba1cf4b`) and 2 (`cb80e5d`): 12 dated, L-73 n/a. CF-2: canon's kit checks don't carry L-51.
-- Batch 3 (`731682a`): 7 dated, L-59 and L-61 n/a. L-42 and L-43 carried by §8 prose (`691778f`).
-- Batch 4 (the outbox commit after `415f480`): 7 dated, L-58 and L-65 n/a. Carried along the way:
-  L-39 (§7) and L-64 (§3) as prose, L-47 (a §6 scar still read "open"), L-56 (`/walk` now spawns in
-  the imperative). CF-3: the spines' anchor carries no spine version.
-- Fixes the triage found in the audit: `b87ffe3`, `2afcb7a`, `ba98288`, each measured against the
-  old version with plants, each diff's mutants killed.
-- **Queued in `docs/LESSONS.md`, real work:** L-35 · L-49 (`code()` deletes real code in 10 files),
-  L-41 (quarantine agent citations of files edited after dispatch), and L-68, which only Stéan can
-  carry: a standing authorisation in §7, in Stéan's own words, for the agent pipeline the host layer
-  forbids "unless requested".
+**Triage** (2026-09-10): 36 of 36 answered, queued or held. Batches `ba1cf4b`, `cb80e5d`,
+`731682a`, `46b8221`. Findings to canon: CF-1 (the session-start query runs canon's working tree),
+CF-2 (kit checks don't carry L-51), CF-3 (no spine version in the anchor), CF-4 (above).
 
-**Next action: wait.** Stéan reviews `1396829` and decides the push, and says whether to write the
-L-68 authorisation. Canon lifts the outbox from HEAD. When it replies with SHAs, rows move to
-**Filed**. Before re-running `--emit-open`, check `git -C <canon> status --short tools`: if it is
-dirty, run from `git archive HEAD` (CF-1).
+**Queue, `docs/LESSONS.md`:**
+
+- **L-41**: waits on canon (CF-4). Nothing to build here without forking a kit row.
+- **L-68**: only Stéan can carry it: a standing authorisation in §7, in Stéan's own words, for the
+  agent pipeline the host layer forbids "unless requested". Not to be written for them.
+
+**Next action: wait.** Stéan decides whether to push `a599577` and the records commit, and whether
+to write the L-68 authorisation. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
+move to **Filed**. Before re-running `--emit-open`, check `git -C <canon> status --short tools`: if
+it is dirty, run from `git archive HEAD` (CF-1).
 
 **Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
 `node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree.

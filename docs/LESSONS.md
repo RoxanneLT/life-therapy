@@ -59,36 +59,33 @@ is worth keeping:
 - **L-10** — `audit: the source enumeration has not decayed`, a floor of 400 against a real count
   of 542. Deliberately not `> 0`, which still passes when a walk decays to one file.
 
+One item queued on 2026-09-10 has since been carried, and its queue entry was wrong in two ways:
+
+- **L-35 · L-49** (`a599577`, answered in `docs/CANON-FINDINGS.md` §2). The audit's `code()` and
+  `codeKeepingLiterals()` now ask the TypeScript parser, and `audit: every source file parses`
+  names what the parser could only recover from. The entry said 904 identifiers in 10 files; the
+  real figure is 700 in 8. `admin-header.tsx` and `portal-header.tsx` each hold one lone `\r`, which
+  TypeScript counts as a line break and `split("\n")` does not, so the oracle's line numbers were
+  off and its 204 "losses" there were the harness's. And the fix it proposed, `ts.createScanner`,
+  could not have worked alone: a scanner cannot tell a regex from a division, or JSX text from code,
+  unless the parser drives it. The fix reads the parse tree instead.
+
 ### Queued: applies here, not carried
 
-- **L-35 · L-49 — the audit's `code()` deletes real code, and says nothing when it does.**
-  `code()` (`scripts/architecture-audit.mjs`) is a regex pass standing in for a tokenizer. It blanks
-  strings with a double-quote pass that runs before the single-quote pass, so a `'"'` character
-  literal opens a "string" that swallows code up to the next `"`. A regex literal containing a quote
-  does the same. The TypeScript scanner, which is in the build already, answers the question
-  exactly (L-35). Measured 2026-09-10 with that scanner as the oracle: every identifier outside a
-  template literal, checked for survival on its own line, across 546 files under `app/`, `lib/` and
-  `components/`. **In 10 files `code()` deleted real code, 904 identifiers in total.** The worst:
-  `client-importer.tsx` (475, from line 33), `lib/email-templates.ts` (136), `admin-header.tsx`
-  (105), `portal-header.tsx` (99), `app/api/track/open/route.ts` (35). Then `lib/email-tracking.ts`
-  (20), `lib/csv.ts` (16), `admin-sidebar.tsx` (9), `lib/utils.ts` (8), `lib/safe-redirect.ts` (1).
-  Roughly two dozen checks read through `code()`, so in those regions every one of them reports
-  "no findings" when it had no visibility (L-49). The work is to replace `code()` with
-  `ts.createScanner` and blank by token kind. Failing that, compute the desync (an unbalanced
-  quote at end of line is the signature) and make each check say which files it could not read.
-  Probe with the ten files above: each must come back identical in identifiers to the parser's view.
-
-- **L-41 — an agent can cite the dispatcher's own in-flight edit as independent evidence.** The
+- **L-41 — an agent can cite the dispatcher's own in-flight edit as independent evidence. Waits on
+  canon: `docs/CANON-FINDINGS.md` CF-4.** The mechanism belongs in `check-handoff-contract`, which is
+  canon's bytes with no config region, so it cannot be built here without forking the row. The
   agents here share the main session's working tree, and the main session keeps working while they
   run. Measured 2026-09-10: 8 LT subagent runs on this machine (grounder 5, census 2, db-inspector
   1). Each artefact opens with `commit=<short SHA> · utc=<time>` (five of the six spines;
   `crawler-doctrine` returns bare JSON), and `grounder` forbids a working-tree claim it did not read from `git
   status`. So the materials for the tell are recorded, but nothing compares them. A cited file that
   differs from the anchor commit, or changed after the anchor time, reads exactly like one that did
-  not. The work: `check-handoff-contract` reads each artefact's cited paths and marks any file dirty
-  against `commit=`, or with an mtime past `utc=`, as **quarantined**. It is not failed, because the
-  conclusion may stand on another source; the report has to name which. Probe: an artefact citing
-  a file edited after its anchor must be marked, and one citing a clean file must not.
+  not. The work, as CF-4 proposes it: `check-handoff-contract` marks any cited file whose mtime
+  falls between the anchor's `utc=` and the artefact's own mtime as **quarantined**. It is not
+  failed, because the conclusion may stand on another source; the report has to name which. An edit
+  after the artefact was written is staleness, a different lesson. Prototyped outside the tree on
+  the one artefact here: 23 cited paths, 17 resolving, 0 edited during its 242-second run.
 
 - **L-68 — the host layer forbids the agent pipeline, and only Stéan can lift it.** Observed
   2026-09-10: the session that triaged this arrived with *"Do not use the Agent tool, workflows or
