@@ -1451,6 +1451,49 @@ check("email-tiers: a suppression decision goes through lib/engagement.ts", () =
       "call mayReceiveMarketing / mayReceiveGoodwill / mayReceiveAccountNotice from lib/engagement.ts — an automatic pause must not suppress a birthday wish or a credit-expiry warning",
     );
   }
+
+  // The SECOND path to the same decision, added 2026-09-10 (L-48). The arm above sees a
+  // branch in code and deliberately skips object keys, so a Prisma `where: { emailPaused:
+  // false }` — which decides suppression in the QUERY, before any code runs — was invisible.
+  // That is not a hypothetical path: it is the one the scar took. `birthday-process.ts`
+  // filtered exactly that in SQL, and the fix moved it into `mayReceiveGoodwill`. Planted
+  // back in, the check above stayed green. The control guarded the branch while the query
+  // made the same decision a line away.
+  //
+  // `false` only: a `select` names the column with `true`, and a `where` finding the paused
+  // (`true`) is reporting on them, not suppressing them. A marketing sender filtering in SQL
+  // is CORRECT — every suppression binds that tier — so those are entries here, each saying
+  // which tier it is, and an entry that stops filtering fails, so it cannot outlive its site.
+  const SQL_FILTER_IS_MARKETING = new Map([
+    ["lib/contacts.ts", "campaign audience — marketing, where every suppression binds"],
+    ["lib/drip-emails.ts", "drip sequence — marketing; the candidate query IS the predicate, as the site says"],
+    ["lib/cron/dormant-follow-up.ts", "re-engagement nudge — direct marketing however gently worded, as the site says"],
+  ]);
+  const SQL_FILTER = /\bemailPaused\s*:\s*false\b/;
+  for (const file of allSource()) {
+    const r = rel(file);
+    if (DECIDES_TIERS.has(r) || file.endsWith(".tsx")) continue;
+    const src = codeKeepingLiterals(read(file));
+    const m = SQL_FILTER.exec(src);
+    if (SQL_FILTER_IS_MARKETING.has(r)) {
+      if (!m) {
+        fail(
+          "email-tiers",
+          r,
+          "SQL_FILTER_IS_MARKETING exempts a file that no longer filters on emailPaused",
+          "remove the entry — it now covers whatever query is written into this file next",
+        );
+      }
+      continue;
+    }
+    if (!m) continue;
+    fail(
+      "email-tiers",
+      `${r}:${src.slice(0, m.index).split("\n").length}`,
+      "filters `emailPaused: false` in a query — a suppression decision made in SQL, where no tier is named",
+      "filter consent and opt-out in SQL and the pause in code through lib/engagement.ts; if this sender is marketing, add it to SQL_FILTER_IS_MARKETING with the reason",
+    );
+  }
 });
 
 check("email-tracking: a tracked link is one the redirector will forward", () => {

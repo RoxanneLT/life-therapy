@@ -226,6 +226,17 @@ const MUTATIONS = [
     replace: '"test": "tsx --test lib/__probe-vanished.test.ts ',
     expects: ["test-floor: every test file on disk is in the suite the gate runs"],
   },
+  {
+    // The scar's own regression, in the scar's own file: the birthday query filtering the pause
+    // in SQL, which is how the practice owner's birthday email stopped arriving. The email-tiers
+    // check was green over exactly this until 2026-09-10 — it watched branches, and this is a
+    // query (L-48). `named`, so the finding must be THIS file, not some other sender.
+    path: "lib/birthday-process.ts",
+    named: true,
+    find: "dateOfBirth: { not: null },\n",
+    replace: "dateOfBirth: { not: null },\n      emailPaused: false,\n",
+    expects: ["email-tiers: a suppression decision goes through lib/engagement.ts"],
+  },
 ];
 
 /**
