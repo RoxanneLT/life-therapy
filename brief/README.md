@@ -43,8 +43,8 @@ Each folder carries its own `README.md` indexing its files.
 
 ## What is NOT here, and why
 
-`docs/` still exists and is not a second brief. Four files there are **addressed by name from code,
-config or `CLAUDE.md`** and cannot move without breaking the thing that reads them:
+`docs/` still exists and is not a second brief. Five files there are **addressed by name from code,
+config, `CLAUDE.md` or canon** and cannot move without breaking the thing that reads them:
 
 | File | Read by |
 |---|---|
@@ -52,6 +52,7 @@ config or `CLAUDE.md`** and cannot move without breaking the thing that reads th
 | `docs/LESSONS.md` | the pointer to `dev-standards/LESSONS.md`, named in `CLAUDE.md` §1 |
 | `docs/DEPENDENCY-ADVISORIES.md` | named in the commit that carries the four declined advisories |
 | `docs/SESSION_HANDOVER_2026-08-17.md` | `CLAUDE.md` §1, **Session state** — named by path, so a move edits §1 |
+| `docs/CANON-FINDINGS.md` | **canon**, from outside this repo: the estate session lifts it with `git -C <project> show HEAD:docs/CANON-FINDINGS.md`. Nothing here would fail if it moved — the reader that breaks is in another repo, which is why this row matters more than the other four |
 
 That fourth row was missing when this file was seeded: the table said three, and the handover it
 omitted is the one a session is told to read first. It is also one of the four documents `G-02` was
