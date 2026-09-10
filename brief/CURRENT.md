@@ -8,63 +8,41 @@
 > so its size is a per-session tax. Anything older than the current step is history: finished
 > decisions go to `DECISIONS.md`, finished steps to `build/INDEX.md`, the rest nowhere.
 
-**Active** — adopting the dev-standards project kit. No band; the work is one row at a time against
-`kit/project-kit/MANIFEST.json`, verified by `apply-kit --project life-therapy` (dry run only —
-`--write` is never run from here) and `check-kit-drift`.
+**Active** — canon's handover of 2026-09-10 (`dev-standards/docs/handovers/2026-09-10-life-therapy.md`,
+committed at canon `6a0f5ed`). Five sections; four are done, the lesson triage is not started.
 
-**Just done**
+**Just done** (2026-09-10, none pushed)
 
-- **M-KIT-17 answered here**: `.claude/package.json` declares `"type": "module"` for that subtree,
-  and `context-budget.js` + `statusline.js` converted. Canon left this fix open as Stéan's call and
-  weighed two options; this is a third it had not considered, so it goes back as a finding along
-  with ⑩ — `typelessHooks()` reads only the ROOT `package.json`, so it still reports this project as
-  typeless after the fix, and would SKIP a project whose root says `module` while a nested file says
-  `commonjs`. That second direction is the silent one.
-- `bash-gate` v3 + probe v4 + the new `bash-gate.config.mjs`. `apply-kit` now reports **nothing to
-  do** — the first time this project has been level with canon.
+- `2ea2ca6` — `"PowerShell"` denied in `.claude/settings.json` (M-KIT-22). Stéan's edit, confirmed
+  theirs before committing. Every command gate here matches `Bash`; that tool walked around all of them.
+- `bafd9e3` — `check-brief` v5, from canon's history, `names` region carried. Brief unchanged.
+- `6009d55` — the outbox, `docs/CANON-FINDINGS.md` (template row `canon-findings`). §3 reports both
+  adoptions. `brief/README.md`: five `docs/` files are addressed by name, one of them by canon.
+- `52af865` — the ledger's path. Canon moved it to `ledgers/LESSONS.md` on 2026-08-20 and this tree
+  taught the old one at 23 sites, including the audit's own fix text (L-99). The citations check got a
+  detector for the old path, a narrowed zero-padding detector (the old one would have failed an honest
+  `L-100`), a wider scope, and its first probe. `CLAUDE.md` §1 now says to query canon at session start
+  rather than read the ledger. CF-1 filed: that query runs canon's working tree, which today was dirty.
 
-- `check-claude-md` **v15** adopted (canon `671b269`, taken from history), and the `dates-test`
-  splice repaired by hand — canon repaired its own copy and cannot deliver that repair, because the
-  damage is inside a `KIT:CONFIG` region and `apply-kit` carries a project's region rather than
-  overwriting it. Same reason `POINTER`'s v15 widening had to be taken by hand; the four probes that
-  fail without it are named in the region.
-- `G-02` closed: the four pre-brief handovers **stay in `docs/`**, indexed at `build/INDEX.md` under
-  *Before this brief existed* rather than migrated. `CALENDAR_PIPELINE_HANDOVER.md` renamed to carry
-  the date it had only in git. Enumerating the four exposed a fourth reader `README.md` had not
-  listed: `CLAUDE.md` §1 names `SESSION_HANDOVER_2026-08-17.md` by path.
-- `brief` v1 + `check-brief` v4 seeded and wired. This file, and the four spine files beside it.
-- `check-claude-md` v14 adopted and on the gate. Its first run found this project's own `CLAUDE.md`
-  header comment closing 8 lines early, on a `-->` inside backticks in the entry that documents
-  comment-stripping. Two `@enforced` markers were real overclaims and were fixed at the control.
-- The `audit:` namespace is **overridden** in the checker's resolvers region, not merely added:
-  canon's literal substring test resolved 1 of this project's 21 audit markers, and the 1 was a
-  false positive matching a selftest fixture.
-- 7 npm advisories classified, 3 fixed, 4 declined with the reasoning on disk.
-- `bash-gate-probe` v3 with 7 verdicts tightened here; `dates` / `dates-test`;
-  `agent-write-scope` trio; `check-handoff-contract` v3.
+**Next action — §2, the lesson triage: 36 of 99 open, L-34…L-73.** For each one:
 
-**Next action** — none in the kit. **The adoption is finished.** `apply-kit --project life-therapy`
-reports *"Nothing to do: every requested row is already canon's, pinned, or a template already
-present"*, and `check-kit-drift` reports this project with **no findings at all** — its one
-life-therapy line is the positive `◈ asserted — settings — 2 of 2 claim(s) held`. `brief` and
-`check-brief` were declared in canon's ledger on 2026-09-09, which cleared the last `UNRECONCILED`
-row; that declaration is the dev-standards session's to write and was never this project's to fix.
+1. Check `git -C <canon> status --short tools` first. **It was dirty today**, so the list came from
+   `git archive HEAD tools ledgers` extracted to the scratchpad (CF-1). The HEAD run and the dirty run
+   named the same 36 lessons.
+2. Read each entry from its line (about 40 lines), measure this tree, and answer it with a date plus
+   evidence, or with `n/a:` and a reason that argues it (with the search and its hit count when it
+   rests on one). A lesson that applies and is **not** carried here is real work: queue it in
+   `docs/LESSONS.md` or `docs/MECHANISABLE.md`, never in the outbox.
+3. Write the answers to `docs/CANON-FINDINGS.md` §2 and commit one trigger group at a time. Canon lifts
+   only committed answers.
+4. Report *N dated · N n/a · N queued* along with the outbox SHA. Rows move to **Filed** when canon
+   replies with its SHA.
 
-Two estate-wide tallies went to zero in the same pass, and neither is only about this project:
-`🧩 typeless hooks — 7 examined, 0 rely on Node's module-syntax detection` and `🎯 adopted probes —
-5 reached from their gate, 0 NOT reached`.
+**Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
+`node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree.
+`claude-md-ratio` is retired in canon; do not install it if an older manifest is ever read.
 
-`claude-md-ratio` is retired in canon — the row and the file are gone, and it was never installed
-here. **Do not install it if an older manifest is ever read.**
-
-What this project should watch for next is not a queue but a signal: canon pushing again. The check
-is `node tools/apply-kit.mjs --project life-therapy` (dry run — `--write` is never run from here)
-and `node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree.
-
-`G-01` and `G-03` are open and **deliberately not being chased** — Stéan set them aside on
-2026-09-09. G-01 cannot close until the desktop exists to point at; G-03 stays open because "don't
-worry about it" is a deferral, and writing it into the Closed table as an answer would be putting
-words in someone's mouth. The **open since** column is doing its job on both.
+`G-01` and `G-03` are open and **deliberately not being chased**. Stéan set them aside on 2026-09-09.
 
 **Decided mid-build, not yet in DECISIONS.md** — nothing.
 
@@ -72,8 +50,8 @@ words in someone's mouth. The **open since** column is doing its job on both.
 
 - `C:\dev\dev-standards` — read-only from this project, in every direction. Never
   `apply-kit --write`; the dry run is the read-only way to read the plan.
-- `docs/MECHANISABLE.md` **as a path** — `scripts/check-claude-md.mjs` addresses it by name as its
-  register, and every `M-NN` pointer in `CLAUDE.md` §5 resolves into it.
+- `docs/MECHANISABLE.md` and `docs/CANON-FINDINGS.md` **as paths** — the first is
+  `check-claude-md`'s register, the second is lifted by canon from this repo's HEAD.
 - `prisma/schema.prisma` — never modified without being explicitly told to (`CLAUDE.md` §5, M-01).
 - The `KIT:CONFIG` region markers in any adopted kit file. Canon owns the bytes outside them, and
   editing a marker turns a tracked row into a silent fork.
