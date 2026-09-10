@@ -534,12 +534,52 @@ const REVALIDATE_EXCEPTIONS = new Map([
  * for its route group. Checking every action against `requireRole` would flag
  * all 40 portal actions — noise that gets the whole audit ignored.
  */
-// Any spelling of a rate-limiter. There are two modules — lib/rate-limit.ts
-// (`rateLimit`, `rateLimitBooking`, …) and lib/rate-limit-db.ts
-// (`isRateLimitedDb`, `recordHitDb`) — and matching only the first spelling
-// reported forgot-password as unguarded when it is in fact throttled on both IP
-// and target email. One spelling measures a false result.
-const RATE_LIMITED = /rate-?limit/i;
+// The calls that DECIDE whether a request is over its limit: a closed, classified list, each
+// name with the module it must be imported from.
+//
+// This was a regex, `/rate-?limit/i`, and it was written wide on purpose. Matching only one
+// module's spellings had reported forgot-password as unguarded, when it is in fact throttled
+// on both IP and target email. Wide was the wrong cure for that (L-52: an exemption keyed on
+// TEXT exempts by alias). It accepted `clearRateLimitDb(`, the call that LIFTS a limit, which
+// three pre-auth files make. In the two raw-text checks below it also accepted a comment, an
+// import line and the module's path. And it still missed a real throttle imported under
+// another name. All four were measured on 2026-09-10, one plant at a time, against this
+// version and the one before it; no live file relied on any of them. probe-checks now plants
+// each one.
+//
+// Deliberately absent: clearRateLimitDb (lifts a limit), recordHitDb (counts and decides
+// nothing), limitKey and pruneExpiredRateLimits. A name only counts where the file being judged
+// imports it from its module, so a local function that happens to share the name does not.
+// The module must also still export it (`allowlists`), or a name nothing defines would go on
+// vouching for every file that calls something by that name.
+const THROTTLES = new Map([
+  ["rateLimitApi", "lib/rate-limit.ts"],
+  ["isRateLimitedDb", "lib/rate-limit-db.ts"],
+  ["checkAndRecord", "lib/rate-limit-db.ts"],
+  ["rateLimitBookingDb", "lib/rate-limit-db.ts"],
+  ["rateLimitRegisterDb", "lib/rate-limit-db.ts"],
+  ["rateLimitNewsletterDb", "lib/rate-limit-db.ts"],
+]);
+
+/**
+ * A regex matching a CALL to any throttle `raw` imports from its module, under whatever local
+ * name the import gives it, or null when the file imports none. Import lines are read from
+ * the raw text, where `code()` would have blanked the module path; the call is then matched
+ * against whatever text the caller passes, so a comment cannot supply one. `durable` keeps
+ * only the database-backed limiter.
+ */
+function throttleCall(raw, { durable = false } = {}) {
+  const locals = [];
+  for (const m of raw.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']@\/(lib\/rate-limit(?:-db)?)["']/g)) {
+    const mod = `${m[2]}.ts`;
+    if (durable && mod !== "lib/rate-limit-db.ts") continue;
+    for (const spec of m[1].split(",")) {
+      const [name, alias] = spec.trim().split(/\s+as\s+/);
+      if (THROTTLES.get(name) === mod) locals.push(alias ?? name);
+    }
+  }
+  return locals.length ? new RegExp(`\\b(?:${locals.join("|")})\\s*\\(`) : null;
+}
 
 const AUTH_REGIME = [
   {
@@ -552,7 +592,8 @@ const AUTH_REGIME = [
     // Either is sufficient. Some actions in these folders are genuinely
     // pre-session (register, forgot-password) and must be throttled; others are
     // post-login and merely FILED here (change-password), and hold a session.
-    guard: /rate-?limit|getAuthenticatedStudent\s*\(|getAuthenticatedAdmin\s*\(|requireRole\s*\(/i,
+    guard: /getAuthenticatedStudent\s*\(|getAuthenticatedAdmin\s*\(|requireRole\s*\(/,
+    throttled: true,
     fix: "a pre-auth mutation must be rate-limited (lib/rate-limit.ts) or hold a session guard",
   },
   {
@@ -573,7 +614,8 @@ const AUTH_REGIME = [
     // endpoint for anyone on the internet.
     name: "(public)",
     match: (p) => p.includes("(public)"),
-    guard: RATE_LIMITED,
+    guard: null,
+    throttled: true,
     fix: "public mutations must be rate-limited — see lib/rate-limit.ts",
   },
 ];
@@ -585,10 +627,12 @@ check("server-action-auth: every mutating action is guarded for its route group"
     const path = rel(f);
     const regime = AUTH_REGIME.find((r) => r.match(path));
     if (!regime) continue;
-    const fileHasGuard = regime.guard.test(code(raw)); // module-level throttles count
+    const throttle = regime.throttled ? throttleCall(raw) : null;
+    const guards = (text) => Boolean(regime.guard?.test(text) || throttle?.test(text));
+    const fileHasGuard = guards(code(raw)); // module-level throttles count
     for (const fn of serverActions(code(raw))) {
       if (!MUTATION.test(fn.body)) continue; // read-only action
-      if (regime.guard.test(fn.body)) continue;
+      if (guards(fn.body)) continue;
       if (regime.name === "pre-auth" && fileHasGuard) continue;
       fail(
         "server-action-auth",
@@ -677,8 +721,12 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
   // guarded write should live, both of which the 2026-07-12 audit flagged as blind
   // spots: API route handlers (app/api/**/route.ts) and inline `"use server"`
   // closures written directly inside a page.
+  // Matched over code(), never raw: over raw, a comment naming a guard was a guard, and so was
+  // the limiter's import path (THROTTLES, above). `unsubscribeToken:` is the one guard still
+  // keyed on text. The token IS the credential, and the key is where the lookup reads it.
   const ANY_GUARD =
-    /requireRole\s*\(|getAuthenticatedAdmin\s*\(|getAuthenticatedStudent\s*\(|getOptionalStudent\s*\(|requirePasswordChanged\s*\(|verifyWebhookSignature\s*\(|isCronAuthorised\s*\(|withCronRun\s*\(|rate-?limit|auth\.getUser\s*\(|unsubscribeToken/i;
+    /requireRole\s*\(|getAuthenticatedAdmin\s*\(|getAuthenticatedStudent\s*\(|getOptionalStudent\s*\(|requirePasswordChanged\s*\(|verifyWebhookSignature\s*\(|isCronAuthorised\s*\(|withCronRun\s*\(|auth\.getUser\s*\(|\bunsubscribeToken\s*:/;
+  const guarded = (raw) => ANY_GUARD.test(code(raw)) || Boolean(throttleCall(raw)?.test(code(raw)));
 
   // 1. API route handlers that mutate.
   for (const f of walk(join(APP, "api"), /route\.ts$/)) {
@@ -687,7 +735,7 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
     // Public-by-design, low-value writes carry their own note; allow the tracking
     // pixels and the coupon oracle (now rate-limited in slice 3).
     if (/track\/(?:click|open)/.test(rel(f))) continue;
-    if (!ANY_GUARD.test(raw)) {
+    if (!guarded(raw)) {
       fail(
         "server-action-auth",
         rel(f),
@@ -706,7 +754,7 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
     // inline closures: `"use server";` INSIDE a function body (indented), not the
     // file-level directive.
     if (!/\n\s+["']use server["']/.test(raw)) continue;
-    if (MUTATION.test(code(raw)) && !ANY_GUARD.test(raw)) {
+    if (MUTATION.test(code(raw)) && !guarded(raw)) {
       fail(
         "server-action-auth",
         rel(f),
@@ -1795,13 +1843,15 @@ check("abuse: an MFA/OTP verify is rate-limited", () => {
   // account protected by 2FA — and the existing `server-action-auth` check
   // structurally cannot see it, because that one only inspects functions that
   // touch prisma.*.create/update, and verifying a code touches Supabase.
+  // The guard was `/isRateLimitedDb|checkAndRecord|rate-limit-db/` over raw text, so an import
+  // of the module's lift function alone was a durable limit. It is now a durable throttle
+  // CALLED (THROTTLES, above).
   const VERIFY = /\.mfa\.(?:verify|challengeAndVerify)\s*\(/;
-  const GUARD = /isRateLimitedDb|checkAndRecord|rate-limit-db/;
   for (const f of walk(APP)) {
     if (isTest(f)) continue;
     const raw = read(f);
     if (!VERIFY.test(code(raw))) continue;
-    if (!GUARD.test(raw)) {
+    if (!throttleCall(raw, { durable: true })?.test(code(raw))) {
       fail(
         "abuse",
         rel(f),
@@ -3668,6 +3718,21 @@ check("allowlists: every exemption is still load-bearing", () => {
         `REVALIDATE_EXCEPTIONS → ${action}`,
         `exempts an action that no longer exists ("${reason.slice(0, 60)}…")`,
         "delete the entry — if the name returns for a different action it silently inherits this exemption",
+      );
+    }
+  }
+
+  // THROTTLES vouches for a mutation wherever one of its names is imported and called. A name
+  // its module no longer exports vouches for a call that resolves to nothing, and the file
+  // stays green until tsc is next asked, if it ever is.
+  for (const [name, mod] of THROTTLES) {
+    const abs = join(ROOT, mod);
+    if (!existsSync(abs) || !new RegExp(String.raw`export\s+(?:async\s+)?function\s+${name}\b`).test(read(abs))) {
+      fail(
+        "allowlists",
+        mod,
+        `THROTTLES trusts \`${name}\` as a rate limit, and ${mod} no longer exports it`,
+        "re-classify: delete the entry, or name the throttle that replaced it — and check it DECIDES, not just counts or clears",
       );
     }
   }

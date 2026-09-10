@@ -175,6 +175,99 @@ A lesson cited at the ledger's old path (${"dev-standards"}/LESSONS.md L-21).
 `,
     expects: ["citations: a lesson reference names the ledger that holds it"],
   })),
+  // THROTTLES (L-52). The guard was `/rate-?limit/i`, and each plant below is a shape it got
+  // wrong. Measured one at a time against both versions on 2026-09-10: the three `named` plants
+  // left the old audit at exit 0, and the old audit reported the `quiet` one, a real throttle
+  // under an alias, as unguarded. Two plants share `server-action-auth`, so the runner's
+  // `failed.has(name)` cannot tell them apart; `named` does, because each must be named by path.
+  // In isolation, each is named by its target check and by nothing else.
+  {
+    path: "app/(public)/__probe-throttle/actions.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+// A public write whose only rate-limit call is the one that LIFTS a limit.
+"use server";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
+
+export async function probeThrottleAction(email: string) {
+  await clearRateLimitDb(limitKey("probe", "email", email));
+  await prisma.newsletterSubscriber.create({ data: { email } });
+  revalidatePath("/");
+  return { success: true };
+}
+`,
+    expects: ["server-action-auth: every mutating action is guarded for its route group"],
+  },
+  {
+    path: "app/(public)/__probe-throttle-alias/actions.ts",
+    quiet: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+// A real throttle under a local alias: the check must follow the import, not the spelling.
+"use server";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { rateLimitNewsletterDb as overLimit } from "@/lib/rate-limit-db";
+
+export async function probeAliasAction(ip: string, email: string) {
+  if (await overLimit(ip)) return { success: false, error: "Too many attempts." };
+  await prisma.newsletterSubscriber.create({ data: { email } });
+  revalidatePath("/");
+  return { success: true };
+}
+`,
+    expects: [],
+  },
+  {
+    path: "app/api/__probe-guard/route.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+// Guarded upstream by requireRole(), says this comment. Nothing below calls anything.
+import { prisma } from "@/lib/prisma";
+
+export async function POST(req: Request) {
+  const { id } = await req.json();
+  await prisma.newsletterSubscriber.update({ where: { id }, data: { active: false } });
+  return Response.json({ ok: true });
+}
+`,
+    expects: ["server-action-auth: mutating API routes and inline actions are guarded"],
+  },
+  {
+    path: "app/__probe-mfa/verify.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+// Imports the durable limiter's module, and calls only the function that lifts a limit.
+import { createClient } from "@/lib/supabase/server";
+import { clearRateLimitDb } from "@/lib/rate-limit-db";
+
+export async function probeVerify(factorId: string, code: string) {
+  const supabase = await createClient();
+  await clearRateLimitDb(factorId);
+  return supabase.auth.mfa.challengeAndVerify({ factorId, code });
+}
+`,
+    expects: ["abuse: an MFA/OTP verify is rate-limited"],
+  },
+  {
+    // A real throttle, but the per-instance in-memory one, which resets on a cold start. Without
+    // this plant, dropping the check's `durable` filter survived every probe (L-54).
+    path: "app/__probe-mfa/verify-in-memory.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+// Throttled, but only per warm instance: the limit resets with the lambda.
+import { createClient } from "@/lib/supabase/server";
+import { rateLimitApi } from "@/lib/rate-limit";
+
+export async function probeVerifyInMemory(ip: string, factorId: string, code: string) {
+  if (!rateLimitApi(ip).success) return null;
+  const supabase = await createClient();
+  return supabase.auth.mfa.challengeAndVerify({ factorId, code });
+}
+`,
+    expects: ["abuse: an MFA/OTP verify is rate-limited"],
+  },
 ];
 
 /**
@@ -236,6 +329,15 @@ const MUTATIONS = [
     find: "dateOfBirth: { not: null },\n",
     replace: "dateOfBirth: { not: null },\n      emailPaused: false,\n",
     expects: ["email-tiers: a suppression decision goes through lib/engagement.ts"],
+  },
+  {
+    // A throttle THROTTLES trusts, renamed out from under it. The list would otherwise go on
+    // vouching for any file calling the old name, which then resolves to nothing.
+    path: "lib/rate-limit-db.ts",
+    named: true,
+    find: "export async function checkAndRecord(",
+    replace: "export async function checkAndRecordRenamed(",
+    expects: ["allowlists: every exemption is still load-bearing"],
   },
 ];
 
