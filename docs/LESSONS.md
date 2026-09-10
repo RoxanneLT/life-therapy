@@ -59,6 +59,25 @@ is worth keeping:
 - **L-10** — `audit: the source enumeration has not decayed`, a floor of 400 against a real count
   of 542. Deliberately not `> 0`, which still passes when a walk decays to one file.
 
+### Queued: applies here, not carried
+
+- **L-35 · L-49 — the audit's `code()` deletes real code, and says nothing when it does.**
+  `code()` (`scripts/architecture-audit.mjs`) is a regex pass standing in for a tokenizer. It blanks
+  strings with a double-quote pass that runs before the single-quote pass, so a `'"'` character
+  literal opens a "string" that swallows code up to the next `"`. A regex literal containing a quote
+  does the same. The TypeScript scanner, which is in the build already, answers the question
+  exactly (L-35). Measured 2026-09-10 with that scanner as the oracle: every identifier outside a
+  template literal, checked for survival on its own line, across 546 files under `app/`, `lib/` and
+  `components/`. **In 10 files `code()` deleted real code, 904 identifiers in total.** The worst:
+  `client-importer.tsx` (475, from line 33), `lib/email-templates.ts` (136), `admin-header.tsx`
+  (105), `portal-header.tsx` (99), `app/api/track/open/route.ts` (35). Then `lib/email-tracking.ts`
+  (20), `lib/csv.ts` (16), `admin-sidebar.tsx` (9), `lib/utils.ts` (8), `lib/safe-redirect.ts` (1).
+  Roughly two dozen checks read through `code()`, so in those regions every one of them reports
+  "no findings" when it had no visibility (L-49). The work is to replace `code()` with
+  `ts.createScanner` and blank by token kind. Failing that, compute the desync (an unbalanced
+  quote at end of line is the signature) and make each check say which files it could not read.
+  Probe with the ten files above: each must come back identical in identifiers to the parser's view.
+
 When an entry in the shared ledger gains a `life-therapy` line, or should have one and does not,
 this is where the work is tracked. **An unapplied lesson is an open item here — not an `n/a:`
 there.** The two states in that ledger are a date or a reasoned "does not apply"; "we have not
