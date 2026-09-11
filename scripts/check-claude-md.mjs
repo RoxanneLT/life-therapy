@@ -247,7 +247,7 @@ const AUDIT_ENTRY = "scripts/architecture-audit.mjs"
  * call in the audit entry point is what runs, and `npm run check` runs the audit (GATE_SCRIPTS).
  *
  * `settings:` IS AN ADDITION. The settings-ask twins (§3) are a real control layer here —
- * dormant while the hook lives, load-bearing when it dies — and nothing in canon's six
+ * live beside the hook (measured 2026-09-11), load-bearing when it dies — and nothing in canon's six
  * namespaces can see one. It resolves through `permissions.ask`, which is what the harness
  * actually consults; the presence of a settings FILE would prove nothing.
  *

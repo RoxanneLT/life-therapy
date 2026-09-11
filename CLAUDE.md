@@ -238,8 +238,10 @@ Reading `.env*` is denied at the settings layer.
 
 **Hook-asks:** `git push` · any SQL through the Management API · `vercel`.
 
-**Settings-ask twins** (coarse patterns — **dormant while the hook lives**, consulted only
-when it is dead): every gate above names its twin inline as `// @twin`. Reconciled by
+**Settings-ask twins** (coarse patterns that stand in when the hook is dead, and are **live beside
+it**. Measured 2026-09-11 on Claude Code 2.1.235: a settings ask prompts even when the hook
+allows, so a twin wider than its rule costs a prompt. One anomaly is open, recorded in the hook's
+twins region.) Every gate above names its twin inline as `// @twin`. Reconciled by
 `hooks: every hook declares its twin or why it cannot have one`, which also checks each twin's probe
 record and fails if the rule it covers has been edited since.
 

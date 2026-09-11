@@ -56,21 +56,32 @@
  * here must exist there and vice versa. Declare a @no-twin with its reason instead
  * where a coarse settings pattern would be WRONG rather than merely redundant. */
 
-// A TWIN IS DORMANT BY DESIGN, and this project measured that rather than assuming it.
-// MEASURED 2026-08-18: a hook "allow" does NOT leave settings.json free to intervene.
-// `Bash(curl*)` sits in permissions.ask, and a bare curl — which this hook allows, since
-// its rule only matches the Management API URL — ran with NO PROMPT AT ALL. The hook
-// short-circuits the permission system entirely. These are not belt-and-braces while the
-// hook is alive.
+// A TWIN IS LIVE, NOT DORMANT. Measured 2026-09-11 on Claude Code 2.1.235 by Stéan, who alone
+// sees prompts (L-64). With this hook alive and answering allow, `git merge --abort` PROMPTED
+// through `Bash(git merge*)`. So a settings ask beats the hook's allow, as the permissions docs
+// say, and yoros measured the same that morning. Each twin costs a prompt wherever it is wider
+// than its rule: here `curl*`, `git merge*` and `git clean*`, all rare in this repo's work.
+// The 2026-08-18 measurement said the opposite: a bare curl ran with no prompt beside
+// `Bash(curl*)`. It recorded no harness version, so it cannot be re-run as it was. It stays
+// here as history, contradicted.
 //
-// That does not break the twin design; it explains it. A twin matters in exactly one
-// scenario: this hook dead, its script path broken, its failure reported as a non-blocking
-// status nobody reads. Then settings is all there is, and every rule held here alone
-// degrades WITHOUT FAILING — deny silently becomes ask, ask silently becomes allow.
+// The same session measured the hook's own verdicts. An ASK prompted on its own
+// (`git pull origin <branch>` on master, `gh -R <repo> pr merge`, `git push <remote>`,
+// `vercel`), and a DENY blocked. ONE ANOMALY IS OPEN: `gh pr merge 99999 --repo <repo>` did
+// NOT prompt, twice, though the hook asked. It is the only spelling tested that also matches
+// `Bash(gh pr merge*)`, the one ask added mid-session. `git push` and `vercel` match asks loaded
+// at session start, and both prompted. Next: re-run it after a restart. Until then, do not assume
+// that a twin leaves the hook's ask intact.
 //
-// Consequence for testing: a twin cannot be probed while the hook is alive, because the
-// hook answers first. Verifying one means disabling this hook and re-running the command —
-// which is also a faithful rehearsal of the only situation the twin covers. That is what
+// What a twin is FOR is unchanged. It matters most when this hook is dead: its script path
+// broken, its failure reported as a non-blocking status nobody reads. Then settings is all there
+// is, and every rule held here alone degrades WITHOUT FAILING. Deny silently becomes ask, and ask
+// silently becomes allow.
+//
+// Consequence for testing. A twin can be seen while the hook is alive only on a command the hook
+// ALLOWS; where the hook denies, it answers first. Verifying the floor for a rule this hook holds
+// means disabling the hook and re-running the command, which also rehearses the one situation the
+// twin exists for. That is what
 // the `@probed` records below are: each names the date, the disabled-hook observation, and
 // the exact command. The `@probed-sha` is the rule text's hash at probe time, so an edited
 // rule invalidates its own probe record instead of inheriting it.
@@ -370,9 +381,9 @@ const PROJECT_ASK = [
 // Sized as if live, none is WRONG while the hook runs. The widest are `git merge*`, `git clean*`
 // and `git push*`: a prompt on a merge, a dry-run clean or a push the hook also asks on. None
 // blocks a command that the hook allows. The two DENY twins, the force-push ones and
-// `git reset --hard*`, deny only what the hook denies too. The live-hook question canon raises
-// (does an ask prompt under a hook that allowed?) is recorded as unmeasured again since 2026-08-18.
-// Only the operator can see a prompt (L-64), so the answer waits for Stéan.
+// `git reset --hard*`, deny only what the hook denies too. Canon asked whether an ask prompts under a
+// hook that allowed. It does, measured 2026-09-11 (the twins region above), so each twin is live and
+// sized as the paragraph above says.
 //
 // The floor is PARTIAL where a prefix glob cannot spell the rule, and it says so rather than
 // reading as cover. Every git twin starts `git <verb>`, so `git -C x push --force` or

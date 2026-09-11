@@ -359,8 +359,8 @@ const MUTATIONS = [
   },
   {
     path: ".claude/hooks/bash-gate.js",
-    // Strip a probe record: a twin nobody has ever tested is a dormant fallback whose rot
-    // cannot announce itself, which is the whole reason the record is required.
+    // Strip a probe record: a twin nobody has ever tested is a fallback whose rot cannot
+    // announce itself while the hook lives, which is the whole reason the record is required.
     find: "// @probed",
     replace: "// probed-not",
     expects: ["hooks: every hook declares its twin or why it cannot have one"],

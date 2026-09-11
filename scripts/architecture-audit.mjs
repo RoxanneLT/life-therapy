@@ -2559,8 +2559,9 @@ check("hooks: every hook declares its twin or why it cannot have one", () => {
     // The rule body this twin covers: the code lines following it, to the end of the
     // array entry. Hashed together with the twin pattern so the probe record binds to
     // WHAT IT PROBED — "re-probe on any edit" is undetectable otherwise, because
-    // nothing notices the edit. A dormant twin (see the hook header) cannot announce
-    // its own rot in normal operation, so this is the only thing that will.
+    // nothing notices the edit. A twin cannot announce its own rot while the hook lives
+    // (see the hook header): where the hook denies it answers first, and where it asks, the twin's
+    // prompt looks like the hook's. So this is the only thing that will.
     const body = [];
     for (let j = i + 1; j < Math.min(i + 14, lines.length); j++) {
       const line = lines[j].trim();
