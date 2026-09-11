@@ -450,8 +450,8 @@ const MUTATIONS = [
     replace: "  useEffect(() => {\n    void createClient().auth.verifyOtp;\n    setTokenHash(",
     expects: ["auth: a recovery link survives a mail scanner: straight to /reset-password, spent only on submit"],
   },
-  // The next four are the fixes of 2026-09-10/11, reverted one at a time. Each keeps the setter and
-  // its count, so only the entry's guard can see it; before guards existed all four passed.
+  // The next five are the fixes of 2026-09-10/11, reverted one at a time. Each keeps the setter and
+  // its count, so only the entry's guard can see it; before guards existed all five passed.
   {
     // The forced-change form, accepting any signed-in session again.
     path: "app/(portal)/portal/(auth)/change-password/actions.ts",
@@ -469,11 +469,24 @@ const MUTATIONS = [
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {
-    // An admin's own change, back to a session alone.
+    // An admin's own change, back to a session alone, in the shape walk 02 named (finding 5): the
+    // check is still made, on a line of its own, and its answer is ignored. The call's text survives,
+    // so the guard as it was until 2026-09-11, the text alone, stayed green on this plant. Its first
+    // form replaced the call with `false`, which any guard sees. The plants run together, so the
+    // finding is named by its message: only a guard that pins the refusal reports this one.
     path: "app/(admin)/admin/(dashboard)/users/actions.ts",
-    named: true,
-    find: "!(await verifyPassword(user.email, currentPassword))",
-    replace: "false",
+    named: "rests on is gone: /if \\([^{]*!\\(await verifyPassword",
+    find: "  if (!currentPassword || !user.email || !(await verifyPassword(user.email, currentPassword))) {\n",
+    replace: "  await verifyPassword(user.email, currentPassword);\n  if (!currentPassword || !user.email) {\n",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // The same shape in Settings: the sign-in is made and its error never refuses. This file holds
+    // another plant (the second setter above), so `true` would be met by that one; the message is not.
+    path: "app/(portal)/portal/(dashboard)/settings/actions.ts",
+    named: "rests on is gone: /const \\{ error: signInError \\}",
+    find: "  if (signInError) {\n",
+    replace: "  if (signInError && currentPassword === \"\") {\n",
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {

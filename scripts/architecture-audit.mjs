@@ -904,12 +904,16 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
 // entry was a count and a sentence, so deleting the guard a sentence described left the audit
 // green. An independent review ran this check over the three pre-fix files and it passed all
 // three. A guard does not prove the authority; it proves the line that claims it is still there.
+// So where the authority is a CHECK, the guard pins the check AND its refusal: the condition, then
+// a block that returns. Until 2026-09-11 it pinned the check's text alone, and a revert that kept
+// the call on a line of its own and dropped it from the `if` stayed green (walk 02, finding 5).
+// Where the authority is a VALUE (a flag set, a password nobody is told), the text is the authority.
 const PASSWORD_SETTERS = new Map([
-  ["app/(admin)/admin/(dashboard)/users/actions.ts", [2, "an invited admin's login, with a random password nobody is told: the invite is a set-password link emailed to the address. And an admin's own change, after the current password is verified on a client that holds no session", [/emailPasswordLink\(/, /await verifyPassword\(user\.email, currentPassword\)/]]],
-  ["app/(portal)/portal/(auth)/change-password/actions.ts", [1, "only while mustChangePassword is set: the account holds a temporary password nobody was told", [/if \(!student\.mustChangePassword\)/]]],
-  ["app/(portal)/portal/(dashboard)/settings/actions.ts", [1, "after the current password is verified by signing in with it", [/signInWithPassword\(\{\s*email: student\.email,\s*password: currentPassword/]]],
+  ["app/(admin)/admin/(dashboard)/users/actions.ts", [2, "an invited admin's login, with a random password nobody is told: the invite is a set-password link emailed to the address. And an admin's own change, after the current password is verified on a client that holds no session", [/emailPasswordLink\(/, /if \([^{]*!\(await verifyPassword\(user\.email, currentPassword\)\)\)\s*\{[^}]*?\breturn\b/]]],
+  ["app/(portal)/portal/(auth)/change-password/actions.ts", [1, "only while mustChangePassword is set: the account holds a temporary password nobody was told", [/if \(!student\.mustChangePassword\)\s*\{\s*return\b/]]],
+  ["app/(portal)/portal/(dashboard)/settings/actions.ts", [1, "after the current password is verified by signing in with it", [/const \{ error: signInError \} = await supabase\.auth\.signInWithPassword\(\{\s*email: student\.email,\s*password: currentPassword,?\s*\}\);\s*if \(signInError\)\s*\{[^}]*?\breturn\b/]]],
   ["app/(public)/book/actions.ts", [1, "a first booking's login: a temporary password emailed only to the booking's address, and changed at first sign-in", [/mustChangePassword: true/]]],
-  ["app/(public)/forgot-password/actions.ts", [1, "after the recovery token, emailed to the address, is verified on submit; there is no path without one", [/if \(!tokenHash\)/, /verifyOtp\(\{\s*token_hash: tokenHash,\s*type: "recovery"/]]],
+  ["app/(public)/forgot-password/actions.ts", [1, "after the recovery token, emailed to the address, is verified on submit; there is no path without one", [/if \(!tokenHash\)\s*\{\s*return\b/, /const \{ error: verifyError \} = await supabase\.auth\.verifyOtp\(\{\s*token_hash: tokenHash,\s*type: "recovery",?\s*\}\);\s*if \(verifyError\)\s*\{[^}]*?\breturn\b/]]],
   ["lib/account-link.ts", [1, "a login made with a random password nobody is told; the only way in is the set-password link it emails to the address, and the student row is linked when that is spent", [/password: `\$\{randomUUID\(\)\}-\$\{randomUUID\(\)\}`/]]],
   ["lib/account-provisioning.ts", [1, "a temporary password emailed only to the record's address, and changed at first sign-in", [/mustChangePassword: true/]]],
   ["lib/campaign-process.ts", [1, "a login with a temporary password nobody is told, changed at first sign-in; reached only by the reset link emailed to the student's address", [/mustChangePassword: true/]]],
