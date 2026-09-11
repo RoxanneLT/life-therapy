@@ -7,7 +7,9 @@ import { useClientInsights } from "../use-client-data";
 // `getRateLabel` while the exported version sat unused in lib/admin/client-insights.ts
 // — two expressions of one banding rule, so a change to "what counts as a high
 // reschedule rate" would have moved the label in one place and not the other.
-import { getRateLabel } from "@/lib/admin/client-insights";
+// From lib/admin/rate-label.ts, never client-insights.ts: that imports Prisma, and
+// a client component importing it broke `next build` for three weeks.
+import { getRateLabel } from "@/lib/admin/rate-label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {

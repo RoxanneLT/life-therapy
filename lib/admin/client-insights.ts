@@ -29,18 +29,6 @@ export type InsightFlag =
   | { type: "high_cancel_rate"; message: string; severity: "info" }
   | { type: "no_upcoming"; message: string; severity: "info" };
 
-// ── Rate label helper ────────────────────────────────────────
-
-export function getRateLabel(rate: number): {
-  label: string;
-  color: "green" | "amber" | "red";
-} {
-  if (rate <= 10) return { label: "Very low", color: "green" };
-  if (rate <= 20) return { label: "Low", color: "green" };
-  if (rate <= 35) return { label: "Moderate", color: "amber" };
-  return { label: "High", color: "red" };
-}
-
 // ── Main insights function ───────────────────────────────────
 
 export async function getClientInsights(
