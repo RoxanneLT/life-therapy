@@ -51,7 +51,7 @@ from canon's history at `2e79fdb`. The kit rows are bash-gate and its probe v6, 
 and its probe v5, check-hook-registration v6, check-handoff-contract v5, check-install-platform v3 and check-claude-md v17. The spines, through
 propagate-spines, are census v10, db-inspector v5, grounder v7, implementer v5 and walker v8.
 bash-gate's per-rule fallbacks are answered from existing settings, plus one added ask,
-`Bash(gh pr merge*)`. Outbox §3 asks canon to drop all thirteen pins. Measured by Stéan
+`Bash(gh pr merge*)`. Canon dropped all thirteen pins (`c06491c`). Measured by Stéan
 2026-09-11: a settings ask prompts beside a live hook, so twins are live. The one silent hook ask,
 on the spelling matching the mid-session `Bash(gh pr merge*)`, prompted after a restart: closed.
 
@@ -90,9 +90,13 @@ two of them.
 - The Outlook Safe Links property is now an audit check: a recovery link goes straight to
   `/reset-password`, and its token is spent only on submit.
 
-**Next action:** Stéan's review of the L-72 work. L-72 stays off the outbox until Stéan says
-the review is done. Then walk 02's Promote goes to §1, worded without exploit detail. Canon lifts the outbox from HEAD. Before re-running `--emit-open`, check
-`git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
+**L-72 review done (Stéan, 2026-09-11).** Walk 02's Promote is outbox §2's L-72 row, worded
+without exploit detail. Its LOW residuals 1, 4 and 5 stay open, in the session report only.
+Canon removed every pin at `c06491c`, and `check-kit-drift` from its HEAD shows no drift here.
+The outbox holds CF-5: canon still calls a twin dormant.
+
+**Next action:** none queued. Canon lifts the outbox from HEAD. Before re-running `--emit-open`,
+check `git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
 
 **Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
 `node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree, and run

@@ -33,7 +33,36 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-Empty. CF-2, CF-3 and CF-4 were filed at canon `61bd006` (below).
+### CF-5 · A settings ask prompts beside a live hook, and canon still says it does not
+
+```
+OBSERVED   On Claude Code 2.1.235, with bash-gate alive and answering allow, a command matching a
+           settings ask rule PROMPTED. Canon still records the opposite in three places.
+COMMAND    Measured 2026-09-11 by Stéan, who alone sees prompts (L-64):
+             git merge --abort                                   → prompted (Bash(git merge*); hook allows)
+             git push <remote> · vercel · gh -R <repo> pr merge   → prompted (hook asks)
+             a hook-denied command                                → blocked, reason shown
+           One command was silent twice in the session that added its settings ask, and prompted
+           after a restart, so it is not evidence either way (bash-gate.js, twins region).
+           Canon HEAD c06491c still reads:
+             ledgers/LESSONS.md L-15   "The coarse layer is **dormant by construction** while the
+                                        precise one lives"; "Verify a dormant layer by disabling
+                                        the layer above it"
+             kit bash-gate v6 :123     "life-therapy measured an ask NOT prompting under a live
+                                        hook on 2026-08-18. Until the two agree, a twin that would
+                                        be wrong while the hook is alive is a `noTwin`"
+             kit check-hook-registration v6 :181, :371   "the dormant layer has nothing to fall back to"
+WHY IT IS  The permission order is the harness's, so it holds for every stack. L-15's reading came
+CANON'S    from this project on 2026-08-18 and recorded no harness version, so it cannot be re-run
+           as it was. The 2026-09-11 reading agrees with the permissions page and with yoros CF-9 (b).
+SMALLEST   A dated correction on L-15: on 2.1.235 the coarse layer is live beside the hook, so a
+FIX        twin costs a prompt wherever it is wider than its rule. Keep the procedure (disable the
+           hook to see the twin alone), which is still the only way to test a twin behind a DENY.
+           In bash-gate, drop "Until the two agree" and cite this measurement. In
+           check-hook-registration, a wording change only: "the fallback layer". It must not
+           loosen any check: a twin is still required, and "live" makes a wide twin a cost, never
+           a reason to delete one.
+```
 
 ---
 
@@ -80,6 +109,7 @@ off this table and it stays open.
 | L-69 | 2026-09-09 | `d1509b7` — `dev-standards` is read-only from this project's sessions (CLAUDE.md §1, a floor held by attention), so no change made here lands in canon. A finding goes to this outbox, and canon's own session lifts it, makes the change and runs canon's gate. The one canon tool this session runs is `check-lessons --emit-open`, from canon's HEAD, and its whole output is read |
 | L-70 | 2026-08-19 | `4e540c6` — the fourth of the four tier-0 slots entered the gate chain: `tsc --noEmit` (`6f0f867`, 2026-06-24), `eslint . --max-warnings 0` (`821fe93`, 2026-07-12), knip as `crawl:tier0` (`21490a4`, 2026-08-18), `check:cycles` (`4e540c6`). All four are in `npm run check`, and the git hooks run that on every commit and push (CLAUDE.md §3) |
 | L-71 | 2026-09-10 | `2ea2ca6` denies the PowerShell tool, the shell the entry's corruption came through. The shell that remains was measured rather than assumed: Git Bash's `sed -i` on a file holding `— § ⚠ · é` changed only its ASCII target, and `cmp` against the expected bytes → identical. Mojibake scan of every tracked file (`git grep -lP` for the UTF-8-read-as-1252 sequences of `—`, `§`, `⚠`) → 0 files. No `.ps1` in the repo |
+| L-72 | 2026-09-11 | found while triaging this lesson: this project's password-setting paths had its shape, an operation that sets a credential authorised by what the calling session could do rather than by the account. Fixed in `1396829`, `64e00c3`, `7d89fc1`, `3ea8335` and `0538d24`, each walked by an independent `walker`; the second walk says proceed. Carried mechanically: the audit classifies every password setter (`PASSWORD_SETTERS`), each entry naming its guard line, with four revert probes. The walk adds two things the entry could say in general. **A platform setting can be part of the control:** where a provider's own endpoint can mint a credential, the code's guard holds only while that setting holds, so the setting is pinned where the code is reviewed (here, the brief). **A fix can reintroduce an existence oracle:** a branch whose cost depends on whether the account exists tells an attacker so through response time, even when every branch returns the same body. The residuals the walk graded LOW stay in the session report, because this repository is public |
 | L-73 | n/a: no member of this gate reads build output. Every check reads source, the working tree or git, so the rendering strategy cannot narrow what any of them sees. The content rules here (money, dual-domain, dates) walk `app/`, `lib/` and `components/` as source, and that includes every dynamic route | `git grep -nE "\.next/\|dist/\|out/\|build-manifest\|prerender-manifest" -- scripts .githooks package.json` → 3 hits, none a build artefact: `checkout/route.ts` twice (substring `out/`) and `timeout/` once |
 
 ---
@@ -93,7 +123,6 @@ never *exempt*, so the reason has to argue it.
 | Row | Version | What | Evidence |
 |---|---|---|---|
 | `settings` | v3 | the M-KIT-22 claim is now committed here — `"PowerShell"` in `permissions.deny`. Nothing to record in `kitAdopted` (the row is asserted, not adopted); listed so canon sees the claim is held by a commit and not by a working tree | `2ea2ca6` |
-| thirteen rows | see What | moved 2026-09-11 by each pin's route, from canon's history at `2e79fdb`: canon's bytes with this project's `KIT:CONFIG` regions put back. Kit rows: `bash-gate` v6 and `bash-gate-probe` v6, `agent-write-scope` v5 and `agent-write-scope-probe` v5, `check-hook-registration` v6, `check-handoff-contract` v5, `check-install-platform` v3 and `check-claude-md` v17. Spines, by `tools/propagate-spines.mjs` run from `git archive 2e79fdb`: `census` v10, `db-inspector` v5, `grounder` v7, `implementer` v5 and `walker` v8. **All thirteen pins are finished work: drop them from `ledgers/projects.json`.** bash-gate's `fallbacks` region is answered from the settings this project already held: 8 of 9 canon rules are twinned, and `isSeamAssignment` is a noTwin with its reason. One ask was added, `Bash(gh pr merge*)`, which is exactly as wide as `isPrMerge`. The probe's 15 new cases that allow a push are held at `ask` in its `verdicts` region: this project asks on every push. **Re-measured 2026-09-11, on Claude Code 2.1.235, by Stéan, who alone sees prompts (L-64).** A settings ask PROMPTS beside a live hook that allowed: `git merge --abort`, through `Bash(git merge*)`. This contradicts the 2026-08-18 reading (canon L-15), agrees with yoros CF-9 (b), and supports canon's `SIZE A TWIN AS IF IT IS LIVE`. A hook ask prompted on its own four times, and a hook deny blocked. **One anomaly came and went:** `gh pr merge 99999 --repo <repo>` did not prompt, twice, though the hook asked. It was the only spelling that also matched `Bash(gh pr merge*)`, the one ask added to settings mid-session. `gh -R <repo> pr merge 99999` prompted, and so did `git push` and `vercel`, whose asks were loaded at session start. After a restart the same command prompted, so a twin does not suppress its hook's ask. The silence belonged to the session that edited `settings.json`, and its mechanism is unknown. Nothing goes to §1. Canon's own text lags the measurement: `check-hook-registration` v6 calls settings "the dormant layer" in two messages (`:181`, `:371`). The bytes are canon's, so this repo leaves them | the commit that adds this row · `check-kit-drift` from `git archive 2e79fdb` → 8 pins `STALE IN THE AHEAD DIRECTION` and no byte drift · `check-agent-spines` → 5 × `at canon vN but still carries a pin` · `bash-gate.probe` → `114 probes pass, both directions, 22 verdict(s) tightened` · `agent-write-scope.probe` → 99 pass · `check-hook-registration` → green · `npm run check` → exit 0 |
 
 No pins.
 
@@ -114,3 +143,4 @@ A pointer, not a restatement — the canon entry is the record.
 | CF-4 | `check-handoff-contract` read the anchor and never compared it | v5 prints L-41's QUARANTINED tell | `61bd006` |
 | §3 | `canon-findings` v1, adopted 2026-09-10 | recorded in `kitAdopted` | `31ed513` |
 | §3 | `check-brief` v7 (`beabdc0`); canon's v6 pin was finished work | pin removed | `a152e89` |
+| §3 | Thirteen rows moved to canon `2e79fdb` (`8d29b98`); their thirteen pins were finished work | all pins removed | `c06491c` |
