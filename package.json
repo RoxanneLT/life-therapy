@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "check:push": "npm run check && npm run build",
     "check": "node scripts/check-install-platform.mjs --selftest && node scripts/check-install-platform.mjs . && tsc --noEmit && eslint . --max-warnings 0 && npm run audit:selftest && node scripts/architecture-audit.mjs && npm run check:claude-md && npm run check:brief && npm run crawl:tier0 && npm run check:cycles && npm run test:gate && npm run test:budget && npm run test:probes && npm run test",
     "postinstall": "prisma generate",
     "prepare": "git config core.hooksPath .githooks || true",

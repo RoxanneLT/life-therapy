@@ -974,6 +974,45 @@ check("auth: every place that sets a password is classified by what authorises i
   }
 });
 
+// A mail scanner opens every link in an email before the person does. Outlook's Safe Links is the one
+// that matters here. So a recovery link that spends its token when OPENED arrives dead. That is
+// what Supabase's own `action_link` does, and what routing through /auth/callback did. Every sender
+// therefore links straight to /reset-password with the hashed token, the page only reads it into
+// a hidden field, and `updatePasswordAction` spends it on SUBMIT. Stéan asked on 2026-09-11 that
+// this be kept; until then it was held by a comment at each of five sites.
+check("auth: a recovery link survives a mail scanner: straight to /reset-password, spent only on submit", () => {
+  let senders = 0;
+  for (const f of allSource()) {
+    const kept = codeKeepingLiterals(read(f));
+    if (!/generateLink\s*\(\s*\{[^}]*type:\s*"recovery"/.test(kept)) continue;
+    senders++;
+    const path = rel(f);
+    if (/\baction_link\b/.test(kept)) {
+      fail(
+        "auth",
+        path,
+        "a recovery link is sent as Supabase's action_link, which spends the token when opened, so a mail scanner spends it first",
+        "send `${base}/reset-password?token_hash=${encodeURIComponent(properties.hashed_token)}&type=recovery`",
+      );
+    }
+    if (!/\/reset-password\?token_hash=/.test(kept)) {
+      fail(
+        "auth",
+        path,
+        "generates a recovery link but builds no /reset-password?token_hash= link from it",
+        "link straight to the reset page; /auth/callback spends the token on the scanner's GET",
+      );
+    }
+  }
+  if (!senders) {
+    fail("auth", "(tree)", "no file generates a recovery link, so this check is matching nothing", "fix the pattern before trusting a green run");
+  }
+  const page = "app/(public)/reset-password/page.tsx";
+  if (/\b(verifyOtp|exchangeCodeForSession)\b/.test(code(read(join(ROOT, page))))) {
+    fail("auth", page, "the reset page spends the token when it loads, so a mail scanner spends it first", "spend it in updatePasswordAction, on submit");
+  }
+});
+
 check("mutation-revalidate: every mutating action calls revalidatePath", () => {
   for (const f of walk(APP, /actions\.ts$/)) {
     const raw = read(f);

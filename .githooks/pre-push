@@ -14,6 +14,12 @@
 # made with --no-verify, a rebase whose intermediate trees this tier skips by design (see
 # prepare-commit-msg), and anything that arrived by `git pull`.
 #
+# THE PUSH ALSO BUILDS. `check:push` is `check` and then `npm run build`, the build Vercel runs on
+# every push. Nothing in `check` walks the client bundle graph: from 2026-08-19 (566617e) to
+# 2026-09-11 (4342b14) every deploy failed because a client component imported Prisma, while tsc,
+# ESLint, knip and the audit all passed. It went unseen for three weeks because the only place the
+# failure surfaced was a commit status on GitHub that nobody read.
+#
 # LT_PREPUSH_CMD is a probe seam and, like the commit hooks', is INERT without LT_HOOK_PROBE=1
 # alongside it. See .githooks/pre-commit for why that second variable exists.
 #
@@ -25,7 +31,7 @@ cat > /dev/null
 if [ -n "$LT_PREPUSH_CMD" ] && [ "$LT_HOOK_PROBE" = "1" ]; then
   CMD="$LT_PREPUSH_CMD"
 else
-  CMD="npm run check"
+  CMD="npm run check:push"
 fi
 echo "pre-push → $CMD"
 $CMD

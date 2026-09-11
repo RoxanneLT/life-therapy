@@ -290,6 +290,20 @@ export async function probeSetPasswordAction(userId: string, password: string) {
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {
+    // A recovery link sent as Supabase's action_link, which a mail scanner spends by opening it.
+    path: "lib/__probe-recovery-link.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { supabaseAdmin } from "@/lib/supabase-admin";
+
+export async function probeRecoveryLink(email: string) {
+  const { data } = await supabaseAdmin.auth.admin.generateLink({ type: "recovery", email });
+  return data?.properties?.action_link;
+}
+`,
+    expects: ["auth: a recovery link survives a mail scanner: straight to /reset-password, spent only on submit"],
+  },
+  {
     // A file the parser can only recover from. `code()` reads the recovery (L-49), so the audit
     // must say so rather than let every check report it clean. In isolation, named by this check
     // and by no other.
@@ -427,6 +441,14 @@ const MUTATIONS = [
     find: "supabaseAdmin.auth.admin.updateUserById(",
     replace: "supabaseAdmin.auth.admin.getUserById(",
     expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // The reset page spending the token as it loads, which is what a mail scanner's visit then does.
+    path: "app/(public)/reset-password/page.tsx",
+    named: true,
+    find: "  useEffect(() => {\n    setTokenHash(",
+    replace: "  useEffect(() => {\n    void createClient().auth.verifyOtp;\n    setTokenHash(",
+    expects: ["auth: a recovery link survives a mail scanner: straight to /reset-password, spent only on submit"],
   },
   // The next four are the fixes of 2026-09-10/11, reverted one at a time. Each keeps the setter and
   // its count, so only the entry's guard can see it; before guards existed all four passed.

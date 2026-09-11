@@ -182,7 +182,7 @@ Two domains, **one deployment**, region decided per-request from the hostname:
 | Gate | Command | Held by |
 |---|---|---|
 | Before every commit | `npm run check` | `.githooks/pre-commit` — and `prepare-commit-msg` for the paths git skips it on |
-| Before every push | `npm run check`, then wait to be asked | `.githooks/pre-push` |
+| Before every push | `npm run check:push` (`check`, then the production build Vercel runs), then wait to be asked | `.githooks/pre-push` |
 | Before every deploy | Vercel builds from `master`; there is no separate deploy step | — |
 
 **These are git hooks now, not requests.** Until 2026-08-21 the first two rows were prose: no

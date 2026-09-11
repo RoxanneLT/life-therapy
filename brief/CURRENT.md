@@ -14,10 +14,14 @@ section of that handover is done.
 
 **Pushed 2026-09-10, at Stéan's request: `1101e1f..46b8221`.** That carries the auth-flow fix
 `1396829`, found while triaging L-72; the audit classifies every password setter
-(`PASSWORD_SETTERS`). The deploy was **not verified from here**: this session's Vercel team lists
-pleks, yoros and sterreveld, not life-therapy, which deploys from the repo owner's account. The repo
-is public, so the details are in the session report and nowhere else. L-72 stays off the outbox
-until Stéan says the review is done.
+(`PASSWORD_SETTERS`). The repo is public, so the details are in the session report and nowhere else.
+
+**Production was frozen from 2026-08-19 to 2026-09-11.** Every deploy failed from `566617e` on: a
+client component imported Prisma, which only `next build` sees. The last success was `e48cd61`. It
+was fixed in `4342b14`, pushed and deployed 2026-09-11, which released 76 held commits at once.
+Deploy state IS readable from here: `gh api repos/RoxanneLT/life-therapy/commits/<sha>/status`.
+Read it after every push. Since this change pre-push runs `npm run check:push`, which is `check`
+followed by the production build.
 
 **Pushed 2026-09-10, at Stéan's request: `46b8221..fb1c669`.** Nothing was on origin ahead of it.
 
@@ -70,10 +74,14 @@ two of them.
 - Production, read 2026-09-11. The `account_created` row is the old default, so Roxanne resets it
   to default in admin to get the new copy. The step of `campaign_explore_portal` that carries the
   reset link sent 3 emails on 2026-08-19 with a dead button, and none were clicked.
-- Stéan's call: switch on `security_update_password_require_current_password` in Supabase auth,
-  which is off. Since `0538d24` the code is ready for it. `mailer_autoconfirm` must stay off.
+- `security_update_password_require_current_password` was switched ON 2026-09-11 through the
+  Management API, at Stéan's request, after `0538d24` was live. It was the only field changed.
+  Recovery sessions are exempt in Supabase's source, so reset links still work.
+  `mailer_autoconfirm` must stay off.
+- The Outlook Safe Links property is now an audit check: a recovery link goes straight to
+  `/reset-password`, and its token is spent only on submit.
 
-**Next action:** Stéan's review, then push when asked. L-72 stays off the outbox until Stéan says
+**Next action:** Stéan's review of the L-72 work. L-72 stays off the outbox until Stéan says
 the review is done. Then walk 02's Promote goes to §1, worded without exploit detail. Canon lifts the outbox from HEAD. Before re-running `--emit-open`, check
 `git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
 

@@ -25,15 +25,18 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 const HOOKS = [
-  { file: ".githooks/pre-commit", env: "LT_PRECOMMIT_CMD" },
-  { file: ".githooks/pre-push", env: "LT_PREPUSH_CMD" },
+  { file: ".githooks/pre-commit", env: "LT_PRECOMMIT_CMD", cmd: "npm run check" },
+  // A push also runs the production build: a push is when Vercel builds, and nothing else here walks
+  // the client bundle graph. From 2026-08-19 to 2026-09-11 every deploy failed on an error only
+  // `next build` could see, while every gate here passed.
+  { file: ".githooks/pre-push", env: "LT_PREPUSH_CMD", cmd: "npm run check:push" },
   // Git does NOT run pre-commit for a merge; it runs pre-merge-commit. Without this hook the commit
   // gate had a hole the size of every merge commit.
-  { file: ".githooks/pre-merge-commit", env: "LT_PRECOMMIT_CMD" },
+  { file: ".githooks/pre-merge-commit", env: "LT_PRECOMMIT_CMD", cmd: "npm run check" },
   // Measured 2026-08-21: `git cherry-pick` and `git revert` run NEITHER pre-commit NOR
   // pre-merge-commit. They do run prepare-commit-msg, which is therefore the gate for every
   // commit-creating path git does not otherwise cover — including whichever one is added next.
-  { file: ".githooks/prepare-commit-msg", env: "LT_PRECOMMIT_CMD" },
+  { file: ".githooks/prepare-commit-msg", env: "LT_PRECOMMIT_CMD", cmd: "npm run check" },
 ]
 
 let failed = 0
@@ -174,7 +177,7 @@ clearMarker()
   const shimDir = mkdtempSync(join(tmpdir(), "lt-hookshim-"))
   writeFileSync(join(shimDir, "npm"), '#!/bin/sh\necho "SHIM npm $*"\nexit 0\n', { mode: 0o755 })
 
-  for (const { file, env } of HOOKS) {
+  for (const { file, env, cmd } of HOOKS) {
     clearMarker()
     const withFlag = spawnSync("sh", [file], {
       encoding: "utf8",
@@ -198,12 +201,12 @@ clearMarker()
     const arrows = out.split(/\r?\n/).filter((l) => l.includes("→"))
     const resolved = (arrows.at(-1) ?? "").replace(/^.*→\s*/, "").trim()
     ok(
-      resolved === "npm run check" && !out.includes("SEAM-LEAKED"),
+      resolved === cmd && !out.includes("SEAM-LEAKED"),
       `${file}: …and IGNORED without it — resolved "${resolved || "(no output)"}"`,
     )
     // The shim must actually have been reached, or the assertion above is about an echo and nothing
     // else — a hook could resolve the right string and invoke something different.
-    ok(out.includes("SHIM npm run check"), `${file}: …and INVOKED it — the shimmed npm was reached`)
+    ok(out.includes(`SHIM ${cmd}`), `${file}: …and INVOKED it — the shimmed npm was reached`)
   }
   rmSync(shimDir, { recursive: true, force: true })
 }
