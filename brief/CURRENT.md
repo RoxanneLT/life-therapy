@@ -56,10 +56,26 @@ spine version in the anchor), CF-4 (above). CF-1 was filed at canon `054eab2`.
   is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
   workflow stays under 15 agents and is announced in one line when it starts.
 
-**Next action: wait.** Nothing here is waiting on Stéan. Canon lifts the outbox
-from HEAD; when it replies with SHAs, rows move to **Filed**. Before re-running `--emit-open`,
-check `git -C <canon> status --short tools`: if it is dirty, run from `git archive HEAD`. Since
-`054eab2` the tool warns on its own.
+**L-72, second pass (2026-09-11, unpushed).** An independent walker review of `1396829` said stop.
+It found more of the same class, and those are fixed in `64e00c3`, `7d89fc1`, `3ea8335` and
+`0538d24`. The details are in the session report only. The re-walk at `3ea8335`
+(`.handoff/l72-password-setters/02-walker.md`) says ✅ proceed, with low residuals. `0538d24` takes
+two of them.
+
+- Registration sets no password; it emails a link. Forgot password shares the core,
+  `lib/account-link.ts`. A login is linked to its student only when the emailed token is spent.
+- An admin's own password change needs the current one. The admin invite now sends its link.
+- An admin's change to a client's email is audited.
+- `PASSWORD_SETTERS` sees `createUser`, and every entry names its guard line. Four revert probes.
+- Production, read 2026-09-11. The `account_created` row is the old default, so Roxanne resets it
+  to default in admin to get the new copy. The step of `campaign_explore_portal` that carries the
+  reset link sent 3 emails on 2026-08-19 with a dead button, and none were clicked.
+- Stéan's call: switch on `security_update_password_require_current_password` in Supabase auth,
+  which is off. Since `0538d24` the code is ready for it. `mailer_autoconfirm` must stay off.
+
+**Next action:** Stéan's review, then push when asked. L-72 stays off the outbox until Stéan says
+the review is done. Then walk 02's Promote goes to §1, worded without exploit detail. Canon lifts the outbox from HEAD. Before re-running `--emit-open`, check
+`git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
 
 **Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
 `node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree. On
