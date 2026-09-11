@@ -42,10 +42,12 @@ until Stéan says the review is done.
 `731682a`, `46b8221`. Findings still with canon: CF-2 (kit checks don't carry L-51), CF-3 (no
 spine version in the anchor), CF-4 (above). CF-1 was filed at canon `054eab2`.
 
-**Committed 2026-09-11, not pushed:** `c0fc378`, which carries L-68, and the commit after it.
-That one moves `check-brief` to v7 by canon's new pin's route and files four outbox items that
-canon answered: CF-1, and three kit rows whose pins canon dropped. A third commit adds Stéan's
-second authorisation to §7, for workflows and deep-research.
+**Pushed 2026-09-11, at Stéan's request: `fb1c669..28e9886`.**
+
+- `c0fc378` carries L-68: Stéan's first authorisation, for agents.
+- `beabdc0` moves `check-brief` to v7 by the route in canon's new pin. It also files four outbox
+  items that canon answered: CF-1, and three kit rows whose pins canon dropped.
+- `28e9886` adds Stéan's second authorisation to §7, for workflows and deep-research.
 
 **Queue, `docs/LESSONS.md`:**
 
@@ -54,7 +56,7 @@ second authorisation to §7, for workflows and deep-research.
   is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
   workflow stays under 15 agents and is announced in one line when it starts.
 
-**Next action: wait.** Stéan decides whether to push the three commits above. Canon lifts the outbox
+**Next action: wait.** Nothing here is waiting on Stéan. Canon lifts the outbox
 from HEAD; when it replies with SHAs, rows move to **Filed**. Before re-running `--emit-open`,
 check `git -C <canon> status --short tools`: if it is dirty, run from `git archive HEAD`. Since
 `054eab2` the tool warns on its own.
