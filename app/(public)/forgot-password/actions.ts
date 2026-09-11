@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { prisma } from "@/lib/prisma";
 import { emailPasswordLink } from "@/lib/account-link";
@@ -43,27 +44,36 @@ export async function requestPasswordResetAction(
   await recordHitDb(ipKey, RESET_WINDOW_MS);
   await recordHitDb(emailKey, RESET_WINDOW_MS);
 
-  try {
-    // The core is shared with registration: lib/account-link.ts. It links nothing; the student row
-    // is linked to its login in updatePasswordAction below, once the emailed token is spent.
-    const result = await emailPasswordLink(
-      email,
-      (link) => ({ templateKey: "password_reset", variables: { resetUrl: link } }),
-      BASE_URL,
-    );
-    if (!result.ok) return { error: result.error };
-    if (result.sent) {
-      await recordAuthEvent({
-        action: "password_reset_requested",
+  // The core is shared with registration: lib/account-link.ts. It links nothing; the student row
+  // is linked to its login in updatePasswordAction below, once the emailed token is spent.
+  //
+  // It runs in `after`, once the answer has gone out, for the reason registration gives: an address
+  // with no account returns at once, one with an account builds a link and sends an email, and the
+  // difference is measurable from outside. The same message at the same speed says nothing. A
+  // failed send is logged, not shown; showing it would say that the address has an account.
+  after(async () => {
+    try {
+      const result = await emailPasswordLink(
         email,
-        ip: clientIp(await headers()),
-        userId: result.authUserId,
-      });
+        (link) => ({ templateKey: "password_reset", variables: { resetUrl: link } }),
+        BASE_URL,
+      );
+      if (!result.ok) {
+        console.error(`[password-reset] no link sent to ${email}: ${result.error}`);
+        return;
+      }
+      if (result.sent) {
+        await recordAuthEvent({
+          action: "password_reset_requested",
+          email,
+          ip: reqIp === "unknown" ? undefined : reqIp,
+          userId: result.authUserId,
+        });
+      }
+    } catch (err) {
+      console.error(`[password-reset] Unexpected error:`, err);
     }
-  } catch (err) {
-    console.error(`[password-reset] Unexpected error:`, err);
-    return { error: "Something went wrong. Please try again later." };
-  }
+  });
 
   return { success: true };
 }
