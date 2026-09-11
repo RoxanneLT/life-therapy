@@ -45,10 +45,11 @@ CF-2 (kit checks don't carry L-51), CF-3 (no spine version in the anchor), CF-4 
 **Queue, `docs/LESSONS.md`:**
 
 - **L-41**: waits on canon (CF-4). Nothing to build here without forking a kit row.
-- **L-68**: only Stéan can carry it: a standing authorisation in §7, in Stéan's own words, for the
-  agent pipeline the host layer forbids "unless requested". Not to be written for them.
+- **L-68**: carried 2026-09-11. Stéan gave the standing authorisation in their own words, and it
+  is in `CLAUDE.md` §7. Agents may be spawned without asking; workflows and deep-research still
+  wait to be asked.
 
-**Next action: wait.** Stéan decides whether to write the L-68 authorisation. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
+**Next action: wait.** Nothing here is waiting on Stéan. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
 move to **Filed**. Before re-running `--emit-open`, check `git -C <canon> status --short tools`: if
 it is dirty, run from `git archive HEAD` (CF-1).
 

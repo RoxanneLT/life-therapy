@@ -59,7 +59,8 @@ is worth keeping:
 - **L-10** — `audit: the source enumeration has not decayed`, a floor of 400 against a real count
   of 542. Deliberately not `> 0`, which still passes when a walk decays to one file.
 
-One item queued on 2026-09-10 has since been carried, and its queue entry was wrong in two ways:
+Two items queued on 2026-09-10 have since been carried. The first one's queue entry was wrong in
+two ways:
 
 - **L-35 · L-49** (`a599577`, answered in `docs/CANON-FINDINGS.md` §2). The audit's `code()` and
   `codeKeepingLiterals()` now ask the TypeScript parser, and `audit: every source file parses`
@@ -69,6 +70,11 @@ One item queued on 2026-09-10 has since been carried, and its queue entry was wr
   off and its 204 "losses" there were the harness's. And the fix it proposed, `ts.createScanner`,
   could not have worked alone: a scanner cannot tell a regex from a division, or JSX text from code,
   unless the parser drives it. The fix reads the parse tree instead.
+- **L-68** (2026-09-11, answered in §2). The host layer's *"Do not use the Agent tool, workflows or
+  deep-research unless requested"* is a condition, so a request meets it. Stéan made that request
+  standing, in their own words: `CLAUDE.md` §7, *"STANDING AUTHORISATION — Stéan, 2026-09-11"*. The
+  session waited for those words and did not draft them. The words name agents only, so workflows
+  and deep-research still need asking.
 
 ### Queued: applies here, not carried
 
@@ -86,16 +92,6 @@ One item queued on 2026-09-10 has since been carried, and its queue entry was wr
   failed, because the conclusion may stand on another source; the report has to name which. An edit
   after the artefact was written is staleness, a different lesson. Prototyped outside the tree on
   the one artefact here: 23 cited paths, 17 resolving, 0 edited during its 242-second run.
-
-- **L-68 — the host layer forbids the agent pipeline, and only Stéan can lift it.** Observed
-  2026-09-10: the session that triaged this arrived with *"Do not use the Agent tool, workflows or
-  deep-research unless requested"*, from above `CLAUDE.md` and in no file in this repo. It honoured
-  it. Six spines are installed, `grounder`'s and `census`'s descriptions say to use them
-  PROACTIVELY, and the session spawned none. `/walk` is unaffected, because invoking a command is the request. The text
-  is conditional, so it is satisfied by a request rather than removed by a setting. The carry is a
-  **standing authorisation in `CLAUDE.md` §7, in Stéan's words and dated**, with the bounds on how
-  far it reaches (yoros's carries five rules of discretion from canon's `4-AGENT-PIPELINES.md`
-  §3.1). A session must not write that authorisation for the owner; it waits for Stéan to give it.
 
 When an entry in the shared ledger gains a `life-therapy` line, or should have one and does not,
 this is where the work is tracked. **An unapplied lesson is an open item here — not an `n/a:`

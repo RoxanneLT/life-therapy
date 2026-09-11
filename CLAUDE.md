@@ -497,6 +497,21 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 Mechanical reading → the handoff-only four. Mechanical writing → the implementer. Judgment stays
 in the main session.
 
+**STANDING AUTHORISATION — Stéan, 2026-09-11, from this date onwards.** In Stéan's words: *"from
+today onwards i authorise you to use/spawn agents independently"*. So the agents in the table above
+may be spawned without asking, in any session. This is the standing request for the host-layer
+instruction some sessions arrive with: *"Do not use the Agent tool, workflows or deep-research
+unless requested"*. It sits above this file and is in no file on this machine; canon's L-68 records
+where it was looked for, so don't search again. The words name agents. **Workflows and
+deep-research are not in them and still wait to be asked.** This lifts the question of whether to
+spawn, and none of the limits on what a spawned agent may do: the write scope, the implementer's
+manifest, the denial of commits from a subagent, `census` as the only spawner, depth 2, and §3's
+push gate. The judgement that goes with it is canon's (`4-AGENT-PIPELINES.md` §3.1). Delegate when
+you would read a lot and return a little, and never for what two greps answer. Judgement stays in
+the main session. Never spawn an agent to summarise another. Every claim an agent makes about the
+tree carries the SHA it read. Relay an agent's return block verbatim and put your own reading
+beside it; a paraphrase drops the verdict, the artefact path and the `Promote` line.
+
 **Nobody gets a worktree, and the line that used to say otherwise was wrong.** `isolation:
 "worktree"` bases the agent's tree on the **default branch**, not your HEAD — so on any feature
 branch the implementer transforms a different tree and its green `npm run check` is a true
