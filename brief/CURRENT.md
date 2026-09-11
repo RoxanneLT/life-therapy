@@ -46,9 +46,9 @@ followed by the production build.
 `731682a`, `46b8221`. No findings left with canon: CF-1 was filed at `054eab2`, and CF-2, CF-3 and
 CF-4 at `61bd006`.
 
-**Kit move, 2026-09-11, unpushed.** Thirteen rows came from canon's history at `2e79fdb`. The kit
-rows are bash-gate and its probe v6, agent-write-scope and its probe v5, check-hook-registration v6,
-check-handoff-contract v5, check-install-platform v3 and check-claude-md v17. The spines, through
+**Kit move, pushed 2026-09-11 at Stéan's request (`bf62b2a..f936b77`).** Thirteen rows came
+from canon's history at `2e79fdb`. The kit rows are bash-gate and its probe v6, agent-write-scope
+and its probe v5, check-hook-registration v6, check-handoff-contract v5, check-install-platform v3 and check-claude-md v17. The spines, through
 propagate-spines, are census v10, db-inspector v5, grounder v7, implementer v5 and walker v8.
 bash-gate's per-rule fallbacks are answered from existing settings, plus one added ask,
 `Bash(gh pr merge*)`. Outbox §3 asks canon to drop all thirteen pins. Measured by Stéan
@@ -69,7 +69,7 @@ on the spelling matching the mid-session `Bash(gh pr merge*)`, prompted after a 
   is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
   workflow stays under 15 agents and is announced in one line when it starts.
 
-**L-72, second pass (2026-09-11, unpushed).** An independent walker review of `1396829` said stop.
+**L-72, second pass (2026-09-11, pushed).** An independent walker review of `1396829` said stop.
 It found more of the same class, and those are fixed in `64e00c3`, `7d89fc1`, `3ea8335` and
 `0538d24`. The details are in the session report only. The re-walk at `3ea8335`
 (`.handoff/l72-password-setters/02-walker.md`) says ✅ proceed, with low residuals. `0538d24` takes
