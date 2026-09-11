@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,17 +12,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, MailCheck } from "lucide-react";
 import { registerStudent } from "./actions";
 
 export default function PortalRegisterPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [sent, setSent] = useState(false);
   const [redirectTo, setRedirectTo] = useState("/portal");
 
   useEffect(() => {
@@ -42,7 +39,6 @@ export default function PortalRegisterPage() {
       formData.set("firstName", firstName);
       formData.set("lastName", lastName);
       formData.set("email", email);
-      formData.set("password", password);
 
       const result = await registerStudent(formData);
       if (result?.error) {
@@ -51,28 +47,40 @@ export default function PortalRegisterPage() {
         return;
       }
 
-      // Sign in client-side to establish session
-      const supabase = createBrowserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        setError(signInError.message);
-        setLoading(false);
-        return;
-      }
-
-      const dest = new URLSearchParams(globalThis.location.search).get("redirect") || "/portal";
-      router.push(dest);
-      router.refresh();
+      // No password is chosen here: the email carries a link that sets it, and that link is what
+      // proves the address belongs to the person registering (see ./actions.ts).
+      setSent(true);
+      setLoading(false);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unexpected error occurred"
       );
       setLoading(false);
     }
+  }
+
+  if (sent) {
+    return (
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <MailCheck className="mx-auto mb-2 h-10 w-10 text-brand-600" />
+          <CardTitle className="font-heading text-2xl">Check your email</CardTitle>
+          <CardDescription>
+            We&rsquo;ve sent a link to <strong>{email}</strong>. Open it to confirm your email
+            address and choose your password. The link expires in 1 hour.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-sm text-muted-foreground">
+            Nothing arrived? Check your spam folder, or{" "}
+            <Link href="/forgot-password" className="text-brand-600 hover:underline">
+              send a new link
+            </Link>
+            .
+          </p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -113,20 +121,6 @@ export default function PortalRegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-            />
-            <p className="text-xs text-muted-foreground">
-              At least 8 characters
-            </p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>

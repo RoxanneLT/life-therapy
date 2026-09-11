@@ -1,11 +1,9 @@
 "use server";
 
 import { headers } from "next/headers";
-import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { prisma } from "@/lib/prisma";
-import { renderEmail } from "@/lib/email-render";
-import { sendEmail } from "@/lib/email";
+import { emailPasswordLink } from "@/lib/account-link";
 import { recordAuthEvent } from "@/lib/audit";
 import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
 import { appBaseUrl } from "@/lib/region";
@@ -46,138 +44,22 @@ export async function requestPasswordResetAction(
   await recordHitDb(emailKey, RESET_WINDOW_MS);
 
   try {
-    // Find the account — clients live in `students`, staff in `admin_users`.
-    // Both are Supabase auth users, so a recovery link works for either.
-    const student = await prisma.student.findUnique({
-      where: { email },
-      select: { id: true, supabaseUserId: true },
-    });
-
-    let authUserId = student?.supabaseUserId ?? null;
-    const resolvedFor: "student" | "admin" = student ? "student" : "admin";
-
-    if (!student) {
-      const admin = await prisma.adminUser.findUnique({
-        where: { email },
-        select: { supabaseUserId: true },
-      });
-      if (!admin) {
-        console.warn(`[password-reset] No account found for ${email}`);
-        // Don't reveal whether an account exists.
-        return { success: true };
-      }
-      authUserId = admin.supabaseUserId;
-    }
-
-    // Ensure the account is linked to a Supabase auth user.
-    if (!authUserId) {
-      console.warn(`[password-reset] ${resolvedFor} ${email} has no supabaseUserId, searching auth...`);
-      const { data: userList, error: listError } = await supabaseAdmin.auth.admin.listUsers({
-        perPage: 1000,
-      });
-
-      if (listError) {
-        console.error(`[password-reset] listUsers error:`, listError);
-        return { error: "Something went wrong. Please try again later." };
-      }
-
-      const authMatch = userList?.users?.find(
-        (u) => u.email?.toLowerCase() === email,
-      );
-
-      if (authMatch) {
-        authUserId = authMatch.id;
-        if (resolvedFor === "student" && student) {
-          await prisma.student.update({ where: { id: student.id }, data: { supabaseUserId: authMatch.id } });
-        } else {
-          await prisma.adminUser.update({ where: { email }, data: { supabaseUserId: authMatch.id } });
-        }
-        console.log(`[password-reset] Linked ${resolvedFor} to auth user ${authMatch.id}`);
-      } else if (resolvedFor === "student" && student) {
-        // Auto-provision a Supabase auth account for imported clients (students only —
-        // never auto-create an admin auth user).
-        console.log(`[password-reset] No auth user found — creating one for ${email}`);
-        const tempPassword = `LT-${crypto.randomUUID().slice(0, 8)}!`;
-        const { data: newUser, error: createError } =
-          await supabaseAdmin.auth.admin.createUser({
-            email,
-            password: tempPassword,
-            email_confirm: true,
-          });
-
-        if (createError || !newUser?.user) {
-          console.error(`[password-reset] createUser error:`, createError);
-          return { error: "Something went wrong. Please try again later." };
-        }
-
-        await prisma.student.update({
-          where: { id: student.id },
-          data: { supabaseUserId: newUser.user.id },
-        });
-        authUserId = newUser.user.id;
-        console.log(`[password-reset] Created & linked auth user ${authUserId} for ${email}`);
-      } else {
-        console.error(`[password-reset] Admin ${email} has no linked auth user`);
-        return { error: "Something went wrong. Please try again later." };
-      }
-    }
-
-    // Step 3: Generate recovery link via admin SDK
-    console.log(`[password-reset] Generating recovery link for ${email} (auth: ${authUserId})`);
-
-    const { data: linkData, error: linkError } =
-      await supabaseAdmin.auth.admin.generateLink({
-        type: "recovery",
-        email,
-        options: {
-          redirectTo: `${BASE_URL}/auth/callback?next=/reset-password`,
-        },
-      });
-
-    if (linkError) {
-      console.error(`[password-reset] generateLink error:`, linkError);
-      return { error: "Something went wrong. Please try again later." };
-    }
-
-    if (!linkData?.properties?.hashed_token) {
-      console.error(`[password-reset] generateLink returned no hashed_token`);
-      return { error: "Something went wrong. Please try again later." };
-    }
-
-    // Point straight at the reset page (NOT /auth/callback). The token is only
-    // verified when the user submits their new password, so email-link scanners
-    // (e.g. Microsoft Safe Links) that pre-fetch the URL can't consume it first.
-    const actionLink = `${BASE_URL}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
-
-    // Step 4: Render and send email via Resend
-    console.log(`[password-reset] Sending reset email to ${email}`);
-
-    const { subject, html } = await renderEmail("password_reset", {
-      resetUrl: actionLink,
-    });
-
-    const result = await sendEmail({
-      to: email,
-      subject,
-      html,
-      templateKey: "password_reset",
-      studentId: student?.id,
-      skipTracking: true,
-    });
-
-    if (!result.success) {
-      console.error(`[password-reset] sendEmail failed:`, result.error);
-      return { error: "Failed to send reset email. Please try again later." };
-    }
-
-    console.log(`[password-reset] Reset email sent successfully to ${email}`);
-
-    await recordAuthEvent({
-      action: "password_reset_requested",
+    // The core is shared with registration: lib/account-link.ts. It links nothing; the student row
+    // is linked to its login in updatePasswordAction below, once the emailed token is spent.
+    const result = await emailPasswordLink(
       email,
-      ip: clientIp(await headers()),
-      userId: authUserId,
-    });
+      (link) => ({ templateKey: "password_reset", variables: { resetUrl: link } }),
+      BASE_URL,
+    );
+    if (!result.ok) return { error: result.error };
+    if (result.sent) {
+      await recordAuthEvent({
+        action: "password_reset_requested",
+        email,
+        ip: clientIp(await headers()),
+        userId: result.authUserId,
+      });
+    }
   } catch (err) {
     console.error(`[password-reset] Unexpected error:`, err);
     return { error: "Something went wrong. Please try again later." };
@@ -241,6 +123,28 @@ export async function updatePasswordAction(
   const h = await headers();
   const ip = clientIp(h);
   const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    // The token was just spent, so THIS is when the address is proven, and when a student row is
+    // linked to its login. lib/account-link.ts deliberately links nothing when the email is sent.
+    // Whatever temporary password the account held is replaced, so the forced-change flag goes too.
+    // Until 2026-09-11 it stayed set, and sent a person who had just chosen a password to choose
+    // another one.
+    await prisma.student.updateMany({
+      where: { supabaseUserId: user.id, mustChangePassword: true },
+      data: { mustChangePassword: false },
+    });
+    if (user.email) {
+      try {
+        await prisma.student.updateMany({
+          where: { email: { equals: user.email, mode: "insensitive" }, supabaseUserId: null },
+          data: { supabaseUserId: user.id, mustChangePassword: false },
+        });
+      } catch (err) {
+        // Another student row already holds this login. The password is set; the link is not.
+        console.error("[password-reset] could not link the student row:", err);
+      }
+    }
+  }
   await recordAuthEvent({
     action: "password_changed",
     email: user?.email ?? "unknown",

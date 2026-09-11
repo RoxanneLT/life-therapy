@@ -428,6 +428,42 @@ const MUTATIONS = [
     replace: "supabaseAdmin.auth.admin.getUserById(",
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
+  // The next four are the fixes of 2026-09-10/11, reverted one at a time. Each keeps the setter and
+  // its count, so only the entry's guard can see it; before guards existed all four passed.
+  {
+    // The forced-change form, accepting any signed-in session again.
+    path: "app/(portal)/portal/(auth)/change-password/actions.ts",
+    named: true,
+    find: "  if (!student.mustChangePassword) {\n",
+    replace: "  if (!student) {\n",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // The reset form, with the no-token refusal gone.
+    path: "app/(public)/forgot-password/actions.ts",
+    named: true,
+    find: "  if (!tokenHash) {\n",
+    replace: "  if (tokenHash === null) {\n",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // An admin's own change, back to a session alone.
+    path: "app/(admin)/admin/(dashboard)/users/actions.ts",
+    named: true,
+    find: "!(await verifyPassword(user.email, currentPassword))",
+    replace: "false",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // A login created holding a password somebody chose, which is how registration minted one. That
+    // SETS_PASSWORD sees createUser at all is proven by the clean tree: without it this entry would
+    // be reported as a file that no longer sets a password.
+    path: "lib/account-link.ts",
+    named: true,
+    find: "password: `${randomUUID()}-${randomUUID()}`,",
+    replace: "password: email,",
+    expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
   {
     // A throttle THROTTLES trusts, renamed out from under it. The list would otherwise go on
     // vouching for any file calling the old name, which then resolves to nothing.

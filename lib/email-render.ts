@@ -78,7 +78,7 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
   },
   account_created: {
     firstName: "Jane",
-    loginUrl: "https://life-therapy.co.za/portal/login",
+    loginUrl: "https://life-therapy.co.za/reset-password?token=sample",
   },
   account_provisioned: {
     firstName: "Jane",

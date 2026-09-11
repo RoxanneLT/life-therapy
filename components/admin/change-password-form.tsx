@@ -10,6 +10,7 @@ import { changePassword } from "@/app/(admin)/admin/(dashboard)/users/actions";
 
 export function ChangePasswordForm() {
   const [saving, setSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -26,6 +27,7 @@ export function ChangePasswordForm() {
     setSaving(true);
     try {
       const formData = new FormData();
+      formData.set("currentPassword", currentPassword);
       formData.set("newPassword", newPassword);
       formData.set("confirmPassword", confirmPassword);
       const result = await changePassword(formData);
@@ -37,6 +39,7 @@ export function ChangePasswordForm() {
         return;
       }
       toast.success("Password changed successfully");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch {
@@ -49,6 +52,17 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-sm space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="currentPassword">Current password</Label>
+        <Input
+          id="currentPassword"
+          type="password"
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          required
+        />
+      </div>
       <div className="space-y-2">
         <Label htmlFor="newPassword">New password</Label>
         <Input

@@ -647,10 +647,10 @@ const REVALIDATE_EXCEPTIONS = new Map([
   ["recordSettingsVisitAction", "fire-and-forget visit tally, called .catch(()=>{}) — must never block navigation."],
   ["getWhatsAppTemplatesAction", "lazily seeds defaults then RETURNS the list; the client sets state from the return value, not from cache."],
   ["changeStudentPassword", "caller does router.push() + router.refresh() — the client-side equivalent."],
-  ["registerStudent", "caller signs in then router.push() + router.refresh()."],
+  ["registerStudent", "pre-session form whose page renders from the return value (a check-your-email card); no page shows the student it records until an admin opens it."],
   ["saveVideoPositionAction", "debounced fire-and-forget playback position; client-owned state during playback."],
   ["saveNoteAction", "client sets local note state synchronously; the write is background persistence."],
-  ["requestPasswordResetAction", "useActionState form; incidental auth-linking writes are side effects of sending the email, rendered from the return value."],
+  ["updatePasswordAction", "useActionState form rendered from the return value. Its writes link a student to its login and clear mustChangePassword once the emailed token is spent; no page is showing that student at that moment."],
 ]);
 
 /**
@@ -899,16 +899,30 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
 // session when no token came with it. All three are fixed at their sites. This list makes the
 // next setter somebody's decision. The count is there because a file-level entry would
 // otherwise cover the next setter written into the same file.
+// Each entry is [count, authority, guards]. A guard is a pattern the file must still contain, read
+// with literals kept and comments stripped: the line the authority rests on. Until 2026-09-11 an
+// entry was a count and a sentence, so deleting the guard a sentence described left the audit
+// green. An independent review ran this check over the three pre-fix files and it passed all
+// three. A guard does not prove the authority; it proves the line that claims it is still there.
 const PASSWORD_SETTERS = new Map([
-  ["app/(admin)/admin/(dashboard)/users/actions.ts", [1, "an admin's own password, behind requireRole, which passes the 2FA gate: the session is AAL2"]],
-  ["app/(portal)/portal/(auth)/change-password/actions.ts", [1, "only while mustChangePassword is set: the account holds a temporary password nobody was told"]],
-  ["app/(portal)/portal/(dashboard)/settings/actions.ts", [1, "after the current password is verified by signing in with it"]],
-  ["app/(public)/forgot-password/actions.ts", [1, "after the recovery token, emailed to the address, is verified on submit; there is no path without one"]],
-  ["lib/gift.ts", [1, "only on a login created in the same call (isNew): no prior account, so nothing to take over"]],
+  ["app/(admin)/admin/(dashboard)/users/actions.ts", [2, "an invited admin's login, with a random password nobody is told: the invite is a set-password link emailed to the address. And an admin's own change, after the current password is verified on a client that holds no session", [/emailPasswordLink\(/, /await verifyPassword\(user\.email, currentPassword\)/]]],
+  ["app/(portal)/portal/(auth)/change-password/actions.ts", [1, "only while mustChangePassword is set: the account holds a temporary password nobody was told", [/if \(!student\.mustChangePassword\)/]]],
+  ["app/(portal)/portal/(dashboard)/settings/actions.ts", [1, "after the current password is verified by signing in with it", [/signInWithPassword\(\{\s*email: student\.email,\s*password: currentPassword/]]],
+  ["app/(public)/book/actions.ts", [1, "a first booking's login: a temporary password emailed only to the booking's address, and changed at first sign-in", [/mustChangePassword: true/]]],
+  ["app/(public)/forgot-password/actions.ts", [1, "after the recovery token, emailed to the address, is verified on submit; there is no path without one", [/if \(!tokenHash\)/, /verifyOtp\(\{\s*token_hash: tokenHash,\s*type: "recovery"/]]],
+  ["lib/account-link.ts", [1, "a login made with a random password nobody is told; the only way in is the set-password link it emails to the address, and the student row is linked when that is spent", [/password: `\$\{randomUUID\(\)\}-\$\{randomUUID\(\)\}`/]]],
+  ["lib/account-provisioning.ts", [1, "a temporary password emailed only to the record's address, and changed at first sign-in", [/mustChangePassword: true/]]],
+  ["lib/campaign-process.ts", [1, "a login with a temporary password nobody is told, changed at first sign-in; reached only by the reset link emailed to the student's address", [/mustChangePassword: true/]]],
+  ["lib/campaign-send.ts", [1, "a login with a temporary password nobody is told, changed at first sign-in; reached only by the reset link emailed to the student's address", [/mustChangePassword: true/]]],
+  ["lib/drip-emails.ts", [1, "a login with a temporary password nobody is told, changed at first sign-in; reached only by the reset link emailed to the student's address", [/mustChangePassword: true/]]],
+  ["lib/gift.ts", [1, "the recipient's typed password, only on a login this redemption created (isNew). The redemption token is emailed to the recipient's address and is the authority", [/result\.isNew && recipientInfo\.password/]]],
 ]);
 const SETS_PASSWORD = [
   /auth\.admin\.updateUserById\s*\((?:[^()]|\([^()]*\))*?\bpassword\b/g,
   /auth\.updateUser\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\bpassword\b/g,
+  // A login CREATED holding a password is a password set too, and until 2026-09-11 this list could
+  // not see one: registration minted on an address through exactly this call (L-72).
+  /auth\.admin\.createUser\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\bpassword\b/g,
 ];
 
 check("auth: every place that sets a password is classified by what authorises it", () => {
@@ -927,13 +941,30 @@ check("auth: every place that sets a password is classified by what authorises i
         `sets a password (${n}) and is not in PASSWORD_SETTERS, so nothing records what authorises it`,
         "authorise it on the ACCOUNT (a token sent to the address, the verified current password, a temporary-password flag), then add the file with that reason. Never a session alone, never knowing an address (L-72)",
       );
-    } else if (entry[0] !== n) {
-      fail(
-        "auth",
-        path,
-        `sets a password ${n} time(s); PASSWORD_SETTERS classified ${entry[0]}`,
-        "classify the new setter: each one needs its own authority, and an entry for the file is not one",
-      );
+    } else {
+      if (entry[0] !== n) {
+        fail(
+          "auth",
+          path,
+          `sets a password ${n} time(s); PASSWORD_SETTERS classified ${entry[0]}`,
+          "classify the new setter: each one needs its own authority, and an entry for the file is not one",
+        );
+      }
+      const guards = entry[2] ?? [];
+      if (!guards.length) {
+        fail("auth", path, "PASSWORD_SETTERS names no guard for this file", "name the line the authority rests on, as a pattern");
+      }
+      const kept = codeKeepingLiterals(read(f));
+      for (const guard of guards) {
+        if (!guard.test(kept)) {
+          fail(
+            "auth",
+            path,
+            `the guard PASSWORD_SETTERS rests on is gone: ${guard}`,
+            `restore it, or reclassify the setter by the authority it has now. The entry says: "${entry[1]}"`,
+          );
+        }
+      }
     }
   }
   for (const [path] of PASSWORD_SETTERS) {

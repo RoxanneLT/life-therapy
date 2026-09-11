@@ -137,10 +137,11 @@ const defaults: Record<string, TemplateDefault> = {
   account_created: {
     subject: "Welcome to Life-Therapy!",
     bodyHtml: `<p>Hi {{firstName}},</p>
-<p>Welcome to Life-Therapy! Your student account has been created successfully.</p>
+<p>Welcome to Life-Therapy! To finish setting up your account, please confirm your email address and choose your password:</p>
 <div style="text-align: center; margin: 24px 0;">
-  <a href="{{loginUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Go to My Portal</a>
+  <a href="{{loginUrl}}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Set My Password</a>
 </div>
+<p style="color: #6b7280; font-size: 13px;">This link expires in 1 hour. If you didn&rsquo;t create an account, you can safely ignore this email.</p>
 <p>From your portal, you can:</p>
 <ul style="color: #555; padding-left: 20px;">
   <li>Access your courses and track progress</li>

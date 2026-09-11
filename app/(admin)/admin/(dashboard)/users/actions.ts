@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin, verifyPassword } from "@/lib/supabase-admin";
+import { emailPasswordLink } from "@/lib/account-link";
+import { isRateLimitedDb, recordHitDb, limitKey } from "@/lib/rate-limit-db";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
 import { recordAuthEvent } from "@/lib/audit";
@@ -58,11 +60,22 @@ export async function inviteUser(
     },
   });
 
-  // Send password reset email so user can set their own password
-  await supabaseAdmin.auth.admin.generateLink({
-    type: "recovery",
+  // The invite IS a set-password link, emailed to the address. Until 2026-09-11 this called
+  // generateLink and discarded the result, and the admin API sends nothing itself, so no invite
+  // ever arrived: the new colleague had to find Forgot password on their own. Refused rather than
+  // thrown: the account exists by now, and Forgot password still reaches it.
+  const invite = await emailPasswordLink(
     email,
-  });
+    (link) => ({ templateKey: "password_reset", variables: { resetUrl: link } }),
+    BASE_URL,
+  );
+  if (!invite.ok || !invite.sent) {
+    revalidatePath("/admin/settings/team");
+    return {
+      success: false,
+      error: "The account was created, but the invite email did not send. Ask them to use Forgot password on the sign-in page.",
+    };
+  }
 
   revalidatePath("/admin/settings/team");
   redirect("/admin/settings/team");
@@ -134,6 +147,7 @@ export async function changePassword(
 ): Promise<{ success: boolean; error?: string }> {
   const { user } = await requireRole("super_admin", "editor", "marketing");
 
+  const currentPassword = formData.get("currentPassword") as string;
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -143,6 +157,20 @@ export async function changePassword(
 
   if (newPassword !== confirmPassword) {
     return { success: false, error: "The two passwords do not match." };
+  }
+
+  // THE CURRENT PASSWORD IS THE AUTHORITY, as it is for a client in portal Settings. Until
+  // 2026-09-11 a signed-in session was enough, justified by "the session is AAL2", but the 2FA gate
+  // fails open when the assurance lookup errors (lib/auth.ts), and a session is not proof of the
+  // account in any case (dev-standards/ledgers/LESSONS.md L-72). Throttled per account, so the form
+  // is not a way to guess the current one.
+  const guessKey = limitKey("pwchange", "user", user.id);
+  if (await isRateLimitedDb(guessKey, 5)) {
+    return { success: false, error: "Too many attempts. Please wait 15 minutes and try again." };
+  }
+  if (!currentPassword || !user.email || !(await verifyPassword(user.email, currentPassword))) {
+    await recordHitDb(guessKey, 15 * 60 * 1000);
+    return { success: false, error: "Your current password is incorrect." };
   }
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
