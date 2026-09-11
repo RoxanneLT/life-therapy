@@ -34,8 +34,9 @@ CF-4 at `61bd006`.
 **Kit move, pushed 2026-09-11 at Stéan's request (`bf62b2a..f936b77`).** Thirteen rows came
 from canon's history at `2e79fdb`. The kit rows are bash-gate and its probe v6, agent-write-scope
 and its probe v5, check-hook-registration v6, check-handoff-contract v5, check-install-platform v3
-and check-claude-md v17. The spines, through propagate-spines, are census v10, db-inspector v5, grounder v7, implementer v5 and walker v8.
-bash-gate's per-rule fallbacks are answered from existing settings, plus one added ask,
+and check-claude-md v17. The spines, through propagate-spines, are census v10, db-inspector v5,
+grounder v7, implementer v5 and walker v8. bash-gate's per-rule fallbacks are answered from
+existing settings, plus one added ask,
 `Bash(gh pr merge*)`. Canon dropped all thirteen pins (`c06491c`). Measured by Stéan
 2026-09-11: a settings ask prompts beside a live hook, so twins are live. The one silent hook ask,
 on the spelling matching the mid-session `Bash(gh pr merge*)`, prompted after a restart: closed.
@@ -76,8 +77,8 @@ two of them.
   `/reset-password`, and its token is spent only on submit.
 
 **L-72 review done (Stéan, 2026-09-11).** Walk 02's Promote is outbox §2's L-72 row, worded
-without exploit detail. Its LOW residuals 1, 4 and 5 were fixed the same day, unpushed: `02b0a2b`,
-`68f5e71` and the audit commit after them. A guard that is a check now pins its refusal too.
+without exploit detail. Its LOW residuals 1, 4 and 5 were fixed and pushed the same day: `02b0a2b`,
+`68f5e71` and `1e3217a` (`008a868..1e3217a`). A guard that is a check now pins its refusal too.
 Canon removed every pin at `c06491c`, and `check-kit-drift` from its HEAD shows no drift here.
 The outbox holds CF-5: canon still calls a twin dormant.
 
