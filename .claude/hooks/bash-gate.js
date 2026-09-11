@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v6 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v7 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -38,6 +38,27 @@
  * v6 (2026-09-11) is yoros CF-4: a fallback was declared per FILE, so one `@twin` passed a hook
  * holding nine rules with no floor behind eight. Every rule now carries its own — see "WHAT STANDS
  * BEHIND EACH RULE" below — and `node bash-gate.js --fallbacks` lists them for the checks to read.
+ *
+ * v7 (2026-09-11) is pleks CF-8, CF-9 and yoros CF-10, and it is the first version measured against
+ * the gate it replaces rather than only against its own cases. Run beside pleks's previous gate, v6
+ * ALLOWED 15 of 15 payloads that gate denied or asked, and yoros found the same class on its own.
+ * Three causes, each a piece of bash read wrongly:
+ *   - COMMAND POSITION. The command word was found past a fixed list of BARE wrappers. `timeout 30`,
+ *     `bash -c`, `eval`, `xargs`, `sudo -E`, `nice -n 10`, `then` and `!` all moved the real
+ *     command off it, and every rule missed. See "WHERE THE COMMAND IS".
+ *   - HEREDOC MASKING hid a here-string's following lines (`<<<`), a body piped on to `sh`, and
+ *     `$(…)` in an unquoted body, all of which bash runs.
+ *   - THE MESSAGE MASK read `\` as an escape inside single quotes, where bash does not, so `-m 'a\'`
+ *     never closed and the mask blanked the command after it.
+ * Also: `git push -n` is a dry run and is no longer denied as `--no-verify` (yoros CF-10); `git merge
+ * main` names its SOURCE and no longer asks on a working branch (pleks CF-8); `--mirror` is denied as
+ * the force-push it is; and the abbreviations git accepts (`--no-veri`, `--har`) and
+ * `-c core.hooksPath=` read as what they spell.
+ *
+ * THE PROBE NOW TAKES `--against <previous bash-gate.js>` (pleks CF-10): every case through both
+ * gates, failing on any verdict that got LOOSER unless this version declares it. A replacement
+ * gate's own cases assert what its author intended, and the previous corpus asserts the old
+ * mechanisms, so a regression sits in the gap between the two suites, where neither has a case.
  *
  * A REASON IS ALWAYS SET, INCLUDING ON ALLOW. An empty reason makes an allow
  * indistinguishable from a hook that ran and decided nothing.
@@ -149,17 +170,30 @@
 // dated `@probed-sha` records below were re-recorded that day, with their dates unchanged and
 // their predicate and reason bytes identical to the probed ones (`git diff` shows only the added
 // element).
+//
+// v7 (canon `98f9636`, adopted 2026-09-11) was read rule by rule, each pulled out of canon's v6 and
+// v7 as text, because the TypeScript scanner run alone cannot tell this file's regex literals from
+// division and collapsed both versions to 17 lines. `isDestructiveRm`, `LETHAL_TARGET`,
+// `FORCE_LONG` and `SHORT_CLUSTER_WITH_F` are byte-identical. `isForcePush` gains one alternative,
+// `--mirror`, a stricter deny that the `Bash(git push*)` ask still floors when the hook is dead.
+// CANON_DENY changes only its two reason strings. What v7 adds upstream of the rules is reading
+// through wrappers, shell keywords and git's abbreviations, so `timeout 30 git push -f` now reaches
+// `isForcePush`. v6 allowed those spellings outright, and settings cannot spell a wrapper, so they
+// join the partial floors (the `git -C` forms below) and nothing a twin held is lost. `@probed-kit`
+// moves to v7 and the dates stay. The gate itself went in by canon's install step: the new probe run
+// `--against` this file's v6, 181 cases through both, 3 looser (all 3 in canon's `LOOSENED`), 44
+// stricter.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v6
+// @probed-kit bash-gate v7
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v6
+// @probed-kit bash-gate v7
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -439,12 +473,71 @@ const HEREDOC_SINKS = new Set([
   "sha256sum", "curl", "wget", "dd", "od", "xxd", "hexdump", "column", "fold", "paste",
 ]);
 
-const WRAPPERS = new Set(["sudo", "env", "command", "exec", "nohup", "nice", "time", "builtin"]);
+// ── WHERE THE COMMAND IS (v7, pleks CF-9 ①, yoros CF-10 (a)) ──
+//
+// Every rule is a test at COMMAND POSITION, so the whole gate is only as good as the reader that
+// finds that position. v6 stepped over `VAR=x` and eight bare words. Measured in both projects, it
+// then read `timeout` in `timeout 30 git push -f`, and `-E` in `sudo -E rm -rf /*`, as the command.
+// So the reader now steps over three things, in a loop:
+//   - a leading assignment, and the shell keywords that open a command (`then`, `do`, `!`, …);
+//   - a WRAPPER, with its options: the table says which options take the next token as a value,
+//     and how many positionals come before the command (timeout's DURATION);
+//   - a RUNNER (`bash -c`, `sh -c`, `eval`, `xargs`). The string it runs is split on whitespace
+//     with its quotes stripped, like every token here, so its first word is the command word. A
+//     script path (`bash deploy.sh --force`) matches no rule, so `-c` needs no special case.
+// `command -v git` names git and runs nothing, so it stops there.
+//
+// The table is not closed, and no table can be: the set of runners is open. So the DENY and ASK
+// lists also look past the command word — see "THE BACKSTOP" at `decide`.
+const KEYWORDS = new Set(["if", "then", "else", "elif", "do", "while", "until", "!"]);
+const SH_OPTS = { value: ["-o", "-O", "--rcfile", "--init-file"] };
+const WRAPPERS = new Map([
+  ["sudo", { value: ["-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "-U", "-r", "-t", "--user", "--group", "--host", "--prompt", "--close-from", "--chdir", "--chroot", "--command-timeout", "--other-user", "--role", "--type"] }],
+  ["doas", { value: ["-u", "-C"] }],
+  // Not `-S`: `env -S "git push -f"` splits its value into the command, so the value IS the command.
+  ["env", { value: ["-u", "--unset", "-C", "--chdir"] }],
+  ["command", { query: ["-v", "-V"] }],
+  ["exec", { value: ["-a"] }],
+  ["nohup", {}], ["builtin", {}], ["noglob", {}], ["time", {}], ["winpty", {}], ["eval", {}],
+  ["nice", { value: ["-n", "--adjustment"] }],
+  ["ionice", { value: ["-c", "-n", "-p", "-P", "-u", "--class", "--classdata"] }],
+  ["timeout", { value: ["-s", "--signal", "-k", "--kill-after"], positional: 1 }],
+  ["stdbuf", { value: ["-i", "-o", "-e", "--input", "--output", "--error"] }],
+  ["xargs", { value: ["-a", "-d", "-E", "-I", "-L", "-n", "-P", "-s", "--arg-file", "--delimiter", "--eof", "--replace", "--max-lines", "--max-args", "--max-procs", "--max-chars", "--process-slot-var"] }],
+  ["bash", SH_OPTS], ["sh", SH_OPTS], ["zsh", SH_OPTS], ["dash", SH_OPTS], ["ksh", SH_OPTS],
+]);
 
-/** Index of the command word in a segment: past leading `VAR=x` assignments and wrappers. */
+/** The index just past one wrapper's options and positionals, starting at its first argument. */
+function pastWrapper(tokens, i, w) {
+  let positional = w.positional ?? 0;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (t === "--") return i + 1 + positional;
+    if (t.startsWith("-")) {
+      i += w.value?.includes(t) ? 2 : 1;
+    } else if (positional > 0) {
+      positional--;
+      i++;
+    } else {
+      return i;
+    }
+  }
+  return i;
+}
+
+/** Index of the command word in a segment: past assignments, keywords, wrappers and runners. */
 function commandWordIndex(tokens) {
   let i = 0;
-  while (i < tokens.length && (WRAPPERS.has(tokens[i]) || /^[A-Za-z_]\w*=/.test(tokens[i]))) i++;
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (KEYWORDS.has(t) || /^[A-Za-z_]\w*=/.test(t)) {
+      i++;
+      continue;
+    }
+    const w = WRAPPERS.get(t.slice(t.lastIndexOf("/") + 1));
+    if (!w || w.query?.includes(tokens[i + 1])) break;
+    i = pastWrapper(tokens, i + 1, w);
+  }
   return i < tokens.length ? i : -1;
 }
 
@@ -468,10 +561,25 @@ function argsOf(tokens) {
  * fail toward deny). The receiver is the command word of the last segment on the
  * opener's line before `<<`.
  *
+ * THREE WAYS A BODY IS NOT DATA, all measured by pleks as allowed by v6 (CF-9 ②), and each keeps
+ * the body now:
+ *   - `<<<` is a HERE-STRING. It feeds one word, and the lines after it are commands. The opener
+ *     regex matched the last two of its three `<`.
+ *   - `cat <<'EOF' | sh` pipes the body on. The receiver before `<<` is a sink, but the command after
+ *     `|` runs the body, so every stage of the pipeline must be a sink.
+ *   - An UNQUOTED delimiter's body is expanded, so `$(…)` and backticks in it run. Such a line is
+ *     kept, and splitting makes the substitution a command position. A quoted body is literal.
+ *
  * ONE PASS. Bare-identifier lines are indexed first, then each opener binary-searches
  * for its terminator — a scan-to-end per opener measured QUADRATIC (20k unterminated
  * openers: 4 s), and a hook that can be made to hang has failed at the one job it has.
  */
+function isSink(segmentText) {
+  const tokens = segmentText.split(/\s+/).map(normToken).filter(Boolean);
+  const cw = commandWordIndex(tokens);
+  return cw !== -1 && HEREDOC_SINKS.has(tokens[cw].replace(/^.*\//, ""));
+}
+
 function maskSinkHeredocs(command) {
   const lines = command.split("\n");
   const bare = new Map(); // ID → ascending line numbers where the line is exactly that ID
@@ -495,17 +603,19 @@ function maskSinkHeredocs(command) {
   const consume = (i) => {
     const line = lines[i];
     out.push(line);
-    const m = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(line);
+    const m = /(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(line);
     if (!m) return i;
     const before = line.slice(0, m.index);
-    const seg = before.split(/[;&|]+/).pop() ?? "";
-    const tokens = seg.split(/\s+/).map(normToken).filter(Boolean);
-    const cw = commandWordIndex(tokens);
-    const receiver = cw === -1 ? "" : tokens[cw].replace(/^.*\//, "");
-    if (!HEREDOC_SINKS.has(receiver)) return i;
+    if (!isSink(before.split(/[;&|]+/).pop() ?? "")) return i;
+    // The rest of the opener's pipeline: every stage after `|` must be a sink too, and a process
+    // substitution runs a command of its own.
+    const rest = line.slice(m.index + m[0].length);
+    const pipeline = rest.split(/;|&&|\|\|/)[0];
+    if (/[<>]\(/.test(rest) || pipeline.split(/\|&?/).slice(1).some((stage) => !isSink(stage))) return i;
     const j = firstAfter(bare.get(m[2]) ?? [], i);
     if (j === -1) return i; // unterminated: keep the body
-    for (let k = i + 1; k < j; k++) out.push("");
+    const literal = m[1] !== "";
+    for (let k = i + 1; k < j; k++) out.push(literal || !/\$\(|`/.test(lines[k]) ? "" : lines[k]);
     out.push(lines[j]);
     return j;
   };
@@ -517,15 +627,59 @@ function maskSinkHeredocs(command) {
 /**
  * A command string as SEGMENTS of normalised tokens — one per shell command. Line
  * continuations are joined first, or `\`+newline tears a command in half at exactly
- * the point an attacker would choose. `$(` and backticks open a segment too, so a
- * substitution is a command position and not a hiding place.
+ * the point an attacker would choose. `$(`, backticks and the process substitutions
+ * `<(` / `>(` open a segment too, so a substitution is a command position and not a
+ * hiding place.
+ *
+ * `bare` says, per token, whether it stood OUTSIDE quotes. Only the backstop reads it: a
+ * quoted word is an argument (`--body "never rm -rf /"`), and a bare one may be a command.
  */
 function segments(command) {
-  return maskSinkHeredocs(command)
-    .replace(/\\\r?\n/g, " ")
-    .split(/[;&|\n]+|\$\(|`/)
-    .map((seg) => ({ text: seg.trim(), tokens: seg.split(/\s+/).map(normToken).filter(Boolean) }))
-    .filter((s) => s.tokens.length > 0);
+  const src = maskSinkHeredocs(command).replace(/\\\r?\n/g, " ");
+  const quoted = quoteMap(src);
+  const out = [];
+  const piece = (from, to) => {
+    const tokens = [];
+    const bare = [];
+    for (const m of src.slice(from, to).matchAll(/\S+/g)) {
+      const t = normToken(m[0]);
+      if (!t) continue;
+      tokens.push(t);
+      bare.push(quoted[from + m.index] === 0);
+    }
+    if (tokens.length > 0) out.push({ text: src.slice(from, to).trim(), tokens, bare });
+  };
+  let from = 0;
+  for (const sep of src.matchAll(/[;&|\n]+|\$\(|[<>]\(|`/g)) {
+    piece(from, sep.index);
+    from = sep.index + sep[0].length;
+  }
+  piece(from, src.length);
+  return out;
+}
+
+/**
+ * 1 for each character inside quotes (or a quote itself), else 0. Bash's rules: nothing escapes in
+ * single quotes; in double quotes `\` escapes the next character; outside, `\` quotes one.
+ */
+function quoteMap(s) {
+  const q = new Uint8Array(s.length);
+  let state = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (state === "") {
+      if (c === "\\") i++;
+      else if (c === "'" || c === '"') {
+        state = c;
+        q[i] = 1;
+      }
+    } else {
+      q[i] = 1;
+      if (state === '"' && c === "\\" && i + 1 < s.length) q[++i] = 1;
+      else if (c === state) state = "";
+    }
+  }
+  return q;
 }
 
 /**
@@ -534,6 +688,9 @@ function segments(command) {
  * "we ban --no-verify"` means the gate forbids writing down the rule it enforces.
  * NOT "strip quotes": `git commit "--no-verify"` IS the flag once the shell strips
  * the quotes, and `normToken` treats it so. Only the value of `-m` is inert.
+ *
+ * A backslash escapes only inside DOUBLE quotes. v6 honoured it inside single quotes too, so
+ * `echo -m 'a\' && rm -rf /* && echo 'b'` masked everything up to the last `'` (pleks CF-9 ③).
  */
 function maskMessageText(command) {
   const out = command.split("");
@@ -558,7 +715,7 @@ function maskMessageText(command) {
     }
     let end = k + 1;
     while (end < command.length && command[end] !== quote) {
-      if (command[end] === "\\") end++;
+      if (quote === '"' && command[end] === "\\") end++;
       end++;
     }
     for (let p = k + 1; p < Math.min(end, command.length); p++) out[p] = " ";
@@ -580,22 +737,50 @@ function isDestructiveRm(tokens) {
   return atCommand(tokens, "rm") && argsOf(tokens).some((t) => LETHAL_TARGET.test(t));
 }
 
-/** `git … push … --force|-f|-xf` — `--force-with-lease` and `--force-if-includes` are the SAFE forms and pass. */
+/**
+ * Git accepts any unambiguous prefix of a long option, so `--no-veri` IS `--no-verify` and `--har` IS
+ * `--hard` (pleks CF-9, observed). `min` is the shortest prefix that names only `full` for the verbs
+ * it is used with; a shorter one is ambiguous, and git refuses it.
+ */
+const spells = (t, full, min) => t.length >= min.length && t.startsWith(min) && full.startsWith(t);
+
+/**
+ * `git … push … --force|-f|-xf`, or `--mirror`, which force-updates and deletes every remote ref to
+ * match the local ones. `--force-with-lease` and `--force-if-includes` are the SAFE forms and pass.
+ */
 function isForcePush(tokens) {
   if (!atCommand(tokens, "git")) return false;
   const args = argsOf(tokens);
   if (!args.includes("push")) return false;
-  return args.some((t) => FORCE_LONG.test(t) || SHORT_CLUSTER_WITH_F.test(t));
+  return args.some((t) => FORCE_LONG.test(t) || SHORT_CLUSTER_WITH_F.test(t) || spells(t, "--mirror", "--mi"));
 }
 
-/** `--no-verify` on the hooked verbs, and `-n` only where `-n` MEANS it (commit, push). */
+/**
+ * `-n` inside a short cluster, read the way git reads one: letters until one that takes a value, whose
+ * value is the rest (`-am x` is all + message; `-mn` is the message "n"; `-an` is all + no-verify).
+ */
+function clusterHasN(t) {
+  if (!/^-[A-Za-z]+$/.test(t)) return false;
+  for (const c of t.slice(1)) {
+    if (c === "n") return true;
+    if ("mFcCtuS".includes(c)) return false;
+  }
+  return false;
+}
+
+/**
+ * `--no-verify` on the hooked verbs, `-c core.hooksPath=…` (which points every hook elsewhere), and
+ * `-n` only on COMMIT. On push `-n` is `--dry-run`, and push's --no-verify has no short form (git
+ * 2.55 `push -h`): v6 denied a dry-run push as if it skipped the gate (yoros CF-10 (b)).
+ */
 function isNoVerify(tokens) {
   if (!atCommand(tokens, "git")) return false;
   const args = argsOf(tokens);
   const verb = args.find((t) => ["commit", "push", "merge", "revert", "cherry-pick"].includes(t));
   if (!verb) return false;
-  if (args.includes("--no-verify")) return true;
-  return ["commit", "push"].includes(verb) && args.includes("-n");
+  if (args.some((t) => spells(t, "--no-verify", "--no-veri"))) return true;
+  if (args.some((t, i) => t === "-c" && /^core\.hookspath=/i.test(args[i + 1] ?? ""))) return true;
+  return verb === "commit" && args.some(clusterHasN);
 }
 
 /** A leading `SEAM_VAR=…` assignment — the only spelling of the seam the Bash tool can reach. */
@@ -839,8 +1024,10 @@ function targetsProtectedBranch(tokens, _text, _command, ctx) {
   if (!atCommand(tokens, "git")) return false;
   const args = argsOf(tokens);
   const b = PROTECTED_BRANCH;
-  // NAMED: v4's test, kept whole. Every command it asked on still asks.
-  if ((args.includes("push") || args.includes("merge")) &&
+  // NAMED: a PUSH naming the branch as its destination. Until v7 a merge naming it asked too, but a
+  // merge's argument is its SOURCE: `git merge main` brings main into the branch you are on, and
+  // whether THAT is the protected branch is the BY REFERENCE question below (pleks CF-8).
+  if (args.includes("push") &&
     args.some((t) => t === b || t === `origin/${b}` || t === `refs/heads/${b}` || t.endsWith(`:${b}`))) return true;
   // BY REFERENCE: everything else that lands there.
   if (!ctx) return false;
@@ -867,20 +1054,22 @@ function isPrMerge(tokens) {
 }
 
 function isHardReset(tokens) {
-  return atCommand(tokens, "git") && argsOf(tokens).includes("reset") && argsOf(tokens).includes("--hard");
+  if (!atCommand(tokens, "git")) return false;
+  const args = argsOf(tokens);
+  return args.includes("reset") && args.some((t) => spells(t, "--hard", "--ha"));
 }
 
 function isForceClean(tokens) {
   if (!atCommand(tokens, "git")) return false;
   const args = argsOf(tokens);
-  return args.includes("clean") && args.some((t) => t === "--force" || SHORT_CLUSTER_WITH_F.test(t));
+  return args.includes("clean") && args.some((t) => spells(t, "--force", "--f") || SHORT_CLUSTER_WITH_F.test(t));
 }
 
 const CANON_DENY = [
   [isDestructiveRm, "rm aimed at a filesystem root or home directory"],
-  [isForcePush, "force-push without --force-with-lease"],
+  [isForcePush, "force-push without --force-with-lease (--mirror is one)"],
   [isForceRefspec, "a +refspec force-pushes that ref — push without the +, or use --force-with-lease"],
-  [isNoVerify, "--no-verify (or -n on commit/push) skips the project's own gate"],
+  [isNoVerify, "--no-verify (or -n on commit, or core.hooksPath) skips the project's own gate"],
   [isSeamAssignment, "sets a hook probe seam — the gate would report PASSED without running"],
 ];
 const CANON_ASK = [
@@ -896,12 +1085,47 @@ const CANON_ASK = [
 const fires = (rule, seg, command, ctx) =>
   typeof rule === "function" ? rule(seg.tokens, seg.text, command, ctx) : rule.test(seg.text);
 
+// ── THE BACKSTOP (v7, pleks CF-9 ①) ──
+//
+// The wrapper table cannot be complete, because the set of commands that run another command is
+// open: `winpty git push -f`, `find / -exec rm -rf / \;`, and the next runner nobody has listed.
+// pleks's argument, and canon takes it: a gate must fail toward the gate. So after the command word,
+// every BARE token naming a command canon's rules key on (`git`, `rm`, `gh`) is tried as a command
+// word too, by every deny and ask rule.
+//
+// Three limits keep the gate from being a wall, which is v2's harvest and still the posture:
+//   - A QUOTED token is an argument, never a command: `gh pr create --body "never rm -rf /"`.
+//     A runner's quoted string is reached by the wrapper table (`bash -c "…"`), not by this.
+//   - A PROSE command's words are text, never run: `echo git push -f`, `grep -rn "rm -rf /" .`.
+//   - A bare `#` starts a comment, and nothing after it runs.
+// NOT COVERED: a project rule keyed on some other command gets the wrapper table, not this; and a
+// command a runner sends elsewhere in quotes (`ssh host "rm -rf /"`), which runs on another machine.
+const GATED_NAMES = new Set(["git", "rm", "gh"]);
+const PROSE = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "man", "help", "info", "whatis", "apropos", "which", "type", "whereis", ":", "true", "false"]);
+
+/** Each later command position the backstop tries in one segment, as that position's segment. */
+function laterPositions(seg) {
+  const cw = commandWordIndex(seg.tokens);
+  if (cw === -1 || PROSE.has(seg.tokens[cw].replace(/^.*\//, ""))) return [];
+  const out = [];
+  for (let i = cw + 1; i < seg.tokens.length; i++) {
+    if (!seg.bare[i]) continue;
+    if (seg.tokens[i].startsWith("#")) break;
+    if (GATED_NAMES.has(seg.tokens[i].replace(/^.*\//, ""))) out.push({ ...seg, tokens: seg.tokens.slice(i), bare: seg.bare.slice(i) });
+  }
+  return out;
+}
+
 function decide(command) {
   // Flag scans run on the message-masked text; the rm rule on the unmasked text, so
   // `-m "rm -rf /"` is prose either way (rm is not at command position there).
   const segs = segments(maskMessageText(command));
   const plan = planOf(segs);
-  const hit = (rule) => segs.some((s, index) => fires(rule, s, command, { plan, index }));
+  const later = segs.map(laterPositions);
+  const hit = (rule) =>
+    segs.some((s, index) =>
+      fires(rule, s, command, { plan, index }) ||
+      later[index].some((l) => fires(rule, l, command, { plan: plan.map((p, k) => (k === index ? planOf([l])[0] : p)), index })));
   for (const [rule, why] of [...CANON_DENY, ...PROJECT_DENY]) {
     if (hit(rule)) return ["deny", why];
   }

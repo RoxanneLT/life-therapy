@@ -33,36 +33,7 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-### CF-5 · A settings ask prompts beside a live hook, and canon still says it does not
-
-```
-OBSERVED   On Claude Code 2.1.235, with bash-gate alive and answering allow, a command matching a
-           settings ask rule PROMPTED. Canon still records the opposite in three places.
-COMMAND    Measured 2026-09-11 by Stéan, who alone sees prompts (L-64):
-             git merge --abort                                   → prompted (Bash(git merge*); hook allows)
-             git push <remote> · vercel · gh -R <repo> pr merge   → prompted (hook asks)
-             a hook-denied command                                → blocked, reason shown
-           One command was silent twice in the session that added its settings ask, and prompted
-           after a restart, so it is not evidence either way (bash-gate.js, twins region).
-           Canon HEAD c06491c still reads:
-             ledgers/LESSONS.md L-15   "The coarse layer is **dormant by construction** while the
-                                        precise one lives"; "Verify a dormant layer by disabling
-                                        the layer above it"
-             kit bash-gate v6 :123     "life-therapy measured an ask NOT prompting under a live
-                                        hook on 2026-08-18. Until the two agree, a twin that would
-                                        be wrong while the hook is alive is a `noTwin`"
-             kit check-hook-registration v6 :181, :371   "the dormant layer has nothing to fall back to"
-WHY IT IS  The permission order is the harness's, so it holds for every stack. L-15's reading came
-CANON'S    from this project on 2026-08-18 and recorded no harness version, so it cannot be re-run
-           as it was. The 2026-09-11 reading agrees with the permissions page and with yoros CF-9 (b).
-SMALLEST   A dated correction on L-15: on 2.1.235 the coarse layer is live beside the hook, so a
-FIX        twin costs a prompt wherever it is wider than its rule. Keep the procedure (disable the
-           hook to see the twin alone), which is still the only way to test a twin behind a DENY.
-           In bash-gate, drop "Until the two agree" and cite this measurement. In
-           check-hook-registration, a wording change only: "the fallback layer". It must not
-           loosen any check: a twin is still required, and "live" makes a wide twin a cost, never
-           a reason to delete one.
-```
+Empty. CF-5 was filed at canon `98f9636` (below).
 
 ---
 
@@ -122,6 +93,7 @@ never *exempt*, so the reason has to argue it.
 
 | Row | Version | What | Evidence |
 |---|---|---|---|
+| three rows | v7 | moved 2026-09-11 from canon's history at `98f9636`, with this project's `KIT:CONFIG` regions put back: `bash-gate` v7, `bash-gate-probe` v7 and `check-hook-registration` v7. The probe's new `loosened` region is taken empty, as canon ships it: the gate replaced was canon's v6, whose step canon's own `LOOSENED` covers. By the install step in `kit/INSTALL.md`, `bash-gate.probe.mjs --against` the committed v6 ran 181 cases through both gates: 3 looser, all 3 declared in `LOOSENED`, and 44 stricter. Seven of v7's new cases meet this project's two policies (ask on every push, deny a hard reset) and are held in the `verdicts` region, never `loosened`. The two dated `@probed-kit` twin records move to v7 with their dates kept: `isDestructiveRm`, `LETHAL_TARGET`, `FORCE_LONG` and `SHORT_CLUSTER_WITH_F` are byte-identical, and `isForcePush` only gains `--mirror`. **All three pins are finished work: drop them from `ledgers/projects.json`.** | the commit that adds this row · `check-kit-drift` from `git archive 98f9636` → 3 pins `STALE IN THE AHEAD DIRECTION` and no byte drift · `bash-gate.probe` → `181 probes pass, both directions, 29 verdict(s) tightened` · `--against` → `181 cases through both gates — 3 looser (3 declared), 44 stricter` · `check-hook-registration` → green · `npm run check` → exit 0 |
 | `settings` | v3 | the M-KIT-22 claim is now committed here — `"PowerShell"` in `permissions.deny`. Nothing to record in `kitAdopted` (the row is asserted, not adopted); listed so canon sees the claim is held by a commit and not by a working tree | `2ea2ca6` |
 
 No pins.
@@ -141,6 +113,7 @@ A pointer, not a restatement — the canon entry is the record.
 | CF-2 | Canon's kit checks did not carry canon's L-51 | every kit check spawns itself for each exit path (yoros CF-7 alongside) | `61bd006`, completed in `a108fd9` |
 | CF-3 | The spines' anchor carried no spine version | `spine=<agent> vN` on every anchor; `check-handoff-contract` v5 prints L-39's stamp tell | `61bd006` |
 | CF-4 | `check-handoff-contract` read the anchor and never compared it | v5 prints L-41's QUARANTINED tell | `61bd006` |
+| CF-5 | A settings ask prompts beside a live hook, and canon said it did not | L-15 corrected on measurement; bash-gate v7's fallbacks region says the same; `check-hook-registration` v7 says "the fallback layer" | `98f9636` |
 | §3 | `canon-findings` v1, adopted 2026-09-10 | recorded in `kitAdopted` | `31ed513` |
 | §3 | `check-brief` v7 (`beabdc0`); canon's v6 pin was finished work | pin removed | `a152e89` |
 | §3 | Thirteen rows moved to canon `2e79fdb` (`8d29b98`); their thirteen pins were finished work | all pins removed | `c06491c` |

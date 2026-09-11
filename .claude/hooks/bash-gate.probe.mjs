@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v6 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v7 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -30,7 +30,16 @@
  * and no count over it can see that rule. Whether a fallback is ANSWERED, and present in settings,
  * is `check-hook-registration`'s question; canon's own copy ships every one unfilled.
  *
+ * v7 (2026-09-11) carries the payloads pleks and yoros measured v6 allowing (pleks CF-9, yoros
+ * CF-10), and a DIFFERENTIAL run (pleks CF-10). This file's cases assert what the hook is meant to
+ * do, so they cannot show what a replacement stopped doing. `--against <previous bash-gate.js>` puts
+ * every case through the previous gate as well, and fails on any verdict that got LOOSER unless the
+ * `LOOSENED` table below names it with a reason. Run it before you replace your gate, against the
+ * copy you are replacing, so your own rules are in the comparison. v6's probe and pleks's corpus were
+ * both green over a gate that allowed 15 payloads its predecessor refused.
+ *
  * Run: node .claude/hooks/bash-gate.probe.mjs   (wire into the `probe` script)
+ *      node .claude/hooks/bash-gate.probe.mjs --against <the gate you are replacing>
  */
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -62,12 +71,12 @@ import * as branchConfig from "./bash-gate.config.mjs";
  * inherited. The hook reads `.git/HEAD` only when it is set, so a case that inherited a session's
  * value would pass or fail by which branch that session had checked out.
  */
-function run(payload, { raw = false, root } = {}) {
+function run(payload, { raw = false, root, hook = HOOK } = {}) {
   return new Promise((resolve) => {
     const env = { ...process.env };
     delete env.CLAUDE_PROJECT_DIR;
     if (root) env.CLAUDE_PROJECT_DIR = root;
-    const p = spawn(process.execPath, [HOOK], { stdio: ["pipe", "pipe", "inherit"], env });
+    const p = spawn(process.execPath, [hook], { stdio: ["pipe", "pipe", "inherit"], env });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     p.on("close", () => {
@@ -159,6 +168,42 @@ export function fallbackProblem(fb) {
   return `has a fallback keyed ${keys[0]} — it takes exactly one of twins or noTwin`;
 }
 
+/**
+ * v7: the verdicts THIS version loosens on purpose, by case `why`, each with the reason the previous
+ * verdict was wrong. `--against` fails on any looser verdict not named here, and a name that no case
+ * carries is itself a finding. Replace the table at each version; it describes one step.
+ */
+export const LOOSENED = {
+  "PUSH -n is --dry-run, not --no-verify (yoros CF-10)": "v6 denied a dry-run push as if it skipped the project's gate",
+  [`MERGE DIRECTION: merging ${PROTECTED_BRANCH} into the working branch leaves ${PROTECTED_BRANCH} alone (pleks CF-8)`]: "v6 read a merge's source as its target and asked",
+  [`MERGE DIRECTION: likewise origin/${PROTECTED_BRANCH}`]: "the same, spelled by remote",
+};
+
+/**
+ * v7: compare two gates' verdicts over the same cases. `rows` are `{ why, old, now }`. Pure, so both
+ * directions are checked below without a second hook. Returns the undeclared looser rows as findings,
+ * and counts for the summary line.
+ */
+export function differential(rows, loosened) {
+  const findings = [];
+  let looser = 0;
+  let declared = 0;
+  let stricter = 0;
+  for (const r of rows) {
+    if (!(r.old in STRICTNESS) || !(r.now in STRICTNESS)) {
+      findings.push(`"${r.why}": the ${r.old in STRICTNESS ? "new" : "previous"} gate gave no verdict (${r.old in STRICTNESS ? r.now : r.old}) — NOT MEASURED, which is not a pass`);
+      continue;
+    }
+    const d = STRICTNESS[r.now] - STRICTNESS[r.old];
+    if (d > 0) stricter++;
+    if (d >= 0) continue;
+    looser++;
+    if (Object.hasOwn(loosened, r.why)) declared++;
+    else findings.push(`LOOSER: "${r.why}" was ${r.old} and is now ${r.now}, and this version does not say why`);
+  }
+  return { findings, looser, declared, stricter };
+}
+
 /** v6: findings over the hook's rule list, given the reasons the hook was SEEN to give. Pure. */
 export function fallbackFindings(inv, seenReasons) {
   if (inv === null || typeof inv !== "object" || !Array.isArray(inv.rules) || !Array.isArray(inv.strays)) {
@@ -188,10 +233,12 @@ export function fallbackFindings(inv, seenReasons) {
  *   "hard reset discards uncommitted work with no undo": "deny",
  *   [`pushing ${WORKING_BRANCH} is not the deployment`]: "ask",
  */
-/* LT holds two of canon's verdicts tighter, and the twenty-two entries below are those two policies
- * meeting canon's cases — not twenty-two separate decisions.
+/* LT holds two of canon's verdicts tighter, and the twenty-nine entries below are those two policies
+ * meeting canon's cases — not twenty-nine separate decisions.
  *
- * PUSH (twenty-one entries; fifteen arrived with canon's v5 cases). "Push policy: never push. Commit, report, and wait" (§3) is a standing rule,
+ * PUSH (twenty-five entries; fifteen arrived with canon's v5 cases, four with v7's). A dry-run push
+ * asks too: the rule reads `git push`, and a flag that makes it harmless is still a push command a
+ * human can glance at. Loosening that is Stéan's call, not a kit move's. "Push policy: never push. Commit, report, and wait" (§3) is a standing rule,
  * not a branch rule: Stéan walks the work before it ships, and that is as true on a feature branch
  * as on the deployment. So every case canon lets through because the branch is not `master` is an
  * ask here — including the three safe force forms, which canon is right to keep out of `deny` and
@@ -199,7 +246,7 @@ export function fallbackFindings(inv, seenReasons) {
  * arriving through a compound command; they are canon's proof that a gate reads segments rather
  * than substrings, and that proof survives at `ask`.
  *
- * RESET (one entry). §3 lists `git reset --hard` under hook-denied by name. Canon asks because
+ * RESET (four entries; three arrived with v7's wrapper, keyword and abbreviation cases). §3 lists `git reset --hard` under hook-denied by name. Canon asks because
  * discarding uncommitted work is sometimes what you meant; this repo lost a working day to
  * OneDrive eating the tree (§6) and does not want the one-keystroke version of that available.
  * The recovery is `git stash`, which loses nothing.
@@ -231,9 +278,31 @@ const PROJECT_VERDICTS = {
   "HEAD on protected: pushing the working branch by name": "ask",
   "HEAD on protected: --tags alone": "ask",
   "a detached HEAD pushing the working branch by name": "ask",
+  // v7's cases (adopted 2026-09-11): the same two policies, reached through a wrapper, a shell
+  // keyword, an abbreviation git accepts, and a push flag canon now reads as harmless.
+  "PLAN: command -v checks out nothing": "ask",
+  "a lease push behind a wrapper is still the safe form": "ask",
+  "PUSH -n is --dry-run, not --no-verify (yoros CF-10)": "ask",
+  "PUSH --dry-run likewise": "ask",
   "hard reset discards uncommitted work with no undo": "deny",
+  "WRAPPER: a hard reset behind timeout": "deny",
+  "KEYWORD: a hard reset after then": "deny",
+  "ABBREVIATED: --har is --hard to git": "deny",
 }
 /* KIT:CONFIG /verdicts */
+
+/* KIT:CONFIG loosened — verdicts THIS project accepts as looser than the gate it replaced (v7).
+ *
+ * Read only by `--against`, and only when the gate you are replacing is your own rather than canon's
+ * previous version: `LOOSENED` above already covers canon's own step. Keyed by a case's `why`, each
+ * with the reason the old verdict was wrong for you. A verdict that was your POLICY (asking on every
+ * push, denying `git reset --hard`) belongs in the hook's deny and ask regions instead, where it
+ * holds. Measured on pleks's v4-lineage gate: 39 looser, in exactly those two kinds.
+ *
+ *   "PROSE: a gated command named in echo's arguments": "our old gate matched a name at any token",
+ */
+const PROJECT_LOOSENED = {}
+/* KIT:CONFIG /loosened */
 
 /**
  * FIXTURE REPOSITORIES FOR THE HEAD READ (v5). Each is a directory whose `.git` holds a HEAD and
@@ -393,7 +462,7 @@ const CASES = [
   { want: "allow", why: "the seam rule is inert with no seams configured", payload: bash("SOME_VAR=1 git status") },
 
   // ── Must ASK ──────────────────────────────────────────────────────────────
-  { want: "ask", why: `merging to ${PROTECTED_BRANCH}`, payload: bash(`git merge ${WORKING_BRANCH} ${PROTECTED_BRANCH}`) },
+  { want: "ask", root: ON_P, why: `merging to ${PROTECTED_BRANCH}`, payload: bash(`git merge ${WORKING_BRANCH} ${PROTECTED_BRANCH}`) },
   { want: "ask", why: `pushing to ${PROTECTED_BRANCH}`, payload: bash(`git push origin ${PROTECTED_BRANCH}`) },
   { want: "ask", why: `pushing to ${PROTECTED_BRANCH} via git -C`, payload: bash(`git -C /tmp/d push origin ${PROTECTED_BRANCH}`) },
   { want: "ask", why: `pushing HEAD:${PROTECTED_BRANCH}`, payload: bash(`git push origin HEAD:${PROTECTED_BRANCH}`) },
@@ -446,7 +515,7 @@ const CASES = [
   { want: "ask", why: "BY REFERENCE: push HEAD after checking out the protected branch", payload: bash(`git checkout ${P} && git push -u origin HEAD`) },
   { want: "ask", why: "BY REFERENCE: a full ref as the destination", payload: bash(`git push origin ${W}:refs/heads/${P}`) },
   { want: "ask", why: "BY REFERENCE: --all pushes every branch, the protected one included", payload: bash("git push --all origin") },
-  { want: "ask", why: "BY REFERENCE: --mirror likewise", payload: bash("git push --mirror origin") },
+  { want: "deny", why: "--mirror force-updates and deletes every remote ref: it is a force-push", payload: bash("git push --mirror origin") },
   { want: "ask", why: "BY REFERENCE: gh pr merge lands on a base the command does not name", payload: bash("gh pr merge 12 --merge") },
   { want: "allow", why: "BY REFERENCE: switch away again before a bare push", payload: bash(`git switch ${P} && git switch ${W} && git push`) },
   { want: "allow", why: "BY REFERENCE: a new branch off the protected one, pushed by HEAD", payload: bash(`git checkout ${P} && git checkout -b feature/x && git push -u origin HEAD`) },
@@ -487,6 +556,85 @@ const CASES = [
   { want: "allow", root: DETACHED, why: "a detached HEAD pushing the working branch by name", payload: bash(`git push origin ${W}`) },
   { want: "allow", root: NO_GIT, why: "no .git, and nothing git", payload: bash("ls") },
 
+  // ── v7: the command behind a wrapper, a keyword or a runner (pleks CF-9 ①, yoros CF-10 (a)) ──
+  // Each was ALLOWED by v6, measured in pleks or yoros or both.
+  { want: "deny", why: "WRAPPER: timeout and its duration", payload: bash(`timeout 30 git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: timeout with an option that takes a value", payload: bash(`timeout -s KILL 30 git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: stdbuf with an attached option", payload: bash(`stdbuf -oL git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: noglob", payload: bash(`noglob git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: time -p", payload: bash(`time -p git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: nice -n and its value", payload: bash(`nice -n 10 git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: env -i", payload: bash(`env -i git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: sudo -u and its user", payload: bash(`sudo -u root git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: sudo -E before rm", payload: bash("sudo -E rm -rf /*") },
+  { want: "deny", why: "WRAPPER: command -p", payload: bash(`command -p git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPER: exec -a and its name", payload: bash(`exec -a x git push -f origin ${W}`) },
+  { want: "deny", why: "WRAPPERS NEST: timeout, then nice", payload: bash("timeout --preserve-status 30 nice -n 5 rm -rf /") },
+  { want: "deny", why: "RUNNER: xargs", payload: bash("echo x | xargs git push -f origin") },
+  { want: "deny", why: "RUNNER: bash -c and its string", payload: bash(`bash -c "git push -f origin ${W}"`) },
+  { want: "deny", why: "RUNNER: sh -c and its string", payload: bash("sh -c 'rm -rf /*'") },
+  { want: "deny", why: "RUNNER: eval", payload: bash(`eval "git push -f origin ${W}"`) },
+  { want: "deny", why: "KEYWORD: then opens a command", payload: bash("if true; then git push -f; fi") },
+  { want: "deny", why: "KEYWORD: do opens a command", payload: bash("for i in 1; do rm -rf /; done") },
+  { want: "deny", why: "KEYWORD: ! opens a command", payload: bash("! git push -f") },
+  { want: "deny", why: "BACKSTOP: a runner in no table (winpty stands in for the next one)", payload: bash("winpty git push -f") },
+  { want: "deny", why: "BACKSTOP: find -exec runs its command", payload: bash("find . -exec rm -rf / \\;") },
+  { want: "deny", why: "PROCESS SUBSTITUTION is a command position", payload: bash("diff <(rm -rf /) x") },
+  { want: "ask", why: "WRAPPER: the protected-branch push behind timeout", payload: bash(`timeout 30 git push origin ${P}`) },
+  { want: "ask", why: "WRAPPER: a bare push behind timeout, after checking out the protected branch", payload: bash(`git checkout ${P} && timeout 30 git push`) },
+  { want: "ask", why: "WRAPPER: a hard reset behind timeout", payload: bash("timeout 30 git reset --hard") },
+  { want: "ask", why: "RUNNER: a protected-branch push inside bash -c", payload: bash(`bash -c "git push origin ${P}"`) },
+  { want: "deny", why: "RUNNER: --no-verify inside bash -c", payload: bash('bash -c "git commit --no-verify -m x"') },
+  { want: "ask", why: "KEYWORD: a hard reset after then", payload: bash("if true; then git reset --hard; fi") },
+  { want: "deny", why: "MESSAGE MASK: an unclosed single quote does not hide a force-push", payload: bash("echo -m 'a\\' && git push -f && echo 'b'") },
+  { want: "deny", why: "RUNNER: bash -o and its value before -c", payload: bash(`bash -o pipefail -c "git push -f origin ${W}"`) },
+  { want: "deny", why: "BACKSTOP: a backslash does not escape inside single quotes, so what follows is bare", payload: bash("find . -name 'x\\' -exec rm -rf / \\;") },
+  // The BACKSTOP finds a wrapped git, rm or gh anywhere, so the table shows in the PLAN: a checkout
+  // behind a wrapper still moves HEAD for the push after it, and one behind a query does not.
+  { want: "ask", why: "PLAN: a checkout behind timeout moves HEAD", payload: bash(`timeout 30 git checkout ${P} && git push`) },
+  { want: "ask", why: "PLAN: a checkout behind nice -n and its value", payload: bash(`nice -n 5 git checkout ${P} && git push`) },
+  { want: "ask", why: "PLAN: timeout -- and the duration still owed", payload: bash(`timeout -- 30 git checkout ${P} && git push`) },
+  { want: "ask", why: "PLAN: a checkout after then", payload: bash(`if true; then git checkout ${P}; fi; git push`) },
+  { want: "allow", why: "PLAN: command -v checks out nothing", payload: bash(`command -v git checkout ${P} && git push`) },
+  { want: "ask", root: ON_P, why: "PLAN: a bare push the backstop finds is a push of HEAD", payload: bash("find . -maxdepth 0 -exec git push \\;") },
+  // MUST NOT BREAK, from yoros's list and pleks's.
+  { want: "allow", why: "command -v names git and runs nothing", payload: bash("command -v git") },
+  { want: "allow", why: "PROSE: a wrapper named in echo's arguments", payload: bash("echo timeout 30 rm -rf /") },
+  { want: "allow", why: "PROSE: a gated command named in echo's arguments", payload: bash("echo git push -f") },
+  { want: "allow", why: "PROSE: grepping for a force-push", payload: bash('grep -rn "git push -f" .') },
+  { want: "allow", why: "a -m message naming a wrapped force-push", payload: bash('git commit -m "timeout 30 git push -f"') },
+  { want: "allow", why: "a script run by a shell is not the flags it is given", payload: bash("bash scripts/deploy.sh --force") },
+  { want: "allow", why: "a lease push behind a wrapper is still the safe form", payload: bash(`timeout 30 git push --force-with-lease origin ${W}`) },
+  { want: "allow", why: "QUOTED: a PR body naming gated commands is an argument", payload: bash('gh pr create --body "never rm -rf / or git push -f"') },
+  { want: "allow", why: "a wrapper around an ordinary command", payload: bash("nice -n 5 npm run check") },
+  { want: "allow", why: "a runner around an ordinary command", payload: bash("xargs -n1 echo") },
+  { want: "allow", why: "COMMENT: nothing after a bare # runs", payload: bash("ls # then git push -f") },
+
+  // ── v7: heredocs whose body is not data, and the message mask (pleks CF-9 ②, ③) ──
+  { want: "deny", why: "HERE-STRING: <<< feeds one word, and the next lines run", payload: bash("cat <<< EOF\ngit push -f\nEOF") },
+  { want: "deny", why: "HEREDOC PIPED ON: a sink's body sent to sh runs", payload: bash("cat <<'EOF' | sh\ngit push -f\nEOF") },
+  { want: "deny", why: "UNQUOTED HEREDOC: $(…) in the body runs", payload: bash("cat <<EOF\n$(git push -f)\nEOF") },
+  { want: "deny", why: "HEREDOC TO A PROCESS SUBSTITUTION: the body is sent to sh", payload: bash("cat <<'EOF' > >(sh)\ngit push -f\nEOF") },
+  { want: "deny", why: "MESSAGE MASK: a backslash does not escape inside single quotes", payload: bash("echo -m 'a\\' && rm -rf /* && echo 'b'") },
+  { want: "allow", why: "HEREDOC PIPED ON: a sink's body sent to another sink is still data", payload: bash("cat <<'EOF' | git commit -F -\nnever rm -rf /\nEOF") },
+  { want: "allow", why: "UNQUOTED HEREDOC: a body with no substitution is still data", payload: bash("git commit -F - <<EOF\nno rm -rf / here\nEOF") },
+
+  // ── v7: what git's flags actually spell ──
+  { want: "allow", why: "PUSH -n is --dry-run, not --no-verify (yoros CF-10)", payload: bash(`git push -n origin ${W}`) },
+  { want: "allow", why: "PUSH --dry-run likewise", payload: bash(`git push --dry-run origin ${W}`) },
+  { want: "allow", why: "COMMIT -am is all and a message, not -n", payload: bash("git commit -am x") },
+  { want: "deny", why: "COMMIT -an: -n inside a cluster is --no-verify", payload: bash("git commit -an -m x") },
+  { want: "allow", why: "COMMIT -mn is the message \"n\", and skips nothing", payload: bash("git commit -mn") },
+  { want: "deny", why: "ABBREVIATED: --no-veri is --no-verify to git", payload: bash("git commit --no-veri -m x") },
+  { want: "deny", why: "core.hooksPath points every hook elsewhere", payload: bash("git -c core.hooksPath=/dev/null commit -m x") },
+  { want: "ask", why: "ABBREVIATED: --har is --hard to git", payload: bash("git reset --har") },
+  { want: "ask", why: "ABBREVIATED: --forc is --force to git clean", payload: bash("git clean --forc") },
+
+  // ── v7: a merge names its SOURCE (pleks CF-8) ──
+  { want: "allow", root: ON_W, why: `MERGE DIRECTION: merging ${P} into the working branch leaves ${P} alone (pleks CF-8)`, payload: bash(`git merge ${P}`) },
+  { want: "allow", root: ON_W, why: `MERGE DIRECTION: likewise origin/${P}`, payload: bash(`git merge origin/${P}`) },
+  { want: "ask", root: ON_P, why: "MERGE DIRECTION: any merge while on the protected branch lands on it", payload: bash("git merge feature-x") },
+
   /* KIT:CONFIG cases — this project's own gates, beyond the canonical set above.
    * ONE PROBE PER RULE YOU ADDED TO THE HOOK'S DENY/ASK BLOCKS, both directions: the
    * violation, and the near-miss that must still pass. A rule with no probe is a rule
@@ -500,12 +648,49 @@ const { cases: EFFECTIVE, findings: verdictFindings } = applyVerdicts(CASES, PRO
 let failed = verdictFindings.length;
 for (const f of verdictFindings) console.log(`✗ ${f}`);
 
+const DECLARED_LOOSER = { ...LOOSENED, ...PROJECT_LOOSENED };
+for (const why of Object.keys(DECLARED_LOOSER)) {
+  if (!CASES.some((c) => c.why === why)) {
+    failed++;
+    console.log(`✗ ${Object.hasOwn(PROJECT_LOOSENED, why) ? "the loosened region" : "LOOSENED"} names "${why}", which no case carries — a declaration for nothing`);
+  }
+}
+
+// --against <file>: the previous gate, copied beside this directory's files so its imports resolve,
+// and as `.mjs` unless it is CommonJS. Nothing is written to your tree.
+const againstAt = process.argv.indexOf("--against");
+let AGAINST = null;
+if (againstAt !== -1) {
+  const src = process.argv[againstAt + 1];
+  if (!src || !existsSync(src)) {
+    console.log(`✗ --against needs the previous bash-gate.js; "${src ?? ""}" does not exist`);
+    process.exit(1);
+  }
+  const dir = mkdtempSync(join(tmpdir(), "bash-gate-against-"));
+  for (const f of readdirSync(HERE)) if (statSync(join(HERE, f)).isFile()) copyFileSync(join(HERE, f), join(dir, f));
+  const text = readFileSync(src, "utf8");
+  const cjs = /\brequire\(/.test(text) && !/^[ \t]*import\b/m.test(text);
+  AGAINST = { src, dir, file: join(dir, cjs ? "bash-gate.against.cjs" : "bash-gate.against.mjs"), rows: [] };
+  writeFileSync(AGAINST.file, text);
+}
+// --sample <n>: the first n cases only, which is how the exit-path check below runs this file as a
+// child without tripling its time. A sampled run exits 3 when nothing failed, never 0, so it cannot
+// stand in for the probe in a gate.
+const sampleAt = process.argv.indexOf("--sample");
+const SAMPLE = sampleAt === -1 ? null : Number(process.argv[sampleAt + 1]);
+if (SAMPLE !== null && !(Number.isInteger(SAMPLE) && SAMPLE > 0)) {
+  console.log(`✗ --sample needs a whole number of cases; got "${process.argv[sampleAt + 1] ?? ""}"`);
+  process.exit(1);
+}
+const RUN_CASES = SAMPLE === null ? EFFECTIVE : EFFECTIVE.slice(0, SAMPLE);
+
 let tightened = 0;
 const seenReasons = new Set();
 const UNPARSED = "could not parse hook input — failing to a prompt, not to silence";
 try {
-  for (const c of EFFECTIVE) {
+  for (const c of RUN_CASES) {
     const got = await run(c.payload, { raw: c.raw === true, root: c.root });
+    if (AGAINST) AGAINST.rows.push({ why: c.why, old: (await run(c.payload, { raw: c.raw === true, root: c.root, hook: AGAINST.file })).decision, now: got.decision });
     const ok = got.decision === c.want;
     if (!ok) failed++;
     if (c.overridden) tightened++;
@@ -526,6 +711,49 @@ try {
   }
 } finally {
   rmSync(FIXTURES, { recursive: true, force: true });
+  if (AGAINST) rmSync(AGAINST.dir, { recursive: true, force: true });
+}
+
+// ── v7: the differential, both directions on rows written here, then the run asked for ──
+for (const [label, rows, fires] of [
+  ["KNOWN-GOOD: unchanged, stricter, and a declared loosening", [{ why: "a", old: "ask", now: "ask" }, { why: "b", old: "allow", now: "deny" }, { why: "d", old: "deny", now: "allow" }], false],
+  ["an undeclared loosening fires — the CF-9 shape", [{ why: "x", old: "deny", now: "allow" }], true],
+  ["deny to ask is looser too", [{ why: "x", old: "deny", now: "ask" }], true],
+  ["a gate that gave no verdict fires, never passes", [{ why: "x", old: "(no output)", now: "deny" }], true],
+]) {
+  const got = differential(rows, { d: "declared here" }).findings.length > 0;
+  if (got !== fires) failed++;
+  console.log(`${got === fires ? "✓" : "✗"} differential: ${label}`);
+}
+if (AGAINST) {
+  const d = differential(AGAINST.rows, DECLARED_LOOSER);
+  failed += d.findings.length;
+  for (const f of d.findings) console.log(`✗ against: ${f}`);
+  for (const r of AGAINST.rows) {
+    if (STRICTNESS[r.now] < STRICTNESS[r.old] && Object.hasOwn(DECLARED_LOOSER, r.why)) console.log(`✓ against: declared looser — "${r.why}": ${DECLARED_LOOSER[r.why]}`);
+  }
+  console.log(`⇄ against ${AGAINST.src}: ${AGAINST.rows.length} cases through both gates — ${d.looser} looser (${d.declared} declared), ${d.stricter} stricter`);
+  if (d.looser === 0 && d.stricter === 0) {
+    console.log("– against: the two gates agreed on every case. If the mechanism changed, these cases do not reach the change: add cases drawn from the diff.");
+  }
+} else if (SAMPLE === null) {
+  // The same path through the process a gate runs (L-51). Against a predecessor that denied
+  // everything, the first cases are looser and undeclared, so a child `--against` must exit 1 and
+  // name them. It fails here if the run compares this gate with itself, or prints and passes.
+  const dir = mkdtempSync(join(tmpdir(), "bash-gate-deny-all-"));
+  const denyAll = join(dir, "deny-all.mjs");
+  writeFileSync(denyAll, 'process.stdin.resume();\nprocess.stdin.on("end", () => process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "planted" } })));\n');
+  const child = (...args) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...args], { encoding: "utf8" });
+  const r = child("--against", denyAll, "--sample", "3");
+  rmSync(dir, { recursive: true, force: true });
+  const sampled = child("--sample", "1");
+  for (const [label, good, got] of [
+    ["--against a gate that denied everything exits 1 and names the looser cases", r.status === 1 && r.stdout.includes("✗ against: LOOSER: "), r.status],
+    ["a sampled run that passes exits 3, never 0", sampled.status === 3, sampled.status],
+  ]) {
+    if (!good) failed++;
+    console.log(`${good ? "✓" : "✗"} differential: ${label}${good ? "" : ` — got exit ${got}`}`);
+  }
 }
 
 for (const [args, want] of WITNESS_SELFTEST) {
@@ -618,6 +846,10 @@ console.log(`\n${seen.line}`);
   }
 }
 
+if (SAMPLE !== null) {
+  console.log(`\n– SAMPLED: ${RUN_CASES.length} of ${EFFECTIVE.length} cases, which is not a probe run. ${failed} failed.`);
+  process.exit(failed === 0 ? 3 : 1);
+}
 console.log(
   failed === 0
     ? `\n✅ bash-gate: ${EFFECTIVE.length} probes pass, both directions` +

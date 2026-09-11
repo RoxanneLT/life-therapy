@@ -80,7 +80,9 @@ two of them.
 without exploit detail. Its LOW residuals 1, 4 and 5 were fixed and pushed the same day: `02b0a2b`,
 `68f5e71` and `1e3217a` (`008a868..1e3217a`). A guard that is a check now pins its refusal too.
 Canon removed every pin at `c06491c`, and `check-kit-drift` from its HEAD shows no drift here.
-The outbox holds CF-5: canon still calls a twin dormant.
+Canon filed CF-5 at `98f9636` (L-15 corrected) and shipped bash-gate v7. Its three rows moved
+here the same day, unpushed: the probe run `--against` the old v6 found 3 looser cases, all
+declared by canon, and 44 stricter. Outbox §3 asks canon to drop the three pins.
 
 **Next action:** none queued. Canon lifts the outbox from HEAD. Before re-running `--emit-open`,
 check `git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
