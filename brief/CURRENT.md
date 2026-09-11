@@ -44,16 +44,17 @@ spine version in the anchor), CF-4 (above). CF-1 was filed at canon `054eab2`.
 
 **Committed 2026-09-11, not pushed:** `c0fc378`, which carries L-68, and the commit after it.
 That one moves `check-brief` to v7 by canon's new pin's route and files four outbox items that
-canon answered: CF-1, and three kit rows whose pins canon dropped.
+canon answered: CF-1, and three kit rows whose pins canon dropped. A third commit adds Stéan's
+second authorisation to §7, for workflows and deep-research.
 
 **Queue, `docs/LESSONS.md`:**
 
 - **L-41**: waits on canon (CF-4). Nothing to build here without forking a kit row.
 - **L-68**: carried 2026-09-11. Stéan gave the standing authorisation in their own words, and it
-  is in `CLAUDE.md` §7. Agents may be spawned without asking; workflows and deep-research still
-  wait to be asked.
+  is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
+  workflow stays under 15 agents and is announced in one line when it starts.
 
-**Next action: wait.** Stéan decides whether to push the two commits above. Canon lifts the outbox
+**Next action: wait.** Stéan decides whether to push the three commits above. Canon lifts the outbox
 from HEAD; when it replies with SHAs, rows move to **Filed**. Before re-running `--emit-open`,
 check `git -C <canon> status --short tools`: if it is dirty, run from `git archive HEAD`. Since
 `054eab2` the tool warns on its own.

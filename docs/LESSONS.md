@@ -73,8 +73,10 @@ two ways:
 - **L-68** (2026-09-11, answered in §2). The host layer's *"Do not use the Agent tool, workflows or
   deep-research unless requested"* is a condition, so a request meets it. Stéan made that request
   standing, in their own words: `CLAUDE.md` §7, *"STANDING AUTHORISATION — Stéan, 2026-09-11"*. The
-  session waited for those words and did not draft them. The words name agents only, so workflows
-  and deep-research still need asking.
+  session waited for those words and did not draft them. They named agents only, so Stéan asked
+  for wording for the rest. The session drafted it on that request, and Stéan gave it the same day
+  with their own edits: workflows and deep-research, under 15 agents, each announced in one line.
+  Both halves are quoted in §7.
 
 ### Queued: applies here, not carried
 

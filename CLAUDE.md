@@ -502,9 +502,13 @@ today onwards i authorise you to use/spawn agents independently"*. So the agents
 may be spawned without asking, in any session. This is the standing request for the host-layer
 instruction some sessions arrive with: *"Do not use the Agent tool, workflows or deep-research
 unless requested"*. It sits above this file and is in no file on this machine; canon's L-68 records
-where it was looked for, so don't search again. The words name agents. **Workflows and
-deep-research are not in them and still wait to be asked.** This lifts the question of whether to
-spawn, and none of the limits on what a spawned agent may do: the write scope, the implementer's
+where it was looked for, so don't search again. Those words named agents only, so Stéan gave the
+second half the same day: *"From today, 11 sept 2026, onwards I also authorise you, claude code, to
+run workflows and deep-research on your own judgement, without asking each time. Keep a workflow
+under 15 agents unless I say otherwise, and say in one line what you're starting and why when you
+start it. This changes nothing about pushing or the hooks. — Stéan"*. **So a workflow stays under
+15 agents, and each one is announced in one line when it starts.** This lifts the question of
+whether to spawn, and none of the limits on what a spawned agent may do: the write scope, the implementer's
 manifest, the denial of commits from a subagent, `census` as the only spawner, depth 2, and §3's
 push gate. The judgement that goes with it is canon's (`4-AGENT-PIPELINES.md` §3.1). Delegate when
 you would read a lot and return a little, and never for what two greps answer. Judgement stays in
