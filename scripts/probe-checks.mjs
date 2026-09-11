@@ -414,8 +414,8 @@ const MUTATIONS = [
     // A second setter in a file PASSWORD_SETTERS already lists: the file's entry must not cover it.
     path: "app/(portal)/portal/(dashboard)/settings/actions.ts",
     named: true,
-    find: "  // Update password\n",
-    replace: "  // Update password\n  await supabase.auth.updateUser({ password: currentPassword });\n",
+    find: "  // Verify current password by signing in\n",
+    replace: "  await supabase.auth.updateUser({ password: currentPassword });\n  // Verify current password by signing in\n",
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {

@@ -8,6 +8,7 @@ import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
 import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
 import { revalidatePath } from "next/cache";
+import { isRateLimitedDb, recordHitDb, limitKey } from "@/lib/rate-limit-db";
 
 // ────────────────────────────────────────────────────────────
 // Profile (personal details)
@@ -140,6 +141,14 @@ export async function changePasswordAction(
   const { student } = await getAuthenticatedStudent();
   const supabase = await createSupabaseServerClient();
 
+  // The current password is the authority, so guesses at it are throttled per account, as the admin
+  // form's are. Supabase's own sign-in limit is keyed on the caller's IP, which here is the server's,
+  // shared by every client.
+  const guessKey = limitKey("pwchange", "user", student.id);
+  if (await isRateLimitedDb(guessKey, 5)) {
+    return { error: "Too many attempts. Please wait 15 minutes and try again." };
+  }
+
   // Verify current password by signing in
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: student.email,
@@ -147,12 +156,17 @@ export async function changePasswordAction(
   });
 
   if (signInError) {
+    await recordHitDb(guessKey, 15 * 60 * 1000);
     return { error: "Current password is incorrect" };
   }
 
-  // Update password
+  // `current_password` is sent although the sign-in above already checked it. Supabase can require
+  // it on its own endpoint (UpdatePasswordRequireCurrentPassword), which is what stops a session
+  // calling that endpoint directly past this action. With that setting on, an update without it is
+  // refused, so this line is what lets the setting be switched on without breaking this form.
   const { error: updateError } = await supabase.auth.updateUser({
     password: newPassword,
+    current_password: currentPassword,
   });
 
   if (updateError) {

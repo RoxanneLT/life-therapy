@@ -32,9 +32,10 @@ export async function registerStudent(formData: FormData) {
 
   const { firstName, lastName, email } = parsed.data;
 
-  // Registration now sends an email, so the address is throttled as Forgot password's is: three per
-  // address per fifteen minutes, or the form becomes a way to fill someone's inbox.
-  const emailKey = limitKey("register", "email", email);
+  // Registration now sends an email, so the address is throttled in the SAME bucket as Forgot
+  // password's: three emails per address per fifteen minutes across both forms. Two buckets would
+  // let one address be sent six by alternating the forms.
+  const emailKey = limitKey("pwreset", "email", email);
   if (await isRateLimitedDb(emailKey, 3)) {
     return { error: "Too many registration attempts. Please try again later." };
   }
