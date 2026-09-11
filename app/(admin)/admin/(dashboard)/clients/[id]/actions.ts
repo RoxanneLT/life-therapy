@@ -1507,7 +1507,7 @@ export async function updateClientEmailAction(
   studentId: string,
   newEmail: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const email = newEmail.trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -1539,7 +1539,10 @@ export async function updateClientEmailAction(
     return { success: false, error: "That email already has a portal account." };
   }
 
-  // Update Supabase Auth (sends confirmation email to new address)
+  // The login moves with the record, so the next reset link goes to the NEW address. That makes
+  // this a change to where the account can be recovered, on an admin's say-so, and it is audited
+  // below. Whether Supabase mails the new address on `email_confirm: false` is its behaviour and
+  // is not verified here; this code sends nothing itself.
   if (student.supabaseUserId) {
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
       student.supabaseUserId,
@@ -1554,6 +1557,18 @@ export async function updateClientEmailAction(
   await prisma.student.update({
     where: { id: studentId },
     data: { email },
+  });
+
+  // Recorded because it moves the account's recovery channel, and a mistyped address (the
+  // 2026-08-19 partner-invite scar) would hand that channel to a stranger's mailbox.
+  await recordAudit({
+    action: "client_email_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: { email: student.email },
+    after: { email },
+    metadata: { loginMoved: Boolean(student.supabaseUserId) },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
