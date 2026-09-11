@@ -33,96 +33,7 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-### CF-2 · Canon's kit checks do not carry canon's L-51 — no selftest runs the process the gate runs
-
-```
-OBSERVED   Every kit check life-therapy runs keeps a green --selftest with its main-path failure
-           exit edited to 0: none spawns its own file, so the exit code the gate's `&&` chain reads
-           is on no probe's path — L-51, in canon's own shipped bytes.
-COMMAND    In life-therapy, each file clean at HEAD, one mutant at a time, restored with git checkout:
-           the literal main-path `process.exit(1)` → `exit(0)` (selftests exit via `failed ? 1 : 0`,
-           untouched), or the main-path ternary → `exit(0)` where there is no literal:
-             scripts/check-claude-md.mjs          (v15, lines 1692, 1925)      → selftest exit 0
-             scripts/check-handoff-contract.mjs   (v3,  line 406)              → selftest exit 0
-             scripts/check-hook-registration.mjs  (v2,  line 367)              → selftest exit 0
-                                                  (v3,  line 364, re-measured at adoption) → exit 0
-             scripts/check-brief.mjs              (v5,  `failed.length ? 1 : 0`) → exit 0,
-                                                  "selftest: all probes green (both directions)"
-             scripts/check-install-platform.mjs   (v1,  `v.level === "fail" ? 1 : 0`) → exit 0,
-                                                  "✅ probes green — reads both tree shapes, …"
-           The same mutant on this project's own audit left all 15 of its planted probes green
-           until be03bc4; it dies now.
-WHY IT IS  The bytes are canon's outside KIT:CONFIG and identical in every adopter, so every project
-CANON'S    running these rows has a gate member whose failure path is unprobed — and cannot add the
-           probe without forking the row. A report that prints ✗ and exits 0 passes any `&&` chain,
-           on any stack.
-SMALLEST   Per check, one spawn of the file itself against a fixture root per distinct exit path,
-FIX        asserting `status` — check-brief already spawns itself for `--status` (line 776), so the
-           seam exists there. It must not spawn the real gate chain (L-34), and must not read the
-           adopting project's tree, or a clean fixture stops being clean in some adopter.
-```
-
-### CF-3 · The spines' anchor carries no spine version, so L-39's cheap tell is out of reach
-
-```
-OBSERVED   Every spine states its version in a marker, and none of the five anchor templates asks
-           the agent to copy it into the artefact. So an artefact cannot say which file its agent
-           ran, and L-39 names exactly that as the first question to ask before diagnosing
-           "disobedience".
-COMMAND    $ grep -H "SPINE:" .claude/agents/*.md | grep -v "/SPINE"
-           .claude/agents/census.md:<!-- SPINE:census v9 -->
-           .claude/agents/crawler-doctrine.md:<!-- SPINE:crawler-doctrine v3 -->
-           .claude/agents/db-inspector.md:<!-- SPINE:db-inspector v4 -->
-           .claude/agents/grounder.md:<!-- SPINE:grounder v6 -->
-           .claude/agents/implementer.md:<!-- SPINE:implementer v4 -->
-           .claude/agents/walker.md:<!-- SPINE:walker v7 -->
-           $ grep -n "^anchor:" <canon>/kit/agents/census.spine.md     (kit/agents clean at 69d6111)
-           268:anchor: task=<slug> · agent=census · utc=<YYYY-MM-DDTHH:MM:SSZ> · commit=<short SHA>
-           The same four fields in db-inspector, grounder, implementer and walker; crawler-doctrine
-           has no anchor (its stdout is one JSON object).
-WHY IT IS  The spines are canon's bytes and `check-agent-spines` verifies them against canon, so no
-CANON'S    adopter can add the field without forking the row. The trap is the harness's, not a
-           stack's: every project that edits a spine and spawns within the same turn meets it.
-SMALLEST   Add `spine=<name> v<N>` to the anchor template, copied from the file's own SPINE marker.
-FIX        That is L-39's refinement exactly: a version the agent must write as part of work it
-           already does, not an aside it can skip as noise. `check-handoff-contract` can then
-           compare the stamped version with the spine at the anchor's commit. It must NOT fail an
-           artefact written before the field existed (they have none), and must not read the spine
-           from the working tree: an in-turn edit is the case it exists to expose.
-```
-
-### CF-4 · `check-handoff-contract` reads the anchor and never compares it, so L-41's tell is recorded and unread
-
-```
-OBSERVED   Five spines stamp `utc=` and `commit=` on every artefact, and the artefact's own mtime
-           says when it was written, so "a cited file changed while the agent ran" can be computed
-           from the artefact alone. check-handoff-contract, the one check that reads artefacts,
-           validates the anchor's shape and stops there.
-COMMAND    $ grep -n "@kit" scripts/check-handoff-contract.mjs
-           5: * @kit check-handoff-contract v3 — tracked. Edit it in dev-standards and re-adopt; a local
-           $ grep -c "KIT:CONFIG" scripts/check-handoff-contract.mjs
-           0
-           L-41's tell, prototyped outside the tree on the one artefact here: the cited paths whose
-           mtime falls inside (anchor utc, artefact mtime].
-           $ node <scratch>/l41-tell.mjs .handoff/life-therapy-auth/01-grounder.md
-           anchor utc 2026-08-31T06:00:32.000Z · artefact written 2026-08-31T06:04:33.647Z (242 s run)
-           cited paths 23 · resolving here 17 · edited during the run 0
-           The six that do not resolve are yoros's: that grounder read two repos, anchored as
-           `commit(life-therapy)=` and `commit(yoros)=`.
-WHY IT IS  Every adopter of the pipeline shares one tree between the dispatcher and its agents, on
-CANON'S    any stack. The check is canon's bytes with no config region, so no project can add the
-           comparison without forking the row. pleks carried L-41 as a hand-written contamination
-           notice, which is the entry's "labelled" mitigation with nothing to prompt it.
-SMALLEST   In the live pass, per artefact: take the cited paths and mark any whose mtime falls inside
-FIX        (anchor utc, artefact mtime] as QUARANTINED. That is a line naming the file and the
-           paragraph, never a failure, because the conclusion may stand on another leg (at pleks it
-           did). The upper bound matters: an edit after the artefact was written is staleness, a
-           different lesson, and flagging it would bury the tell. The check must not pass a path it
-           cannot resolve (one under another repo's `commit(<repo>)=` is named as unresolved), and
-           must not fail an artefact written before the anchor existed. Probe: an artefact citing a
-           file touched inside its window is marked; one citing an untouched file, and one citing a
-           file touched after it was written, are not.
-```
+Empty. CF-2, CF-3 and CF-4 were filed at canon `61bd006` (below).
 
 ---
 
@@ -138,8 +49,9 @@ off this table and it stays open.
 | L-34 | 2026-08-21 | `7ca62aa` — `scripts/check-git-hooks.mjs` proves each hook's seam inert by letting the hook resolve AND invoke `npm run check` against an `npm` shimmed first on `PATH`, never the real chain, and asserts the shim was reached (`:168-206`), so a hook that echoes the right command and runs another fails |
 | L-35 | 2026-09-10 | `a599577` — found by this triage. The audit's `code()` and `codeKeepingLiterals()` used regexes to answer a tokenizer's question, and the TypeScript parser, already in the build, answers it exactly. Measured with that parser as the oracle across 546 source files: the regex `code()` lost 700 identifiers in 8 files and shifted the line count of 6, and `codeKeepingLiterals()` disagreed with the parser's comments in 5. Both now read one cached parse: 0 lost, 0 shifted, 0 disagreeing, against 4,381 comments. The recovery came from the oracle, not from reasoning, and the audit's output was byte-identical after the swap, so no check had depended on the damage. The oracle had its own trap: TypeScript counts a lone `\r` as a line break and `split("\n")` does not. That put 204 phantom losses in 2 files into the first measurement, which read 904 in 10 |
 | L-36 | 2026-08-20 | `06bfdb5` — every spine's turn budget is sized from its own role, never from an aggregate, and each records its n: implementer 250 (median ≈ 196, 10 runs), walker 150 (≈ 118, 6), grounder 150 (≈ 100, 5), census 150 (≈ 62, 5), db-inspector 40 ("n=1, so this is a first value, not a distribution"). Each is "a backstop, not a target", set off the tail. `npm run agents:distribution` (`8877cde`, the same day) reports medians per type and counts nested runs separately by depth, so a fan-out cannot merge two populations into one median |
-| L-39 | 2026-09-10 | `a59a59c` — the ledger marks this trap as live here and unrecorded, and it was. §7 now says a spine edit takes effect at the next turn, not the next spawn, and that an agent seeming to ignore a fresh edit is a version question first. The reload timing is cited as pleks's measurement (E9), a harness fact, not re-measured here. What would make it detectable is canon's, since the anchor carries no spine version: CF-3 |
+| L-39 | 2026-09-10 | `a59a59c` — the ledger marks this trap as live here and unrecorded, and it was. §7 now says a spine edit takes effect at the next turn, not the next spawn, and that an agent seeming to ignore a fresh edit is a version question first. The reload timing is cited as pleks's measurement (E9), a harness fact, not re-measured here. What would make it detectable was canon's, since the anchor carried no spine version: CF-3, filed at `61bd006`. It is carried here by the kit move of 2026-09-11, which stamps `spine=` on every anchor and takes `check-handoff-contract` v5, which reads it |
 | L-40 | 2026-08-19 | `6478de1` — `audit: a check that says it scans raw actually scans raw` turns the audit on its own source, reconciling each check's stated raw/`code()` choice against the read it performs; `check-claude-md --selftest` runs the marker audit over its own file. **Not a clean bill**, as pleks's line says of pleks: no survey has run every control here against its own rule. One member is live and reasoned: the citations check exempts its own file, because it documents the shapes it hunts (`scripts/architecture-audit.mjs`, `DOCUMENTS_THE_SHAPES`) |
+| L-41 | 2026-09-11 | the kit move that adds this row takes `check-handoff-contract` v5, canon's answer to this project's CF-4 (`61bd006`). It marks a cited file whose mtime falls between the anchor's `utc=` and the artefact's own mtime as QUARANTINED, and fails nothing. Its first live run here: `L-41 · 3 artefact(s) measured, 55 citation(s) resolved, 0 edited during their run`, and it names 4 cited paths as NOT MEASURED because they do not resolve here. It could not be built here first, because the check is canon's bytes with no config region |
 | L-42 | 2026-09-10 | `691778f` — §8 had split *does* claims (anchored) from *should* claims since `c33bd2e` (2026-08-18). That is the split pleks had when this happened, so it is not the carry. The lesson's addition is now written there: a *does* claim rests on the code site, and a spec, plan or ruling saying the code does X is intent, labelled so. No mechanism, as the entry says. The brief's rulings already name their site: each `brief/DECISIONS.md` row cites the file or commit that holds it |
 | L-43 | 2026-09-10 | `691778f` — §8 now says to verify by changing the method (resolve the type, follow the call, run the code), and names the absence claim as the dangerous shape. Before it, the nearest carries were walker step 9 (`b0d525b`), which is reproduce-before-report rather than change-the-route, and the probes' known-good half, which catches the sibling failure (a token matching what its author did not model). This triage worked that way: each "0" was first checked against a known positive (the L-50 row), and the L-52 and L-53 fixes were measured by planting into the tree, not by re-reading the audit's patterns |
 | L-44 | 2026-08-21 | `7ca62aa` — a mutation test found a live mutant: deleting `git write-tree` from `pre-commit` left every probe green, because each supplied the marker itself. The producer-side probe was added in response, and the finding is recorded at `scripts/check-git-hooks.mjs:95` |
@@ -149,7 +61,7 @@ off this table and it stays open.
 | L-48 | 2026-09-10 | `b87ffe3` — found by this triage. The email-tiers check watched `if (…emailPaused)` branches at send sites, and the birthday scar's own path was a QUERY: `where: { emailPaused: false }`, planted in `lib/birthday-process.ts`, read ✓. A second arm now fails any file filtering `emailPaused: false` in SQL, outside an allowlist of the three marketing queries (each carrying its reason, and failing when it stops filtering). probe-checks plants the scar's regression by name. The same class, earlier: `ddl-gate` (2026-08-18) gates DDL written to a file because `bash-gate` saw only the command line, and `2ea2ca6` denies the PowerShell tool, which no Bash-matching hook sees (M-KIT-22) |
 | L-49 | 2026-09-10 | `a599577` — the regex `code()` computed no unknown-state signal at all. Where a quote mispaired it blanked to the next quote, and every check reading it reported clean (the L-35 row's 700 identifiers). The parser supplies the signal now, and the boundary keeps it: `stripRanges()` returns `{ ranges, clean }`, and `audit: every source file parses` fails the gate on any whole file that parses unclean. So no check can read a parser's recovery as clean while the gate stays green. Probed both ways: a planted `lib/__probe-parse.ts` is named by that check and by no other, and the tree is the known-good half. One boundary still drops the signal, by construction: `code()` of a slice. Of 59 slice texts in a run, 1 parses unclean. It is the whatsapp check's function prefix, cut just before its marker, so `'}' expected` is certain, and its 16 comment and literal ranges are identical to the whole file's over the same span |
 | L-50 | 2026-09-10 | verified present, measured by pattern across `scripts/` and `.claude/`: `ok(` with an emptiness test left of `\|\|`/`&&` → 0 hits; empty `catch {}` → 0; single-line `for … of … ok(` → 0. The one `ok(A \|\| B)` (`scripts/check-context-budget.mjs:237`) takes the OR over a fixture's output, not live state, and the next line pins the exact count. `check-handoff-contract` names its zero-file live pass on every run rather than printing a bare tick |
-| L-51 | 2026-09-10 | `be03bc4` — found by this triage and **demonstrated by mutation**: with the audit's final `exit(1)` changed to `exit(0)`, all 15 planted probes stayed green. `probe-checks` now asserts the exit code both ways. `check-import-cycles` spawns itself once per exit path; flipping both of its failure exits turns two probes red. The five canon-owned kit checks carry the same gap and cannot be fixed here: CF-2 |
+| L-51 | 2026-09-10 | `be03bc4` — found by this triage and **demonstrated by mutation**: with the audit's final `exit(1)` changed to `exit(0)`, all 15 planted probes stayed green. `probe-checks` now asserts the exit code both ways. `check-import-cycles` spawns itself once per exit path; flipping both of its failure exits turns two probes red. The five canon-owned kit checks carried the same gap and could not be fixed here: CF-2, filed at `61bd006` and completed in `a108fd9`. Each now spawns itself per exit path, and the kit move of 2026-09-11 carries all five |
 | L-52 | 2026-09-10 | `2afcb7a` — found by this triage. Three guards took a rate limit from TEXT: `/rate-?limit/i` in the route-group regimes, the same alternative in the API-route check over raw text, and the MFA check's `/isRateLimitedDb\|checkAndRecord\|rate-limit-db/`, also over raw. Four plants, measured one at a time against both versions. Three passed the old audit at exit 0: `clearRateLimitDb(` (the call that LIFTS a limit), a comment naming `requireRole()`, and the module's import path. The fourth, a real throttle imported under an alias, was reported unguarded. Now: a classified `THROTTLES` list, a name counted only as a call over `code()` and only where the file imports it from its module (aliases followed), and liveness against the module's exports. Seven mutants from the diff, seven killed |
 | L-53 | 2026-09-10 | `ba98288` — found by this triage. Of the audit's named lists, six were read by more than one check (scan in the commit message). The one borrow was in `allowlists`: `DATE_ALLOWLIST`'s liveness test ORed in a wider slice pattern and the `+02:00` rule's detector over raw text, a criterion the list never admits by. Against the two date checks' own detectors, all four entries exempted nothing. Two were kept green only by comments explaining why their files do NOT write "+02:00". Planted in `lib/graph.ts`, a local-midnight constructor left the audit at exit 0. The list is now empty, the ISO patterns are one constant read by the check and by its liveness test, and seven mutants from the diff are killed |
 | L-54 | 2026-09-10 | `be03bc4` — mutants enumerated from `52af865`'s DIFF, not its commit message: each of the three widened walks dropped, each of three detectors disabled, and the narrowed one widened back to `\d{3,}`. Seven killed, of seven. Before that, the three walk mutants had survived. Two runner features came out of it: `named` plants (a plant must be named under a ✗) and `quiet` plants (a plant must not be). Held by attention, as at pleks — no mechanism enumerates a diff's hunks |
@@ -180,9 +92,8 @@ never *exempt*, so the reason has to argue it.
 
 | Row | Version | What | Evidence |
 |---|---|---|---|
-| `canon-findings` | v1 | adopted 2026-09-10 — this file, a template, copied from canon's history at `6a0f5ed` | the commit that adds this file |
 | `settings` | v3 | the M-KIT-22 claim is now committed here — `"PowerShell"` in `permissions.deny`. Nothing to record in `kitAdopted` (the row is asserted, not adopted); listed so canon sees the claim is held by a commit and not by a working tree | `2ea2ca6` |
-| `check-brief` | v7 | moved 2026-09-11 by the pin's own route, from canon's history at `f6ea3eb`: canon's bytes with the `names` region put back. **Canon's v6 pin on this row is now finished work: drop it from `ledgers/projects.json`** | the commit that adds this row · the file's diff equals canon's own `fa85fe0..f6ea3eb` diff for it, so there was no local fork to lose · `--selftest` → `all probes green (both directions)` · live run → `brief: conformant · 1 of 9 not measured` · `npm run check` → exit 0 |
+| thirteen rows | see What | moved 2026-09-11 by each pin's route, from canon's history at `2e79fdb`: canon's bytes with this project's `KIT:CONFIG` regions put back. Kit rows: `bash-gate` v6 and `bash-gate-probe` v6, `agent-write-scope` v5 and `agent-write-scope-probe` v5, `check-hook-registration` v6, `check-handoff-contract` v5, `check-install-platform` v3 and `check-claude-md` v17. Spines, by `tools/propagate-spines.mjs` run from `git archive 2e79fdb`: `census` v10, `db-inspector` v5, `grounder` v7, `implementer` v5 and `walker` v8. **All thirteen pins are finished work: drop them from `ledgers/projects.json`.** bash-gate's `fallbacks` region is answered from the settings this project already held: 8 of 9 canon rules are twinned, and `isSeamAssignment` is a noTwin with its reason. One ask was added, `Bash(gh pr merge*)`, which is exactly as wide as `isPrMerge`. The probe's 15 new cases that allow a push are held at `ask` in its `verdicts` region: this project asks on every push. **Not re-measured:** whether an ask rule prompts while the hook is running and returned allow. It was measured NOT to prompt on 2026-08-18. Only the operator can see a prompt (L-64), so the re-test waits for Stéan | the commit that adds this row · `check-kit-drift` from `git archive 2e79fdb` → 8 pins `STALE IN THE AHEAD DIRECTION` and no byte drift · `check-agent-spines` → 5 × `at canon vN but still carries a pin` · `bash-gate.probe` → `114 probes pass, both directions, 22 verdict(s) tightened` · `agent-write-scope.probe` → 99 pass · `check-hook-registration` → green · `npm run check` → exit 0 |
 
 No pins.
 
@@ -197,4 +108,9 @@ A pointer, not a restatement — the canon entry is the record.
 | CF-1 | The session-start query runs canon's working tree | `check-lessons --emit-open` now says when its answer came from an uncommitted canon, and gives the `git archive` command for the committed one | `054eab2` |
 | §3 | `check-hook-registration` v3; canon's v2 pin was finished work | pin removed | `948fc18` |
 | §3 | Eight M-KIT-28 rows moved (`fb1c669`); their eight pins were finished work | pins removed | `fa85fe0` |
-| §3 | `check-brief` v5, adopted 2026-09-10 (`bafd9e3`) | already in `kitAdopted` since `b0ebdc7`, which carries no version. The row is now at v7 (above) | `b0ebdc7` |
+| §3 | `check-brief` v5, adopted 2026-09-10 (`bafd9e3`) | already in `kitAdopted` since `b0ebdc7`, which carries no version. The row is now at v7 (below) | `b0ebdc7` |
+| CF-2 | Canon's kit checks did not carry canon's L-51 | every kit check spawns itself for each exit path (yoros CF-7 alongside) | `61bd006`, completed in `a108fd9` |
+| CF-3 | The spines' anchor carried no spine version | `spine=<agent> vN` on every anchor; `check-handoff-contract` v5 prints L-39's stamp tell | `61bd006` |
+| CF-4 | `check-handoff-contract` read the anchor and never compared it | v5 prints L-41's QUARANTINED tell | `61bd006` |
+| §3 | `canon-findings` v1, adopted 2026-09-10 | recorded in `kitAdopted` | `31ed513` |
+| §3 | `check-brief` v7 (`beabdc0`); canon's v6 pin was finished work | pin removed | `a152e89` |

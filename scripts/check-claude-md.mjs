@@ -2,7 +2,7 @@
 /**
  * scripts/check-claude-md.mjs — the marker audit for CLAUDE.md and .claude/rules/*.md
  *
- * @kit check-claude-md v16 — tracked OUTSIDE its `KIT:CONFIG` regions. Improve it in
+ * @kit check-claude-md v17 — tracked OUTSIDE its `KIT:CONFIG` regions. Improve it in
  * dev-standards and re-adopt; a local change here is a fork and `check-kit-drift.mjs` says so.
  * Imports `hookRegistrations` from `check-hook-registration.mjs`, which is a kit item too and
  * must be installed beside it — the `hook:` namespace resolves through registration, not presence,
@@ -46,9 +46,11 @@
  *   node scripts/check-claude-md.mjs             # audit the real files
  *   node scripts/check-claude-md.mjs --selftest  # run the fixtures (both directions)
  */
-import { readFileSync, readdirSync, existsSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from "node:fs"
+import { readFileSync, readdirSync, existsSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, copyFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join , dirname} from "node:path"
+import { spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import { registrations as hookRegistrations } from "./check-hook-registration.mjs"
 
 // ── Rules sections. Listed explicitly, and the list ASSERTS ITS OWN PREMISE (§4.3): a heading that
@@ -277,6 +279,14 @@ PROJECT_RESOLVERS.settings = {
 }
 
 /* KIT:CONFIG /resolvers */
+
+// The ratchet region sat beside the ratchet, below the selftest, until v17 — whose exit probes seed
+// a fixture's ceiling and met `CEILING_PATH` in its temporal dead zone. Regions graft by NAME, so
+// moving one changes no adopter's value; the ratchet itself is explained where it runs.
+/* KIT:CONFIG ratchet — where this project's N ceiling and D floor live. Seed it from one measured
+ * run: the ratchet fails when N is BELOW maxN as well as above it, so it cannot be seeded high. */
+const CEILING_PATH = "scripts/check-claude-md.ceiling.json"
+/* KIT:CONFIG /ratchet */
 
 /**
  * ns:id[:qualifier] — `advisory` (the control REPORTS rather than blocking) or `shared`.
@@ -1608,6 +1618,64 @@ if (process.argv.includes("--selftest")) {
     }
   }
 
+  // ── THE EXIT CODE THE GATE READS, one spawn per exit path (L-51; life-therapy CF-2, yoros CF-7) ──
+  // Every probe above calls a function in-process, and the main path below — the `process.exit`s
+  // the gate actually reads — was on none of their paths: `exit(1)` turned to `exit(0)` on the
+  // findings arm left every fixture green. Each spawn runs THIS file with a fixture tree as its cwd,
+  // never the real tree, and asserts the line as well as the status, so a crash cannot pass as a
+  // verdict. The known-good tree is seeded the way an adopter seeds one, with `--emit-ceiling`.
+  //
+  // ⚠ THE PROJECT'S OWN RESOLVERS ARE VALIDATED AGAINST THE CWD (see `auditResolvers` at the entry
+  // point), so a fixture cwd holding none of their inputs would fail the known-good case in every
+  // project that has filled `PROJECT_RESOLVERS` — canon's probe contradicting the region it ships
+  // (M-KIT-07). The files those resolvers read from the live tree are recorded and copied in.
+  {
+    const fx = mkdtempSync(join(tmpdir(), "claude-md-exit-"))
+    const reads = new Set()
+    const rec = (rel) => { reads.add(rel); return rel }
+    auditResolvers(PROJECT_RESOLVERS, {
+      root: ".",
+      read: (rel) => readFileSync(`./${rec(rel)}`, "utf8"),
+      exists: (rel) => existsSync(`./${rec(rel)}`),
+      json: (rel) => JSON.parse(readFileSync(`./${rec(rel)}`, "utf8")),
+    })
+    for (const rel of reads) {
+      if (!existsSync(rel)) continue
+      mkdirSync(dirname(join(fx, rel)), { recursive: true })
+      copyFileSync(rel, join(fx, rel))
+    }
+    const run = (...args) => {
+      const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: fx, encoding: "utf8" })
+      return { status: r.status, out: `${r.stdout}${r.stderr}` }
+    }
+    const say = (okx, label, r) => {
+      if (!okx) failed++
+      console.log(`  ${okx ? "✓" : "✗"} EXIT       — ${label}${okx ? "" : ` (exited ${r.status}: ${r.out.trim().split("\n").slice(-1)[0]})`}`)
+    }
+
+    let r = run()
+    say(r.status === 1 && r.out.includes("CLAUDE.md does not exist"), "1 — a tree with no CLAUDE.md fails and says nothing was measured", r)
+
+    const clean = RULES_SECTIONS.map((s) =>
+      `${s}\n\n- A rule nothing scans for.\n  **UNENFORCEABLE** — a human judgement call; nothing can see it.\n`).join("\n")
+    writeFileSync(join(fx, "CLAUDE.md"), clean)
+    r = run("--emit-ceiling")
+    let seed = null
+    try { seed = JSON.parse(r.out) } catch { /* the probe below reports it */ }
+    say(r.status === 0 && typeof seed?.maxN === "number", "0 — `--emit-ceiling` prints the seed and nothing else", r)
+    mkdirSync(dirname(join(fx, CEILING_PATH)), { recursive: true })
+    writeFileSync(join(fx, CEILING_PATH), JSON.stringify(seed ?? {}))
+
+    r = run()
+    say(r.status === 0 && r.out.includes("✅ every marker resolves"), "0 — KNOWN-GOOD: a tagged tree at its seeded ceiling passes", r)
+
+    writeFileSync(join(fx, "CLAUDE.md"), `${clean}\n- An untagged rule under the last section.\n`)
+    r = run()
+    say(r.status === 1 && r.out.includes("finding(s)"), "1 — the same tree with one untagged bullet fails", r)
+
+    rmSync(fx, { recursive: true, force: true })
+  }
+
   console.log(failed === 0
     ? "\n✅ fixtures green — fires, stays quiet, AND notices its own subject going missing"
     : `\n❌ ${failed} fixture(s) wrong`)
@@ -1833,10 +1901,7 @@ console.log(`📑 marker ratio — ${N} of ${D} rules UNENFORCEABLE ` +
  *   N below the ceiling → the ratchet has not been tightened. Lowering it is part of the
  *     mechanisation's acceptance, exactly as removing a baseline entry is part of a fix's.
  */
-/* KIT:CONFIG ratchet — where this project's N ceiling and D floor live. Seed it from one measured
- * run: the ratchet fails when N is BELOW maxN as well as above it, so it cannot be seeded high. */
-const CEILING_PATH = "scripts/check-claude-md.ceiling.json"
-/* KIT:CONFIG /ratchet */
+// `CEILING_PATH` is declared with the other KIT:CONFIG regions near the top — see the ratchet region.
 // SEEDING THE RATCHET, and why the tool does it rather than a human.
 //
 // Found 2026-09-09 walking greenfield into phase 1: the ratchet refuses to run without a stored

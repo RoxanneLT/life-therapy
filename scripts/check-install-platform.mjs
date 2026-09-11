@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @kit check-install-platform v2 — tracked. Edit it in dev-standards and re-adopt; a local
+// @kit check-install-platform v3 — tracked. Edit it in dev-standards and re-adopt; a local
 // change is a fork, and the next project starts from the worse version without knowing it.
 /**
  * Is `node_modules` built for the machine that is about to run it?
@@ -31,6 +31,7 @@ import { existsSync, readdirSync, lstatSync, mkdirSync, mkdtempSync, writeFileSy
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -130,6 +131,36 @@ function selftest() {
   ok(/npm ci/.test(crossed.msg), "…and names the recovery, because the cost is the ten minutes before remembering it");
   ok(verdict({ shape: readBinShape(winBin), platform: "linux" }).level === "fail", "a win32 tree on linux fails too — it is symmetric");
   ok(verdict({ shape: readBinShape(emptyBin), platform: "linux" }).level === "skip", "an unreadable tree is SKIPPED, never passed");
+
+  // THE EXIT CODE THE GATE READS, one spawn per verdict (L-51; life-therapy CF-2, yoros CF-7). Every
+  // probe above calls the functions in-process, so the `process.exit` at the bottom of this file was
+  // on no probe's path: the fail arm turned to `exit(0)` left all of them green. Each spawn is handed
+  // a fixture project as its argument, never this tree, and asserts the line as well as the status,
+  // so a crash cannot pass as a verdict. SKIP exits 0 on purpose — an absent install fails at the
+  // gate's next step anyway — and the probe holds it to the line that says nothing was measured.
+  {
+    const here = familyOf(process.platform);
+    const project = (name, build) => {
+      const bin = join(root, `project-${name}`, "node_modules", ".bin");
+      mkdirSync(bin, { recursive: true });
+      build(bin);
+      return join(root, `project-${name}`);
+    };
+    const shims = (d) => writeFileSync(join(d, "eslint.cmd"), "@echo off\n");
+    const links = (d) => {
+      writeFileSync(join(d, "..", "target.js"), "//\n");
+      symlinkSync(join("..", "target.js"), join(d, "eslint"));
+    };
+    const run = (dir) => spawnSync(process.execPath, [fileURLToPath(import.meta.url), dir], { encoding: "utf8" });
+    for (const [label, dir, status, line] of [
+      ["EXIT 0 — a tree built for this platform", project("same", here === "win32" ? shims : links), 0, "📦 install-platform: node_modules matches"],
+      ["EXIT 1 — a tree built for the other platform", project("other", here === "win32" ? links : shims), 1, "❌ install-platform: node_modules was installed on"],
+      ["EXIT 0 — a tree it cannot read, and the line says SKIPPED", project("unread", () => {}), 0, "⊘ install-platform: cannot tell"],
+    ]) {
+      const r = run(dir);
+      ok(r.status === status && r.stdout.includes(line), `${label}${r.status === status ? "" : ` (exited ${r.status})`}`);
+    }
+  }
 
   rmSync(root, { recursive: true, force: true });
   console.log(failed ? `\n❌ ${failed} probe(s) wrong` : "\n✅ probes green — reads both tree shapes, fails both crossings, and skips rather than passes when it cannot tell");

@@ -601,7 +601,12 @@ this file said about it. Recorded because "no entry to close" and "did not look"
 absence in a diff.
 
 **What the hook still does NOT hold:** the width of a `census` fan-out, for the reason given
-above — a per-call hook cannot count a run's children.
+above — a per-call hook cannot count a run's children. And **the write fence tagged enforced above
+holds only for writes a tool call NAMES**: Write and Edit paths, and since kit v5 a Bash command's
+redirections and named writers (`tee`, `sed -i`, `cp`/`mv`, `rm`, …). An interpreter or a script
+(`node -e`, `npm run`), git's tree-writing subcommands (`checkout`, `restore`, `stash`, `apply`), a
+command named through a variable, and `eval` write files their text never names. Those are held by
+the caller reading `git status` after the run, as before.
 
 Subagents **do** receive this file (E3) — but a narrow-task agent skims it, and rung-4 files
 never reach an edit-blind session (E1b). Presence is not enforcement, which is why the
@@ -613,8 +618,9 @@ definitions at the turn boundary, so every spawn inside the turn that made the e
 file, while hooks in the same folder reload at once. That is a harness fact measured in pleks (E9),
 so it holds here without re-measuring. An agent that seems to ignore a fresh edit is a version
 question before it is a wording question: find out which file it ran before rewording anything.
-The artefact cannot say yet, because the anchor carries no spine version (`docs/CANON-FINDINGS.md`
-CF-3). dev-standards/ledgers/LESSONS.md L-39.
+Since 2026-09-11 the artefact can say which spine ran: the anchor line carries `spine=<agent> vN`,
+copied from the spine the agent ran, and `check-handoff-contract` reports an artefact whose
+commit did not hold it (CF-3, filed at canon `61bd006`). dev-standards/ledgers/LESSONS.md L-39.
 
 **What agents actually cost: `npm run agents:distribution`.** Turn and output budgets live in each
 spine and are UNENFORCEABLE by canon's own grammar — an agent has no reliable turn counter, it

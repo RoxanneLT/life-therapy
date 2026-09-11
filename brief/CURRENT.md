@@ -43,8 +43,17 @@ followed by the production build.
   outbox asks canon to drop them.
 
 **Triage** (2026-09-10): 36 of 36 answered, queued or held. Batches `ba1cf4b`, `cb80e5d`,
-`731682a`, `46b8221`. Findings still with canon: CF-2 (kit checks don't carry L-51), CF-3 (no
-spine version in the anchor), CF-4 (above). CF-1 was filed at canon `054eab2`.
+`731682a`, `46b8221`. No findings left with canon: CF-1 was filed at `054eab2`, and CF-2, CF-3 and
+CF-4 at `61bd006`.
+
+**Kit move, 2026-09-11, unpushed.** Thirteen rows came from canon's history at `2e79fdb`. The kit
+rows are bash-gate and its probe v6, agent-write-scope and its probe v5, check-hook-registration v6,
+check-handoff-contract v5, check-install-platform v3 and check-claude-md v17. The spines, through
+propagate-spines, are census v10, db-inspector v5, grounder v7, implementer v5 and walker v8.
+bash-gate's per-rule fallbacks are answered from existing settings, plus one added ask,
+`Bash(gh pr merge*)`. Outbox §3 asks canon to drop all thirteen pins. For Stéan: canon asks whether
+an ask rule prompts while the hook is live. It was measured not to on 2026-08-18, and only the
+operator can see a prompt.
 
 **Pushed 2026-09-11, at Stéan's request: `fb1c669..28e9886`.**
 
@@ -55,7 +64,7 @@ spine version in the anchor), CF-4 (above). CF-1 was filed at canon `054eab2`.
 
 **Queue, `docs/LESSONS.md`:**
 
-- **L-41**: waits on canon (CF-4). Nothing to build here without forking a kit row.
+- **L-41**: carried 2026-09-11 by the kit move. check-handoff-contract v5 prints the QUARANTINED tell.
 - **L-68**: carried 2026-09-11. Stéan gave the standing authorisation in their own words, and it
   is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
   workflow stays under 15 agents and is announced in one line when it starts.
@@ -86,10 +95,8 @@ the review is done. Then walk 02's Promote goes to §1, worded without exploit d
 `git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
 
 **Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
-`node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree. On
-2026-09-11 canon's working tree held an uncommitted `bash-gate` v5 and its probe. Drift run
-there reports them; drift run from `git archive HEAD` does not. Adopt nothing until they are
-committed.
+`node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree, and run
+its tools from `git archive HEAD` when `tools/` or `kit/` is dirty.
 `claude-md-ratio` is retired in canon; do not install it if an older manifest is ever read.
 
 `G-01` and `G-03` are open and **deliberately not being chased**. Stéan set them aside on 2026-09-09.

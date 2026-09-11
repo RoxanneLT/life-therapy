@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v4 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v6 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -21,13 +21,23 @@
  * a pattern spanning `&&`/`;`/`|` into a neighbouring command, a verb matched
  * inside prose or a quoted argument, or punctuation touching the target
  * (`\rm`, `(rm`, `/"*"`). Segments, normalised tokens and a position check
- * remove all three at once.
+ * remove all three at once. ONE rule also reads the segments BEFORE its own, and only to learn
+ * which branch its segment lands on: the protected-branch ask (v5, below).
  *
  * v2 (2026-09-08) is the harvest of four field copies. Measured before it:
  * canon ALLOWED `git push -f`, `\rm -rf /`, `(rm -rf /*)`, `rm -rf /"*"` and
  * `git commit --no-verify`; false-DENIED `rm -rf .next && du -sh /`; and ASKED
  * on `git fetch origin main && git push origin feature/x` with a reason that
  * named the wrong segment. Each is a probe case now.
+ *
+ * v5 (2026-09-10) is yoros's measurement of v4: the protected-branch gate asked only when a command
+ * NAMED the branch, so the ordinary deploy sequence — `git checkout main && git merge x && git push`
+ * — was allowed end to end, and `git push origin +main` force-pushed it. The branch a segment lands
+ * on is now resolved (see "WHICH BRANCH" below), and a `+refspec` is a force-push.
+ *
+ * v6 (2026-09-11) is yoros CF-4: a fallback was declared per FILE, so one `@twin` passed a hook
+ * holding nine rules with no floor behind eight. Every rule now carries its own — see "WHAT STANDS
+ * BEHIND EACH RULE" below — and `node bash-gate.js --fallbacks` lists them for the checks to read.
  *
  * A REASON IS ALWAYS SET, INCLUDING ON ALLOW. An empty reason makes an allow
  * indistinguishable from a hook that ran and decided nothing.
@@ -39,6 +49,7 @@
  */
 // @event PreToolUse
 // @matcher Bash
+// @rule-fallbacks --fallbacks
 
 /* KIT:CONFIG twins — the settings.json `ask` rules that back the ASK gates below.
  * `check-hook-registration.mjs` reconciles these against settings, so every @twin
@@ -112,17 +123,31 @@
 // rewrites are equal to `[A-Za-z0-9_]` on every BMP character (0 disagreements). `LETHAL_TARGET`
 // and CANON_DENY are byte-identical. The heredoc masker's loop was restructured; the gate's two
 // bash-gate suites exercise it. `@probed-kit` moves to v4 and the dates stay, as at v3.
+//
+// v5 and v6 (canon `a152e89`, `2e79fdb`, adopted 2026-09-11) left what the two dated twins back
+// alone. The code-only diff of canon's v4 against its v6 comes from the TypeScript scanner, with
+// comments and blank lines dropped. It has no hunk in `isForcePush`, `FORCE_LONG`,
+// `SHORT_CLUSTER_WITH_F`, `isDestructiveRm` or `LETHAL_TARGET`. CANON_DENY gains `isForceRefspec`,
+// another deny, so no force-push decision changes. `fires` now passes a context that none of these
+// rules reads. `@probed-kit` moves to v6 and the dates stay.
+//
+// v6 also moved each twin ONTO the rule it backs, as the `fallbacks` region below and the third
+// element of every project entry. That third element is data: `decide()` destructures
+// `[rule, why]` and never reads it. Adding it still changed the text the audit hashes, so the five
+// dated `@probed-sha` records below were re-recorded that day, with their dates unchanged and
+// their predicate and reason bytes identical to the probed ones (`git diff` shows only the added
+// element).
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v4
+// @probed-kit bash-gate v6
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v4
+// @probed-kit bash-gate v6
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -140,6 +165,11 @@
 // @probed never — NEW with kit v2 on 2026-09-09, backing canon's isForceClean. Untracked files
 //   are drafts here until they are committed, so the floor is worth an occasional prompt.
 // @probed-kit bash-gate v2
+// @twin Bash(gh pr merge*)
+// @probed never — NEW with kit v6 on 2026-09-11, backing canon's isPrMerge. This project has no PR
+//   flow, so the prompt costs nothing, and a merge on GitHub into master IS the deploy. It is
+//   exactly as wide as the rule, so it is sized correctly whether or not the hook is live.
+// @probed-kit bash-gate v6
 // @no-twin isSeamAssignment — settings speaks in prefix-globs over the command string and cannot
 //   express "a leading VAR= assignment naming one of this project's hook seams". The pattern that
 //   would come closest, `Bash(LT_HOOK_PROBE=*)`, matches only the spelling where that variable is
@@ -168,6 +198,8 @@
 // not a fix, and it is version-dependent. Set `"type": "module"`, or convert this file. Do not
 // assume either way. → M-KIT-17.
 import { PROTECTED_BRANCH, PROTECTED_REASON } from "./bash-gate.config.mjs";
+import { readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 /* KIT:CONFIG seams — shell variables that, set as a leading assignment, bypass this
  * project's git hooks (a `.githooks` probe seam: `X_HOOK_PROBE=1 git commit …`). An
@@ -228,7 +260,7 @@ const PROJECT_DENY = [
   // below tells the reader to run them, so denying them would make the refusal unfollowable.
   // @twin Bash(npx prisma migrate*)
   // @probed 2026-08-19 hook-disabled: intercepts — prompted · `npx prisma migrate --help`
-  // @probed-sha 8e4a09
+  // @probed-sha 9e9a83
   [
     (t) => {
       if (!runnerCmd(t, "prisma")) return false;
@@ -236,6 +268,7 @@ const PROJECT_DENY = [
       return a.includes("migrate") || (a.includes("db") && a.includes("push"));
     },
     "prisma migrate/db push does NOT work on this project — apply DDL via the Supabase Management API, then `npx prisma db pull && npx prisma generate` (see .claude/rules/schema-changes.md)",
+    { twins: ["Bash(npx prisma migrate*)", "Bash(npx prisma db push*)"] },
   ],
 
   // DENIED here where canon merely ASKS, which the deny region exists to allow. This project's
@@ -243,8 +276,8 @@ const PROJECT_DENY = [
   // nowhere else; `--hard` discards it with no undo and no reflog entry to recover it from.
   // @twin Bash(git reset --hard*)
   // @probed 2026-08-19 hook-disabled: intercepts — denied · `git reset --hard HEAD`
-  // @probed-sha 82887d
-  [isHardReset, "hard reset is denied — it discards uncommitted work with no undo"],
+  // @probed-sha 3809dd
+  [isHardReset, "hard reset is denied — it discards uncommitted work with no undo", { twins: ["Bash(git reset --hard*)"] }],
 ];
 /* KIT:CONFIG /deny */
 
@@ -259,8 +292,8 @@ const PROJECT_ASK = [
   // only ever speaks for a merge.
   // @twin Bash(git push*)
   // @probed 2026-08-19 hook-disabled: intercepts — prompted · `git push --dry-run`
-  // @probed-sha 202f6e
-  [(t) => atCommand(t, "git") && argsOf(t).includes("push"), "pushing to origin requires approval — the user walks the work first"],
+  // @probed-sha d828f1
+  [(t) => atCommand(t, "git") && argsOf(t).includes("push"), "pushing to origin requires approval — the user walks the work first", { twins: ["Bash(git push*)"] }],
 
   // The Management API is the working path for DDL — but it hits PRODUCTION. Matched on the URL
   // rather than on `curl`, because the URL is what makes it dangerous and the tool carrying it is
@@ -271,16 +304,16 @@ const PROJECT_ASK = [
   // both deserve a prompt anyway.
   // @twin Bash(curl*)
   // @probed 2026-08-19 hook-disabled: intercepts — prompted · `curl https://example.com`
-  // @probed-sha f2847b
-  [/api\.supabase\.com\/[^\s]{1,200}\/database\/query/, "this runs SQL against production — approve the statement"],
+  // @probed-sha 5723c1
+  [/api\.supabase\.com\/[^\s]{1,200}\/database\/query/, "this runs SQL against production — approve the statement", { twins: ["Bash(curl*)"] }],
 
   // `atCommand`, not `/\bvercel\b/`. The substring form asked on any command whose text merely
   // CONTAINED the word — a grep for it, a commit message about it, a path with `vercel` in it —
   // which is the shape that trains a user to click through prompts.
   // @twin Bash(vercel*)
   // @probed 2026-08-19 hook-disabled: intercepts — prompted · `vercel --version`
-  // @probed-sha d0abc5
-  [(t) => runnerCmd(t, "vercel"), "deploying requires approval"],
+  // @probed-sha 2fcf2e
+  [(t) => runnerCmd(t, "vercel"), "deploying requires approval", { twins: ["Bash(vercel*)"] }],
 
   // .env handling, a two-step decision rather than a table row. Loading a .env is routine —
   // `npx tsx --env-file=.env.local` is the documented way to run scripts here, because ESM hoists
@@ -304,9 +337,62 @@ const PROJECT_ASK = [
       return readsItOut && !loadsEnvOnly;
     },
     "reading out a .env file requires approval",
+    {
+      noTwin:
+        "a prefix glob cannot tell a command that reads a .env OUT from one that only loads it: `Bash(cat .env*)` misses less, grep, xxd and every redirection, and anything wider catches the documented `npx tsx --env-file=.env.local`, which runs many times a session. The Read tool's `.env` is denied in settings, which is a different channel",
+    },
   ],
 ];
 /* KIT:CONFIG /ask */
+
+/* KIT:CONFIG fallbacks — what stands behind each of CANON's rules if this hook stops running.
+ *
+ * One entry per canon rule, keyed by its function's name, in one of two shapes:
+ *   { twins: ["Bash(git push *main*)", …] } — rules in settings `permissions.deny` or `.ask`
+ *   { noTwin: "why a settings rule cannot say it" } — a reason, never a placeholder
+ * Canon ships every entry UNFILLED, because which floor a rule deserves is this project's call,
+ * and `check-hook-registration` fails an entry until it is answered. It also fails a twin that is
+ * not in settings, and a key naming no rule — a canon rename leaves its fallback behind.
+ *
+ * WRITE A TWIN IN THE SHAPE SETTINGS READS. `:*` is a wildcard only at the END of a pattern; in
+ * `Bash(git merge:*main*)` the colon is literal and the rule matches no command. Write
+ * `Bash(git merge *main*)`. The space before a `*` is a word boundary: `Bash(git push --force *)`
+ * does not match `--force-with-lease`.
+ *
+ * SIZE A TWIN AS IF IT IS LIVE. Claude Code's permissions page (read 2026-09-11) says a matching ask
+ * rule still prompts when this hook returns allow, and a deny still blocks — so a twin wider than
+ * its rule fires on commands the rule allows. life-therapy measured an ask NOT prompting under a
+ * live hook on 2026-08-18. Until the two agree, a twin that would be wrong while the hook is alive
+ * is a `noTwin`, with that as its reason. */
+// ANSWERED 2026-09-11 from the settings this project already held, plus one ask added for gh pr merge.
+// Every twin below is one of the patterns the twins region above records, so the reasoning there
+// holds: ASK IS THE FLOOR, and a twin that prompts more widely than its rule is the accepted cost.
+// Sized as if live, none is WRONG while the hook runs. The widest are `git merge*`, `git clean*`
+// and `git push*`: a prompt on a merge, a dry-run clean or a push the hook also asks on. None
+// blocks a command that the hook allows. The two DENY twins, the force-push ones and
+// `git reset --hard*`, deny only what the hook denies too. The live-hook question canon raises
+// (does an ask prompt under a hook that allowed?) is recorded as unmeasured again since 2026-08-18.
+// Only the operator can see a prompt (L-64), so the answer waits for Stéan.
+//
+// The floor is PARTIAL where a prefix glob cannot spell the rule, and it says so rather than
+// reading as cover. Every git twin starts `git <verb>`, so `git -C x push --force` or
+// `git -c k=v commit --no-verify` meets none of them. `git revert --no-verify` and
+// `git cherry-pick --no-verify` have no glob here either. The same goes for `gh -R o/r pr merge`.
+const CANON_FALLBACKS = {
+  isDestructiveRm: { twins: ["Bash(rm -rf /*)", "Bash(rm -rf ~*)"] },
+  isForcePush: { twins: ["Bash(git push --force*)", "Bash(git push -f*)"] },
+  isForceRefspec: { twins: ["Bash(git push*)"] },
+  isNoVerify: { twins: ["Bash(git commit --no-verify*)", "Bash(git push --no-verify*)"] },
+  isSeamAssignment: {
+    noTwin:
+      "a prefix glob matches the FIRST word, and a seam assignment may name any of three variables in any order — `Bash(LT_HOOK_PROBE=*)` would miss `LT_PRECOMMIT_CMD=x LT_HOOK_PROBE=1 git …` and read as a floor that is not one",
+  },
+  targetsProtectedBranch: { twins: ["Bash(git merge*)", "Bash(git push*)"] },
+  isPrMerge: { twins: ["Bash(gh pr merge*)"] },
+  isHardReset: { twins: ["Bash(git reset --hard*)"] },
+  isForceClean: { twins: ["Bash(git clean*)"] },
+};
+/* KIT:CONFIG /fallbacks */
 
 // ── Canon machinery. Every rule is a token test at command position in one segment. ──
 
@@ -513,12 +599,259 @@ function isSeamAssignment(tokens) {
   return false;
 }
 
-function targetsProtectedBranch(tokens) {
+// ── WHICH BRANCH A GIT ACT LANDS ON, WHEN THE COMMAND DOES NOT SAY (v5, yoros CF-3 and CF-5) ──
+//
+// v4 asked only when a merge or push NAMED the protected branch. Measured by yoros on the real hook:
+//
+//   git checkout main && git merge rebuild && git push     allow   ← the ordinary deploy sequence
+//   git push  ·  git push origin HEAD  ·  git merge rebuild  allow   (while main is checked out)
+//   git push origin rebuild:refs/heads/main                  allow
+//   git push --all origin  ·  git push --mirror origin       allow
+//   git push origin +main                                    allow   ← a force-push to the deploy branch
+//
+// L-14's general form, in canon's own hook: a gate that matches how a target APPEARS misses it when
+// it is supplied BY REFERENCE. So the target is resolved: the branch a checkout or switch EARLIER IN
+// THE SAME COMMAND moved to, else the one `.git/HEAD` names, else UNKNOWN, which asks. What follows is
+// yoros's stopgap (`bash-gate.refs.mjs`, mutation-tested 6 of 6), lifted with its reasoning.
+//
+// ⚠ `.git/HEAD` IS READ ONLY WHEN `CLAUDE_PROJECT_DIR` IS SET, and that is sound rather than
+// convenient. Every project registers this hook as `node "$CLAUDE_PROJECT_DIR/.claude/hooks/…"`, so
+// a hook running under the harness has it. Unset means a probe or a hand run, and reading the
+// probe's own checkout there would make its bare-push cases pass or fail by which branch is out.
+// Unset is NOT_READ, which asserts nothing; set and unreadable is UNKNOWN, which asks.
+//
+// `gh pr merge` merges into the PR's base, which lives on the server and not in the command, so it is
+// UNKNOWN and asks, whatever the base turns out to be.
+//
+// NOT COVERED, stated so it is not mistaken for cover: a push through an alias or a script, and
+// `git rebase`/`reset` onto the protected branch, which move the local branch and deploy nothing
+// until a push this does see.
+
+/** Outside the harness: no HEAD was read, and nothing is known either way. */
+const NOT_READ = undefined;
+/** Inside it, and still unknown: detached, unreadable, or another repository. This ASKS. */
+const UNKNOWN = null;
+
+/** The branch `.git/HEAD` names, following a `.git` FILE (a worktree or submodule) to its gitdir. */
+function readHeadBranch(root) {
+  if (!root) return NOT_READ;
+  try {
+    let gitDir = join(root, ".git");
+    if (statSync(gitDir).isFile()) {
+      const line = readFileSync(gitDir, "utf8").split(/\r?\n/).find((l) => l.startsWith("gitdir:"));
+      if (!line) return UNKNOWN;
+      gitDir = resolve(root, line.slice("gitdir:".length).trim());
+    }
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const REF = "ref: refs/heads/";
+    return head.startsWith(REF) ? head.slice(REF.length).trim() || UNKNOWN : UNKNOWN;
+  } catch {
+    return UNKNOWN;
+  }
+}
+
+let headMemo = null;
+function headBranch() {
+  if (headMemo === null) headMemo = { v: readHeadBranch(process.env.CLAUDE_PROJECT_DIR || null) };
+  return headMemo.v;
+}
+
+/**
+ * Drop shell redirections, which the tokens keep: `git push > "$LOG" 2>&1` is a probe case, and read
+ * as arguments it would make `>` a remote and `$LOG` a refspec, which is an explicit destination and
+ * allows. `>` / `2>>` / `&>` take the next token; `>out` / `2>/dev/null` carry theirs.
+ */
+function dropRedirections(args) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i];
+    if (/^(?:\d*|&)[<>]{1,2}&?$/.test(t)) {
+      i++;
+      continue;
+    }
+    if (/^(?:\d*|&)[<>]/.test(t)) continue;
+    out.push(t);
+  }
+  return out;
+}
+
+/** git's global options that take a value as the NEXT token, and those that point it elsewhere. */
+const GLOBAL_WITH_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"]);
+const ELSEWHERE = /^(?:-C|--git-dir(?:=.*)?|--work-tree(?:=.*)?)$/;
+
+/** `{ verb, rest, elsewhere }` for a git segment's arguments (the tokens after `git`). */
+function gitVerb(args) {
+  const a = dropRedirections(args);
+  let elsewhere = false;
+  let i = 0;
+  while (i < a.length && a[i].startsWith("-")) {
+    if (ELSEWHERE.test(a[i])) elsewhere = true;
+    i += GLOBAL_WITH_VALUE.has(a[i]) ? 2 : 1;
+  }
+  return { verb: a[i] ?? "", rest: a.slice(i + 1), elsewhere };
+}
+
+/** A token that names a PATH rather than a branch: a file checkout leaves the branch alone. */
+const looksLikePath = (t) => t.includes(".") || t.includes("\\") || t.startsWith("/");
+
+/**
+ * The branch after a `git checkout` / `git switch` segment, given the one before it. A path checkout
+ * (`--`, or a file) leaves it alone. `-` and `--detach` make it UNKNOWN: the previous branch is not
+ * in the command.
+ */
+function branchAfter(args, current) {
+  const { verb, rest, elsewhere } = gitVerb(args);
+  if (elsewhere || (verb !== "checkout" && verb !== "switch")) return current;
+  if (rest.includes("--")) return current;
+  const create = verb === "checkout" ? ["-b", "-B", "--orphan"] : ["-c", "-C", "--create", "--force-create", "--orphan"];
+  for (let i = 0; i < rest.length; i++) {
+    if (create.includes(rest[i])) return rest[i + 1] ?? UNKNOWN;
+    if (rest[i] === "--detach" || (rest[i] === "-d" && verb === "switch")) return UNKNOWN;
+  }
+  const positional = rest.filter((t) => !t.startsWith("-") || t === "-");
+  if (positional.length === 0) return current;
+  if (positional[0] === "-") return UNKNOWN;
+  // `--track origin/main` creates and checks out a LOCAL `main`, so the remote prefix comes off.
+  const tracks = rest.some((t) => t === "-t" || t === "--track" || t.startsWith("--track="));
+  if (tracks && positional.length === 1 && positional[0].includes("/")) return positional[0].slice(positional[0].indexOf("/") + 1);
+  if (positional.length > 1 || looksLikePath(positional[0])) return current;
+  return positional[0];
+}
+
+/** A path for comparison: forward slashes, `/c/` as `c:/`, lower case, no trailing slash. */
+function normPath(p) {
+  let s = p.replace(/\\/g, "/").replace(/^\/([a-z])\//i, "$1:/").toLowerCase();
+  while (s.length > 1 && s.endsWith("/")) s = s.slice(0, -1);
+  return s;
+}
+
+/** The branch after a `cd` / `pushd`: the same one if it stays in this repository, else UNKNOWN. */
+function branchAfterCd(target, current, root) {
+  if (target === undefined || target === "-" || target === "~" || target.startsWith("~/")) return UNKNOWN;
+  const absolute = /^(?:\/|[A-Za-z]:[\\/])/.test(target);
+  if (!absolute) return target.split(/[\\/]/).includes("..") ? UNKNOWN : current;
+  if (!root) return UNKNOWN;
+  const t = normPath(target);
+  const r = normPath(root);
+  return t === r || t.startsWith(r + "/") ? current : UNKNOWN;
+}
+
+/** `git push` options that take a value as the NEXT token; those that push every branch. */
+const PUSH_WITH_VALUE = new Set(["-o", "--push-option", "--repo", "--receive-pack", "--exec"]);
+const PUSH_ALL = new Set(["--all", "--mirror", "--branches"]);
+/** The current-branch aliases a refspec may use. */
+const SELF_REF = new Set(["HEAD", "@"]);
+
+/**
+ * What a `git push`'s arguments land on: `{ all, current, branches, forced }`. `all` is --all /
+ * --mirror. `current` is a push of the checked-out branch (no refspec, or `HEAD`). `branches` are the
+ * destination BRANCH names, with `+` and `refs/heads/` taken off. `forced` is any `+refspec`.
+ */
+function pushTargets(rest) {
+  const flags = [];
+  const positional = [];
+  for (let i = 0; i < rest.length; i++) {
+    const t = rest[i];
+    if (t.startsWith("-")) {
+      flags.push(t);
+      if (PUSH_WITH_VALUE.has(t)) i++;
+    } else positional.push(t);
+  }
+  const refspecs = positional.slice(1);
+  const all = flags.some((f) => PUSH_ALL.has(f));
+  const tagsOnly = refspecs.length === 0 && flags.includes("--tags");
+  const out = { all, current: false, branches: [], forced: false };
+  if (refspecs.length === 0) {
+    out.current = !all && !tagsOnly;
+    return out;
+  }
+  for (const spec of refspecs) {
+    if (spec.startsWith("+")) out.forced = true;
+    const s = spec.startsWith("+") ? spec.slice(1) : spec;
+    const colon = s.lastIndexOf(":");
+    const src = colon === -1 ? s : s.slice(0, colon);
+    const dst = colon === -1 ? s : s.slice(colon + 1) || src;
+    if (SELF_REF.has(dst) || (colon === -1 && SELF_REF.has(src))) out.current = true;
+    else out.branches.push(dst.startsWith("refs/heads/") ? dst.slice("refs/heads/".length) : dst);
+  }
+  return out;
+}
+
+/**
+ * Does segment `index` merge, pull or push into the protected branch? `plan` is every segment as
+ * `{ kind: "git" | "cd" | "popd" | "other", args }`; the segments before `index` say which branch is
+ * checked out when this one runs.
+ */
+function reachesProtected(plan, index, { protectedBranch, head, root }) {
+  let current = head;
+  for (let i = 0; i < index; i++) {
+    const s = plan[i];
+    if (s.kind === "git") current = branchAfter(s.args, current);
+    else if (s.kind === "cd") current = branchAfterCd(s.args.find((t) => !t.startsWith("-")), current, root);
+    else if (s.kind === "popd") current = UNKNOWN;
+  }
+  const s = plan[index];
+  if (s.kind !== "git") return false;
+  const { verb, rest, elsewhere } = gitVerb(s.args);
+  const here = elsewhere ? UNKNOWN : current;
+  // NOT_READ (outside the harness) is not UNKNOWN: nothing was read, so nothing is asserted.
+  const onProtected = here === protectedBranch || here === UNKNOWN;
+  if (verb === "merge") {
+    if (rest.some((t) => ["--abort", "--quit", "--continue"].includes(t))) return false;
+    return onProtected;
+  }
+  if (verb === "pull") {
+    // A bare pull syncs the branch with its own upstream. Naming ANOTHER branch merges it in.
+    const positional = rest.filter((t) => !t.startsWith("-"));
+    const merged = positional.slice(1).map((t) => (t.startsWith("+") ? t.slice(1) : t).split(":")[0]);
+    return merged.some((b) => b !== here) && onProtected;
+  }
+  if (verb === "push") {
+    const t = pushTargets(rest);
+    if (t.all) return true;
+    if (t.branches.includes(protectedBranch)) return true;
+    return t.current && onProtected;
+  }
+  return false;
+}
+
+const planOf = (segs) =>
+  segs.map((s) => ({
+    kind: atCommand(s.tokens, "git") ? "git"
+      : atCommand(s.tokens, "cd") || atCommand(s.tokens, "pushd") ? "cd"
+      : atCommand(s.tokens, "popd") ? "popd" : "other",
+    args: argsOf(s.tokens),
+  }));
+
+function targetsProtectedBranch(tokens, _text, _command, ctx) {
   if (!atCommand(tokens, "git")) return false;
   const args = argsOf(tokens);
-  if (!args.includes("push") && !args.includes("merge")) return false;
   const b = PROTECTED_BRANCH;
-  return args.some((t) => t === b || t === `origin/${b}` || t === `refs/heads/${b}` || t.endsWith(`:${b}`));
+  // NAMED: v4's test, kept whole. Every command it asked on still asks.
+  if ((args.includes("push") || args.includes("merge")) &&
+    args.some((t) => t === b || t === `origin/${b}` || t === `refs/heads/${b}` || t.endsWith(`:${b}`))) return true;
+  // BY REFERENCE: everything else that lands there.
+  if (!ctx) return false;
+  return reachesProtected(ctx.plan, ctx.index, { protectedBranch: b, head: headBranch(), root: process.env.CLAUDE_PROJECT_DIR || null });
+}
+
+/**
+ * `git push origin +main`: a `+` on a refspec IS `--force` for that ref. v4 read it as a branch name
+ * that did not equal `main`, and allowed it (yoros CF-5). Denied with or without a lease flag beside
+ * it: what `+` does alongside `--force-with-lease` is not something this file should have to know.
+ */
+function isForceRefspec(tokens) {
+  if (!atCommand(tokens, "git")) return false;
+  const { verb, rest } = gitVerb(argsOf(tokens));
+  return verb === "push" && pushTargets(rest).forced;
+}
+
+/** `gh pr merge`: the base branch is on the server, so the command cannot say where this lands. */
+function isPrMerge(tokens) {
+  if (!atCommand(tokens, "gh")) return false;
+  const args = argsOf(tokens);
+  const i = args.indexOf("pr");
+  return i !== -1 && args[i + 1] === "merge";
 }
 
 function isHardReset(tokens) {
@@ -534,56 +867,113 @@ function isForceClean(tokens) {
 const CANON_DENY = [
   [isDestructiveRm, "rm aimed at a filesystem root or home directory"],
   [isForcePush, "force-push without --force-with-lease"],
+  [isForceRefspec, "a +refspec force-pushes that ref — push without the +, or use --force-with-lease"],
   [isNoVerify, "--no-verify (or -n on commit/push) skips the project's own gate"],
   [isSeamAssignment, "sets a hook probe seam — the gate would report PASSED without running"],
 ];
 const CANON_ASK = [
   [targetsProtectedBranch, PROTECTED_REASON],
+  [isPrMerge, "gh pr merge merges into the PR's base branch, which is on the server and not in this command — if it is the protected branch, this is the deploy"],
   [isHardReset, "git reset --hard discards uncommitted work with no undo"],
   [isForceClean, "git clean -f deletes untracked files permanently — drafts are untracked until committed"],
 ];
 
-const fires = (rule, seg, command) =>
-  typeof rule === "function" ? rule(seg.tokens, seg.text, command) : rule.test(seg.text);
+// A function rule also receives `{ plan, index }`: every segment's kind and arguments, and which one
+// this is. Only the protected-branch rule reads it — which branch a segment lands on is decided by
+// the segments before it — and a project rule may ignore it.
+const fires = (rule, seg, command, ctx) =>
+  typeof rule === "function" ? rule(seg.tokens, seg.text, command, ctx) : rule.test(seg.text);
 
 function decide(command) {
   // Flag scans run on the message-masked text; the rm rule on the unmasked text, so
   // `-m "rm -rf /"` is prose either way (rm is not at command position there).
   const segs = segments(maskMessageText(command));
+  const plan = planOf(segs);
+  const hit = (rule) => segs.some((s, index) => fires(rule, s, command, { plan, index }));
   for (const [rule, why] of [...CANON_DENY, ...PROJECT_DENY]) {
-    if (segs.some((s) => fires(rule, s, command))) return ["deny", why];
+    if (hit(rule)) return ["deny", why];
   }
   for (const [rule, why] of [...CANON_ASK, ...PROJECT_ASK]) {
-    if (segs.some((s) => fires(rule, s, command))) return ["ask", why];
+    if (hit(rule)) return ["ask", why];
   }
   return ["allow", "allowed — no gate matched"];
 }
 
-const chunks = [];
-process.stdin.on("data", (d) => chunks.push(d));
-process.stdin.on("end", () => {
-  let decision = "allow";
-  let reason = "bash-gate: allowed — no gate matched";
-  try {
-    // Buffers, not string concatenation: a multibyte character split across chunks
-    // would corrupt the JSON. A leading BOM (Windows) is stripped — written as the
-    // escape so it survives a diff, an editor and a control-byte assertion.
-    const raw = Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/, "");
-    const input = JSON.parse(raw);
-    if (input === null || typeof input !== "object" || Array.isArray(input)) {
-      throw new TypeError("hook input is not an object");
+// ── v6: WHAT STANDS BEHIND EACH RULE IF THIS HOOK STOPS RUNNING (yoros CF-4) ──
+//
+// L-16: a rule held at the hook layer alone needs a fallback, reconciled as a set difference. Until
+// v6 the fallback was declared per FILE — one `@twin` line anywhere passed — so the difference taken
+// was twins against settings, and rules against twins was never taken: two twins backed one rule of
+// nine and the check was green. The fallback now sits ON the rule, and this lists every rule with
+// its fallback, so a count can see a rule that has none. Canon's rules take theirs from the
+// fallbacks region by function name; a project's carry theirs as the third element of the entry.
+//
+// `node bash-gate.js --fallbacks` prints the list as JSON and reads no stdin. Claude Code never
+// passes an argument, so a gating run cannot reach it. `inert` marks the one rule that cannot fire:
+// the seam rule, with no seams configured, needs no floor until it has something to hold.
+function inventory() {
+  const canonRule = (severity) => ([rule, reason]) => ({
+    severity,
+    owner: "canon",
+    rule: rule.name,
+    reason,
+    fallback: Object.hasOwn(CANON_FALLBACKS, rule.name) ? CANON_FALLBACKS[rule.name] : null,
+    inert: rule === isSeamAssignment && SEAM_VARS.length === 0,
+  });
+  const projectRule = (severity, table) => ([, reason, fallback], i) => ({
+    severity,
+    owner: "project",
+    rule: `${table}[${i}]`,
+    reason,
+    fallback: fallback ?? null,
+    inert: false,
+  });
+  const names = new Set([...CANON_DENY, ...CANON_ASK].map(([rule]) => rule.name));
+  return {
+    rules: [
+      ...CANON_DENY.map(canonRule("deny")),
+      ...PROJECT_DENY.map(projectRule("deny", "PROJECT_DENY")),
+      ...CANON_ASK.map(canonRule("ask")),
+      ...PROJECT_ASK.map(projectRule("ask", "PROJECT_ASK")),
+    ],
+    strays: Object.keys(CANON_FALLBACKS).filter((k) => !names.has(k)),
+  };
+}
+
+/** The gating run: one hook payload on stdin, one decision on stdout. */
+function gate() {
+  const chunks = [];
+  process.stdin.on("data", (d) => chunks.push(d));
+  process.stdin.on("end", () => {
+    let decision = "allow";
+    let reason = "bash-gate: allowed — no gate matched";
+    try {
+      // Buffers, not string concatenation: a multibyte character split across chunks
+      // would corrupt the JSON. A leading BOM (Windows) is stripped — written as the
+      // escape so it survives a diff, an editor and a control-byte assertion.
+      const raw = Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/, "");
+      const input = JSON.parse(raw);
+      if (input === null || typeof input !== "object" || Array.isArray(input)) {
+        throw new TypeError("hook input is not an object");
+      }
+      const command = String(input.tool_input?.command ?? "");
+      const [d, why] = decide(command);
+      decision = d;
+      reason = "bash-gate: " + why;
+    } catch {
+      decision = "ask";
+      reason = "bash-gate: could not parse hook input — failing to a prompt, not to silence";
     }
-    const command = String(input.tool_input?.command ?? "");
-    const [d, why] = decide(command);
-    decision = d;
-    reason = "bash-gate: " + why;
-  } catch {
-    decision = "ask";
-    reason = "bash-gate: could not parse hook input — failing to a prompt, not to silence";
-  }
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: decision, permissionDecisionReason: reason },
-    }),
-  );
-});
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: decision, permissionDecisionReason: reason },
+      }),
+    );
+  });
+}
+
+if (process.argv.includes("--fallbacks")) {
+  process.stdout.write(JSON.stringify(inventory()));
+} else {
+  gate();
+}

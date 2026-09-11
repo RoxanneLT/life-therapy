@@ -59,7 +59,7 @@ is worth keeping:
 - **L-10** — `audit: the source enumeration has not decayed`, a floor of 400 against a real count
   of 542. Deliberately not `> 0`, which still passes when a walk decays to one file.
 
-Two items queued on 2026-09-10 have since been carried. The first one's queue entry was wrong in
+Three items queued on 2026-09-10 have since been carried. The first one's queue entry was wrong in
 two ways:
 
 - **L-35 · L-49** (`a599577`, answered in `docs/CANON-FINDINGS.md` §2). The audit's `code()` and
@@ -77,23 +77,16 @@ two ways:
   for wording for the rest. The session drafted it on that request, and Stéan gave it the same day
   with their own edits: workflows and deep-research, under 15 agents, each announced in one line.
   Both halves are quoted in §7.
+- **L-41** (2026-09-11, answered in §2). It waited on canon: `check-handoff-contract` is canon's
+  bytes with no config region. Canon filed this project's CF-4 at `61bd006`, and v5 of that check,
+  adopted by the kit move of 2026-09-11, marks a cited file whose mtime falls between the anchor's
+  `utc=` and the artefact's own mtime as **QUARANTINED**. It does not fail, because the conclusion
+  may stand on another source. Its first live run here: 3 artefacts, 55 citations resolved, 0
+  edited during their run, and 4 cited paths it names as not measured because they do not resolve.
 
 ### Queued: applies here, not carried
 
-- **L-41 — an agent can cite the dispatcher's own in-flight edit as independent evidence. Waits on
-  canon: `docs/CANON-FINDINGS.md` CF-4.** The mechanism belongs in `check-handoff-contract`, which is
-  canon's bytes with no config region, so it cannot be built here without forking the row. The
-  agents here share the main session's working tree, and the main session keeps working while they
-  run. Measured 2026-09-10: 8 LT subagent runs on this machine (grounder 5, census 2, db-inspector
-  1). Each artefact opens with `commit=<short SHA> · utc=<time>` (five of the six spines;
-  `crawler-doctrine` returns bare JSON), and `grounder` forbids a working-tree claim it did not read from `git
-  status`. So the materials for the tell are recorded, but nothing compares them. A cited file that
-  differs from the anchor commit, or changed after the anchor time, reads exactly like one that did
-  not. The work, as CF-4 proposes it: `check-handoff-contract` marks any cited file whose mtime
-  falls between the anchor's `utc=` and the artefact's own mtime as **quarantined**. It is not
-  failed, because the conclusion may stand on another source; the report has to name which. An edit
-  after the artefact was written is staleness, a different lesson. Prototyped outside the tree on
-  the one artefact here: 23 cited paths, 17 resolving, 0 edited during its 242-second run.
+Nothing.
 
 When an entry in the shared ledger gains a `life-therapy` line, or should have one and does not,
 this is where the work is tracked. **An unapplied lesson is an open item here — not an `n/a:`

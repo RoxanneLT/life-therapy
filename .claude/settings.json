@@ -46,6 +46,7 @@
       "Bash(curl*)",
       "Bash(git merge*)",
       "Bash(git clean*)",
+      "Bash(gh pr merge*)",
       "mcp__claude_ai_Vercel__deploy_to_vercel"
     ]
   },
