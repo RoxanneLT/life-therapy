@@ -13,7 +13,7 @@
 | B-3 | pass | 2 open gates, all complete |
 | B-4 | pass | 13 rows, under the 40-row sweep trigger |
 | B-5 | skipped | no unresolved markers |
-| B-6 | FAIL | stale — newer since generated: CURRENT.md. Regenerate: node scripts/check-brief.mjs . --status |
+| B-6 | pass | current |
 | B-7 | pass | 2 numbered documents, no collisions · 1 name(s) B-7 CANNOT READ and did not check: build/INDEX.md — teach it their shape in the `names` config region |
 | B-8 | pass | CURRENT.md + build/INDEX.md within budget, no reserved names |
 | B-9 | pass | 6 spine files + 7 role folders, nothing unfiled |
@@ -22,12 +22,12 @@
 
 | File | Size | Last commit |
 |---|---|---|
-| `CURRENT.md` | 4.6 KB | 2026-09-10 |
+| `CURRENT.md` | 5.0 KB | 2026-09-11 |
 | `DECISIONS.md` | 6.5 KB | 2026-09-09 |
 | `EVIDENCE.md` | 4.5 KB | 2026-09-09 |
 | `GATES.md` | 2.4 KB | 2026-09-09 |
 | `README.md` | 4.2 KB | 2026-09-10 |
-| `STATUS.md` | 1.8 KB | 2026-09-10 |
+| `STATUS.md` | 0.1 KB | 2026-09-11 |
 | `build\INDEX.md` | 2.6 KB | 2026-09-09 |
 | `build\README.md` | 0.5 KB | 2026-09-09 |
 | `design\README.md` | 0.1 KB | 2026-09-09 |

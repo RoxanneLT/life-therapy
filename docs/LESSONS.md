@@ -13,8 +13,8 @@ canon writes the `Applied:` line. The **session** runs this, never the gate: a g
 on the path of a sibling checkout.
 
 ⚠ **First, `git -C <dev-standards> status --short tools`.** If the tool shows as modified, canon's
-session is mid-edit and its output comes from code no commit contains — `docs/CANON-FINDINGS.md`
-CF-1. Run the committed one instead:
+session is mid-edit and its output comes from code no commit contains. Since canon `054eab2`
+(this project's CF-1, now filed) the tool says so itself. Run the committed one instead:
 `git -C <dev-standards> archive HEAD tools ledgers | tar -x -C <scratch>`, and run it from there.
 
 This file used to hold twelve entries of its own. Every one has been promoted to the shared

@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // check-brief — conformance for `brief/`, per standards/BRIEF-STANDARD.md v1.1
 //
-// @kit check-brief v6 — tracked. Edit it in dev-standards and re-adopt; a local change
+// @kit check-brief v7 — tracked. Edit it in dev-standards and re-adopt; a local change
 // here is a fork, and `check-kit-drift.mjs` will say so.
 //
 // Nine checks (B-1…B-9), one generator (--status), one probe (--selftest).
@@ -35,7 +35,7 @@
 
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { join, relative, dirname, isAbsolute } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -45,6 +45,11 @@ const SELF = fileURLToPath(import.meta.url);
 const SPINE = ["README.md", "EVIDENCE.md", "DECISIONS.md", "GATES.md", "CURRENT.md", "STATUS.md"];
 const FOLDERS = ["product", "build", "design", "runbooks", "legal", "research", "vendors"];
 const ROTATE_ROWS = 40;
+// Where B-4 sends the rows a sweep retires. `_`-prefixed, so B-9's root pass admits it and `walk`'s
+// skipArchives keeps it out of B-2's index and B-7's bands (§3.2 retained-but-not-authoritative).
+// v6 printed `decisions/ARCHIVE-<YYYY-MM>.md`, which B-9 fails at `brief/` root: the fix one check
+// printed was a failure in the next. Found by yoros (CF-1); a probe now obeys the message.
+const ARCHIVE_TO = "_ARCHIVE/DECISIONS-<YYYY-MM>.md";
 // ⚠ `ROTATE_BYTES = 25 * 1024` WAS HERE AND IS WITHDRAWN — 2026-09-10, reported by the pleks
 // session. It was a size limit on `DECISIONS.md`, which is not one of the two files read at session
 // start, and the next four lines of this very file say that may not exist. The rule and its own
@@ -372,7 +377,7 @@ export function checkBrief(projectDir, { strictMarkers = false } = {}) {
   } else if (decRows.length === tested) {
     add("B-4", false,
       `the sweep found ${tested - bind} row(s) that no longer bind and they are STILL IN THE LOG — ` +
-      `move them to decisions/ARCHIVE-<YYYY-MM>.md. That is the whole of the rule.`);
+      `move them to ${ARCHIVE_TO}. That is the whole of the rule.`);
   } else {
     add("B-4", false,
       `the sweep kept ${bind} of ${tested} rows and the log now holds ${decRows.length} — ` +
@@ -784,6 +789,68 @@ function selftest() {
     rmSync(root, { recursive: true, force: true });
   }
 
+  // THE STALE ARM (yoros CF-2). STATUS.md exists and a document was edited after it, which is the only
+  // tree that ever needs regenerating. Moving STATUS.md into the past, rather than the document into
+  // the future, is what models it: a future mtime would stay newer than any regeneration.
+  {
+    const root = fixture(GOOD);
+    const status = join(root, "brief", "STATUS.md");
+    const doc = join(root, "brief", "build", "10-foundation.md");
+    const t = Date.now();
+    utimesSync(status, new Date(t - 120000), new Date(t - 120000));
+    utimesSync(doc, new Date(t - 60000), new Date(t - 60000));
+    const before = checkBrief(root).find((r) => r.id === "B-6");
+    execFileSync(process.execPath, [SELF, root, "--status"], { stdio: "pipe" });
+    const row = readFileSync(status, "utf8").split("\n").find((l) => l.startsWith("| B-6 |")) ?? "";
+    const ok = before.ok === false && row.startsWith("| B-6 | pass |");
+    if (!ok) failures++;
+    console.log(`  ${ok ? "✓" : "✗"} --status over a STALE STATUS.md writes B-6 as pass, not the staleness it just cured${ok ? "" : ` — before ${before.ok}, wrote ${row}`}`);
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  // B-4's REMEDY, OBEYED (yoros CF-1). The path is read out of the message, not the constant, so the
+  // message cannot again name somewhere B-9 fails.
+  {
+    const root = fixture({ ...GOOD, "brief/DECISIONS.md": swept(45, 44, "2026-02-01") });
+    const said = checkBrief(root).find((r) => r.id === "B-4");
+    const to = said.note.match(/move them to (\S+?)\. That is/)?.[1] ?? null;
+    let after = [];
+    if (to) {
+      const target = join(root, "brief", to.replace("<YYYY-MM>", "2026-01"));
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, "# Decisions archive\n\n| Date | Decision |\n|---|---|\n| 2026-01-01 | **Row 0.** Why. |\n");
+      writeFileSync(join(root, "brief", "DECISIONS.md"), swept(44, 44, "2026-02-01", 45));
+      const s = join(root, "brief", "STATUS.md");
+      writeFileSync(s, "# Status\n\ngenerated\n");
+      after = checkBrief(root);
+    }
+    const bad = after.filter((r) => !r.ok && !r.skipped).map((r) => r.id);
+    const ok = said.ok === false && to !== null && after.length > 0 && bad.length === 0;
+    if (!ok) failures++;
+    console.log(`  ${ok ? "✓" : "✗"} doing exactly what B-4 prints (${to ?? "no path in the message"}) leaves every check passing${ok ? "" : ` — failed: ${bad.join(", ") || "B-4 never asked"}`}`);
+    rmSync(root, { recursive: true, force: true });
+  }
+
+  // THE EXIT CODE THE GATE READS, one spawn per path (L-51; life-therapy CF-2, yoros CF-7). Every
+  // probe above calls checkBrief in-process, so the `process.exit` at the bottom of this file was on
+  // no probe's path: it could be `exit(0)` and every one of them stayed green.
+  {
+    const run = (dir, ...args) => spawnSync(process.execPath, [SELF, dir, ...args], { encoding: "utf8" }).status;
+    const good = fixture(GOOD);
+    const failing = fixture({ ...GOOD, "brief/DECISIONS.md": swept(45, 44, "2026-02-01") });
+    const empty = mkdtempSync(join(tmpdir(), "brief-probe-"));
+    for (const [label, got, want] of [
+      ["a conformant brief exits 0", run(good), 0],
+      ["a brief with a failing check exits 1", run(failing), 1],
+      ["no brief/ at all exits 2 — the tool could not run, which is not a pass", run(empty), 2],
+    ]) {
+      const ok = got === want;
+      if (!ok) failures++;
+      console.log(`  ${ok ? "✓" : "✗"} ${label}${ok ? "" : ` — exited ${got}`}`);
+    }
+    for (const d of [good, failing, empty]) rmSync(d, { recursive: true, force: true });
+  }
+
   console.log(failures === 0 ? "\nselftest: all probes green (both directions)" : `\nselftest: ${failures} probe(s) wrong`);
   return failures === 0 ? 0 : 1;
 }
@@ -822,7 +889,12 @@ const strict = { strictMarkers: argv.includes("--strict-markers") };
 // obviously unfinished file rather than a plausible wrong one.
 if (argv.includes("--status")) {
   const out = join(dir, "brief", "STATUS.md");
-  if (!existsSync(out)) writeFileSync(out, "# Status\n\n(generating — check-brief.mjs --status did not finish)\n");
+  // UNCONDITIONALLY, and v6 guarded it with `!existsSync(out)`. That fixed the ABSENT arm and left the
+  // STALE one: an existing, stale STATUS.md kept its old mtime through renderStatus, so B-6 measured
+  // it as stale and wrote that FAIL into the file whose regeneration had just cured it. Regenerating
+  // is only ever needed when B-6 fails, so every regeneration that had to happen recorded a false
+  // failure. Found by yoros (CF-2), one branch over from pleks's report.
+  writeFileSync(out, "# Status\n\n(generating — check-brief.mjs --status did not finish)\n");
   writeFileSync(out, renderStatus(dir, strict));
   console.log("wrote brief/STATUS.md\n");
 }

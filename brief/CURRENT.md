@@ -39,8 +39,12 @@ until Stéan says the review is done.
   outbox asks canon to drop them.
 
 **Triage** (2026-09-10): 36 of 36 answered, queued or held. Batches `ba1cf4b`, `cb80e5d`,
-`731682a`, `46b8221`. Findings to canon: CF-1 (the session-start query runs canon's working tree),
-CF-2 (kit checks don't carry L-51), CF-3 (no spine version in the anchor), CF-4 (above).
+`731682a`, `46b8221`. Findings still with canon: CF-2 (kit checks don't carry L-51), CF-3 (no
+spine version in the anchor), CF-4 (above). CF-1 was filed at canon `054eab2`.
+
+**Committed 2026-09-11, not pushed:** `c0fc378`, which carries L-68, and the commit after it.
+That one moves `check-brief` to v7 by canon's new pin's route and files four outbox items that
+canon answered: CF-1, and three kit rows whose pins canon dropped.
 
 **Queue, `docs/LESSONS.md`:**
 
@@ -49,12 +53,16 @@ CF-2 (kit checks don't carry L-51), CF-3 (no spine version in the anchor), CF-4 
   is in `CLAUDE.md` §7. Agents may be spawned without asking; workflows and deep-research still
   wait to be asked.
 
-**Next action: wait.** Nothing here is waiting on Stéan. Canon lifts the outbox from HEAD; when it replies with SHAs, rows
-move to **Filed**. Before re-running `--emit-open`, check `git -C <canon> status --short tools`: if
-it is dirty, run from `git archive HEAD` (CF-1).
+**Next action: wait.** Stéan decides whether to push the two commits above. Canon lifts the outbox
+from HEAD; when it replies with SHAs, rows move to **Filed**. Before re-running `--emit-open`,
+check `git -C <canon> status --short tools`: if it is dirty, run from `git archive HEAD`. Since
+`054eab2` the tool warns on its own.
 
 **Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
-`node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree.
+`node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree. On
+2026-09-11 canon's working tree held an uncommitted `bash-gate` v5 and its probe. Drift run
+there reports them; drift run from `git archive HEAD` does not. Adopt nothing until they are
+committed.
 `claude-md-ratio` is retired in canon; do not install it if an older manifest is ever read.
 
 `G-01` and `G-03` are open and **deliberately not being chased**. Stéan set them aside on 2026-09-09.
