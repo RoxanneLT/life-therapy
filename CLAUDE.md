@@ -240,16 +240,17 @@ Reading `.env*` is denied at the settings layer.
 
 **Settings-ask twins** (coarse patterns that stand in when the hook is dead, and are **live beside
 it**. Measured 2026-09-11 on Claude Code 2.1.235: a settings ask prompts even when the hook
-allows, so a twin wider than its rule costs a prompt. One anomaly is open, recorded in the hook's
-twins region.) Every gate above names its twin inline as `// @twin`. Reconciled by
-`hooks: every hook declares its twin or why it cannot have one`, which also checks each twin's probe
-record and fails if the rule it covers has been edited since.
+allows, so a twin wider than its rule costs a prompt. A command that went silent in the session
+that added its ask prompted after a restart; the hook's twins region has it.) Every gate above
+names its twin inline as `// @twin`. Reconciled by `hooks: every hook declares its twin or why it
+cannot have one`, which also checks each twin's probe record and fails if the rule it covers has
+been edited since.
 
 **A hook gates only a session that loaded it.** Hooks are read at session start, from the folder
 the session was launched in. So a hook added mid-session passes its probes and gates nothing until a
 restart. A session opened at the parent folder this repo shares with its siblings loads none of
-them. Open the session at the repo root, and restart after changing a hook. Then send a call no
-settings rule covers, such as `cd scripts && ls`: a loaded `bash-gate` allows it without a prompt.
+them. Open the session at the repo root, and restart after changing a hook or
+`.claude/settings.json`. Then send a call no settings rule covers, such as `cd scripts && ls`: a loaded `bash-gate` allows it without a prompt.
 Only the operator can see a prompt. The model gets the same result from an allowed call and an
 approved one, so it cannot confirm its own hooks. dev-standards/ledgers/LESSONS.md L-64.
 

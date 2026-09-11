@@ -67,11 +67,12 @@
 //
 // The same session measured the hook's own verdicts. An ASK prompted on its own
 // (`git pull origin <branch>` on master, `gh -R <repo> pr merge`, `git push <remote>`,
-// `vercel`), and a DENY blocked. ONE ANOMALY IS OPEN: `gh pr merge 99999 --repo <repo>` did
-// NOT prompt, twice, though the hook asked. It is the only spelling tested that also matches
-// `Bash(gh pr merge*)`, the one ask added mid-session. `git push` and `vercel` match asks loaded
-// at session start, and both prompted. Next: re-run it after a restart. Until then, do not assume
-// that a twin leaves the hook's ask intact.
+// `vercel`), and a DENY blocked. One anomaly came and went: `gh pr merge 99999 --repo <repo>`
+// did NOT prompt, twice, though the hook asked. It was the only spelling tested that also matched
+// `Bash(gh pr merge*)`, the one ask added to settings mid-session. After a restart the same command
+// PROMPTED. So a twin leaves its hook's ask intact, and the silence belonged to the session that
+// edited settings.json, not to the rules. Its mechanism is unknown. Restart after a settings edit
+// before trusting what a prompt, or its absence, says.
 //
 // What a twin is FOR is unchanged. It matters most when this hook is dead: its script path
 // broken, its failure reported as a non-blocking status nobody reads. Then settings is all there

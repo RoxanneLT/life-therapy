@@ -52,9 +52,8 @@ check-handoff-contract v5, check-install-platform v3 and check-claude-md v17. Th
 propagate-spines, are census v10, db-inspector v5, grounder v7, implementer v5 and walker v8.
 bash-gate's per-rule fallbacks are answered from existing settings, plus one added ask,
 `Bash(gh pr merge*)`. Outbox §3 asks canon to drop all thirteen pins. Measured by Stéan
-2026-09-11: a settings ask prompts beside a live hook, so twins are live. **Open:** a hook ask was
-silent on the one spelling matching the mid-session `Bash(gh pr merge*)`. Next session: restart,
-re-run it (outbox §3).
+2026-09-11: a settings ask prompts beside a live hook, so twins are live. The one silent hook ask,
+on the spelling matching the mid-session `Bash(gh pr merge*)`, prompted after a restart: closed.
 
 **Pushed 2026-09-11, at Stéan's request: `fb1c669..28e9886`.**
 
