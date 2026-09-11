@@ -46,6 +46,22 @@ test("the pixel is injected either way", () => {
   assert.ok(external.includes("/api/track/open?t=t"), "open tracking survives an external-only email");
 });
 
+test("a link carrying a token is never wrapped, so the token never reaches a request log", () => {
+  // Campaign and drip emails carry a password-reset link, and gift emails a redemption link.
+  // Wrapped, each token would travel in /api/track/click's query string.
+  const reset = `${BASE}/reset-password?token_hash=abc123&type=recovery`;
+  const resetEscaped = `${BASE}/reset-password?token_hash=abc123&amp;type=recovery`;
+  const gift = `${BASE}/gift/redeem?token=g-1`;
+  for (const url of [reset, resetEscaped, gift]) {
+    const out = injectTracking(`<a href="${url}">Go</a>`, "t", BASE);
+    assert.ok(out.includes(`href="${url}"`), `${url} must reach the client untouched`);
+    assert.ok(!out.includes("/api/track/click"), `${url} must not be wrapped`);
+  }
+  // The other direction: the same page without a token is still tracked.
+  const plain = injectTracking(`<a href="${BASE}/reset-password">Go</a>`, "t", BASE);
+  assert.ok(plain.includes("/api/track/click"), "a tokenless link on our host keeps click tracking");
+});
+
 test("unsubscribe and track links are never re-wrapped", () => {
   const html = `<a href="${BASE}/api/unsubscribe?e=x">Unsubscribe</a>`;
   assert.equal(injectTracking(html, "t", BASE).includes("/api/track/click"), false);

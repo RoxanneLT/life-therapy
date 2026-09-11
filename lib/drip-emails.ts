@@ -364,13 +364,6 @@ async function processSingleClient(
     firstName: candidate.firstName || "there",
     unsubscribeUrl: unsubscribeUrl || "",
   };
-  // Escaped before substitution. These placeholders carry client-supplied values —
-  // firstName reaches the database from the PUBLIC booking form and the
-  // unauthenticated newsletter signup — and this file has its OWN copy of
-  // replacePlaceholders, so the escaping added at renderEmail never covered it.
-  // Five copies of that function exist across lib/; #18 fixed exactly one.
-  const safeVariables = escapeTemplateVariables(variables);
-
   // Generate password reset URL only if the email template uses it
   const needsPasswordReset =
     dripEmail.bodyHtml.includes("{{passwordResetUrl}}") ||
@@ -383,6 +376,16 @@ async function processSingleClient(
     });
     variables.passwordResetUrl = resetUrl || `${DEFAULT_BASE_URL}/forgot-password`;
   }
+
+  // Escaped before substitution. These placeholders carry client-supplied values —
+  // firstName reaches the database from the PUBLIC booking form and the
+  // unauthenticated newsletter signup — and this file has its OWN copy of
+  // replacePlaceholders, so the escaping added at renderEmail never covered it.
+  // Five copies of that function exist across lib/; #18 fixed exactly one.
+  // Taken AFTER the last variable is assigned. Until 2026-09-11 it came before passwordResetUrl,
+  // and escapeTemplateVariables returns a copy, so the reset link never reached the email: the
+  // placeholder went out as its own literal text. Nothing may be added to `variables` below here.
+  const safeVariables = escapeTemplateVariables(variables);
 
   let bodyHtml = replacePlaceholders(dripEmail.bodyHtml, safeVariables);
 

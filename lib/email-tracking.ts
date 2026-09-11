@@ -30,6 +30,21 @@ export function isTrackableTarget(url: string): boolean {
 }
 
 /**
+ * Does this link carry a token in its query string? A password reset (`token_hash`), a gift
+ * redemption or a booking confirmation (`token`). An href in rendered HTML may have its `&`
+ * escaped, so that is undone before parsing. Unparseable is false, and such a link is never
+ * wrapped anyway, because `isTrackableTarget` refuses it.
+ */
+function carriesToken(url: string): boolean {
+  try {
+    const query = new URL(url.replaceAll("&amp;", "&")).searchParams;
+    return query.has("token") || query.has("token_hash");
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The READER's decision, kept in this file alongside the writer's on purpose:
  * they are two halves of one rule, and the whole incident was them living apart.
  *
@@ -93,6 +108,13 @@ export function injectTracking(html: string, trackingId: string, baseUrl: string
     /href="(https?:\/\/[^"]+)"/gi,
     (_match, url: string) => {
       if (url.includes("/api/unsubscribe") || url.includes("/api/track/")) {
+        return `href="${url}"`;
+      }
+      // A link that carries a token is never wrapped (2026-09-11). Wrapping copies the whole URL,
+      // token included, into the query string of /api/track/click, and from there into every
+      // request log that route writes. A reset or gift-redemption token in a log is a credential
+      // in a log. Losing the click statistic is the cheaper loss.
+      if (carriesToken(url)) {
         return `href="${url}"`;
       }
       // Only wrap what the redirector will actually forward. It accepts our own
