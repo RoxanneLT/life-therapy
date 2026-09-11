@@ -30,15 +30,26 @@ export function isTrackableTarget(url: string): boolean {
 }
 
 /**
- * Does this link carry a token in its query string? A password reset (`token_hash`), a gift
- * redemption or a booking confirmation (`token`). An href in rendered HTML may have its `&`
- * escaped, so that is undone before parsing. Unparseable is false, and such a link is never
- * wrapped anyway, because `isTrackableTarget` refuses it.
+ * The parameter names that carry a credential in a link. Ours today are `token_hash` (a password
+ * reset) and `token` (a gift redemption, a booking confirmation). The rest are what an auth link
+ * would carry if one is ever sent: `code` for a PKCE sign-in through /auth/callback, `access_token`
+ * and `refresh_token` for an implicit one, `otp` for a one-time code. None is sent on 2026-09-11,
+ * and that is why they are listed now: the day one is added, nobody will think of this file.
+ * A false positive only loses a click statistic, so the list errs wide.
+ */
+const CREDENTIAL_PARAMS = ["token", "token_hash", "code", "access_token", "refresh_token", "otp"];
+
+/**
+ * Does this link carry a credential? In the query string, or in the fragment, where an implicit
+ * sign-in puts its tokens. An href in rendered HTML may have its `&` escaped, so that is undone
+ * before parsing. Unparseable is false, and such a link is never wrapped anyway, because
+ * `isTrackableTarget` refuses it.
  */
 function carriesToken(url: string): boolean {
   try {
-    const query = new URL(url.replaceAll("&amp;", "&")).searchParams;
-    return query.has("token") || query.has("token_hash");
+    const parsed = new URL(url.replaceAll("&amp;", "&"));
+    const fragment = new URLSearchParams(parsed.hash.slice(1));
+    return CREDENTIAL_PARAMS.some((p) => parsed.searchParams.has(p) || fragment.has(p));
   } catch {
     return false;
   }

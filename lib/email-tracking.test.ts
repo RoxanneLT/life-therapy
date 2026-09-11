@@ -62,6 +62,24 @@ test("a link carrying a token is never wrapped, so the token never reaches a req
   assert.ok(plain.includes("/api/track/click"), "a tokenless link on our host keeps click tracking");
 });
 
+test("a sign-in link no email sends yet is never wrapped either", () => {
+  // None of these is sent on 2026-09-11. Each is what an auth link would carry if one were added.
+  const links = [
+    `${BASE}/auth/callback?code=pkce-1&next=/portal`,
+    `${BASE}/auth/callback?next=/portal&amp;code=pkce-2`,
+    `${BASE}/auth/callback#access_token=a1&refresh_token=r1&type=magiclink`,
+    `${BASE}/verify?otp=123456`,
+  ];
+  for (const url of links) {
+    const out = injectTracking(`<a href="${url}">Sign in</a>`, "t", BASE);
+    assert.ok(out.includes(`href="${url}"`), `${url} must reach the client untouched`);
+    assert.ok(!out.includes("/api/track/click"), `${url} must not be wrapped`);
+  }
+  // A fragment that carries no credential is an ordinary anchor, and stays tracked.
+  const anchor = injectTracking(`<a href="${BASE}/sessions#pricing">Prices</a>`, "t", BASE);
+  assert.ok(anchor.includes("/api/track/click"), "a plain #anchor on our host keeps click tracking");
+});
+
 test("unsubscribe and track links are never re-wrapped", () => {
   const html = `<a href="${BASE}/api/unsubscribe?e=x">Unsubscribe</a>`;
   assert.equal(injectTracking(html, "t", BASE).includes("/api/track/click"), false);
