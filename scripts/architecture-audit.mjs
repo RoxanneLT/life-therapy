@@ -2279,6 +2279,32 @@ check("secrets: the cron secret is never read from the URL", () => {
   }
 });
 
+check("storage: an upload's key is one the server built, never a caller's name", () => {
+  // A storage key reaches a URL as it stands, and the URL parser reads more spellings as a dot
+  // segment than a test for `..` does, so any part of a caller's file name in a key can point it at
+  // another path (dev-standards/ledgers/LESSONS.md L-102). Until 2026-09-14 all three upload routes
+  // took the extension from the name. So a file that reads a request and writes to storage must pass
+  // a key built by `uploadPath()`, whose extension comes from a closed map of types. The first
+  // argument is read as written: a template literal or a call there fails, because it is not the
+  // name of a key uploadPath() built. Writes that read no request (the invoice PDFs) build their own.
+  for (const f of [...walk(APP), ...walk(LIB)].filter((p) => !isTest(p))) {
+    const src = code(read(f));
+    if (!/\b(?:request|req)\.(?:formData|json)\(\)/.test(src)) continue;
+    for (const m of src.matchAll(/\.(upload|createSignedUploadUrl)\(\s*([^,)]*)/g)) {
+      const key = m[2].trim();
+      const built = /^[A-Za-z_$][\w$]*$/.test(key) && new RegExp(`\\bconst ${key} = uploadPath\\(`).test(src);
+      if (!built) {
+        fail(
+          "storage",
+          rel(f),
+          `\`.${m[1]}(${key || "…"}, …)\` takes a key that uploadPath() did not build`,
+          "build the key with uploadPath(uploadExtension(bucket, type)) from lib/upload-types.ts, never from the file's name",
+        );
+      }
+    }
+  }
+});
+
 check("secrets: no hardcoded fallback for a secret", () => {
   // `process.env.SOME_KEY || "a-literal"` means the LITERAL is the secret whenever
   // the env var is unset — and the literal is in the repo. For a signing/HMAC key

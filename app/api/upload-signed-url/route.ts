@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { prisma } from "@/lib/prisma";
+import { isUploadBucket, uploadExtension, uploadPath } from "@/lib/upload-types";
 
 /**
  * Generate a signed upload URL for direct browser→Supabase uploads.
@@ -39,17 +40,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowedBuckets = ["images", "products"];
-  if (!allowedBuckets.includes(bucket)) {
+  if (!isUploadBucket(bucket)) {
     return NextResponse.json(
       { error: "Invalid bucket" },
       { status: 400 },
     );
   }
 
-  const ext = fileName.split(".").pop();
-  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const path = `uploads/${safeName}`;
+  // `fileName` is only required, never read into the key: see lib/upload-types.ts.
+  const ext = uploadExtension(bucket, contentType);
+  if (!ext) {
+    return NextResponse.json(
+      { error: "Invalid file type for this bucket" },
+      { status: 400 },
+    );
+  }
+
+  const path = uploadPath(ext);
 
   const { data, error } = await supabaseAdmin.storage
     .from(bucket)

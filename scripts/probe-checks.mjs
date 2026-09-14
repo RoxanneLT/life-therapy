@@ -490,6 +490,16 @@ const MUTATIONS = [
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {
+    // The upload key as all three routes built it until 2026-09-14: the extension read off the name
+    // the caller sent (L-102). It stays a plain identifier, as before, so only the check's question
+    // "did uploadPath() build it?" can see it.
+    path: "app/api/upload-signed-url/route.ts",
+    named: true,
+    find: "  const path = uploadPath(ext);\n",
+    replace: "  const path = `uploads/${Date.now()}.${fileName.split(\".\").pop()}`;\n",
+    expects: ["storage: an upload's key is one the server built, never a caller's name"],
+  },
+  {
     // A login created holding a password somebody chose, which is how registration minted one. That
     // SETS_PASSWORD sees createUser at all is proven by the clean tree: without it this entry would
     // be reported as a file that no longer sets a password.

@@ -2,13 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { prisma } from "@/lib/prisma";
+import { uploadExtension, uploadPath } from "@/lib/upload-types";
 
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/svg+xml",
-];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 
 export async function POST(request: NextRequest) {
@@ -37,7 +32,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  const ext = uploadExtension("images", file.type);
+  if (!ext) {
     return NextResponse.json(
       { error: "Invalid file type. Allowed: JPEG, PNG, WebP, SVG" },
       { status: 400 }
@@ -51,9 +47,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const ext = file.name.split(".").pop();
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const path = `uploads/${filename}`;
+  const path = uploadPath(ext);
 
   const { error: uploadError } = await supabaseAdmin.storage
     .from("images")

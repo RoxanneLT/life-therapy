@@ -80,9 +80,12 @@ two of them.
 without exploit detail. Its LOW residuals 1, 4 and 5 were fixed and pushed the same day: `02b0a2b`,
 `68f5e71` and `1e3217a` (`008a868..1e3217a`). A guard that is a check now pins its refusal too.
 Canon removed every pin at `c06491c`, and `check-kit-drift` from its HEAD shows no drift here.
-Canon filed CF-5 at `98f9636` (L-15 corrected) and shipped bash-gate v7. Its three rows moved
-here the same day, unpushed: the probe run `--against` the old v6 found 3 looser cases, all
-declared by canon, and 44 stricter. Outbox §3 asks canon to drop the three pins.
+Canon filed CF-5 at `98f9636`. Its v7 rows moved here and were pushed 2026-09-14
+(`5c14e38..25b2676`, with dependabot's `5c14e38` merged, not rebased: canon cites `f04797b`).
+Stéan kept a dry-run push asking. Then, unpushed: bash-gate v8 and agent-write-scope v6 (canon
+`d29c021`; `--against` v7: 4 looser, all declared, 3 stricter), which carry L-104, and L-102:
+upload keys now come from `lib/upload-types.ts`, never a caller's file name, held by an audit
+check and a revert probe. Outbox §3 asks canon to drop the four pins.
 
 **Next action:** none queued. Canon lifts the outbox from HEAD. Before re-running `--emit-open`,
 check `git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
