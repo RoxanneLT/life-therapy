@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v7 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v8 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -59,6 +59,14 @@
  * gates, failing on any verdict that got LOOSER unless this version declares it. A replacement
  * gate's own cases assert what its author intended, and the previous corpus asserts the old
  * mechanisms, so a regression sits in the gap between the two suites, where neither has a case.
+ *
+ * v8 (2026-09-11) is yoros CF-11: the message mask read only a standalone `-m`, so `git commit -am
+ * "never use --no-verify"` was denied for its own message. Testing that fix found two holes the mask
+ * had held since v6, both in the other direction: it blanked a double-quoted message's `$(…)` and
+ * backticks, which the shell runs, so `git commit -m "$(git push -f)"` was ALLOWED; and it began a
+ * message at a `-m` that was itself inside quotes, so `echo " -m '" && git push -f && echo "'"` was
+ * masked from the inner quote onward and allowed. See "THE FLAG IS `-m`". Against v7: 4 verdicts
+ * looser, all four the message, and 3 stricter.
  *
  * A REASON IS ALWAYS SET, INCLUDING ON ALLOW. An empty reason makes an allow
  * indistinguishable from a hook that ran and decided nothing.
@@ -183,17 +191,26 @@
 // moves to v7 and the dates stay. The gate itself went in by canon's install step: the new probe run
 // `--against` this file's v6, 181 cases through both, 3 looser (all 3 in canon's `LOOSENED`), 44
 // stricter.
+//
+// v8 (canon `dc7b225`, adopted 2026-09-14) was read the same way, from canon's v7 and v8. Every
+// rule is byte-identical: `isForcePush`, `FORCE_LONG`, `SHORT_CLUSTER_WITH_F`, `isDestructiveRm`,
+// `LETHAL_TARGET`, `isForceRefspec`, `isNoVerify`, `isHardReset` and CANON_DENY. What moved is the
+// commit-message mask upstream of them: it reads `-am`, `-qm`, `-m"…"` and `--message="…"`, and it
+// no longer masks a double-quoted `-m` value the shell would run (`$(…)` inside it). So
+// `@probed-kit` moves to v8 and the dates stay. The probe run `--against` this file's v7 found 195
+// cases through both, 4 looser (all 4 in canon's `LOOSENED`, each a message now read as a
+// message), and 3 stricter.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v7
+// @probed-kit bash-gate v8
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v7
+// @probed-kit bash-gate v8
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -659,23 +676,25 @@ function segments(command) {
 }
 
 /**
- * 1 for each character inside quotes (or a quote itself), else 0. Bash's rules: nothing escapes in
- * single quotes; in double quotes `\` escapes the next character; outside, `\` quotes one.
+ * For each character inside quotes (or a quote itself) 1 if single, 2 if double, else 0. Bash's
+ * rules: nothing escapes in single quotes; in double quotes `\` escapes the next character; outside,
+ * `\` quotes one.
  */
 function quoteMap(s) {
   const q = new Uint8Array(s.length);
   let state = "";
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    const mark = c === '"' || state === '"' ? 2 : 1;
     if (state === "") {
       if (c === "\\") i++;
       else if (c === "'" || c === '"') {
         state = c;
-        q[i] = 1;
+        q[i] = mark;
       }
     } else {
-      q[i] = 1;
-      if (state === '"' && c === "\\" && i + 1 < s.length) q[++i] = 1;
+      q[i] = mark;
+      if (state === '"' && c === "\\" && i + 1 < s.length) q[++i] = mark;
       else if (c === state) state = "";
     }
   }
@@ -691,23 +710,50 @@ function quoteMap(s) {
  *
  * A backslash escapes only inside DOUBLE quotes. v6 honoured it inside single quotes too, so
  * `echo -m 'a\' && rm -rf /* && echo 'b'` masked everything up to the last `'` (pleks CF-9 ③).
+ *
+ * THE FLAG IS `-m` WHEREVER GIT READS ONE (v8, yoros CF-11). Until v8 only a standalone `-m` counted,
+ * so `git commit -am "never use --no-verify"`, the commonest way a commit is typed, was denied for
+ * its own message. Now a short cluster whose LAST letter is `m` counts too (`-am`, `-qm`), and so
+ * does a value attached by a quote (`-m"…"`, `--message="…"`). Not when a letter before the `m`
+ * takes a value: in `-Fm` the `m` is F's file, so a quoted `"--no-verify"` after it is the flag.
  */
+const isSpace = (c) => c === " " || c === "\t" || c === "\r" || c === "\n";
+
+/** The length of a message flag starting at `i` (`-m`, `-am`, `--message`), or 0. */
+function messageFlagAt(command, i) {
+  if (command[i] !== "-" || (i > 0 && !isSpace(command[i - 1]))) return 0;
+  if (command.startsWith("--message", i)) return 9;
+  let j = i + 1;
+  while (j < command.length && /[A-Za-z]/.test(command[j])) j++;
+  const cluster = command.slice(i + 1, j);
+  if (!cluster.endsWith("m") || [...cluster.slice(0, -1)].some((c) => "mFcCtuS".includes(c))) return 0;
+  return j - i;
+}
+
 function maskMessageText(command) {
+  const quoted = quoteMap(command);
+  // A double-quoted message still runs its `$(…)` and backticks, and where a substitution inside
+  // quotes ends is the shell's to say, not this scan's. So where one is double-quoted, nothing is
+  // masked, and every flag rule reads the whole command. Until v8 `git commit -m "$(git push -f)"`
+  // passed. In single quotes it is text, and `-m '$(…)'` is masked as before.
+  for (let p = 0; p < command.length; p++) {
+    if (quoted[p] === 2 && (command[p] === "`" || (command[p] === "$" && command[p + 1] === "("))) return command;
+  }
   const out = command.split("");
-  const isSpace = (c) => c === " " || c === "\t" || c === "\r" || c === "\n";
   let i = 0;
   while (i < command.length) {
-    let flagLen = 0;
-    if (command.startsWith("--message", i)) flagLen = 9;
-    else if (command.startsWith("-m", i)) flagLen = 2;
+    // Only an UNQUOTED `-m` is a flag: in `echo " -m '" && …` it is text, and v7 masked from its
+    // quote to the next one, over the command between.
+    const flagLen = quoted[i] ? 0 : messageFlagAt(command, i);
     const after = command[i + flagLen];
-    const standalone = flagLen > 0 && (i === 0 || isSpace(command[i - 1])) && (after === undefined || isSpace(after));
-    if (!standalone) {
+    const spaced = after === undefined || isSpace(after);
+    const attached = after === '"' || after === "'" || (after === "=" && command[i + 1] === "-");
+    if (flagLen === 0 || !(spaced || attached)) {
       i++;
       continue;
     }
-    let k = i + flagLen;
-    while (k < command.length && isSpace(command[k])) k++;
+    let k = i + flagLen + (after === "=" ? 1 : 0);
+    while (spaced && k < command.length && isSpace(command[k])) k++;
     const quote = command[k];
     if (quote !== '"' && quote !== "'") {
       i = k > i ? k : i + 1;

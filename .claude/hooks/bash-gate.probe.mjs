@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v7 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v8 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -37,6 +37,12 @@
  * `LOOSENED` table below names it with a reason. Run it before you replace your gate, against the
  * copy you are replacing, so your own rules are in the comparison. v6's probe and pleks's corpus were
  * both green over a gate that allowed 15 payloads its predecessor refused.
+ *
+ * v8 (2026-09-11, yoros CF-11) adds the message cases: the mask must read `-am`, `-qm`, `-m"…"` and
+ * `--message="…"`, and must not read `-Fm` or `-cm`, whose `m` is another flag's value. And three
+ * payloads every earlier version allowed — `$(…)` and backticks in a double-quoted message, and a
+ * `-m` inside quotes. `LOOSENED` now accumulates across versions: an adopter at v6 runs `--against`
+ * its v6, and a table describing only v7→v8 would have called v7's declared loosenings undeclared.
  *
  * Run: node .claude/hooks/bash-gate.probe.mjs   (wire into the `probe` script)
  *      node .claude/hooks/bash-gate.probe.mjs --against <the gate you are replacing>
@@ -169,14 +175,22 @@ export function fallbackProblem(fb) {
 }
 
 /**
- * v7: the verdicts THIS version loosens on purpose, by case `why`, each with the reason the previous
- * verdict was wrong. `--against` fails on any looser verdict not named here, and a name that no case
- * carries is itself a finding. Replace the table at each version; it describes one step.
+ * v7: the verdicts canon loosened on purpose, by case `why`, each with the version that loosened it
+ * and the reason the previous verdict was wrong. `--against` fails on any looser verdict not named
+ * here, and a name that no case carries is itself a finding.
+ *
+ * v8: THE TABLE ACCUMULATES. v7 replaced it at each version, as if every adopter moved one step at a
+ * time; yoros and life-therapy were at v6 when v8 shipped, and against v6 v7's own loosenings would
+ * have been undeclared. An entry leaves when its case does.
  */
 export const LOOSENED = {
-  "PUSH -n is --dry-run, not --no-verify (yoros CF-10)": "v6 denied a dry-run push as if it skipped the project's gate",
-  [`MERGE DIRECTION: merging ${PROTECTED_BRANCH} into the working branch leaves ${PROTECTED_BRANCH} alone (pleks CF-8)`]: "v6 read a merge's source as its target and asked",
-  [`MERGE DIRECTION: likewise origin/${PROTECTED_BRANCH}`]: "the same, spelled by remote",
+  "PUSH -n is --dry-run, not --no-verify (yoros CF-10)": "v7: v6 denied a dry-run push as if it skipped the project's gate",
+  [`MERGE DIRECTION: merging ${PROTECTED_BRANCH} into the working branch leaves ${PROTECTED_BRANCH} alone (pleks CF-8)`]: "v7: v6 read a merge's source as its target and asked",
+  [`MERGE DIRECTION: likewise origin/${PROTECTED_BRANCH}`]: "v7: the same, spelled by remote",
+  "MESSAGE CLUSTER: -am's value is the message (yoros CF-11)": "v8: v7 masked only a standalone -m, and read -am's message as flags",
+  "MESSAGE CLUSTER: -qm likewise": "v8: the same, for any cluster git ends in m",
+  'MESSAGE ATTACHED: -m"…" is the message': "v8: v7 masked only a value after a space",
+  'MESSAGE ATTACHED: --message="…" is the message': "v8: the same, for --message=",
 };
 
 /**
@@ -238,7 +252,10 @@ export function fallbackFindings(inv, seenReasons) {
  *
  * PUSH (twenty-five entries; fifteen arrived with canon's v5 cases, four with v7's). A dry-run push
  * asks too: the rule reads `git push`, and a flag that makes it harmless is still a push command a
- * human can glance at. Loosening that is Stéan's call, not a kit move's. "Push policy: never push. Commit, report, and wait" (§3) is a standing rule,
+ * human can glance at. Loosening that was Stéan's call, and on 2026-09-14 Stéan kept it asking. The
+ * hook alone could not have loosened it anyway: the `Bash(git push*)` settings ask prompts beside a
+ * hook that allows (measured 2026-09-11), and a glob cannot except a dry run without thinning the
+ * dead-hook floor under every other push. "Push policy: never push. Commit, report, and wait" (§3) is a standing rule,
  * not a branch rule: Stéan walks the work before it ships, and that is as true on a feature branch
  * as on the deployment. So every case canon lets through because the branch is not `master` is an
  * ask here — including the three safe force forms, which canon is right to keep out of `deny` and
@@ -634,6 +651,22 @@ const CASES = [
   { want: "allow", root: ON_W, why: `MERGE DIRECTION: merging ${P} into the working branch leaves ${P} alone (pleks CF-8)`, payload: bash(`git merge ${P}`) },
   { want: "allow", root: ON_W, why: `MERGE DIRECTION: likewise origin/${P}`, payload: bash(`git merge origin/${P}`) },
   { want: "ask", root: ON_P, why: "MERGE DIRECTION: any merge while on the protected branch lands on it", payload: bash("git merge feature-x") },
+
+  // ── v8: the message flag wherever git reads one (yoros CF-11), and a message that is not inert ──
+  { want: "allow", why: "MESSAGE CLUSTER: -am's value is the message (yoros CF-11)", payload: bash('git commit -am "never use --no-verify"') },
+  { want: "allow", why: "MESSAGE CLUSTER: -qm likewise", payload: bash('git commit -qm "never use --no-verify"') },
+  { want: "allow", why: 'MESSAGE ATTACHED: -m"…" is the message', payload: bash('git commit -m"never use --no-verify"') },
+  { want: "allow", why: 'MESSAGE ATTACHED: --message="…" is the message', payload: bash('git commit --message="never use --no-verify"') },
+  { want: "deny", why: "MESSAGE CLUSTER: -Fm reads the file m, so the next word is a flag", payload: bash('git commit -Fm "--no-verify"') },
+  { want: "deny", why: "MESSAGE CLUSTER: -cm reuses the commit m, so the next word is a flag", payload: bash('git commit -cm "--no-verify"') },
+  { want: "deny", why: "MESSAGE CLUSTER: an n before the m is still --no-verify", payload: bash('git commit -anm "fine message"') },
+  { want: "deny", why: "MESSAGE CLUSTER: a quoted --no-verify before -am is the flag (yoros CF-11)", payload: bash('git commit "--no-verify" -am x') },
+  { want: "deny", why: "MESSAGE FLAG: an -m ending another word starts no message", payload: bash('git commit --author=a-m "--no-verify"') },
+  { want: "deny", why: "SUBSTITUTION: a double-quoted message runs its $(…)", payload: bash('git commit -m "$(git push -f)"') },
+  { want: "deny", why: "SUBSTITUTION: and its backticks", payload: bash('git commit -m "x `rm -rf /`"') },
+  { want: "allow", why: "SUBSTITUTION: in single quotes it is text", payload: bash("git commit -m '$(git push -f)'") },
+  { want: "allow", why: "SUBSTITUTION: one that names nothing gated still passes", payload: bash('git commit -m "build $(date +%F)"') },
+  { want: "deny", why: "QUOTED -m: a -m inside quotes starts no message", payload: bash(`echo " -m '" && git push -f && echo "'"`) },
 
   /* KIT:CONFIG cases — this project's own gates, beyond the canonical set above.
    * ONE PROBE PER RULE YOU ADDED TO THE HOOK'S DENY/ASK BLOCKS, both directions: the
