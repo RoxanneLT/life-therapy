@@ -39,12 +39,28 @@ channel for DDL.
    The REST call above is the only channel that works, for reads as well as DDL. It is `ask`-gated:
    this is **production**, and a statement deserves a glance before it runs.
 
-3. **Re-sync Prisma from the database, don't hand-edit the schema into agreement:**
+3. **Re-sync Prisma from the database — but read the two paragraphs below before running it:**
 
    ```bash
-   npx prisma db pull      # schema.prisma now reflects reality
+   npx prisma db pull      # NOT as-is: see "db pull needs the session pooler"
    npx prisma generate     # regenerate the client at lib/generated/prisma
    ```
+
+   **`db pull` needs the session pooler, and hangs silently without it.** `DATABASE_URL` *and*
+   `DIRECT_URL` both point at the transaction pooler on **6543** — `DIRECT_URL` is not direct, whatever
+   the name says. Introspection needs prepared statements, which transaction pooling does not give it,
+   so `npx prisma db pull` produces **no output at all** and never returns. That looks like a slow
+   query, not a wrong channel, so it gets waited on. Supabase serves a **session-mode** pooler on
+   **5432** at the same host: run `db pull` with `DATABASE_URL` and `DIRECT_URL` rewritten from `:6543/`
+   to `:5432/` and `pgbouncer=true` dropped — build it from the env var in a script, never by pasting
+   the credential.
+
+   **Take the model, not the file.** `db pull` rewrites `schema.prisma` whole: it drops every `@db.Text`
+   annotation, every `//` section banner, and reorders fields. Diff its output against the committed
+   schema with comments stripped, confirm the only difference is the change you applied, then copy
+   **that model's lines** in by hand. Hand-editing into agreement is what this step exists to prevent;
+   pasting a lossy rewrite over a reviewed file is the other failure, and the diff is what tells the
+   two apart. Measured 2026-09-24 adding `availability_overrides."openSlots"`.
 
 4. `npm run check`, then commit `prisma/schema.prisma` with the code that uses the new column.
 

@@ -348,6 +348,9 @@ model AvailabilityOverride {
   reason    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // Which fixed slot start times this override opens. Empty = the whole day, which is what every
+  // override meant before this column existed, so nothing already stored changes meaning.
+  openSlots String[] @default([])
 
   @@unique([date])
   @@map("availability_overrides")
