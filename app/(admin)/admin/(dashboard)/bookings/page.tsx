@@ -36,7 +36,16 @@ type ViewMode = (typeof VALID_VIEWS)[number];
 
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-/** Return the next open business day (SAST). Skips closed days and past-close today. */
+/**
+ * Return the next open business day (SAST). Skips closed days and past-close today.
+ *
+ * Overrides are read here for the same reason lib/availability.ts reads them before its
+ * closed-day test: an override is what opens a day the week normally shuts, so a reader that
+ * only knows the weekday sends the admin past the Saturday Roxanne deliberately opened, and
+ * lands on one she blocked. This is the default date of a page, not a bookability decision —
+ * but it is the same divergence, and it costs one query over seven days to not have it.
+ * Held by `availability: a closed day yields to an override`.
+ */
 async function getNextBusinessDate(): Promise<string> {
   const now = new Date();
   const nowSast = saDateStr(now);
@@ -44,15 +53,34 @@ async function getNextBusinessDate(): Promise<string> {
   const settings = await getSiteSettings();
   const bh = getBusinessHours(settings);
   const candidate = new Date(`${nowSast}T12:00:00Z`);
+  const last = new Date(candidate.getTime() + 6 * 86400000);
+
+  const weekOverrides = await prisma.availabilityOverride.findMany({
+    where: {
+      date: {
+        gte: calendarDate(nowSast),
+        lte: calendarDate(format(last, "yyyy-MM-dd")),
+      },
+    },
+    select: { date: true, isBlocked: true, endTime: true },
+  });
+  const overrideByDate = new Map(
+    weekOverrides.map((o) => [formatInTimeZone(o.date, "UTC", "yyyy-MM-dd"), o]),
+  );
 
   for (let i = 0; i < 7; i++) {
     const d = new Date(candidate.getTime() + i * 86400000);
+    const dateStr = format(d, "yyyy-MM-dd");
     const dayHours = bh[DAY_NAMES[d.getUTCDay()]];
+    const override = overrideByDate.get(dateStr);
 
-    if (!dayHours || dayHours.closed) continue;
-    // If today but past closing time, skip to next day
-    if (i === 0 && nowTimeSast >= dayHours.close) continue;
-    return format(d, "yyyy-MM-dd");
+    if (override?.isBlocked) continue;
+    if ((!dayHours || dayHours.closed) && !override) continue;
+    // If today but past closing time, skip to next day. An override's own close wins; a day the
+    // override opened with no close of its own runs to the last slot, so nothing skips it.
+    const closesAt = override?.endTime ?? (dayHours?.closed ? null : dayHours?.close);
+    if (i === 0 && closesAt && nowTimeSast >= closesAt) continue;
+    return dateStr;
   }
 
   return nowSast;

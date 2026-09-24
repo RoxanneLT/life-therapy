@@ -500,6 +500,16 @@ const MUTATIONS = [
     expects: ["slots: one list of slot start times"],
   },
   {
+    // The closed-day test as getAvailableSlots held it until 2026-09-24: shut on the weekday, with
+    // no yield to the override that was read a line earlier. Planted where it stood, so the fire is
+    // the real defect and not a lookalike.
+    path: "lib/availability.ts",
+    named: true,
+    find: "  if (dayHours.closed && !override) return { slots: [], freeBusyFailed: false };\n",
+    replace: "  if (dayHours.closed) return { slots: [], freeBusyFailed: false };\n",
+    expects: ["availability: a closed day yields to an override"],
+  },
+  {
     // The upload key as all three routes built it until 2026-09-14: the extension read off the name
     // the caller sent (L-102). It stays a plain identifier, as before, so only the check's question
     // "did uploadPath() build it?" can see it.

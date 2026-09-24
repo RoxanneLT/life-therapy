@@ -59,19 +59,26 @@ function timeRangesOverlap(
 // the booking engine on the old times, which reads as a working change and is not one. Held by
 // `slots: one list of slot start times`.
 
+// `open`/`close` are null when no window applies: a day that is closed in business hours and
+// opened by an override has no stored window to read. Its `open`/`close` are whatever was last
+// saved for a day nobody works — the defaults say 09:00–13:00 for Saturday — so honouring them
+// would silently drop the afternoon slots from a day the admin deliberately opened. Null means
+// every slot, and the override's own startTime/endTime narrow it when the admin sets them.
 function generateSlots(
-  open: string,
-  close: string,
+  open: string | null,
+  close: string | null,
   duration: number,
   _buffer: number
 ): TimeSlot[] {
-  const openMin = parseTime(open);
-  const closeMin = parseTime(close);
+  const openMin = open === null ? null : parseTime(open);
+  const closeMin = close === null ? null : parseTime(close);
 
   return ALLOWED_SLOT_START_TIMES
     .filter((start) => {
       const startMin = parseTime(start);
-      return startMin >= openMin && startMin + duration <= closeMin;
+      if (openMin !== null && startMin < openMin) return false;
+      if (closeMin !== null && startMin + duration > closeMin) return false;
+      return true;
     })
     .map((start) => ({
       start,
@@ -102,14 +109,22 @@ export async function getAvailableSlots(
   const noonUtc = new Date(`${dateStr}T12:00:00Z`);
   const dayKey = DAY_MAP[noonUtc.getUTCDay()];
   const dayHours: BusinessHoursDay = businessHours[dayKey];
-  if (dayHours.closed) return { slots: [], freeBusyFailed: false };
 
-  // 2. Check availability override — midnight UTC for @db.Date
+  // 2. Check availability override — midnight UTC for @db.Date.
+  //
+  // Read BEFORE the closed-day test, not after. Until 2026-09-24 the closed-day test returned
+  // above this lookup, while getAvailableDates below let a closed day through when an override
+  // existed. So an override on a Saturday put the date in the client's picker and then offered
+  // no times: the two functions answered differently about the same day, and each read correctly
+  // on its own. Every reason a day is shut — the weekday, a holiday — now yields to an override,
+  // which is the whole point of an override. Held by `availability: a closed day yields to an
+  // override`.
   const dateUtc = calendarDate(dateStr);
   const override = await prisma.availabilityOverride.findUnique({
     where: { date: dateUtc },
   });
   if (override?.isBlocked) return { slots: [], freeBusyFailed: false };
+  if (dayHours.closed && !override) return { slots: [], freeBusyFailed: false };
 
   // 3. Public holidays are closed — unless an override deliberately opens the day.
   //
@@ -122,8 +137,8 @@ export async function getAvailableSlots(
     return { slots: [], freeBusyFailed: false };
   }
 
-  const openTime = override?.startTime || dayHours.open;
-  const closeTime = override?.endTime || dayHours.close;
+  const openTime = override?.startTime || (dayHours.closed ? null : dayHours.open);
+  const closeTime = override?.endTime || (dayHours.closed ? null : dayHours.close);
 
   // 4. Generate candidate slots with buffer between sessions
   const slotDuration = sessionConfig.durationMinutes;

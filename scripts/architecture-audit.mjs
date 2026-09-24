@@ -2332,6 +2332,39 @@ check("slots: one list of slot start times", () => {
   }
 });
 
+check("availability: a closed day yields to an override", () => {
+  // Until 2026-09-24 `getAvailableSlots` returned on a closed weekday BEFORE it read the override,
+  // while `getAvailableDates` beside it let that same day through when an override existed. So an
+  // override on a Saturday put the date in the client's picker and then offered no times — one day,
+  // two answers, and both functions read correctly on their own. The defect lived in the gap between
+  // them, which is the shape no reviewer of either diff catches (CLAUDE.md §6, the tracked-link scar).
+  //
+  // An override exists to open a day that is otherwise shut, so every reason a day is shut has to
+  // yield to one. Stated as: in a file that reads availability overrides, a `.closed` test that
+  // shuts the day names the override in the same condition. Write it as
+  // `if (dayHours.closed && !override)`; a different spelling fails here rather than silently.
+  //
+  // Only `if` conditions, not every `.closed`: the open/close window in getAvailableSlots reads
+  // `override?.endTime || (dayHours.closed ? null : …)`, which is qualified — by an `override`
+  // standing to the LEFT of the `.closed`. A proximity window that reached backwards to admit that
+  // would also admit the defect this check exists for, whose override lookup sits one line above it.
+  // The condition is the honest unit, because a condition is what shuts the day.
+  for (const f of [...walk(APP), ...walk(LIB)].filter((p) => !isTest(p))) {
+    const src = code(read(f));
+    if (!/\bavailabilityOverride\b/.test(src)) continue;
+    for (const m of src.matchAll(/if\s*\(([^()]*\.closed\b[^()]*)\)/g)) {
+      if (!/\boverride\b/.test(m[1])) {
+        fail(
+          "availability",
+          rel(f),
+          "a closed-day test that an override cannot open",
+          "qualify it with `&& !override` — a day the admin deliberately opened must not stay shut in one reader and open in the other",
+        );
+      }
+    }
+  }
+});
+
 check("storage: an upload's key is one the server built, never a caller's name", () => {
   // A storage key reaches a URL as it stands, and the URL parser reads more spellings as a dot
   // segment than a test for `..` does, so any part of a caller's file name in a key can point it at
