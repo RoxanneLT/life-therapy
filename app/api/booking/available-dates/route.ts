@@ -25,14 +25,24 @@ export async function GET(request: NextRequest) {
   // Admin users can see today's date, bypass min notice, and book further ahead
   let includeToday = false;
   let maxDaysOverride: number | undefined;
+  let skipMinNotice = false;
   if (adminMode) {
     const admin = await getAuthenticatedAdmin().catch(() => null);
     if (admin?.adminUser?.role === "super_admin" || admin?.adminUser?.role === "marketing") {
       includeToday = true;
+      skipMinNotice = true; // the same bypass the admin slot list gets
       maxDaysOverride = 90; // 3 months for admin
     }
   }
 
-  const dates = await getAvailableDates({ includeToday, maxDaysOverride });
+  // The session type was resolved above and then not used: the date list was answering "is this
+  // day open" for nobody in particular. It now answers "can THIS session be booked that day",
+  // which is the question the picker in front of the client is asking.
+  const dates = await getAvailableDates({
+    includeToday,
+    maxDaysOverride,
+    skipMinNotice,
+    sessionConfig: config,
+  });
   return NextResponse.json({ dates });
 }

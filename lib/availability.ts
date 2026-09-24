@@ -4,8 +4,12 @@ import {
   getBusinessHours,
   type BusinessHoursDay,
 } from "@/lib/settings";
-import { getFreeBusy } from "@/lib/graph";
-import { ALLOWED_SLOT_START_TIMES, type SessionTypeConfig } from "@/lib/booking-config";
+import { getFreeBusy, MAX_FREE_BUSY_DAYS } from "@/lib/graph";
+import {
+  ALLOWED_SLOT_START_TIMES,
+  SESSION_TYPES,
+  type SessionTypeConfig,
+} from "@/lib/booking-config";
 import { addDays, eachDayOfInterval } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { saToday, saInstant, saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
@@ -93,6 +97,133 @@ function isoToTimeString(timeStr: string): string {
   return `${match[1]}:${match[2]}`;
 }
 
+/** What an override says about one day. Only the fields a slot decision reads. */
+interface DayOverride {
+  isBlocked: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  openSlots: string[];
+  reason: string | null;
+}
+
+interface DayInputs {
+  dateStr: string;
+  dayHours: BusinessHoursDay;
+  override: DayOverride | null;
+  /** Graph busy ranges falling on this day, and this day only. */
+  busy: { start: string; end: string }[];
+  /** Bookings held on this day in our own DB. */
+  bookings: { startTime: string; endTime: string }[];
+  durationMinutes: number;
+  bufferMinutes: number;
+  minNoticeMs: number;
+  nowMs: number;
+  skipMinNotice: boolean;
+}
+
+/**
+ * Every rule about what can be booked on one day, in one place.
+ *
+ * This is the whole reason the function exists: getAvailableSlots and getAvailableDates used to
+ * each carry their own subset, and they disagreed — a day the date list offered could turn out to
+ * have no times on it, and until 2026-09-24 an override could open a Saturday in one and not the
+ * other. A date is now offered if and only if this returns something for it, because it is the
+ * same call. Pure: everything it reads is an argument, so one fetch can answer a whole window.
+ */
+function slotsForDay(i: DayInputs): { slots: TimeSlot[]; closedReason: string | null } {
+  const { dateStr, dayHours, override } = i;
+  const shut = (closedReason: string) => ({ slots: [], closedReason });
+
+  // An override is read BEFORE the closed-day test, not after: every reason a day is shut — the
+  // weekday, a public holiday — yields to one, because that is what an override is for. Recurring
+  // series have skipped holidays since they were built; single bookings never checked, so
+  // Christmas Day was offered on the public form. Held by `availability: a closed day yields to
+  // an override`.
+  // The reason travels with the refusal, because the admin screens that reschedule a whole series
+  // need to say WHY a date was skipped, and the only alternative was each of them re-deriving the
+  // answer by hand — which is exactly how two of them ended up checking holidays and blocks while
+  // knowing nothing about business hours or an override's open slots.
+  if (override?.isBlocked) {
+    return shut(`Day blocked${override.reason ? `: ${override.reason}` : ""}`);
+  }
+  if (dayHours.closed && !override) return shut("Closed that day");
+  if (isSAPublicHolidayOn(dateStr) && !override) return shut("Public holiday");
+
+  const openTime = override?.startTime || (dayHours.closed ? null : dayHours.open);
+  const closeTime = override?.endTime || (dayHours.closed ? null : dayHours.close);
+  const windowed = generateSlots(openTime, closeTime, i.durationMinutes, i.bufferMinutes);
+
+  // An override may open only the slots the admin ticked. Empty means the whole day, which is what
+  // every override meant before the column existed — so an old row and a "full day" row are the
+  // same row, and neither needs a second flag to say which it is.
+  const openSlots: readonly string[] = override?.openSlots ?? [];
+  const candidates =
+    openSlots.length > 0 ? windowed.filter((s) => openSlots.includes(s.start)) : windowed;
+  if (candidates.length === 0) return shut("No slot fits that day's hours");
+
+  const buffer = i.bufferMinutes;
+  const blockedRanges = [
+    ...i.busy.map((b) => {
+      const start = parseTime(isoToTimeString(b.start));
+      const end = parseTime(isoToTimeString(b.end));
+      return { start: formatTime(Math.max(0, start - buffer)), end: formatTime(end + buffer) };
+    }),
+    ...i.bookings.map((b) => ({
+      start: formatTime(Math.max(0, parseTime(b.startTime) - buffer)),
+      end: formatTime(parseTime(b.endTime) + buffer),
+    })),
+  ];
+
+  const slots = candidates.filter((slot) => {
+    const slotUtc = saInstant(dateStr, slot.start);
+    if (!i.skipMinNotice && slotUtc.getTime() - i.nowMs < i.minNoticeMs) return false;
+    return !blockedRanges.some((r) => timeRangesOverlap(slot.start, slot.end, r.start, r.end));
+  });
+
+  // No closedReason when the day was open and simply filled: the day's shape allowed it and
+  // something already booked took it. The callers that care say so in their own words.
+  return { slots, closedReason: null };
+}
+
+/**
+ * Which slot start times a day OFFERS, before anything is booked into them, and why none if none.
+ *
+ * For callers that already know about occupancy and were missing the day's shape — the series
+ * reschedule, which checked public holidays and a blocked override by hand and knew nothing about
+ * business hours or an override that opens only some slots. It asks the same `slotsForDay` the
+ * booking form asks, with the occupancy inputs empty, so there is one answer to "is this day open
+ * at this time" and no second copy to drift.
+ *
+ * Held by `availability: nothing works out a day's shape by hand`.
+ */
+export async function getDayOpening(
+  dateStr: string,
+  durationMinutes: number,
+): Promise<{ starts: string[]; closedReason: string | null }> {
+  const settings = await getSiteSettings();
+  const businessHours = getBusinessHours(settings);
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`);
+
+  const override = await prisma.availabilityOverride.findUnique({
+    where: { date: calendarDate(dateStr) },
+  });
+
+  const { slots, closedReason } = slotsForDay({
+    dateStr,
+    dayHours: businessHours[DAY_MAP[noonUtc.getUTCDay()]],
+    override,
+    busy: [],
+    bookings: [],
+    durationMinutes,
+    bufferMinutes: settings.bookingBufferMinutes ?? 15,
+    minNoticeMs: 0,
+    nowMs: Date.now(),
+    skipMinNotice: true,
+  });
+
+  return { starts: slots.map((s) => s.start), closedReason };
+}
+
 /**
  * Get available time slots for a specific date and session type.
  * @param dateStr — SAST calendar date string, e.g. "2026-02-10"
@@ -105,95 +236,97 @@ export async function getAvailableSlots(
   const settings = await getSiteSettings();
   const businessHours = getBusinessHours(settings);
 
-  // 1. Day of week — use noon UTC to avoid any date-boundary ambiguity
+  // Noon UTC to avoid any date-boundary ambiguity; midnight UTC for the @db.Date column.
   const noonUtc = new Date(`${dateStr}T12:00:00Z`);
-  const dayKey = DAY_MAP[noonUtc.getUTCDay()];
-  const dayHours: BusinessHoursDay = businessHours[dayKey];
-
-  // 2. Check availability override — midnight UTC for @db.Date.
-  //
-  // Read BEFORE the closed-day test, not after. Until 2026-09-24 the closed-day test returned
-  // above this lookup, while getAvailableDates below let a closed day through when an override
-  // existed. So an override on a Saturday put the date in the client's picker and then offered
-  // no times: the two functions answered differently about the same day, and each read correctly
-  // on its own. Every reason a day is shut — the weekday, a holiday — now yields to an override,
-  // which is the whole point of an override. Held by `availability: a closed day yields to an
-  // override`.
+  const dayHours: BusinessHoursDay = businessHours[DAY_MAP[noonUtc.getUTCDay()]];
   const dateUtc = calendarDate(dateStr);
+
   const override = await prisma.availabilityOverride.findUnique({
     where: { date: dateUtc },
   });
-  if (override?.isBlocked) return { slots: [], freeBusyFailed: false };
-  if (dayHours.closed && !override) return { slots: [], freeBusyFailed: false };
 
-  // 3. Public holidays are closed — unless an override deliberately opens the day.
-  //
-  // Recurring series have skipped holidays since they were built; single bookings
-  // never checked, so Christmas Day was offered on the public booking form and a
-  // client could book it. The same day, two answers, decided by which form they
-  // happened to use. An explicit AvailabilityOverride is the escape hatch, exactly
-  // as it is for a normally-closed weekday — Roxanne can still choose to work one.
-  if (isSAPublicHolidayOn(dateStr) && !override) {
-    return { slots: [], freeBusyFailed: false };
-  }
+  const { slots: busy, failed: freeBusyFailed } = await getFreeBusy(
+    saDayStart(dateStr),
+    saDayEnd(dateStr),
+  );
 
-  const openTime = override?.startTime || (dayHours.closed ? null : dayHours.open);
-  const closeTime = override?.endTime || (dayHours.closed ? null : dayHours.close);
-
-  // 4. Generate candidate slots with buffer between sessions
-  const slotDuration = sessionConfig.durationMinutes;
-  const buffer = settings.bookingBufferMinutes ?? 15;
-  const windowed = generateSlots(openTime, closeTime, slotDuration, buffer);
-
-  // An override may open only the slots the admin ticked. Empty means the whole day, which is what
-  // every override meant before the column existed — so an old row and a "full day" row are the
-  // same row, and neither needs a second flag to say which it is.
-  const openSlots: readonly string[] = override?.openSlots ?? [];
-  const candidates =
-    openSlots.length > 0 ? windowed.filter((s) => openSlots.includes(s.start)) : windowed;
-
-  if (candidates.length === 0) return { slots: [], freeBusyFailed: false };
-
-  // 5. Get Exchange calendar busy times (proper UTC boundaries for SAST day)
-  const dayStartUtc = saDayStart(dateStr);
-  const dayEndUtc = saDayEnd(dateStr);
-  const { slots: busyTimes, failed: freeBusyFailed } = await getFreeBusy(dayStartUtc, dayEndUtc);
-
-  // 6. Get existing bookings from our DB (resilience layer)
-  const existingBookings = await prisma.booking.findMany({
-    where: {
-      date: dateUtc,
-      status: { in: ["pending", "confirmed"] },
-    },
+  // Our own bookings are the resilience layer: they hold when Graph does not answer.
+  const bookings = await prisma.booking.findMany({
+    where: { date: dateUtc, status: { in: ["pending", "confirmed"] } },
     select: { startTime: true, endTime: true },
   });
 
-  // 7. Build blocked time ranges (Exchange busy times + DB bookings, with buffer)
-  const blockedRanges = [
-    ...busyTimes.map((busy) => {
-      const start = parseTime(isoToTimeString(busy.start));
-      const end = parseTime(isoToTimeString(busy.end));
-      return { start: formatTime(Math.max(0, start - buffer)), end: formatTime(end + buffer) };
-    }),
-    ...existingBookings.map((b) => ({
-      start: formatTime(Math.max(0, parseTime(b.startTime) - buffer)),
-      end: formatTime(parseTime(b.endTime) + buffer),
-    })),
-  ];
-
-  // 8. Filter out unavailable slots
-  const nowMs = Date.now();
-  const minNoticeMs = (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
-
-  const slots = candidates.filter((slot) => {
-    const slotUtc = saInstant(dateStr, slot.start);
-    if (!options?.skipMinNotice && slotUtc.getTime() - nowMs < minNoticeMs) return false;
-    return !blockedRanges.some((r) => timeRangesOverlap(slot.start, slot.end, r.start, r.end));
+  const { slots } = slotsForDay({
+    dateStr,
+    dayHours,
+    override,
+    busy,
+    bookings,
+    durationMinutes: sessionConfig.durationMinutes,
+    bufferMinutes: settings.bookingBufferMinutes ?? 15,
+    minNoticeMs: (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000,
+    nowMs: Date.now(),
+    skipMinNotice: options?.skipMinNotice ?? false,
   });
+
   return { slots, freeBusyFailed };
 }
 
-export async function getAvailableDates(options?: { includeToday?: boolean; maxDaysOverride?: number }): Promise<string[]> {
+/**
+ * Ask Graph for busy ranges across a whole window, in chunks it will accept.
+ *
+ * `getSchedule` refuses more than MAX_FREE_BUSY_DAYS with `ErrorTimeIntervalTooBig` — measured
+ * 2026-09-24 — and the admin date list asks for 90. A refusal returns `failed`, which reads as
+ * "the calendar is unreachable" and so opens every slot it should have closed, silently. One
+ * chunk failing marks the whole answer failed: a partial busy list is worse than no busy list,
+ * because it is believed.
+ */
+async function busyAcrossWindow(
+  startUtc: Date,
+  endUtc: Date,
+): Promise<{ byDate: Map<string, { start: string; end: string }[]>; failed: boolean }> {
+  const byDate = new Map<string, { start: string; end: string }[]>();
+  let failed = false;
+
+  for (let from = startUtc; from < endUtc; ) {
+    const to = new Date(
+      Math.min(from.getTime() + MAX_FREE_BUSY_DAYS * 86400000, endUtc.getTime()),
+    );
+    const { slots, failed: chunkFailed } = await getFreeBusy(from, to);
+    if (chunkFailed) failed = true;
+    for (const s of slots) {
+      const day = byDate.get(s.date);
+      if (day) day.push(s);
+      else byDate.set(s.date, [s]);
+    }
+    from = to;
+  }
+
+  return { byDate, failed };
+}
+
+/**
+ * The days a booking can actually be made on.
+ *
+ * A date is offered only if a slot is left on it. Until 2026-09-24 this asked whether the day was
+ * OPEN and never whether anything remained, so a fully booked day sat in the client's picker and
+ * answered "no times available" when clicked — and a day Roxanne had filled in Outlook did the
+ * same. Being open and being bookable are different questions, and this is the one the picker is
+ * actually asking.
+ *
+ * The cost of asking it properly is two queries and a small number of Graph calls for the whole
+ * window, not per day: the overrides in one query, the bookings in one, the busy ranges in
+ * ceil(days / 60) calls. Then `slotsForDay` decides each day from memory — the same call
+ * getAvailableSlots makes, so the two cannot drift apart again.
+ */
+export async function getAvailableDates(options?: {
+  includeToday?: boolean;
+  maxDaysOverride?: number;
+  /** Admin books inside the notice period; the public does not. Mirrors getAvailableSlots. */
+  skipMinNotice?: boolean;
+  /** Slot length to test the day against. Defaults to the longest session type. */
+  sessionConfig?: SessionTypeConfig;
+}): Promise<string[]> {
   const settings = await getSiteSettings();
 
   if (!settings.bookingEnabled) return [];
@@ -212,36 +345,60 @@ export async function getAvailableDates(options?: { includeToday?: boolean; maxD
 
   // Get all overrides in range (use UTC midnight for @db.Date). `start`/`end` are
   // noon anchors, so their UTC day is already the SAST day — read it back as UTC.
-  const startUtc = calendarDate(formatInTimeZone(start, "UTC", "yyyy-MM-dd"));
-  const endUtc = calendarDate(formatInTimeZone(end, "UTC", "yyyy-MM-dd"));
+  const startStr = formatInTimeZone(start, "UTC", "yyyy-MM-dd");
+  const endStr = formatInTimeZone(end, "UTC", "yyyy-MM-dd");
+  const startUtc = calendarDate(startStr);
+  const endUtc = calendarDate(endStr);
   const overrides = await prisma.availabilityOverride.findMany({
     where: { date: { gte: startUtc, lte: endUtc } },
   });
   const overrideMap = new Map(
-    overrides.map((o) => [
-      formatInTimeZone(o.date, "UTC", "yyyy-MM-dd"),
-      o,
-    ])
+    overrides.map((o) => [formatInTimeZone(o.date, "UTC", "yyyy-MM-dd"), o]),
   );
 
-  const dates = eachDayOfInterval({ start, end });
+  const bookings = await prisma.booking.findMany({
+    where: { date: { gte: startUtc, lte: endUtc }, status: { in: ["pending", "confirmed"] } },
+    select: { date: true, startTime: true, endTime: true },
+  });
+  const bookingMap = new Map<string, { startTime: string; endTime: string }[]>();
+  for (const b of bookings) {
+    const key = formatInTimeZone(b.date, "UTC", "yyyy-MM-dd");
+    const day = bookingMap.get(key);
+    if (day) day.push(b);
+    else bookingMap.set(key, [b]);
+  }
 
-  const availableDates = dates.filter((d) => {
+  const { byDate: busyMap } = await busyAcrossWindow(saDayStart(startStr), saDayEnd(endStr));
+
+  // The longest session is the honest default: a day with room for an hour has room for a
+  // half-hour consultation, and offering a date that only fits the shorter one would put the
+  // client back where they started. Callers that know the session type pass it.
+  const durationMinutes =
+    options?.sessionConfig?.durationMinutes ??
+    Math.max(...SESSION_TYPES.map((s) => s.durationMinutes));
+
+  const bufferMinutes = settings.bookingBufferMinutes ?? 15;
+  const minNoticeMs = (settings.bookingMinNoticeHours ?? 24) * 60 * 60 * 1000;
+  const nowMs = Date.now();
+
+  const available: string[] = [];
+  for (const d of eachDayOfInterval({ start, end })) {
     const dateStr = formatInTimeZone(d, "UTC", "yyyy-MM-dd");
     const noonUtc = new Date(`${dateStr}T12:00:00Z`);
-    const dayKey = DAY_MAP[noonUtc.getUTCDay()];
-    const dayHours = businessHours[dayKey];
-    const override = overrideMap.get(dateStr);
+    const { slots } = slotsForDay({
+      dateStr,
+      dayHours: businessHours[DAY_MAP[noonUtc.getUTCDay()]],
+      override: overrideMap.get(dateStr) ?? null,
+      busy: busyMap.get(dateStr) ?? [],
+      bookings: bookingMap.get(dateStr) ?? [],
+      durationMinutes,
+      bufferMinutes,
+      minNoticeMs,
+      nowMs,
+      skipMinNotice: options?.skipMinNotice ?? false,
+    });
+    if (slots.length > 0) available.push(dateStr);
+  }
 
-    // Blocked override = unavailable
-    if (override?.isBlocked) return false;
-    // Closed day without override = unavailable
-    if (dayHours.closed && !override) return false;
-    // A public holiday is a closed day — same override escape hatch (see getAvailableSlots).
-    if (isSAPublicHolidayOn(dateStr) && !override) return false;
-    // Open day with custom override hours, or regular open day
-    return true;
-  });
-
-  return availableDates.map((d) => formatInTimeZone(d, "UTC", "yyyy-MM-dd"));
+  return available;
 }

@@ -9,7 +9,7 @@ import { cancelCalendarEvent, createCalendarEvent, createRecurringCalendarEvent,
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getSessionTypeConfig } from "@/lib/booking-config";
-import { getAvailableSlots } from "@/lib/availability";
+import { getAvailableSlots, getDayOpening } from "@/lib/availability";
 import { getBalance, deductCredit } from "@/lib/credits";
 import { getSiteSettings } from "@/lib/settings";
 import { format } from "date-fns";
@@ -312,7 +312,6 @@ export async function rescheduleSeriesAction(
   const endM = (startM + duration) % 60;
   const newEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
-  const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
 
   let updated = 0;
   const skipped: { id: string; date: string; reason: string }[] = [];
@@ -329,15 +328,18 @@ export async function rescheduleSeriesAction(
     // Check for conflicts — skip if any found
     let skipReason: string | null = null;
 
-    if (isSAPublicHoliday(newDate)) {
-      skipReason = "Public holiday";
+    // The day's shape comes from lib/availability.ts, not from here. This block used to ask about
+    // public holidays and a blocked override and nothing else — so it would happily move a whole
+    // series onto a Saturday outside business hours, or onto a time an override had not opened.
+    // Occupancy stays below, because a series reschedule has to ignore its own bookings.
+    const opening = await getDayOpening(newDateStr, duration);
+    if (opening.closedReason) {
+      skipReason = opening.closedReason;
+    } else if (!opening.starts.includes(newStartTime)) {
+      skipReason = `Not an open time that day (${opening.starts.join(", ") || "none"})`;
     } else {
-      const override = await prisma.availabilityOverride.findUnique({
-        where: { date: calendarDate(newDateStr) },
-      });
-      if (override?.isBlocked) {
-        skipReason = `Day blocked${override.reason ? `: ${override.reason}` : ""}`;
-      } else {
+      // Occupancy, which is this path's own business: a series must not count its own bookings.
+      {
         const existing = await prisma.booking.findFirst({
           where: {
             date: calendarDate(newDateStr),
@@ -785,7 +787,6 @@ export async function checkSeriesConflictsAction(
   const endM = (startM + duration) % 60;
   const newEndTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
 
-  const { isSAPublicHoliday } = await import("@/lib/sa-holidays");
   const results: { date: string; conflict: string | null }[] = [];
 
   for (const booking of bookings) {
@@ -811,16 +812,16 @@ export async function checkSeriesConflictsAction(
       select: { clientName: true, startTime: true },
     });
 
-    // Check availability overrides (blocked days)
-    const override = await prisma.availabilityOverride.findUnique({
-      where: { date: calendarDate(newDateStr) },
-    });
+    // The preview has to answer exactly what the reschedule answers, or it green-lights dates the
+    // action then skips. Both now read the same getDayOpening — before today each carried its own
+    // pair of holiday and blocked-override tests and neither knew about business hours.
+    const opening = await getDayOpening(newDateStr, duration);
 
     let conflict: string | null = null;
-    if (isSAPublicHoliday(newDate)) {
-      conflict = "Public holiday";
-    } else if (override?.isBlocked) {
-      conflict = `Day blocked${override.reason ? `: ${override.reason}` : ""}`;
+    if (opening.closedReason) {
+      conflict = opening.closedReason;
+    } else if (!opening.starts.includes(newStartTime)) {
+      conflict = `Not an open time that day (${opening.starts.join(", ") || "none"})`;
     } else if (existing) {
       conflict = `Overlaps with ${existing.clientName} at ${existing.startTime}`;
     }

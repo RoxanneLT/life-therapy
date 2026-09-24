@@ -2365,6 +2365,31 @@ check("availability: a closed day yields to an override", () => {
   }
 });
 
+check("availability: nothing works out a day's shape by hand", () => {
+  // Whether a day is open, and at what times, is decided in lib/availability.ts. Two admin series
+  // functions each carried their own copy — a public-holiday test and a blocked-override test, and
+  // nothing about business hours or an override that opens only some slots. So "Edit Series" would
+  // move a whole series onto a Saturday, or onto a time no override had opened, and its conflict
+  // preview agreed with it because it was the same wrong pair of tests written twice.
+  //
+  // The tell is a file doing BOTH: asking about public holidays and reading availability overrides.
+  // Either alone is fine — recurring-dates skips holidays when generating dates, and the admin
+  // pages read overrides to draw them. Together, outside lib/availability.ts, is a second decider.
+  const HOME = "lib/availability.ts";
+  for (const f of [...walk(APP), ...walk(LIB)].filter((p) => !isTest(p))) {
+    if (rel(f) === HOME) continue;
+    const src = code(read(f));
+    if (!/\bisSAPublicHoliday(?:On)?\b/.test(src)) continue;
+    if (!/\bavailabilityOverride\b/.test(src)) continue;
+    fail(
+      "availability",
+      rel(f),
+      "a second decider for whether a day is open, beside the one in lib/availability.ts",
+      `call getDayOpening() from ${HOME} — it answers the day's shape and why it is shut, and a copy of that reasoning is a copy that does not know about business hours or an override's open slots`,
+    );
+  }
+});
+
 check("availability: an override's open slots come from the list, never from the request", () => {
   // `openSlots` decides which times a day opens at, and a time no slot starts at opens the day to
   // nothing — which looks exactly like a day that is simply fully booked, so it is never reported.
@@ -2378,8 +2403,15 @@ check("availability: an override's open slots come from the list, never from the
   // green. A declaration is skipped: `const openSlots: readonly string[] = …` is a read of the
   // column with a type on it, and a type annotation is not a value being stored.
   const WRITE = /(?<!\b(?:const|let|var)\s)\bopenSlots\b(?:\s*:\s*([^,\n}]+)|\s*,)/g;
+
+  // `openSlots: string[]` inside an interface is a type, not a value being stored, and it is
+  // spelled exactly like a property write. Types come out before the scan rather than being
+  // excused one spelling at a time — every exception widens the hole the check is here to close.
+  const withoutTypes = (s) =>
+    s.replace(/\b(?:interface\s+\w+|type\s+\w+\s*=)\s*\{[\s\S]*?\n\}/g, "");
+
   for (const f of [...walk(APP), ...walk(LIB)].filter((p) => !isTest(p))) {
-    const src = code(read(f));
+    const src = withoutTypes(code(read(f)));
     if (!/\bopenSlots\b/.test(src)) continue;
     for (const m of src.matchAll(WRITE)) {
       const value = (m[1] ?? "openSlots").trim();

@@ -89,10 +89,20 @@ async function withRetry<T>(
 // Free/busy
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Busy ranges from the practice calendar, as SAST "HH:mm" with the day they fall on.
+ *
+ * The window has a ceiling: measured 2026-09-24 against the live tenant, 60 days answers in
+ * ~390ms and 90 days is refused outright with `ErrorTimeIntervalTooBig`. A caller spanning more
+ * than MAX_FREE_BUSY_DAYS must ask in chunks — one refusal returns `failed`, which reads as "the
+ * calendar is unreachable" and opens every slot it should have closed.
+ */
+export const MAX_FREE_BUSY_DAYS = 60;
+
 export async function getFreeBusy(
   startDate: Date,
   endDate: Date
-): Promise<{ slots: { start: string; end: string }[]; failed: boolean }> {
+): Promise<{ slots: { date: string; start: string; end: string }[]; failed: boolean }> {
   const config = getGraphConfig();
   if (!config) return { slots: [], failed: true };
 
@@ -141,7 +151,16 @@ export async function getFreeBusy(
           "HH:mm"
         );
 
-        return { start: startSast, end: endSast };
+        // The SAST calendar day the busy item starts on. Without it a multi-day window collapses
+        // to a bag of "HH:mm" ranges with no day attached, and 14:15 busy on one Tuesday reads as
+        // 14:15 busy on every day in the window. Callers asking about a single day ignore it.
+        const dateSast = formatInTimeZone(
+          startTz === "UTC" ? new Date(startDt + "Z") : new Date(startDt),
+          TIMEZONE,
+          "yyyy-MM-dd"
+        );
+
+        return { date: dateSast, start: startSast, end: endSast };
       });
     return { slots, failed: false };
   } catch (error) {

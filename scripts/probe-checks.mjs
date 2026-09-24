@@ -505,9 +505,20 @@ const MUTATIONS = [
     // the real defect and not a lookalike.
     path: "lib/availability.ts",
     named: true,
-    find: "  if (dayHours.closed && !override) return { slots: [], freeBusyFailed: false };\n",
-    replace: "  if (dayHours.closed) return { slots: [], freeBusyFailed: false };\n",
+    find: "  if (dayHours.closed && !override) return shut(\"Closed that day\");\n",
+    replace: "  if (dayHours.closed) return shut(\"Closed that day\");\n",
     expects: ["availability: a closed day yields to an override"],
+  },
+  {
+    // The series reschedule as it stood until 2026-09-24: its own holiday-and-blocked pair, which
+    // knew nothing of business hours or an override's open slots. Planted back into the file it
+    // lived in, so the fire is the real second decider.
+    path: "app/(admin)/admin/(dashboard)/bookings/actions.ts",
+    named: true,
+    find: "    const opening = await getDayOpening(newDateStr, duration);\n",
+    replace:
+      "    const { isSAPublicHoliday } = await import(\"@/lib/sa-holidays\");\n    const planted = await prisma.availabilityOverride.findUnique({ where: { date: calendarDate(newDateStr) } });\n    const opening = { closedReason: isSAPublicHoliday(newDate) || planted?.isBlocked ? \"Public holiday\" : null, starts: [newStartTime] };\n",
+    expects: ["availability: nothing works out a day's shape by hand"],
   },
   {
     // The form's own strings written to the column, which is what it would have been had the
