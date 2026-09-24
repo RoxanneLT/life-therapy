@@ -143,7 +143,14 @@ export async function getAvailableSlots(
   // 4. Generate candidate slots with buffer between sessions
   const slotDuration = sessionConfig.durationMinutes;
   const buffer = settings.bookingBufferMinutes ?? 15;
-  const candidates = generateSlots(openTime, closeTime, slotDuration, buffer);
+  const windowed = generateSlots(openTime, closeTime, slotDuration, buffer);
+
+  // An override may open only the slots the admin ticked. Empty means the whole day, which is what
+  // every override meant before the column existed — so an old row and a "full day" row are the
+  // same row, and neither needs a second flag to say which it is.
+  const openSlots: readonly string[] = override?.openSlots ?? [];
+  const candidates =
+    openSlots.length > 0 ? windowed.filter((s) => openSlots.includes(s.start)) : windowed;
 
   if (candidates.length === 0) return { slots: [], freeBusyFailed: false };
 

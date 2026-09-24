@@ -5,29 +5,48 @@ import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getFreeBusy } from "@/lib/graph";
+import { parseSlotStartTimes } from "@/lib/booking-config";
 import { saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
 
+/**
+ * Three shapes of override, one row.
+ *
+ *   blocked — the day is shut. What the switch did before today.
+ *   hours   — the day runs to a custom open/close window.
+ *   slots   — only the ticked slot start times are open; everything else on the day is shut.
+ *
+ * `openSlots` empty means the whole day, so a row written before the column existed and a row
+ * saying "open the whole day" are the same row. That is why there is no fourth mode flag stored:
+ * the shape is readable from the row, and a stored mode could disagree with the values beside it.
+ */
 export async function createAvailabilityOverride(formData: FormData) {
   await requireRole("super_admin");
 
   const raw = Object.fromEntries(formData.entries());
-  const isBlocked = raw.isBlocked === "true";
+  const mode = raw.mode === "hours" || raw.mode === "slots" ? raw.mode : "blocked";
+  const isBlocked = mode === "blocked";
+
+  // Never the request's own strings: parseSlotStartTimes keeps only times the system actually
+  // starts a slot at. A time it does not know is dropped, so the refusal below is what the admin
+  // sees rather than a day that silently opens to nothing.
+  const openSlots = mode === "slots" ? parseSlotStartTimes(String(raw.openSlots ?? "")) : [];
+
+  if (mode === "slots" && openSlots.length === 0) {
+    return { error: "Pick at least one time slot to open, or choose a different option." };
+  }
+
+  const fields = {
+    isBlocked,
+    startTime: mode === "hours" ? (raw.startTime as string) || null : null,
+    endTime: mode === "hours" ? (raw.endTime as string) || null : null,
+    openSlots,
+    reason: (raw.reason as string) || null,
+  };
 
   await prisma.availabilityOverride.upsert({
     where: { date: new Date(raw.date as string) },
-    update: {
-      isBlocked,
-      startTime: isBlocked ? null : (raw.startTime as string) || null,
-      endTime: isBlocked ? null : (raw.endTime as string) || null,
-      reason: (raw.reason as string) || null,
-    },
-    create: {
-      date: new Date(raw.date as string),
-      isBlocked,
-      startTime: isBlocked ? null : (raw.startTime as string) || null,
-      endTime: isBlocked ? null : (raw.endTime as string) || null,
-      reason: (raw.reason as string) || null,
-    },
+    update: fields,
+    create: { date: new Date(raw.date as string), ...fields },
   });
 
   revalidatePath("/admin/bookings/availability");

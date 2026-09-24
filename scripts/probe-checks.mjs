@@ -510,6 +510,26 @@ const MUTATIONS = [
     expects: ["availability: a closed day yields to an override"],
   },
   {
+    // The form's own strings written to the column, which is what it would have been had the
+    // parse step not gone in: whatever the request said the admin ticked.
+    path: "app/(admin)/admin/(dashboard)/bookings/availability/actions.ts",
+    named: true,
+    find: "    openSlots,\n",
+    replace: "    openSlots: String(raw.openSlots ?? \"\").split(\",\"),\n",
+    expects: ["availability: an override's open slots come from the list, never from the request"],
+  },
+  {
+    // The same defect reached by the other spelling: the write stays shorthand (`openSlots,`) and
+    // the parse is taken off the declaration behind it. Both are probed because the check read
+    // only the colon form at first, and the real write is the shorthand one — so a check that
+    // passed said nothing at all about the line it governs.
+    path: "app/(admin)/admin/(dashboard)/bookings/availability/actions.ts",
+    named: true,
+    find: "parseSlotStartTimes(String(raw.openSlots ?? \"\"))",
+    replace: "String(raw.openSlots ?? \"\").split(\",\")",
+    expects: ["availability: an override's open slots come from the list, never from the request"],
+  },
+  {
     // The upload key as all three routes built it until 2026-09-14: the extension read off the name
     // the caller sent (L-102). It stays a plain identifier, as before, so only the check's question
     // "did uploadPath() build it?" can see it.

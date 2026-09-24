@@ -76,12 +76,21 @@ export default async function AvailabilityOverridesPage() {
                         {format(new Date(override.date), "EEE, d MMM yyyy")}
                       </TableCell>
                       <TableCell>
+                        {/* The shape is read from the row, never from a stored mode flag —
+                            see createAvailabilityOverride. */}
                         {override.isBlocked ? (
                           <Badge
                             variant="secondary"
                             className="bg-red-100 text-red-800"
                           >
                             Blocked
+                          </Badge>
+                        ) : override.openSlots.length > 0 ? (
+                          <Badge
+                            variant="secondary"
+                            className="bg-green-100 text-green-800"
+                          >
+                            Chosen Slots
                           </Badge>
                         ) : (
                           <Badge
@@ -95,7 +104,9 @@ export default async function AvailabilityOverridesPage() {
                       <TableCell className="text-sm text-muted-foreground">
                         {override.isBlocked
                           ? override.reason || "Day off"
-                          : `${override.startTime} – ${override.endTime}`}
+                          : override.openSlots.length > 0
+                            ? override.openSlots.join(", ")
+                            : `${override.startTime} – ${override.endTime}`}
                       </TableCell>
                       <TableCell>
                         <form

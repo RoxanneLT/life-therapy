@@ -62,3 +62,26 @@ export const ALLOWED_SLOT_START_TIMES = [
   "14:15",
   "15:30",
 ] as const;
+
+export type SlotStartTime = (typeof ALLOWED_SLOT_START_TIMES)[number];
+
+function isSlotStartTime(value: string): value is SlotStartTime {
+  return (ALLOWED_SLOT_START_TIMES as readonly string[]).includes(value);
+}
+
+/**
+ * Read a set of slot start times from anything a form or a stored row hands over.
+ *
+ * The one way a slot time is allowed to enter the system. Anything not in the list above is
+ * dropped rather than corrected — an override naming a time no slot starts at would open a day
+ * to nothing at all, which looks like a day that is simply fully booked and so is never reported.
+ * Duplicates collapse and the result is ordered by the list, not by the order it was clicked, so
+ * two overrides that open the same slots are the same row.
+ *
+ * Held by `availability: an override's open slots come from the list, never from the request`.
+ */
+export function parseSlotStartTimes(raw: string | readonly string[]): SlotStartTime[] {
+  const parts = typeof raw === "string" ? raw.split(",") : raw;
+  const wanted = new Set(parts.map((p) => p.trim()).filter(isSlotStartTime));
+  return ALLOWED_SLOT_START_TIMES.filter((t) => wanted.has(t));
+}

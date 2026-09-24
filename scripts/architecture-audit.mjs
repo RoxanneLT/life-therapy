@@ -2365,6 +2365,40 @@ check("availability: a closed day yields to an override", () => {
   }
 });
 
+check("availability: an override's open slots come from the list, never from the request", () => {
+  // `openSlots` decides which times a day opens at, and a time no slot starts at opens the day to
+  // nothing — which looks exactly like a day that is simply fully booked, so it is never reported.
+  // The same shape as the upload keys (L-102): a caller's string reaching a place that is read as
+  // an identifier. So every write of the column takes a value parseSlotStartTimes() produced, which
+  // keeps only the times in ALLOWED_SLOT_START_TIMES. A literal, a spread or a raw form field there
+  // fails: the first argument is read as written, never followed.
+  // Both spellings of a property, because they are the same write: `openSlots: x` and the
+  // shorthand `openSlots,`. The first version of this check read only the colon form, so the
+  // write it exists to govern — written shorthand — went unexamined while the check reported
+  // green. A declaration is skipped: `const openSlots: readonly string[] = …` is a read of the
+  // column with a type on it, and a type annotation is not a value being stored.
+  const WRITE = /(?<!\b(?:const|let|var)\s)\bopenSlots\b(?:\s*:\s*([^,\n}]+)|\s*,)/g;
+  for (const f of [...walk(APP), ...walk(LIB)].filter((p) => !isTest(p))) {
+    const src = code(read(f));
+    if (!/\bopenSlots\b/.test(src)) continue;
+    for (const m of src.matchAll(WRITE)) {
+      const value = (m[1] ?? "openSlots").trim();
+      if (value === "true" || value === "false") continue; // a prisma select, not a value stored
+      const parsed =
+        /^[A-Za-z_$][\w$]*$/.test(value) &&
+        new RegExp(`\\b(?:const|let)\\s+${value}\\b[^\\n]*=[\\s\\S]{0,120}?parseSlotStartTimes\\(`).test(src);
+      if (!parsed) {
+        fail(
+          "availability",
+          rel(f),
+          "an override's open slots are written from a value the slot list never vetted",
+          "assign it from parseSlotStartTimes() in lib/booking-config.ts — a time no slot starts at opens the day to nothing, and a day open to nothing reads as a day that is fully booked",
+        );
+      }
+    }
+  }
+});
+
 check("storage: an upload's key is one the server built, never a caller's name", () => {
   // A storage key reaches a URL as it stands, and the URL parser reads more spellings as a dot
   // segment than a test for `..` does, so any part of a caller's file name in a key can point it at
