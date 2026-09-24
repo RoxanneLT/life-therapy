@@ -23,30 +23,12 @@ Deploy state IS readable from here: `gh api repos/RoxanneLT/life-therapy/commits
 Read it after every push. Since this change pre-push runs `npm run check:push`, which is `check`
 followed by the production build.
 
-**Pushed 2026-09-10, at Stéan's request: `46b8221..fb1c669`.** The audit reads the TypeScript
-parser (`a599577`, L-35 · L-49) and its records (`428ae56`), four unresolvable lesson citations
-(`a1376ac`), and the first kit move (`fb1c669`, canon `efbf834`). The commits carry the detail.
-
-**Triage** (2026-09-10): 36 of 36 answered, queued or held. Batches `ba1cf4b`, `cb80e5d`,
-`731682a`, `46b8221`. No findings left with canon: CF-1 was filed at `054eab2`, and CF-2, CF-3 and
-CF-4 at `61bd006`.
-
-**Kit move, pushed 2026-09-11 at Stéan's request (`bf62b2a..f936b77`).** Thirteen rows came
-from canon's history at `2e79fdb`. The kit rows are bash-gate and its probe v6, agent-write-scope
-and its probe v5, check-hook-registration v6, check-handoff-contract v5, check-install-platform v3
-and check-claude-md v17. The spines, through propagate-spines, are census v10, db-inspector v5,
-grounder v7, implementer v5 and walker v8. bash-gate's per-rule fallbacks are answered from
-existing settings, plus one added ask,
-`Bash(gh pr merge*)`. Canon dropped all thirteen pins (`c06491c`). Measured by Stéan
-2026-09-11: a settings ask prompts beside a live hook, so twins are live. The one silent hook ask,
-on the spelling matching the mid-session `Bash(gh pr merge*)`, prompted after a restart: closed.
-
-**Pushed 2026-09-11, at Stéan's request: `fb1c669..28e9886`.**
-
-- `c0fc378` carries L-68: Stéan's first authorisation, for agents.
-- `beabdc0` moves `check-brief` to v7 by the route in canon's new pin. It also files four outbox
-  items that canon answered: CF-1, and three kit rows whose pins canon dropped.
-- `28e9886` adds Stéan's second authorisation to §7, for workflows and deep-research.
+**Done and pushed, 2026-09-10/11 — detail is in the commits, not here.** `46b8221..fb1c669`: the
+audit reads the TypeScript parser (L-35 · L-49) and the first kit move. Triage: 36 of 36 answered;
+CF-1..CF-4 filed. `bf62b2a..f936b77`: thirteen kit and spine rows from canon `2e79fdb`, all pins
+dropped (`c06491c`). Measured by Stéan 2026-09-11: a settings ask prompts beside a live hook, so
+twins are live. `fb1c669..28e9886`: Stéan's two standing authorisations, now in `CLAUDE.md` §7,
+and `check-brief` v7.
 
 **Queue, `docs/LESSONS.md`:**
 
@@ -87,8 +69,26 @@ Stéan kept a dry-run push asking. Then, unpushed: bash-gate v8 and agent-write-
 upload keys now come from `lib/upload-types.ts`, never a caller's file name, held by an audit
 check and a revert probe. Outbox §3 asks canon to drop the four pins.
 
-**Next action:** none queued. Canon lifts the outbox from HEAD. Before re-running `--emit-open`,
-check `git -C <canon> status --short tools`; if it is dirty, run from `git archive HEAD`.
+**Booking availability, 2026-09-24, unpushed (`30f75de`, `de17b72`, `651d5d6`).** Stéan asked to
+open a normally-blocked date either fully or at chosen slots. Groundwork first, feature next.
+
+- `30f75de` — the six slot start times were declared three times; `lib/booking-config.ts` holds
+  them, the other two import. Held by `slots: one list of slot start times` and a revert probe.
+- `de17b72` — `availability_overrides."openSlots" text[] NOT NULL DEFAULT '{}'`, approved by Stéan
+  and live in production. Empty = whole day, so no stored row changed meaning. Nothing reads it
+  yet. `prisma db pull` hangs on the transaction pooler and needs the session pooler on 5432; its
+  output is a lossy whole-file rewrite, so take the model, not the file. Rule file corrected.
+- `651d5d6` — an override could not open a weekend: `getAvailableSlots` returned on a closed
+  weekday before reading the override, while `getAvailableDates` beside it let the day through.
+  Fixed in both, plus a third reader the check found (`getNextBusinessDate`). Held by
+  `availability: a closed day yields to an override`.
+
+**Next action:** build the override UI — full day or ticked slots — reading `openSlots`. Open and
+undecided: `getAvailableDates` never counts remaining slots, so a fully-booked day stays in the
+client picker. Advised as not worth chasing yet (60 Graph calls per page load); the cheap version
+counts DB bookings only and skips Graph. Stéan has not ruled on it. Canon lifts the outbox from
+HEAD. Before re-running `--emit-open`, check `git -C <canon> status --short tools`; if it is dirty,
+run from `git archive HEAD`.
 
 **Watching:** canon pushing again — `node tools/apply-kit.mjs --project life-therapy` (dry run) and
 `node tools/check-kit-drift.mjs`. Take bytes from canon's HISTORY, never its working tree, and run
