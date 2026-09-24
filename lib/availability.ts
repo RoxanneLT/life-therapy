@@ -5,7 +5,7 @@ import {
   type BusinessHoursDay,
 } from "@/lib/settings";
 import { getFreeBusy } from "@/lib/graph";
-import { type SessionTypeConfig } from "@/lib/booking-config";
+import { ALLOWED_SLOT_START_TIMES, type SessionTypeConfig } from "@/lib/booking-config";
 import { addDays, eachDayOfInterval } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import { saToday, saInstant, saDayStart, saDayEnd, calendarDate } from "@/lib/dates";
@@ -52,9 +52,12 @@ function timeRangesOverlap(
   return a0 < b1 && b0 < a1;
 }
 
-// Fixed time slots as specified by the client.
-// Same start times regardless of session duration (30 or 60 min).
-const FIXED_SLOT_STARTS = ["09:00", "10:15", "11:30", "13:00", "14:15", "15:30"];
+// The slot start times come from lib/booking-config.ts and are declared nowhere else. This file
+// held its own copy of the same six times until 2026-09-24, and that copy was the one deciding
+// what could be booked, while `ALLOWED_SLOT_START_TIMES` drew the admin day and week views. Two
+// lists, no mechanism between them: editing the documented one moved every admin screen and left
+// the booking engine on the old times, which reads as a working change and is not one. Held by
+// `slots: one list of slot start times`.
 
 function generateSlots(
   open: string,
@@ -65,7 +68,7 @@ function generateSlots(
   const openMin = parseTime(open);
   const closeMin = parseTime(close);
 
-  return FIXED_SLOT_STARTS
+  return ALLOWED_SLOT_START_TIMES
     .filter((start) => {
       const startMin = parseTime(start);
       return startMin >= openMin && startMin + duration <= closeMin;

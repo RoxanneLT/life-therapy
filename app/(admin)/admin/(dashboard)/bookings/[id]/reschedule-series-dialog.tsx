@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { ALLOWED_SLOT_START_TIMES } from "@/lib/booking-config";
 import { CalendarClock, Repeat, AlertTriangle, CheckCircle } from "lucide-react";
 import { rescheduleSeriesAction, checkSeriesConflictsAction } from "../actions";
 import { toast } from "sonner";
@@ -30,9 +31,6 @@ const DAYS = [
   { value: "5", label: "Friday" },
 ];
 
-const TIME_SLOTS = [
-  "09:00", "10:15", "11:30", "13:00", "14:15", "15:30",
-];
 
 interface Props {
   readonly seriesId: string;
@@ -144,7 +142,7 @@ export function RescheduleSeriesDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TIME_SLOTS.map((t) => (
+                  {ALLOWED_SLOT_START_TIMES.map((t) => (
                     <SelectItem key={t} value={t}>
                       {t}
                     </SelectItem>

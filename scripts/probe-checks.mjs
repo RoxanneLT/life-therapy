@@ -490,6 +490,16 @@ const MUTATIONS = [
     expects: ["auth: every place that sets a password is classified by what authorises it"],
   },
   {
+    // The slot list as lib/availability.ts held it until 2026-09-24: a second copy of the six times,
+    // in the file that decides what can be booked. The plant is the literal array, because that is
+    // the shape the check hunts and the shape code() would blank.
+    path: "lib/availability.ts",
+    named: true,
+    find: "  return ALLOWED_SLOT_START_TIMES\n",
+    replace: "  const FIXED_SLOT_STARTS = [\"09:00\", \"10:15\", \"11:30\", \"13:00\", \"14:15\", \"15:30\"];\n  return FIXED_SLOT_STARTS\n",
+    expects: ["slots: one list of slot start times"],
+  },
+  {
     // The upload key as all three routes built it until 2026-09-14: the extension read off the name
     // the caller sent (L-102). It stays a plain identifier, as before, so only the check's question
     // "did uploadPath() build it?" can see it.

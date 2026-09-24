@@ -2279,6 +2279,59 @@ check("secrets: the cron secret is never read from the URL", () => {
   }
 });
 
+check("slots: one list of slot start times", () => {
+  // Until 2026-09-24 the six slot start times were declared twice: `ALLOWED_SLOT_START_TIMES` in
+  // lib/booking-config.ts, which CLAUDE.md §9 names as the slots SSOT and which draws the admin day
+  // and week views, and a private `FIXED_SLOT_STARTS` in lib/availability.ts, which is the copy that
+  // decided what could be booked. They matched, and nothing held them to it: edit the documented one
+  // and every admin screen moves while the booking engine keeps the old times — a change that reads
+  // as applied and is not. So: the list lives in booking-config, the decider imports it, and no other
+  // file holds a list of times at all.
+  //
+  // RAW source, not code(): the times are string literals and code() blanks them, which is the
+  // +02:00 failure exactly. Read through codeKeepingLiterals so a comment quoting the times is
+  // stripped and the literals survive.
+  const LIST = /\[(?:[^[\]]*?"\d{1,2}:\d{2}")[\s\S]{0,400}?\]/;
+  const times = (s) => (s.match(/"\d{1,2}:\d{2}"/g) || []).length;
+
+  const CONFIG = "lib/booking-config.ts";
+  const config = codeKeepingLiterals(read(join(LIB, "booking-config.ts")));
+  const declared = /export const ALLOWED_SLOT_START_TIMES\s*=\s*\[[\s\S]*?\]/.exec(config);
+  if (!declared || times(declared[0]) < 3) {
+    fail(
+      "slots",
+      CONFIG,
+      "ALLOWED_SLOT_START_TIMES is not a list of slot start times here",
+      "the slot start times live in this file and nowhere else — every other file imports them",
+    );
+  }
+
+  const decider = codeKeepingLiterals(read(join(LIB, "availability.ts")));
+  if (!/\bALLOWED_SLOT_START_TIMES\b/.test(decider)) {
+    fail(
+      "slots",
+      "lib/availability.ts",
+      "the slot generator does not read ALLOWED_SLOT_START_TIMES",
+      `import the list from ${CONFIG} — the file that decides what is bookable must read the list the admin screens draw`,
+    );
+  }
+
+  for (const f of allSource()) {
+    if (rel(f) === CONFIG) continue;
+    const src = codeKeepingLiterals(read(f));
+    for (const m of src.matchAll(new RegExp(LIST, "g"))) {
+      if (times(m[0]) >= 3) {
+        fail(
+          "slots",
+          rel(f),
+          "a second list of clock times, where the slot times are declared once",
+          `import ALLOWED_SLOT_START_TIMES from ${CONFIG} — two lists of the same times drift silently, and the copy that decides is not the copy that is read`,
+        );
+      }
+    }
+  }
+});
+
 check("storage: an upload's key is one the server built, never a caller's name", () => {
   // A storage key reaches a URL as it stands, and the URL parser reads more spellings as a dot
   // segment than a test for `..` does, so any part of a caller's file name in a key can point it at
