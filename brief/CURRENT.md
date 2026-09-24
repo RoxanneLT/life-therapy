@@ -37,26 +37,15 @@ and `check-brief` v7.
   is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
   workflow stays under 15 agents and is announced in one line when it starts.
 
-**L-72, second pass (2026-09-11, pushed).** An independent walker review of `1396829` said stop.
-It found more of the same class, and those are fixed in `64e00c3`, `7d89fc1`, `3ea8335` and
-`0538d24`. The details are in the session report only. The re-walk at `3ea8335`
-(`.handoff/l72-password-setters/02-walker.md`) says ✅ proceed, with low residuals. `0538d24` takes
-two of them.
+**L-72, second pass (2026-09-11, pushed).** A walker review of `1396829` said stop; the rest of
+the class is fixed in `64e00c3`, `7d89fc1`, `3ea8335`, `0538d24`. Details in the commits and the
+session report only — the repo is public. The re-walk says ✅ proceed with low residuals.
 
-- Registration sets no password; it emails a link. Forgot password shares the core,
-  `lib/account-link.ts`. A login is linked to its student only when the emailed token is spent.
-- An admin's own password change needs the current one. The admin invite now sends its link.
-- An admin's change to a client's email is audited.
-- `PASSWORD_SETTERS` sees `createUser`, and every entry names its guard line. Five revert probes.
-- Production, read 2026-09-11. The `account_created` row is the old default, so Roxanne resets it
-  to default in admin to get the new copy. The step of `campaign_explore_portal` that carries the
-  reset link sent 3 emails on 2026-08-19 with a dead button, and none were clicked.
-- `security_update_password_require_current_password` was switched ON 2026-09-11 through the
-  Management API, at Stéan's request, after `0538d24` was live. It was the only field changed.
-  Recovery sessions are exempt in Supabase's source, so reset links still work.
-  `mailer_autoconfirm` must stay off.
-- The Outlook Safe Links property is now an audit check: a recovery link goes straight to
-  `/reset-password`, and its token is spent only on submit.
+- Waiting on a person: Roxanne clicks **Reset to default** on `/admin/email-templates/account_created`
+  — that row is still the old copy.
+- `security_update_password_require_current_password` is ON since 2026-09-11 (Management API, at
+  Stéan's request). Recovery sessions are exempt in Supabase's source, so reset links still work.
+  **`mailer_autoconfirm` must stay off.**
 
 **L-72 review done (Stéan, 2026-09-11).** Walk 02's Promote is outbox §2's L-72 row, worded
 without exploit detail. Its LOW residuals 1, 4 and 5 were fixed and pushed the same day: `02b0a2b`,
@@ -88,10 +77,16 @@ open a normally-blocked date either fully or at chosen slots. Groundwork first, 
   a time enters, held by a check reading both property spellings, two probes and five unit tests.
   Outlook, existing bookings, buffer and min notice still apply to the opened slots.
 
-**Next action:** none queued; the override work is done. Open and
-undecided: `getAvailableDates` never counts remaining slots, so a fully-booked day stays in the
-client picker. Advised as not worth chasing yet (60 Graph calls per page load); the cheap version
-counts DB bookings only and skips Graph. Stéan has not ruled on it. Canon lifts the outbox from
+- `fbbb8c3` — Stéan: a fully booked day must not be selectable anywhere. One pure `slotsForDay`
+  now decides a day; a date is offered only if it returns a slot. Batched: overrides and bookings
+  one query each, busy in `ceil(days / 60)` Graph calls. **Measured 2026-09-24 on the live tenant:
+  `getSchedule` covers 60 days in ~390ms and refuses 90 with `ErrorTimeIntervalTooBig`** — the
+  admin list asks for 90, so chunking is required. `getFreeBusy` now returns each busy range's
+  day. A census found the series reschedule and its preview each hand-rolling a subset; both call
+  `getDayOpening`. Held by `availability: nothing works out a day's shape by hand`.
+  `adminCreateHistoricalBookingAction` stays unguarded by design.
+
+**Next action:** none queued. Canon lifts the outbox from
 HEAD. Before re-running `--emit-open`, check `git -C <canon> status --short tools`; if it is dirty,
 run from `git archive HEAD`.
 
