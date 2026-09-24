@@ -83,7 +83,12 @@ open a normally-blocked date either fully or at chosen slots. Groundwork first, 
   Fixed in both, plus a third reader the check found (`getNextBusinessDate`). Held by
   `availability: a closed day yields to an override`.
 
-**Next action:** build the override UI — full day or ticked slots — reading `openSlots`. Open and
+- `cc88381` — the feature: an override is blocked, custom hours, or open slots. Ticked in the
+  existing `ToggleChipGrid` from `ALLOWED_SLOT_START_TIMES`; `parseSlotStartTimes` is the only way
+  a time enters, held by a check reading both property spellings, two probes and five unit tests.
+  Outlook, existing bookings, buffer and min notice still apply to the opened slots.
+
+**Next action:** none queued; the override work is done. Open and
 undecided: `getAvailableDates` never counts remaining slots, so a fully-booked day stays in the
 client picker. Advised as not worth chasing yet (60 Graph calls per page load); the cheap version
 counts DB bookings only and skips Graph. Stéan has not ruled on it. Canon lifts the outbox from

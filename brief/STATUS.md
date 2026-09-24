@@ -22,12 +22,12 @@
 
 | File | Size | Last commit |
 |---|---|---|
-| `CURRENT.md` | 7.5 KB | 2026-09-14 |
+| `CURRENT.md` | 7.8 KB | 2026-09-24 |
 | `DECISIONS.md` | 6.5 KB | 2026-09-09 |
 | `EVIDENCE.md` | 4.5 KB | 2026-09-09 |
 | `GATES.md` | 2.4 KB | 2026-09-09 |
 | `README.md` | 4.2 KB | 2026-09-10 |
-| `STATUS.md` | 0.1 KB | 2026-09-14 |
+| `STATUS.md` | 0.1 KB | 2026-09-24 |
 | `build\INDEX.md` | 2.6 KB | 2026-09-09 |
 | `build\README.md` | 0.5 KB | 2026-09-09 |
 | `design\README.md` | 0.1 KB | 2026-09-09 |
