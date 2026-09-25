@@ -908,14 +908,60 @@ export async function createClientAndLinkRelationshipAction(data: {
 // Relationships — Remove relationship
 // ────────────────────────────────────────────────────────────
 
+/**
+ * A relationship can be TWO rows — createClientAndLinkRelationshipAction writes one from
+ * each side — and both have to go. This deleted only the row it was given, so the other
+ * client could keep a row pointing back at a link that no longer existed from this side:
+ * visible on their page, and still a candidate payer there. The portal's version of this
+ * action has removed both since it was written; the admin's had not, and the admin's is
+ * the one Roxanne uses. `relationships: removing a relationship removes both directions`
+ * in the audit now holds the two to the same behaviour.
+ *
+ * `deleteMany` for the reverse row and `delete` for this one: the reverse row is found by
+ * its two ids rather than its own id, and it often does not exist — a corporate link has
+ * no other client, and rows written before that action existed are one-sided (measured
+ * 2026-08-19: nine rows, nine distinct pairs). `delete` would throw on all of those.
+ */
 export async function removeRelationshipAction(relationshipId: string, studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
+
+  const rel = await prisma.clientRelationship.findUnique({
+    where: { id: relationshipId },
+    select: {
+      studentId: true,
+      relatedStudentId: true,
+      billingEntityId: true,
+      relationshipType: true,
+    },
+  });
+  if (!rel) return;
+
+  if (rel.relatedStudentId) {
+    await prisma.clientRelationship.deleteMany({
+      where: { studentId: rel.relatedStudentId, relatedStudentId: rel.studentId },
+    });
+  }
 
   await prisma.clientRelationship.delete({
     where: { id: relationshipId },
   });
 
+  // Unlinking a payer is how a client starts being billed for their own sessions.
+  // It left no trace at all, so "who unlinked this, and when" had no answer.
+  await recordAudit({
+    action: "client_relationship_removed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: {
+      relationshipType: rel.relationshipType,
+      relatedStudentId: rel.relatedStudentId,
+      billingEntityId: rel.billingEntityId,
+    },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
+  if (rel.relatedStudentId) revalidatePath(`/admin/clients/${rel.relatedStudentId}`);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -1023,6 +1069,12 @@ export async function updateBillingAssignmentAction(
     }
   }
 
+  // Read before, not after: the point of the entry is which payer this replaced.
+  const before = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { individualBilledToId: true, couplesBilledToId: true },
+  });
+
   if (sessionType === "individual") {
     await prisma.student.update({
       where: { id: studentId },
@@ -1033,6 +1085,23 @@ export async function updateBillingAssignmentAction(
   } else {
     await assignCouplesSelf(studentId);
   }
+
+  // Who pays for this client's sessions is a money decision, in the same class as
+  // the billing type beside it. `null` means self — the entry says which way it moved.
+  await recordAudit({
+    action: "billing_assignment_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: {
+      sessionType,
+      billedToRelationshipId:
+        sessionType === "individual"
+          ? (before?.individualBilledToId ?? null)
+          : (before?.couplesBilledToId ?? null),
+    },
+    after: { sessionType, billedToRelationshipId: relationshipId },
+  });
 
   revalidatePath(`/admin/clients/${studentId}`);
 }

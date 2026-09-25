@@ -3093,10 +3093,13 @@ check("data-safety: an irreplaceable record is never hard-deleted", () => {
 /**
  * The audit-worthy list, verbatim from CLAUDE.md: billing type changes, booking
  * cancellations, payment recording, invoice voiding, client status changes,
- * discount changes. Nothing can infer that list — it is a business judgement — so
- * it is written down, and this check holds the codebase to it.
+ * discount changes, payer changes. Nothing can infer that list — it is a business
+ * judgement — so it is written down, and this check holds the codebase to it.
+ *
+ * `updateBillingAssignment` joined on 2026-09-25: changing who pays for a client's
+ * sessions moves money between two people and left no trace whatever.
  */
-const AUDIT_WORTHY = /^(void|cancel|recordPayment|changeBillingType|excludeFromBilling|applyDiscount|setDiscount|deactivate|archive)\w*/;
+const AUDIT_WORTHY = /^(void|cancel|recordPayment|changeBillingType|updateBillingAssignment|excludeFromBilling|applyDiscount|setDiscount|deactivate|archive)\w*/;
 
 /**
  * Audit-worthy by NAME but not by nature, or audited by a delegate. Each entry says
@@ -3617,6 +3620,43 @@ check("relationships: a partner lookup reads both ends of the row", () => {
         `${rel(file)}:${src.slice(0, m.index).split("\n").length}`,
         "queries a relationship by studentId only — rows are directional, so this sees the link from one side",
         "use findPartnerOf()/findPartnerName() from lib/partner-link.ts, or OR across studentId and relatedStudentId",
+      );
+    }
+  }
+});
+
+check("relationships: removing a relationship removes both directions", () => {
+  // Two paths delete a ClientRelationship — the admin's and the client's own, in
+  // separate route groups — and for months they behaved differently. The portal
+  // cleared the reverse row; the admin's `delete` took the one row it was handed and
+  // left the mirror in place, so the other client's page went on listing a link this
+  // side no longer had, and went on offering that person as a payer.
+  //
+  // Nothing about a one-row delete looks wrong at the site: it is the complete,
+  // correct removal of the row it names. The defect is only visible from the other
+  // client's page, which is why it survived every reading of this file.
+  //
+  // The rule is not "always two rows" — rows written before the create-and-link path
+  // existed are one-sided, and a corporate link has no second client. It is that a
+  // delete path must ASK for the mirror, which is what `deleteMany` keyed on the two
+  // ids does: zero matches is a fine answer, silently leaving one behind is not.
+  for (const file of allSource().filter((f) => f.endsWith("actions.ts"))) {
+    const src = read(file);
+    for (const part of src.split(/\n(?=export async function )/)) {
+      const fn = /export async function (\w+)/.exec(part)?.[1];
+      if (!fn) continue;
+      // code(), so a commented-out delete cannot be the thing that fires this, and a
+      // commented deleteMany cannot be the thing that satisfies it.
+      const body = code(part);
+      if (!/clientRelationship\.delete\s*\(/.test(body)) continue;
+      if (/clientRelationship\.deleteMany\s*\(/.test(body)) continue;
+
+      fail(
+        "relationships",
+        `${rel(file)} → ${fn}`,
+        "deletes a relationship row without clearing the reverse row",
+        "before the delete, deleteMany({ where: { studentId: <other>, relatedStudentId: <this> } }) — " +
+          "app/(portal)/portal/(dashboard)/settings/actions.ts does it this way",
       );
     }
   }

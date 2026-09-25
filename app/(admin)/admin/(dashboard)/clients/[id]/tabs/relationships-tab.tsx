@@ -67,6 +67,16 @@ interface RelationshipData {
   student?: RelatedStudent | null;
 }
 
+/**
+ * The OTHER client in a relationship, from the point of view of the page you are on.
+ * A row is stored from one side, and this page shows rows in both directions, so
+ * `relatedStudentId` is the other person on a row we own and `studentId` is the other
+ * person on a row they own. A corporate row has no other client and gives null.
+ */
+function otherSideOf(rel: RelationshipData, clientId: string): string | null {
+  return rel.studentId === clientId ? rel.relatedStudentId : rel.studentId;
+}
+
 const RELATIONSHIP_TYPES = [
   { value: "partner", label: "Partner / Spouse" },
   { value: "parent", label: "Parent" },
@@ -96,16 +106,32 @@ export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
   const [isPending, startTransition] = useTransition();
   const [editingRel, setEditingRel] = useState<RelationshipData | null>(null);
 
-  function invalidatePersonal() {
-    void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.personal(clientId) });
+  /**
+   * A relationship is two rows and two clients, so changing it changes BOTH pages.
+   *
+   * This invalidated only `personal(clientId)` — this client, this tab. The other
+   * client's page went on serving its cached copy, and since `refetchOnWindowFocus`
+   * is off globally (components/providers/query-provider.tsx), switching to their tab
+   * did not refresh it: only a hard reload or the staleTime expiring would. On
+   * 2026-09-24 that showed a payer who had been unlinked minutes earlier, on a page
+   * whose database rows were already gone — a cache that reads exactly like live data.
+   *
+   * `all()`, not `personal()`: the Finances tab's billing panels read the same
+   * relationship rows, so a relationship change goes stale there too.
+   */
+  function invalidateBoth(otherClientId?: string | null) {
+    void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.all(clientId) });
+    if (otherClientId && otherClientId !== clientId) {
+      void queryClient.invalidateQueries({ queryKey: CLIENT_QUERY_KEYS.all(otherClientId) });
+    }
   }
 
-  function handleRemove(relationshipId: string) {
+  function handleRemove(rel: RelationshipData) {
     if (!confirm("Remove this relationship?")) return;
     startTransition(async () => {
-      await removeRelationshipAction(relationshipId, clientId);
+      await removeRelationshipAction(rel.id, clientId);
       toast.success("Relationship removed");
-      invalidatePersonal();
+      invalidateBoth(otherSideOf(rel, clientId));
     });
   }
 
@@ -145,7 +171,7 @@ export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-lg font-semibold">Relationships</h2>
-        <AddRelationshipDialog clientId={clientId} clientName={clientName} onSuccess={invalidatePersonal} />
+        <AddRelationshipDialog clientId={clientId} clientName={clientName} onSuccess={invalidateBoth} />
       </div>
 
       {allRelationships.length === 0 ? (
@@ -206,7 +232,7 @@ export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                      onClick={() => handleRemove(rel.id)}
+                      onClick={() => handleRemove(rel)}
                       disabled={isPending}
                       title="Remove"
                     >
@@ -226,7 +252,7 @@ export function RelationshipsTab({ client }: Readonly<RelationshipsTabProps>) {
           relationship={editingRel}
           clientId={clientId}
           onClose={() => setEditingRel(null)}
-          onSuccess={invalidatePersonal}
+          onSuccess={invalidateBoth}
         />
       )}
     </div>
@@ -244,7 +270,7 @@ function EditRelationshipDialog({
   relationship: RelationshipData;
   clientId: string;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (otherClientId?: string | null) => void;
 }>) {
   const [isPending, startTransition] = useTransition();
   const [type, setType] = useState(relationship.relationshipType);
@@ -258,7 +284,7 @@ function EditRelationshipDialog({
           relationshipLabel: label || undefined,
         });
         toast.success("Relationship updated");
-        onSuccess?.();
+        onSuccess?.(otherSideOf(relationship, clientId));
         onClose();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to update");
@@ -329,7 +355,7 @@ function AddRelationshipDialog({
 }: Readonly<{
   clientId: string;
   clientName: string;
-  onSuccess?: () => void;
+  onSuccess?: (otherClientId?: string | null) => void;
 }>) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -398,6 +424,9 @@ function AddRelationshipDialog({
   function handleSubmit() {
     startTransition(async () => {
       try {
+        // The client on the other side of what we just linked, so their page's cache
+        // is invalidated too. A corporate entity is not a client and stays null.
+        let otherClientId: string | null = null;
         if (mode === "corporate") {
           const entity = await createBillingEntityAction({
             name: entityName,
@@ -429,6 +458,7 @@ function AddRelationshipDialog({
             toast.error(result.error);
             return;
           }
+          otherClientId = result.clientId ?? null;
         } else {
           if (!selectedClient) return;
           await addRelationshipAction({
@@ -437,9 +467,10 @@ function AddRelationshipDialog({
             relationshipType: type,
             relationshipLabel: label || undefined,
           });
+          otherClientId = selectedClient.id;
         }
         toast.success(mode === "new_client" ? "Client created & relationship added" : "Relationship added");
-        onSuccess?.();
+        onSuccess?.(otherClientId);
         reset();
         setOpen(false);
       } catch (err) {

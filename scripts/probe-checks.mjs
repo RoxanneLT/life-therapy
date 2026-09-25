@@ -315,6 +315,55 @@ export const broken = (;
     expects: ["audit: every source file parses"],
   },
   {
+    // The audit-worthy list gained `updateBillingAssignment` on 2026-09-25, and a term added to a
+    // regex is the mutation no other plant can see (L-54): narrow it back out and every existing
+    // probe stays green. So this plant exists for that term and for nothing else.
+    //
+    // The body mutates nothing, deliberately. The check fires on the NAME and the absence of a
+    // recordAudit call, so a plant that also wrote to the database would trip the auth and
+    // revalidate checks too — three questions answered by one ✗, and a term that stopped
+    // matching would still look probed.
+    path: "app/(admin)/admin/(dashboard)/__probe-billing/actions.ts",
+    named: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+"use server";
+import { requireRole } from "@/lib/auth";
+
+export async function updateBillingAssignmentProbeAction(studentId: string) {
+  await requireRole("super_admin");
+  return { studentId };
+}
+`,
+    expects: ["audit-trail: an audit-worthy action records one"],
+  },
+  {
+    // The known-good half for the relationships check below: a delete path that DOES ask for the
+    // mirror. Without it, a check that flagged every `clientRelationship.delete()` — the correct
+    // ones included — would read as perfect on the two must-fire plants.
+    path: "app/(admin)/admin/(dashboard)/__probe-rel/actions.ts",
+    quiet: true,
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+"use server";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth";
+
+export async function probeRemoveBothRowsAction(relationshipId: string, studentId: string) {
+  await requireRole("super_admin");
+  const rel = await prisma.clientRelationship.findUnique({ where: { id: relationshipId } });
+  if (!rel) return;
+  if (rel.relatedStudentId) {
+    await prisma.clientRelationship.deleteMany({
+      where: { studentId: rel.relatedStudentId, relatedStudentId: rel.studentId },
+    });
+  }
+  await prisma.clientRelationship.delete({ where: { id: relationshipId } });
+  revalidatePath(\`/admin/clients/\${studentId}\`);
+}
+`,
+    expects: [],
+  },
+  {
     // A real throttle, but the per-instance in-memory one, which resets on a cold start. Without
     // this plant, dropping the check's `durable` filter survived every probe (L-54).
     path: "app/__probe-mfa/verify-in-memory.ts",
@@ -559,6 +608,37 @@ const MUTATIONS = [
     find: "password: `${randomUUID()}-${randomUUID()}`,",
     replace: "password: email,",
     expects: ["auth: every place that sets a password is classified by what authorises it"],
+  },
+  {
+    // The admin delete as it stood until 2026-09-25: one row removed, the mirror left behind on
+    // the other client's page. Planted back into the file that held it, so the fire is the real
+    // defect. `named` spells the function out because this file carries a second plant below and
+    // `true` would be satisfied by either of them.
+    path: "app/(admin)/admin/(dashboard)/clients/[id]/actions.ts",
+    named: "✗ app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → removeRelationshipAction",
+    find: "  if (rel.relatedStudentId) {\n    await prisma.clientRelationship.deleteMany({\n      where: { studentId: rel.relatedStudentId, relatedStudentId: rel.studentId },\n    });\n  }\n",
+    replace: "  // Planted by scripts/probe-checks.mjs: the reverse row left where it was.\n",
+    expects: ["relationships: removing a relationship removes both directions"],
+  },
+  {
+    // The OTHER path, which has been correct since it was written. It gets its own plant because
+    // the check's scope is what was wrong for months — one path had the behaviour and the other
+    // did not — so a check that only ever reaches the admin's file would be the same defect in
+    // the instrument. This file carries password plants too, hence the spelled-out `named`.
+    path: "app/(portal)/portal/(dashboard)/settings/actions.ts",
+    named: "✗ app/(portal)/portal/(dashboard)/settings/actions.ts → removeRelationshipAction",
+    find: "  if (rel.relatedStudentId) {\n    await prisma.clientRelationship.deleteMany({\n",
+    replace: "  if (rel.relatedStudentId) {\n    await prisma.clientRelationship.findMany({\n",
+    expects: ["relationships: removing a relationship removes both directions"],
+  },
+  {
+    // The audit entry for the payer change, removed. It stays an object literal so the plant is
+    // the missing CALL and not a syntax error the parse check would report instead.
+    path: "app/(admin)/admin/(dashboard)/clients/[id]/actions.ts",
+    named: "✗ app/(admin)/admin/(dashboard)/clients/[id]/actions.ts → updateBillingAssignmentAction",
+    find: '  await recordAudit({\n    action: "billing_assignment_changed",\n',
+    replace: '  const planted = ({\n    action: "billing_assignment_changed",\n',
+    expects: ["audit-trail: an audit-worthy action records one"],
   },
   {
     // A throttle THROTTLES trusts, renamed out from under it. The list would otherwise go on

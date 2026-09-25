@@ -16,26 +16,23 @@ section of that handover is done.
 `1396829`, found while triaging L-72; the audit classifies every password setter
 (`PASSWORD_SETTERS`). The repo is public, so the details are in the session report and nowhere else.
 
-**Production was frozen from 2026-08-19 to 2026-09-11.** Every deploy failed from `566617e` on: a
-client component imported Prisma, which only `next build` sees. The last success was `e48cd61`. It
-was fixed in `4342b14`, pushed and deployed 2026-09-11, which released 76 held commits at once.
-Deploy state IS readable from here: `gh api repos/RoxanneLT/life-therapy/commits/<sha>/status`.
-Read it after every push. Since this change pre-push runs `npm run check:push`, which is `check`
-followed by the production build.
+**Production was frozen 2026-08-19 to 2026-09-11** — every deploy failed from `566617e` on: a
+client component imported Prisma, which only `next build` sees. Fixed in `4342b14`, releasing 76
+held commits at once. Deploy state IS readable from here:
+`gh api repos/RoxanneLT/life-therapy/commits/<sha>/status` — read it after every push. Pre-push
+now runs `npm run check:push`, which is `check` followed by the production build.
 
 **Done and pushed, 2026-09-10/11 — detail is in the commits, not here.** `46b8221..fb1c669`: the
-audit reads the TypeScript parser (L-35 · L-49) and the first kit move. Triage: 36 of 36 answered;
-CF-1..CF-4 filed. `bf62b2a..f936b77`: thirteen kit and spine rows from canon `2e79fdb`, all pins
-dropped (`c06491c`). Measured by Stéan 2026-09-11: a settings ask prompts beside a live hook, so
-twins are live. `fb1c669..28e9886`: Stéan's two standing authorisations, now in `CLAUDE.md` §7,
-and `check-brief` v7.
+audit reads the TypeScript parser (L-35 · L-49) and the first kit move; triage 36 of 36, CF-1..CF-4
+filed. `bf62b2a..f936b77`: thirteen kit and spine rows from canon `2e79fdb`, all pins dropped
+(`c06491c`). `fb1c669..28e9886`: Stéan's two standing authorisations, now in `CLAUDE.md` §7 (where
+the settings-twin measurement is too), and `check-brief` v7.
 
 **Queue, `docs/LESSONS.md`:**
 
 - **L-41**: carried 2026-09-11 by the kit move. check-handoff-contract v5 prints the QUARANTINED tell.
-- **L-68**: carried 2026-09-11. Stéan gave the standing authorisation in their own words, and it
-  is in `CLAUDE.md` §7. Agents, workflows and deep-research run on judgement without asking. A
-  workflow stays under 15 agents and is announced in one line when it starts.
+- **L-68**: carried 2026-09-11 — Stéan's standing authorisation is in `CLAUDE.md` §7 in their own
+  words, with the under-15 and announce-in-one-line conditions on a workflow.
 
 **L-72, second pass (2026-09-11, pushed).** A walker review of `1396829` said stop; the rest of
 the class is fixed in `64e00c3`, `7d89fc1`, `3ea8335`, `0538d24`. Details in the commits and the
@@ -72,19 +69,29 @@ open a normally-blocked date either fully or at chosen slots. Groundwork first, 
   Fixed in both, plus a third reader the check found (`getNextBusinessDate`). Held by
   `availability: a closed day yields to an override`.
 
-- `cc88381` — the feature: an override is blocked, custom hours, or open slots. Ticked in the
-  existing `ToggleChipGrid` from `ALLOWED_SLOT_START_TIMES`; `parseSlotStartTimes` is the only way
-  a time enters, held by a check reading both property spellings, two probes and five unit tests.
-  Outlook, existing bookings, buffer and min notice still apply to the opened slots.
+- `cc88381` — the feature: an override is blocked, custom hours, or open slots. Ticked from
+  `ALLOWED_SLOT_START_TIMES`; `parseSlotStartTimes` is the only way a time enters, held by a check
+  reading both property spellings, two probes and five unit tests. Outlook, bookings, buffer and
+  min notice still apply to the opened slots.
 
 - `fbbb8c3` — Stéan: a fully booked day must not be selectable anywhere. One pure `slotsForDay`
   now decides a day; a date is offered only if it returns a slot. Batched: overrides and bookings
-  one query each, busy in `ceil(days / 60)` Graph calls. **Measured 2026-09-24 on the live tenant:
-  `getSchedule` covers 60 days in ~390ms and refuses 90 with `ErrorTimeIntervalTooBig`** — the
-  admin list asks for 90, so chunking is required. `getFreeBusy` now returns each busy range's
-  day. A census found the series reschedule and its preview each hand-rolling a subset; both call
-  `getDayOpening`. Held by `availability: nothing works out a day's shape by hand`.
-  `adminCreateHistoricalBookingAction` stays unguarded by design.
+  one query each, busy in `ceil(days / 60)` Graph calls — the 60-day ceiling is measured and
+  recorded at `lib/graph.ts` `MAX_FREE_BUSY_DAYS`. The series reschedule and its preview each
+  hand-rolled a subset; both now call `getDayOpening`. Held by `availability: nothing works out a
+  day's shape by hand`. `adminCreateHistoricalBookingAction` stays unguarded by design.
+
+- **Genna Scott — a stale cache that read as live data (2026-09-25, committed, not pushed).**
+  Roxanne unlinked the payer on Genna and the link stayed on Mark's page. The database was clean
+  (db-inspector: zero relationship rows either way, both FKs null), so the panel was react-query's
+  per-client cache, which nothing invalidated for the OTHER client — and `refetchOnWindowFocus` is
+  off globally, so nothing else refreshed it either. Three fixes: every add/edit/remove now
+  invalidates both clients' `all()` keys; the admin remove clears the reverse row as the portal's
+  always has, held by `relationships: removing a relationship removes both directions` with a
+  plant on each path and a known-good; and the payer change records an audit entry, so
+  `updateBillingAssignment` joins the audit-worthy list here and in `CLAUDE.md` §4.
+  **Waiting on a person: Roxanne hard-reloads Mark's page once (Ctrl+F5)** — the fix invalidates
+  from now on, it cannot reach the copy already in her browser.
 
 **Next action:** none queued. Canon lifts the outbox from
 HEAD. Before re-running `--emit-open`, check `git -C <canon> status --short tools`; if it is dirty,
