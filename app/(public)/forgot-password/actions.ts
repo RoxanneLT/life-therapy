@@ -79,6 +79,17 @@ export async function requestPasswordResetAction(
   return { success: true };
 }
 
+/** Refuse a reset whose token is already spent, ending the session that spending it opened. */
+async function refuseSignedOut(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  error: string,
+): Promise<ResetState> {
+  await supabase.auth.signOut({ scope: "local" }).catch((err: unknown) => {
+    console.error("[password-reset] sign-out after refusal failed:", err);
+  });
+  return { error };
+}
+
 /** Why a reset must stop for want of a 2FA code, or null when it may proceed. */
 async function secondFactorRefusal(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -156,9 +167,15 @@ export async function updatePasswordAction(
   // page shows the code field only then. That is a hint; this check is the enforcement, and it
   // still refuses when the hint was missing — 2FA turned on after the email went — saying a new
   // link is needed.
+  //
+  // Every refusal from here on signs the session out. verifyOtp above has already signed the person
+  // in, at AAL1, and a refusal that left that session behind stranded them: /login saw a user and
+  // routed to /admin, the 2FA gate routed to /login/mfa, and "Forgot password" on /login could no
+  // longer be reached. Stéan hit exactly that on 2026-09-30. A reset that did not happen leaves
+  // nobody signed in. `scope: "local"` ends this browser's session only, not their other devices.
   if (user) {
     const refusal = await secondFactorRefusal(supabase, user, formData, ip);
-    if (refusal) return { error: refusal };
+    if (refusal) return refuseSignedOut(supabase, refusal);
   }
 
   const { error } = await supabase.auth.updateUser({
@@ -166,7 +183,7 @@ export async function updatePasswordAction(
   });
 
   if (error) {
-    return { error: error.message };
+    return refuseSignedOut(supabase, error.message);
   }
 
   if (user) {

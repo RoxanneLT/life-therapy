@@ -148,6 +148,26 @@ export default function MfaChallengePage() {
             </Button>
           </form>
         )}
+        {/* The only way off this screen used to be "Back to main site", which left the AAL1
+            session in place, so /login bounced straight back here and "Forgot password" was
+            unreachable. Signing out is the exit for a wrong account, a lost authenticator, or
+            a half-finished reset (2026-09-30). */}
+        {!checking && (
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Not you, or can&apos;t get in?{" "}
+            <button
+              type="button"
+              className="underline hover:text-foreground"
+              onClick={async () => {
+                sessionStorage.removeItem(BOUNCE_KEY);
+                await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+                globalThis.location.assign("/login");
+              }}
+            >
+              Sign out and start again
+            </button>
+          </p>
+        )}
       </CardContent>
     </Card>
   );
