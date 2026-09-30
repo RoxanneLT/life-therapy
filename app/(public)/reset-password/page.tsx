@@ -138,6 +138,25 @@ export default function ResetPasswordPage() {
                     </button>
                   </div>
                 </div>
+                {/* Shown to everyone: which accounts have 2FA is only knowable once the token
+                    is spent (see updatePasswordAction), so a 2FA account must bring its code
+                    on the first submit. */}
+                <div className="space-y-2">
+                  <Label htmlFor="mfa_code">Authenticator code</Label>
+                  <Input
+                    id="mfa_code"
+                    name="mfa_code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    maxLength={6}
+                    pattern="\d{6}"
+                    disabled={isPending}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only if you have set up two-factor authentication. Otherwise leave this blank.
+                  </p>
+                </div>
                 <Button type="submit" className="w-full" disabled={isPending}>
                   {isPending ? (
                     <>
