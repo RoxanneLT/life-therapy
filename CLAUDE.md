@@ -496,8 +496,9 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 | `crawler-doctrine` | The classes no mechanism decides — divergent rule expressions, doctrine the tree contradicts | **writes nothing**, opus |
 | `implementer` | A pre-scoped mechanical transform; returns misfit judgment sites rather than guessing | write, **main checkout**, never commits, sonnet |
 | `walker` | Adversarial pre-push review — tries to **refute** the work. Independent context is the point | handoff-only, opus |
+| `scout` | "Go find out X" when no pipeline step fits — replaces `Explore` and `general-purpose`, which `agent-brief-gate` refuses | handoff-only, sonnet |
 
-Mechanical reading → the handoff-only four. Mechanical writing → the implementer. Judgment stays
+Mechanical reading → the handoff-only five. Mechanical writing → the implementer. Judgment stays
 in the main session.
 
 **STANDING AUTHORISATION — Stéan, 2026-09-11, from this date onwards.** In Stéan's words: *"from
@@ -572,7 +573,7 @@ prompt by design — the sibling project spent three days and two wrong write-up
 protected list is enumerated, not exemplary, and there is no dotfile wildcard, so a root `.handoff/`
 is clear where `.claude/.handoff/` would not have been.
 
-**The artefact's shape is checked too, and that is the point of writing one.** Five spines close
+**The artefact's shape is checked too, and that is the point of writing one.** Six spines close
 with a labelled `Agent / Verdict / Summary / Artefact / Promote` block; the *reply* carrying it is a
 transcript nothing can inspect afterwards, so the same block is required as the artefact's final
 section, on disk, where `scripts/check-handoff-contract.mjs` reaches it. A missing `Promote` line is
@@ -583,6 +584,25 @@ artefact it skipped on every run**, because a boundary widened by hand gets forg
 `.handoff/` is task-scoped scratch, the live pass normally validates **zero** files and says so out
 loud — the both-directions fixtures in `--selftest` are what make it a check rather than a green
 light.
+
+**The brief decides whether that artefact exists, so brief for it.** Every spawn of a spined agent
+names its artefact and asks for nothing inline:
+
+```
+pipeline: feature · step 1 of 3 · artefact: .handoff/<task-slug>/01-grounder.md
+<the question, and any input artefact to read first>
+```
+
+Relay the returned block verbatim and open the artefact only at the section the block names. The
+next agent's brief is a pointer — *"Read `.handoff/<slug>/01-grounder.md`; implement X"* — never a
+retelling; `/walk` numbers one walker and one `db-inspector` per claim the same way. **Never**
+"return your result as text", "give me the table", or a built-in `Explore` / `general-purpose`
+spawn: measured across the estate on 2026-09-30, each came back inline every time, whatever the
+spine said, because an agent follows the nearest instruction and that is the caller's. So it is held
+at the caller's tool call: `.claude/hooks/agent-brief-gate.js` denies a spawn of a `BRIEFED` type
+whose prompt names no `.handoff/<slug>/<NN>-<type>.md` or asks for the answer inline, and denies the
+two built-ins naming `scout` instead. It cannot see what the agent then replies — that half is the
+spine's, and `check-handoff-contract` reads the artefact on disk. <!-- @enforced hook:agent-brief-gate -->
 
 **The hook DOES match `Bash` now, and "the implementer never commits" stopped being a rule it
 follows.** Until 2026-09-09 this section said the opposite and was right at the time: the matcher

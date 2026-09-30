@@ -7,6 +7,19 @@ not confirm it. Spawn the `walker` agent on the diff in the background first, th
 yourself while it runs, and fold its findings in when it returns. Its fresh context catches what the
 author's context cannot.
 
+**Every spawn names its own artefact and asks for nothing inline** — `agent-brief-gate` denies a
+spawn that doesn't. Pick one slug for this walk (`walk-<topic>`) and number the spawns in the order
+you send them, one NN each:
+
+```
+pipeline: walk · step 1 of N · artefact: .handoff/walk-<topic>/01-walker.md
+<what was done, the range to walk (origin/master..HEAD), the claims under test>
+```
+
+then `02-db-inspector.md`, `03-db-inspector.md`, `04-census.md` … one per claim. Each returns its
+contract block; relay it verbatim and read the artefact at the section the block names. Never brief
+"return your findings as text" — the artefact is where the finding lives.
+
 1. **Origin, not working tree.** `git fetch origin` and diff every claim against the pushed state.
    Uncommitted work that a report calls "done" IS a finding.
 

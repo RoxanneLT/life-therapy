@@ -33,7 +33,24 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-Empty. CF-5 was filed at canon `98f9636` (below).
+### CF-6 · `agent-brief-gate` v1 fails canon's own `check-hook-registration`
+OBSERVED   Adopted byte-for-byte from `a4ff0b5` and registered as its header says, the hook turned
+           the gate red: it carries no `@event`, `@matcher`, `@twin` or `@no-twin` declaration.
+           `agent-write-scope.js` at the same commit carries all three.
+COMMAND    `node scripts/check-hook-registration.mjs`
+           ❌ 2 hook-registration finding(s):
+             .claude/hooks/agent-brief-gate.js: declares no "// @event <Event>" and "// @matcher <pattern>" — without them nothing can check it is registered for the calls it gates
+             .claude/hooks/agent-brief-gate.js: declares neither a settings twin nor @no-twin with a reason — add "// @twin <settings pattern>" per rule, or "// @no-twin <why settings cannot express it>"
+WHY IT IS  Any project running the kit's registration check fails on adoption, whatever its stack.
+CANON'S    Canon's probe for the hook passes (77 of 77), because it tests decisions, not declarations,
+           so canon's own gate presumably never ran the registration check over it.
+SMALLEST   Add the declarations above the `import`. LT carries them as a four-line marked fork until
+FIX        re-adoption: `@event PreToolUse`, `@matcher Agent|Task`, and a `@no-twin` saying a
+           settings rule reads a tool name and argument prefix, never a prompt's contents. One thing
+           to decide in canon, not here: the REDIRECT half (refusing `Explore`/`general-purpose`)
+           *is* expressible in settings, e.g. as a deny on `Agent(Explore)`. So a twin there is
+           possible, and a `@no-twin` covering the whole file overstates the case. It must not
+           break: a pass emitting no decision, per the header.
 
 ---
 
@@ -98,6 +115,7 @@ never *exempt*, so the reason has to argue it.
 | four rows | v8 · v6 | moved 2026-09-14 from canon's history at `d29c021`, with this project's `KIT:CONFIG` regions put back: `bash-gate` v8, `bash-gate-probe` v8, `agent-write-scope` v6 and `agent-write-scope-probe` v6. Every config region matched by slug, and the two config modules are unchanged. By the install step in `kit/INSTALL.md`, `bash-gate.probe.mjs --against` the committed v7 ran 195 cases through both gates: 4 looser, all 4 declared in `LOOSENED` (each a commit message now read as a message), and 3 stricter. The rules the two dated `@probed-kit` twin records back are byte-identical between canon's v7 and v8, so the records move to v8 with their dates kept. Stéan was asked about v7's dry-run push on 2026-09-14 and kept it asking; the `verdicts` region says so. **All four pins are finished work: drop them from `ledgers/projects.json`.** | the commit that adds this row · `bash-gate.probe` → `195 probes pass, both directions, 29 verdict(s) tightened` · `--against` → `195 cases through both gates — 4 looser (4 declared), 3 stricter` · `agent-write-scope.probe` → `136 agent-write-scope probes pass` · `check-hook-registration` → green · `npm run check` → exit 0 |
 | `check-brief` | v9 | moved 2026-09-30 from canon's history at `86d123f` (`git show 86d123f:kit/project-kit/scripts/check-brief.mjs`), with the `KIT:CONFIG names` region kept. `diff` against canon's bytes shows that region's LT comment block and nothing else. Everything canon predicted matched. Two things in the instruction did not match: it said to copy canon's working-tree file, and CLAUDE.md §1 takes kit bytes from history. The bytes are the same, since the file was clean at canon's HEAD `86d123f`. It also said `lib/cron/whatsapp-reminders.ts` was staged here. At adoption it was not: it had been committed in `7d5f0f7` first, and the adoption commit holds `scripts/check-brief.mjs` alone. **Record v9 in `kitAdopted`.** | `c886de4` · `--selftest` → `selftest: all probes green (both directions)` · `.` → `brief: conformant · 2 of 10 not measured` (B-5 no unresolved markers, B-10 no `status: reference` document) · `npm run check` → exit 0 |
 | `settings` | v3 | the M-KIT-22 claim is now committed here — `"PowerShell"` in `permissions.deny`. Nothing to record in `kitAdopted` (the row is asserted, not adopted); listed so canon sees the claim is held by a commit and not by a working tree | `2ea2ca6` |
+| artefact-first agents | `agent-brief-gate` v1 · `agent-brief-gate-config` v1 · `agent-brief-gate-probe` v1 · `check-handoff-contract` v6 · `agent-write-scope-config` v2 | moved 2026-09-30 from canon's history at `a4ff0b5` (`git show`). Spines are via `propagate-spines`: census v10→v11, db-inspector v5→v6, grounder v7→v8, implementer v5→v6, walker v8→v9, and `scout` v1 is new, its frontmatter and `## Project surface` written here. `check-handoff-contract` v6 is canon's bytes whole: the previous v5 copy had no local drift. `agent-write-scope.config.mjs` is v2 with LT's dated reading comment kept inside the `scopes` region, extended for scout. The `briefs` region is canon's default unedited: it is exactly LT's six contract spines, with crawler-doctrine absent. `agent-brief-gate.js` is v1 plus the four declaration lines from CF-6, marked as a fork. `settings.json` registers the hook as `Agent\|Task`; `test:gate` runs its probe; CLAUDE.md §7 carries the scout row and the brief paragraph, tagged `@enforced hook:agent-brief-gate` (so `minD` 25→26); `/walk` numbers one artefact per spawn. **Live verification 6(a)–(c) is not yet run**: hooks load at session start, so it needs a fresh session. It will be recorded here, quoted, in a follow-up commit. **Record the five rows in `kitAdopted`.** | the commit that adds this row · `agent-brief-gate.probe` → `✅ agent-brief-gate: 77 of 77 probes pass (6 briefed types, 2 redirects)` · `agent-write-scope.probe` → `✅ 145 agent-write-scope probes pass (31 derived from your 7 agent(s), …)` · `check-hook-registration` → green after CF-6's lines · `npm run check` → exit 0 |
 
 No pins.
 
