@@ -21,16 +21,29 @@ import { sendAndLogTemplate } from "@/lib/whatsapp";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { addDays, format } from "date-fns";
 import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
+import { reminderDue, reminderFingerprint, type ReminderKind } from "@/lib/reminder-fingerprint";
 
 // Hours-before-start window boundaries
 const DAY_BEFORE_MAX = 24; // start sending the day-before reminder once within 24h
 const IMMINENT_MAX = 3; // ~2h nudge: fire when within 3h (2h cron cadence guarantees catch)
 
-/** The three one-per-booking reminder stamps. */
+/** The three reminder stamps, each paired with what it was sent for (lib/reminder-fingerprint.ts). */
 type ReminderField =
   | "reminderSentAt"
   | "whatsappReminder24hSentAt"
   | "whatsappReminderMorningSentAt";
+
+const SENT_FOR: Record<ReminderField, "reminderSentFor" | "whatsappReminder24hSentFor" | "whatsappReminderMorningSentFor"> = {
+  reminderSentAt: "reminderSentFor",
+  whatsappReminder24hSentAt: "whatsappReminder24hSentFor",
+  whatsappReminderMorningSentAt: "whatsappReminderMorningSentFor",
+};
+
+const KIND: Record<ReminderField, ReminderKind> = {
+  reminderSentAt: "email",
+  whatsappReminder24hSentAt: "whatsapp24h",
+  whatsappReminderMorningSentAt: "whatsappImminent",
+};
 
 /**
  * Take ownership of one reminder before sending it.
@@ -45,12 +58,28 @@ type ReminderField =
  * decides, and exactly one caller sees count === 1. Same approach the Paystack
  * fulfilment fix used against redelivery.
  */
-async function claimReminder(bookingId: string, field: ReminderField): Promise<boolean> {
+//
+// The claim also takes a reminder sent for something the booking no longer is, so a moved
+// session is re-reminded exactly once: the winner writes the current fingerprint, after which
+// `not: current` matches nothing. SQL's NULL <> x is not true, so a legacy stamp with no
+// fingerprint is never re-claimed — the same "counts as current" rule as reminderDue.
+async function claimReminder(bookingId: string, field: ReminderField, current: string): Promise<boolean> {
+  const sentFor = SENT_FOR[field];
   const claimed = await prisma.booking.updateMany({
-    where: { id: bookingId, [field]: null },
-    data: { [field]: new Date() },
+    where: { id: bookingId, OR: [{ [field]: null }, { [sentFor]: { not: current } }] },
+    data: { [field]: new Date(), [sentFor]: current },
   });
   return claimed.count === 1;
+}
+
+/** Due, and claimed for this run. */
+async function takeReminder(
+  booking: { id: string; date: Date; startTime: string; teamsMeetingUrl: string | null } & Record<string, unknown>,
+  field: ReminderField,
+): Promise<boolean> {
+  const current = reminderFingerprint(KIND[field], booking);
+  const due = reminderDue(booking[field] as Date | null, booking[SENT_FOR[field]] as string | null, current);
+  return due && (await claimReminder(booking.id, field, current));
 }
 
 /**
@@ -64,7 +93,7 @@ async function claimReminder(bookingId: string, field: ReminderField): Promise<b
  */
 async function releaseReminder(bookingId: string, field: ReminderField): Promise<void> {
   await prisma.booking
-    .updateMany({ where: { id: bookingId }, data: { [field]: null } })
+    .updateMany({ where: { id: bookingId }, data: { [field]: null, [SENT_FOR[field]]: null } })
     .catch((err) => console.error(`[session-reminders] could not release ${field}:`, err));
 }
 
@@ -87,11 +116,9 @@ export async function processSessionReminders(): Promise<{
     where: {
       status: "confirmed",
       date: { gte: windowStart, lte: windowEnd },
-      OR: [
-        { reminderSentAt: null },
-        { whatsappReminder24hSentAt: null },
-        { whatsappReminderMorningSentAt: null },
-      ],
+      // No "stamp is null" filter any more: a reminder sent for an older time is also due, and
+      // that is decided against a fingerprint computed per booking. Two days of confirmed
+      // bookings is a small read.
     },
     include: { student: true },
   });
@@ -115,7 +142,7 @@ export async function processSessionReminders(): Promise<{
       waSessionOn && !!booking.student?.smsOptIn && !!booking.student?.phone;
 
     // ── Day-before: email ──────────────────────────────────────
-    if (isDayBefore && booking.reminderSentAt === null && (await claimReminder(booking.id, "reminderSentAt"))) {
+    if (isDayBefore && (await takeReminder(booking, "reminderSentAt"))) {
       try {
         const teamsButton = booking.teamsMeetingUrl
           ? `<div style="text-align: center; margin: 24px 0;"><a href="${booking.teamsMeetingUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Join Microsoft Teams Meeting</a></div>`
@@ -148,7 +175,7 @@ export async function processSessionReminders(): Promise<{
     }
 
     // ── Day-before: WhatsApp 24h ───────────────────────────────
-    if (isDayBefore && waReady && booking.whatsappReminder24hSentAt === null && (await claimReminder(booking.id, "whatsappReminder24hSentAt"))) {
+    if (isDayBefore && waReady && (await takeReminder(booking, "whatsappReminder24hSentAt"))) {
       try {
         const result = await sendAndLogTemplate({
           studentId: booking.student!.id,
@@ -181,7 +208,7 @@ export async function processSessionReminders(): Promise<{
     }
 
     // ── Imminent: WhatsApp ~2h nudge ───────────────────────────
-    if (isImminent && waReady && booking.whatsappReminderMorningSentAt === null && (await claimReminder(booking.id, "whatsappReminderMorningSentAt"))) {
+    if (isImminent && waReady && (await takeReminder(booking, "whatsappReminderMorningSentAt"))) {
       try {
         const result = await sendAndLogTemplate({
           studentId: booking.student!.id,

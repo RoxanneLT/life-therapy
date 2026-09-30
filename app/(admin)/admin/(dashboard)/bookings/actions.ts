@@ -258,12 +258,16 @@ export async function rescheduleBooking(
       endTime: newEndTime,
       graphEventId: calResult?.eventId || null,
       teamsMeetingUrl: calResult?.teamsMeetingUrl || booking.teamsMeetingUrl,
-      // The reminder stamps belong to the OLD time. Left set, the reminder cron — which only picks
-      // bookings whose stamp is null — sends nothing for the new one: Genevieve's 1 Oct session
-      // carried the stamp of the 29 Sep reminder for the 30 Sep slot it had left.
+      // The reminder stamps belong to the OLD time. The cron now sees that for itself, from the
+      // fingerprint beside each stamp (lib/reminder-fingerprint.ts), on every path that moves a
+      // booking. This reset stays for the one case the fingerprint cannot catch: a stamp written
+      // before fingerprints existed, which the cron counts as current.
       reminderSentAt: null,
+      reminderSentFor: null,
       whatsappReminder24hSentAt: null,
+      whatsappReminder24hSentFor: null,
       whatsappReminderMorningSentAt: null,
+      whatsappReminderMorningSentFor: null,
     },
     });
   } catch (err) {

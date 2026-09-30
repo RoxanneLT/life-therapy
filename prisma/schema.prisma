@@ -313,6 +313,15 @@ model Booking {
   whatsappReminder24hSentAt     DateTime?   @map("whatsappReminder48hSentAt")
   whatsappReminderMorningSentAt DateTime?
 
+  /// What each reminder told the client — the fingerprint from lib/reminder-fingerprint.ts
+  /// ("date|start|link" for the email, "date|start" for WhatsApp). A reminder is due again
+  /// when the booking no longer matches it, so a moved session is re-reminded whatever path
+  /// moved it. Null on a stamp written before this existed, which counts as current.
+  /// Added 2026-09-30 via the Management API and mirrored here by hand.
+  reminderSentFor                String?
+  whatsappReminder24hSentFor     String?
+  whatsappReminderMorningSentFor String?
+
   // NOTE — one live index is NOT declared here, because Prisma cannot express a
   // PARTIAL unique index:
   //
