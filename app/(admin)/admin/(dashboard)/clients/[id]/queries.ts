@@ -20,6 +20,7 @@ export async function fetchClientFinances(clientId: string) {
   const result = await prisma.student.findUnique({
     where: { id: clientId },
     select: {
+      billFullMonth: true,
       bookings: { orderBy: { date: "desc" }, take: 200 },
       creditTransactions: { orderBy: { createdAt: "desc" }, take: 50 },
       orders: {

@@ -274,6 +274,10 @@ export async function createInvoiceFromPaymentRequest(
     billingVatNumber,
     currency: pr.currency,
     lineItems,
+    // The request's own discount — since 2026-09-30 that is where a credit for a billed session
+    // cancelled in time lives (a line total cannot be negative). Not passing it made the tax
+    // invoice total more than the request the client paid.
+    invoiceDiscountCents: pr.discountCents || undefined,
     paymentMethod: payment.method,
     paystackReference: payment.method === "paystack" ? payment.reference : undefined,
     eftReference: payment.method === "eft" ? payment.reference : undefined,

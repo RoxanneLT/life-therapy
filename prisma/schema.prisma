@@ -292,6 +292,9 @@ model Booking {
   invoice                Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   paymentRequestId       String?
   paymentRequest         PaymentRequest? @relation(fields: [paymentRequestId], references: [id], onDelete: SetNull)
+  /// A billed session cancelled in time is credited on a later request, once: this names it.
+  /// Added via the Management API 2026-09-30.
+  creditedOnPaymentRequestId String?
   billingNote            String?         // "(no-show)" | "(rescheduled)" | "(cancelled)" | null
   couplesPartnerName     String?         // Partner name for couples sessions
   /// Partner contact details for a couples session.
@@ -550,7 +553,12 @@ model Student {
 
   // Billing
   billingType             String     @default("prepaid")   // "prepaid" | "postpaid"
-  billingEmail            String?                           // Overrides email for invoice delivery
+  /// Postpaid only: the month-end run also bills the rest of the month's scheduled sessions,
+  /// so the client gets one invoice per month. Added via the Management API 2026-09-30; the
+  /// standard, so it defaults on and every client was switched on that day (Stéan). Prepaid
+  /// clients ignore it, which is why they carry it too: a switch to postpaid needs no second step.
+  billFullMonth           Boolean    @default(true)
+  billingEmail          String?                           // Overrides email for invoice delivery
   billingAddress          String?    @db.Text               // Shown on invoice
   standingDiscountPercent Float?                            // e.g. 10.0 for 10% off every line item
   standingDiscountFixed   Int?                              // Fixed discount in cents per line item

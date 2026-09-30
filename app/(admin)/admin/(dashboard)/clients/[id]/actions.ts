@@ -624,6 +624,37 @@ export async function updateBillingTypeAction(studentId: string, billingType: st
   return { restoredCount };
 }
 
+/**
+ * One invoice per month: the month-end run also bills this client's scheduled sessions up to
+ * the calendar month end (lib/generate-payment-requests.ts says how later changes settle).
+ */
+export async function updateBillFullMonthAction(studentId: string, billFullMonth: boolean) {
+  const { adminUser } = await requireRole("super_admin");
+
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { billFullMonth: true },
+  });
+  if (!student) return { error: "Client not found." };
+
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { billFullMonth },
+  });
+
+  await recordAudit({
+    action: "billing_type_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: { billFullMonth: student.billFullMonth },
+    after: { billFullMonth },
+  });
+
+  revalidatePath(`/admin/clients/${studentId}`);
+  return {};
+}
+
 // ────────────────────────────────────────────────────────────
 // Billing — Restore zero-price sessions for postpaid clients
 // ────────────────────────────────────────────────────────────

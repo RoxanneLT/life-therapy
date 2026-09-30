@@ -47,6 +47,7 @@ import Link from "next/link";
 import {
   grantCreditsAction,
   updateBillingTypeAction,
+  updateBillFullMonthAction,
   updateBillingEmailAction,
   updateStandingDiscountAction,
   markInvoicePaidAction,
@@ -179,6 +180,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
 
   const clientName = `${mergedClient.firstName as string} ${mergedClient.lastName as string}`.trim();
   const billingType = (mergedClient.billingType as string) || "prepaid";
+  const billFullMonth = mergedClient.billFullMonth === true;
   const billingEmail = (mergedClient.billingEmail as string) || (mergedClient.email as string) || "";
   const standingDiscountPercent = (mergedClient.standingDiscountPercent as number) || 0;
   const standingDiscountFixed = (mergedClient.standingDiscountFixed as number) || 0;
@@ -299,6 +301,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
           <BillingConfigCard
             clientId={clientId}
             billingType={billingType}
+            billFullMonth={billFullMonth}
             billingEmail={billingEmail}
             standingDiscountPercent={standingDiscountPercent}
             standingDiscountFixed={standingDiscountFixed}
@@ -479,6 +482,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
 function BillingConfigCard({
   clientId,
   billingType,
+  billFullMonth,
   billingEmail,
   standingDiscountPercent,
   standingDiscountFixed,
@@ -489,6 +493,7 @@ function BillingConfigCard({
 }: Readonly<{
   clientId: string;
   billingType: string;
+  billFullMonth: boolean;
   billingEmail: string;
   standingDiscountPercent: number;
   standingDiscountFixed: number;
@@ -513,6 +518,22 @@ function BillingConfigCard({
         msg += ` · ${result.restoredCount} session price${result.restoredCount !== 1 ? "s" : ""} restored`;
       }
       toast.success(msg);
+      onSuccess?.();
+    });
+  }
+
+  function handleFullMonthChange(checked: boolean) {
+    startTransition(async () => {
+      const result = await updateBillFullMonthAction(clientId, checked);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        checked
+          ? "One invoice per month: the rest of the month is billed at month end"
+          : "Sessions after the billing date go on next month's invoice",
+      );
       onSuccess?.();
     });
   }
@@ -562,6 +583,25 @@ function BillingConfigCard({
             disabled={isPending}
           />
         </div>
+
+        {/* One invoice per month */}
+        {billingType === "postpaid" && (
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">One invoice per month</p>
+              <p className="text-xs text-muted-foreground">
+                {billFullMonth
+                  ? "Month-end billing includes the rest of the month's scheduled sessions. A billed session that moves shows as already billed next month; one cancelled in time is credited."
+                  : "Sessions after the billing date go on next month's invoice"}
+              </p>
+            </div>
+            <Switch
+              checked={billFullMonth}
+              onCheckedChange={handleFullMonthChange}
+              disabled={isPending}
+            />
+          </div>
+        )}
 
         {/* Billing Email */}
         <div className="space-y-2">

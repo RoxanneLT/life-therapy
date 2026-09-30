@@ -6,6 +6,25 @@
  *   2. Group by billing contact (self, individual payer, or corporate)
  *   3. For each group: gather unbilled bookings, build line items,
  *      apply standing discounts, calculate totals, create PaymentRequest
+ *
+ * ONE INVOICE PER MONTH (student.billFullMonth, 2026-09-30). The run happens on the last
+ * business day, so a session later that day, or after it, used to roll into next month's
+ * invoice. Clients who want one invoice got two, and the workaround — marking tomorrow's
+ * session completed so it was billed — cost the client their reminder and, once, the calendar
+ * event. For these clients the run also bills CONFIRMED sessions up to the calendar month end,
+ * shown "(scheduled)", and the request's period ends on the month end. Billing still goes out
+ * before month end, which is the point: cashflow.
+ *
+ * A billed session that later changes is settled on the next request, never by editing the
+ * one the client already has:
+ *   • moved past the period it was billed in → an R0 line, "rescheduled — already billed"
+ *     (derived: its date is after its own request's periodEnd, and inside this run's window);
+ *   • cancelled in time → a credit. A line total cannot be negative, so the credit is the
+ *     request's discount, explained by an R0 line, and the booking is stamped
+ *     creditedOnPaymentRequestId so it is credited once. Credits never take a request below
+ *     zero; one that does not fit waits for the next request.
+ * Late cancels and no-shows stay billed, as the policy says. None of this depends on
+ * billFullMonth: a completed session billed and then moved (2026-10-01) is the same case.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -19,8 +38,11 @@ import {
   calculateDueDate,
   type BillingContact,
 } from "@/lib/billing";
-import { parseLineItems, type InvoiceLineItem } from "@/lib/billing-types";
+import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import { format } from "date-fns";
+import { addSaDays, calendarDate, saDateStr, saFormat, saMonthStart } from "@/lib/dates";
+import { planCredits, type PendingCredit } from "@/lib/billing-credits";
+import { formatPrice } from "@/lib/utils";
 
 // ─── Unbilled bookings query ─────────────────────────────────
 
@@ -31,6 +53,8 @@ import { format } from "date-fns";
 export async function getUnbilledBookings(
   studentId: string,
   periodEnd: Date,
+  /** One-invoice-per-month clients: also bill confirmed sessions up to this day (month end). */
+  prebillUntil?: Date,
 ): Promise<Booking[]> {
   return prisma.booking.findMany({
     where: {
@@ -38,16 +62,77 @@ export async function getUnbilledBookings(
       OR: [
         { status: { in: ["completed", "no_show"] } },
         { status: "cancelled", isLateCancel: true },
+        ...(prebillUntil ? [{ status: "confirmed" as const }] : []),
       ],
       // No lower-bound on date — paymentRequestId: null already prevents double-billing,
       // and removing gte means sessions that were completed after the previous billing run
       // (e.g. on the last day of the prior month) are caught in the next cycle.
-      date: { lte: periodEnd },
+      date: { lte: prebillUntil ?? periodEnd },
       paymentRequestId: null,
       invoiceId: null,
     },
     orderBy: { date: "asc" },
   });
+}
+
+type CarriedBooking = Booking & { paymentRequest: { billingMonth: string; periodEnd: Date } | null };
+
+/** Billed sessions since moved past the period they were billed in, dated inside this window. */
+async function getCarriedOverBookings(studentId: string, from: Date, to: Date): Promise<CarriedBooking[]> {
+  const rows = await prisma.booking.findMany({
+    where: {
+      studentId,
+      status: { not: "cancelled" },
+      paymentRequestId: { not: null },
+      date: { gte: from, lte: to },
+    },
+    include: { paymentRequest: { select: { billingMonth: true, periodEnd: true, status: true } } },
+    orderBy: { date: "asc" },
+  });
+  return rows.filter(
+    (b) => b.paymentRequest && b.paymentRequest.status !== "cancelled" && b.date > b.paymentRequest.periodEnd,
+  );
+}
+
+type CreditBooking = PendingCredit & { booking: Booking };
+
+/** Billed sessions cancelled in time and not yet credited, with what each was charged. */
+async function getPendingCredits(studentId: string): Promise<CreditBooking[]> {
+  const rows = await prisma.booking.findMany({
+    where: {
+      studentId,
+      status: "cancelled",
+      isLateCancel: false,
+      paymentRequestId: { not: null },
+      creditedOnPaymentRequestId: null,
+    },
+    include: { paymentRequest: { select: { status: true, lineItems: true, billingMonth: true, currency: true } } },
+    orderBy: { date: "asc" },
+  });
+  const credits: CreditBooking[] = [];
+  for (const b of rows) {
+    const pr = b.paymentRequest;
+    if (!pr || pr.status === "cancelled") continue; // a voided request charged nothing
+    const line = readLineItems(pr.lineItems)?.find((li) => li.bookingId === b.id);
+    if (!line || line.totalCents <= 0) continue;
+    credits.push({ bookingId: b.id, amountCents: line.totalCents, currency: pr.currency, billedIn: pr.billingMonth, booking: b });
+  }
+  return credits;
+}
+
+/** "2026-09" or "2026-09-USD" → "September 2026". */
+function monthLabel(billingMonth: string): string {
+  return saFormat(calendarDate(`${billingMonth.slice(0, 7)}-01`), "MMMM yyyy");
+}
+
+function sessionSubLine(booking: Booking, studentName: string): string {
+  const dateStr = format(new Date(booking.date), "d MMM yyyy");
+  return `${dateStr}, ${booking.startTime}–${booking.endTime} — ${studentName}`;
+}
+
+/** An explanatory R0 line — it carries no bookingId, so nothing treats it as billing a session. */
+function noteLine(description: string, subLine: string): InvoiceLineItem {
+  return { description, subLine, quantity: 1, unitPriceCents: 0, discountCents: 0, discountPercent: 0, totalCents: 0 };
 }
 
 // ─── Line item builder ───────────────────────────────────────
@@ -72,7 +157,8 @@ function buildLineItemFromBooking(
     booking.sessionType === "couples" && booking.couplesPartnerName
       ? `${studentName} & ${booking.couplesPartnerName}`
       : studentName;
-  const subLine = `${dateStr}, ${booking.startTime}–${booking.endTime} — ${attendeeName}`;
+  const subLine = `${dateStr}, ${booking.startTime}–${booking.endTime} — ${attendeeName}${booking.status === "confirmed" ? " (scheduled)" : ""}`;
+  // "(scheduled)": billed ahead for a one-invoice-per-month client; it has not happened yet.
 
   // Calculate discount
   let discountPercent = 0;
@@ -104,9 +190,21 @@ function buildLineItemFromBooking(
 
 // ─── Main generator ──────────────────────────────────────────
 
+interface GroupEntry {
+  student: Student;
+  /** Charged on this request. */
+  bookings: Booking[];
+  /** Billed earlier, since moved into this period — an R0 line each. */
+  carried: CarriedBooking[];
+  /** Billed earlier, since cancelled in time — credited if they fit. */
+  credits: CreditBooking[];
+}
+
 interface PostpaidGroup {
   contact: BillingContact;
-  entries: { student: Student; bookings: Booking[] }[];
+  entries: GroupEntry[];
+  /** A member bills the whole month → the request's period ends on the month end. */
+  fullMonth: boolean;
 }
 
 function contactKey(contact: BillingContact): string {
@@ -125,45 +223,11 @@ function isSameContact(a: BillingContact, b: BillingContact): boolean {
   return false;
 }
 
-function addToGroup(
-  groups: Map<string, PostpaidGroup>,
-  key: string,
-  contact: BillingContact,
-  student: Student,
-  bookings: Booking[],
-) {
-  if (!groups.has(key)) {
-    groups.set(key, { contact, entries: [] });
-  }
-  groups.get(key)!.entries.push({ student, bookings });
-}
-
 function bookingCurrency(booking: Booking): string {
   return (booking.priceCurrency as string) || "ZAR";
 }
 
-/** Partition bookings by currency and add each currency slice as its own group. */
-function addBookingsByCurrency(
-  groups: Map<string, PostpaidGroup>,
-  baseKey: string,
-  contact: BillingContact,
-  student: Student,
-  bookings: Booking[],
-) {
-  const byCurrency = new Map<string, Booking[]>();
-  for (const b of bookings) {
-    const curr = bookingCurrency(b);
-    if (!byCurrency.has(curr)) byCurrency.set(curr, []);
-    byCurrency.get(curr)!.push(b);
-  }
-  for (const [curr, currBookings] of byCurrency) {
-    addToGroup(groups, `${baseKey}:${curr}`, contact, student, currBookings);
-  }
-}
-
-async function buildGroupLineItems(
-  entries: { student: Student; bookings: Booking[] }[],
-): Promise<InvoiceLineItem[]> {
+function buildGroupLineItems(entries: GroupEntry[], currency: string) {
   const lineItems: InvoiceLineItem[] = [];
   for (const { student, bookings } of entries) {
     for (const booking of bookings) {
@@ -178,7 +242,35 @@ async function buildGroupLineItems(
       );
     }
   }
-  return lineItems;
+  const chargeCount = lineItems.length;
+  const chargesCents = lineItems.reduce((sum, li) => sum + li.totalCents, 0);
+
+  for (const { student, carried } of entries) {
+    const name = `${student.firstName} ${student.lastName}`;
+    for (const b of carried) {
+      lineItems.push(
+        noteLine(
+          "Rescheduled session — already billed",
+          `${sessionSubLine(b, name)} · billed on the ${monthLabel(b.paymentRequest?.billingMonth ?? "")} request`,
+        ),
+      );
+    }
+  }
+
+  const { applied, totalCents: creditCents } = planCredits(chargesCents, currency, entries.flatMap((e) => e.credits));
+  for (const { student, credits } of entries) {
+    const name = `${student.firstName} ${student.lastName}`;
+    for (const c of credits.filter((x) => applied.includes(x))) {
+      lineItems.push(
+        noteLine(
+          "Credit — cancelled session",
+          `${sessionSubLine(c.booking, name)} · billed on the ${monthLabel(c.billedIn)} request, cancelled in time · ${formatPrice(c.amountCents, currency)} credited`,
+        ),
+      );
+    }
+  }
+
+  return { lineItems, chargeCount, credited: applied, creditCents };
 }
 
 async function createGroupPaymentRequest(
@@ -189,18 +281,18 @@ async function createGroupPaymentRequest(
   periodEnd: Date,
   dueDate: Date,
 ) {
-  const lineItems = await buildGroupLineItems(group.entries);
+  // All charged bookings in a group share one currency (the group key carries it)
+  const currency = (group.entries.find((e) => e.bookings.length > 0)?.bookings[0]?.priceCurrency as string) || "ZAR";
+  const { lineItems, chargeCount, credited, creditCents } = buildGroupLineItems(group.entries, currency);
 
-  // Collect ALL booking IDs (including credit-paid R0 ones) so they get linked
-  // to the payment request and aren't picked up again next month
+  // Collect ALL charged booking IDs (including credit-paid R0 ones) so they get linked
+  // to the payment request and aren't picked up again next month. Carried and credited
+  // bookings keep the link to the request that charged them.
   const allBookingIds = group.entries.flatMap(e => e.bookings.map(b => b.id));
 
-  if (lineItems.length === 0) {
+  if (chargeCount === 0) {
     return null;
   }
-
-  // All bookings in a group share the same currency (enforced by addBookingsByCurrency)
-  const currency = (group.entries[0]?.bookings[0]?.priceCurrency as string) || "ZAR";
 
   // Append currency to billingMonth for non-ZAR so the [studentId, billingMonth] unique
   // constraint doesn't conflict when a client somehow has bookings in two currencies.
@@ -216,7 +308,8 @@ async function createGroupPaymentRequest(
   // International currencies are VAT zero-rated (exported services)
   const isVat = vatApplies(currency, settings.vatRegistered);
   const vatPercent = isVat ? (settings.vatPercent ?? 0) : 0;
-  const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
+  // Credits ride as the request's discount, before VAT, so the VAT falls with them.
+  const totals = calculateInvoiceTotals(lineCalcs, undefined, creditCents || undefined, isVat, vatPercent);
 
   try {
     const pr = await prisma.paymentRequest.create({
@@ -242,6 +335,14 @@ async function createGroupPaymentRequest(
       await prisma.booking.updateMany({
         where: { id: { in: allBookingIds } },
         data: { paymentRequestId: pr.id },
+      });
+    }
+
+    // Stamp each credit as used — conditionally, so a credit can never be spent twice.
+    if (credited.length > 0) {
+      await prisma.booking.updateMany({
+        where: { id: { in: credited.map((c) => c.bookingId) }, creditedOnPaymentRequestId: null },
+        data: { creditedOnPaymentRequestId: pr.id },
       });
     }
 
@@ -276,6 +377,9 @@ export async function generateMonthlyPaymentRequests(
   const month = billingDate.getMonth() + 1; // 1-indexed
 
   const { start: periodStart, end: periodEnd } = getBillingPeriod(year, month);
+  // The calendar month, for one-invoice-per-month clients.
+  const monthStart = calendarDate(saDateStr(saMonthStart(year, month)));
+  const monthEnd = calendarDate(addSaDays(saDateStr(saMonthStart(year, month + 1)), -1));
   const dueDate = calculateDueDate(
     billingDate,
     settings.postpaidDueDays,
@@ -294,30 +398,59 @@ export async function generateMonthlyPaymentRequests(
   const groups = new Map<string, PostpaidGroup>();
 
   for (const student of postpaidStudents) {
-    const bookings = await getUnbilledBookings(student.id, periodEnd);
+    const fullMonth = student.billFullMonth;
+    const bookings = await getUnbilledBookings(student.id, periodEnd, fullMonth ? monthEnd : undefined);
     if (bookings.length === 0) continue;
 
     // Partition into individual (includes free_consultation) and couples
-    const indivBookings = bookings.filter((b) => b.sessionType !== "couples");
-    const couplesBookings = bookings.filter((b) => b.sessionType === "couples");
-
-    const indivContact = indivBookings.length > 0
-      ? await resolveBillingContact(student.id, "individual")
-      : null;
-    const couplesContact = couplesBookings.length > 0
-      ? await resolveBillingContact(student.id, "couples")
-      : null;
-
+    const hasIndiv = bookings.some((b) => b.sessionType !== "couples");
+    const hasCouples = bookings.some((b) => b.sessionType === "couples");
+    const indivContact = hasIndiv ? await resolveBillingContact(student.id, "individual") : null;
+    const couplesContact = hasCouples ? await resolveBillingContact(student.id, "couples") : null;
     // If both resolve to same payer, merge into one group (still split by currency)
-    if (indivContact && couplesContact && isSameContact(indivContact, couplesContact)) {
-      addBookingsByCurrency(groups, contactKey(indivContact), indivContact, student, bookings);
-    } else {
-      if (indivContact && indivBookings.length > 0) {
-        addBookingsByCurrency(groups, `${contactKey(indivContact)}:individual`, indivContact, student, indivBookings);
+    const merged = indivContact && couplesContact && isSameContact(indivContact, couplesContact) ? indivContact : null;
+
+    const route = (sessionType: string, currency: string): { key: string; contact: BillingContact } | null => {
+      if (merged) return { key: `${contactKey(merged)}:${currency}`, contact: merged };
+      if (sessionType === "couples") {
+        return couplesContact ? { key: `${contactKey(couplesContact)}:couples:${currency}`, contact: couplesContact } : null;
       }
-      if (couplesContact && couplesBookings.length > 0) {
-        addBookingsByCurrency(groups, `${contactKey(couplesContact)}:couples`, couplesContact, student, couplesBookings);
+      return indivContact ? { key: `${contactKey(indivContact)}:individual:${currency}`, contact: indivContact } : null;
+    };
+    const entryFor = (r: { key: string; contact: BillingContact }): GroupEntry => {
+      let group = groups.get(r.key);
+      if (!group) {
+        group = { contact: r.contact, entries: [], fullMonth: false };
+        groups.set(r.key, group);
       }
+      group.fullMonth ||= fullMonth;
+      let entry = group.entries.find((e) => e.student.id === student.id);
+      if (!entry) {
+        entry = { student, bookings: [], carried: [], credits: [] };
+        group.entries.push(entry);
+      }
+      return entry;
+    };
+
+    for (const b of bookings) {
+      const r = route(b.sessionType, bookingCurrency(b));
+      if (r) entryFor(r).bookings.push(b);
+    }
+
+    // Settle earlier bills on the request the same payer gets now — never on one with nothing
+    // charged (it is not created), in which case they wait for the next.
+    const carried = await getCarriedOverBookings(
+      student.id,
+      fullMonth ? monthStart : periodStart,
+      fullMonth ? monthEnd : periodEnd,
+    );
+    for (const c of carried) {
+      const r = route(c.sessionType, bookingCurrency(c));
+      if (r && groups.has(r.key)) entryFor(r).carried.push(c);
+    }
+    for (const credit of await getPendingCredits(student.id)) {
+      const r = route(credit.booking.sessionType, credit.currency);
+      if (r && groups.has(r.key)) entryFor(r).credits.push(credit);
     }
   }
 
@@ -326,7 +459,14 @@ export async function generateMonthlyPaymentRequests(
 
   for (const group of groups.values()) {
     if (group.entries.length === 0) continue;
-    const pr = await createGroupPaymentRequest(group, settings, billingMonth, periodStart, periodEnd, dueDate);
+    const pr = await createGroupPaymentRequest(
+      group,
+      settings,
+      billingMonth,
+      periodStart,
+      group.fullMonth ? monthEnd : periodEnd,
+      dueDate,
+    );
     if (pr) created.push(pr);
   }
 
