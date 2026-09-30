@@ -19,6 +19,23 @@ type CronHandler = (req: NextRequest) => Promise<Response>;
  *
  * Comparison is constant-time. A `===` on a secret leaks its length and, in
  * principle, its prefix through timing — cheap to close once there is one reader.
+ *
+ * WHO CALLS WHAT. Only the first row is in this repo; the rest are fired by an external
+ * scheduler holding the secret, configured nowhere in git. Measured from cron_runs over
+ * 7 days on 2026-09-30 (not pg_cron — the extension is not installed):
+ *
+ *     /api/cron/daily               Vercel, vercel.json 0 6 * * * → starts ~08:46 SAST
+ *     /api/cron/reminders           external, every 2h on the even SAST hour
+ *     /api/cron/campaign-steps      external, every 2h on the even SAST hour
+ *     /api/cron/gift-delivery       external, every 2h on the even SAST hour
+ *     /api/cron/order-cleanup       external, every 2h on the even SAST hour
+ *     /api/cron/reconcile-calendar  external, every 4h
+ *     /api/cron/drip-emails         nothing — no runs; drip runs inside /daily
+ *
+ * session-reminders.ts depends on the 2h cadence (its 3h imminent window assumes it). If the
+ * external scheduler stops, only the daily safety-net pass remains, and no row here says so.
+ * cron_runs."startedAt" is UTC without a zone: convert with AT TIME ZONE 'UTC' first
+ * (lib/quiet-hours.ts has the trap this set).
  */
 function secretsMatch(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);

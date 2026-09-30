@@ -8,7 +8,8 @@
  *   • Imminent  (~2h out):   WhatsApp `session_reminder_today`
  *
  * Email is sent for the day-before window only; the 2h nudge is WhatsApp
- * (the immediate channel). All sends are idempotent via the booking's
+ * (the immediate channel). WhatsApp keeps to lib/quiet-hours.ts: a session too
+ * early for its nudge relies on the 24h reminder. All sends are idempotent via the booking's
  * reminder flags, so running this alongside the daily safety-net run never
  * double-sends.
  */
@@ -19,8 +20,9 @@ import { renderEmail } from "@/lib/email-render";
 import { getSiteSettings } from "@/lib/settings";
 import { sendAndLogTemplate } from "@/lib/whatsapp";
 import { getSessionTypeConfig } from "@/lib/booking-config";
-import { addDays, format } from "date-fns";
-import { saDateStr, saInstant, calendarDate } from "@/lib/dates";
+import { addDays } from "date-fns";
+import { saDateStr, saInstant, saFormat, calendarDate } from "@/lib/dates";
+import { isWhatsAppHour } from "@/lib/quiet-hours";
 import { reminderDue, reminderFingerprint, type ReminderKind } from "@/lib/reminder-fingerprint";
 
 // Hours-before-start window boundaries
@@ -139,7 +141,7 @@ export async function processSessionReminders(): Promise<{
 
     const config = getSessionTypeConfig(booking.sessionType);
     const waReady =
-      waSessionOn && !!booking.student?.smsOptIn && !!booking.student?.phone;
+      waSessionOn && isWhatsAppHour(now) && !!booking.student?.smsOptIn && !!booking.student?.phone;
 
     // ── Day-before: email ──────────────────────────────────────
     if (isDayBefore && (await takeReminder(booking, "reminderSentAt"))) {
@@ -150,7 +152,7 @@ export async function processSessionReminders(): Promise<{
         const email = await renderEmail("booking_reminder", {
           clientName: booking.clientName,
           sessionType: config.label,
-          date: format(new Date(booking.date), "EEEE, d MMMM yyyy"),
+          date: saFormat(booking.date, "EEEE, d MMMM yyyy"),
           time: `${booking.startTime} – ${booking.endTime} (SAST)`,
           startTime: booking.startTime,
           teamsButton,
@@ -187,7 +189,7 @@ export async function processSessionReminders(): Promise<{
               parameters: [
                 { type: "text", text: booking.student!.firstName },
                 { type: "text", text: config.label },
-                { type: "text", text: format(new Date(booking.date), "EEEE d MMMM") },
+                { type: "text", text: saFormat(booking.date, "EEEE d MMMM") },
                 { type: "text", text: booking.startTime },
               ],
             },
