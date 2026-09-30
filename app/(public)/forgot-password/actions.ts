@@ -151,9 +151,11 @@ export async function updatePasswordAction(
   // stolen inbox would be enough to take an account whose owner turned 2FA on to prevent that.
   //
   // The token is already spent by this point and cannot be re-used, so a missing or wrong code
-  // costs the link. The form cannot ask only 2FA accounts for a code: knowing which accounts have
-  // one would need the token verified first, and verifying on page load is what lets a mail
-  // scanner burn it. So the field is shown to everyone, and the refusal says a new link is needed.
+  // costs the link. The page cannot learn which accounts have 2FA without spending the token, so
+  // the SENDER says so in the link (`&mfa=1`, recoveryLinkMfaHint in lib/mfa-step-up.ts) and the
+  // page shows the code field only then. That is a hint; this check is the enforcement, and it
+  // still refuses when the hint was missing — 2FA turned on after the email went — saying a new
+  // link is needed.
   if (user) {
     const refusal = await secondFactorRefusal(supabase, user, formData, ip);
     if (refusal) return { error: refusal };

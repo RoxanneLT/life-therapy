@@ -6,6 +6,7 @@ import { baseTemplate, normalizeEmailHtml } from "@/lib/email-templates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateTempPassword } from "@/lib/auth/temp-password";
 import { appBaseUrl } from "@/lib/region";
+import { recoveryLinkMfaHint } from "@/lib/mfa-step-up";
 
 const DEFAULT_BASE_URL = appBaseUrl();
 const BATCH_SIZE = 2;
@@ -57,7 +58,7 @@ async function generatePasswordResetUrl(
     // Straight to the reset page, never through /auth/callback: the callback spends the token on a
     // GET (so a mail scanner can burn it) and arrives with a bare session, which updatePasswordAction
     // no longer accepts as authority to set a password (L-72).
-    return `${DEFAULT_BASE_URL}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
+    return `${DEFAULT_BASE_URL}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery${await recoveryLinkMfaHint(linkData.user?.id)}`;
   } catch (err) {
     console.error(`[campaign] Password reset URL error for ${recipient.email}:`, err);
     return null;

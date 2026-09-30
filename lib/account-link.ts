@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
+import { recoveryLinkMfaHint } from "@/lib/mfa-step-up";
 
 type LinkTemplate =
   | { templateKey: "password_reset"; variables: { resetUrl: string } }
@@ -107,7 +108,7 @@ export async function emailPasswordLink(
 
   // Straight to the reset page, never through /auth/callback. The token is verified only when the
   // person submits a password, so a mail scanner that pre-fetches the URL cannot spend it first.
-  const link = `${baseUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
+  const link = `${baseUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery${await recoveryLinkMfaHint(linkData.user?.id)}`;
 
   const { templateKey, variables } = compose(link);
   const { subject, html } = await renderEmail(templateKey, variables, baseUrl);

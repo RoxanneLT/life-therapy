@@ -1,4 +1,5 @@
 import type { createSupabaseServerClient } from "@/lib/supabase-server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
 import { recordAuthEvent } from "@/lib/audit";
 
@@ -12,6 +13,39 @@ const MFA_WINDOW_MS = 15 * 60 * 1000;
 export async function verifiedTotpFactor(supabase: ServerSupabase): Promise<{ id: string } | null> {
   const { data: factors } = await supabase.auth.mfa.listFactors();
   return factors?.totp?.find((f) => f.status === "verified") ?? null;
+}
+
+/**
+ * The query-string suffix a recovery link carries so the reset page knows to ask for a 2FA code:
+ * `"&mfa=1"` for an account with a verified TOTP factor, `""` otherwise. Every sender of a
+ * `/reset-password?token_hash=` link appends it.
+ *
+ * Why the link and not the page: the page cannot find out, because learning which account a token
+ * belongs to means spending it, and spending it on load is what lets a mail scanner burn it. The
+ * sender already knows the account. Without this, the page had to show the code field to everyone
+ * and make people remember whether they had turned 2FA on — and a wrong guess cost the link.
+ *
+ * It is a HINT, never an authority: updatePasswordAction checks the factor itself and refuses a
+ * 2FA account without a code whatever the URL says. Stripping it gets a refusal, not a bypass. It
+ * tells a reader of the email whether the account has 2FA, and that reader already holds the mailbox.
+ *
+ * Fails to `""`: an unreadable factor list shows no field, the server still refuses, and the
+ * refusal says to request a new link. Showing the field to everyone on an error would bring back
+ * the question this exists to remove.
+ */
+export async function recoveryLinkMfaHint(userId: string | null | undefined): Promise<string> {
+  if (!userId) return "";
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId });
+    if (error) {
+      console.error(`[mfa-hint] listFactors failed for ${userId}:`, error.message);
+      return "";
+    }
+    return data?.factors?.some((f) => f.factor_type === "totp" && f.status === "verified") ? "&mfa=1" : "";
+  } catch (err) {
+    console.error(`[mfa-hint] listFactors threw for ${userId}:`, err);
+    return "";
+  }
 }
 
 /**

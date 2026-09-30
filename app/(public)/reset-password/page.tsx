@@ -28,11 +28,16 @@ export default function ResetPasswordPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmError, setConfirmError] = useState("");
   const [tokenHash, setTokenHash] = useState("");
+  const [needsMfa, setNeedsMfa] = useState(false);
 
   // Read the recovery token from the URL on the client; it's verified server-side
   // only when the form is submitted (so email-link scanners can't consume it).
+  // `mfa=1` is the sender's hint that the account has 2FA (recoveryLinkMfaHint in
+  // lib/mfa-step-up.ts) — it only decides whether to ask; the server enforces.
   useEffect(() => {
-    setTokenHash(new URLSearchParams(globalThis.location.search).get("token_hash") ?? "");
+    const params = new URLSearchParams(globalThis.location.search);
+    setTokenHash(params.get("token_hash") ?? "");
+    setNeedsMfa(params.get("mfa") === "1");
   }, []);
 
   const [state, formAction, isPending] = useActionState(
@@ -138,25 +143,26 @@ export default function ResetPasswordPage() {
                     </button>
                   </div>
                 </div>
-                {/* Shown to everyone: which accounts have 2FA is only knowable once the token
-                    is spent (see updatePasswordAction), so a 2FA account must bring its code
-                    on the first submit. */}
-                <div className="space-y-2">
-                  <Label htmlFor="mfa_code">Authenticator code</Label>
-                  <Input
-                    id="mfa_code"
-                    name="mfa_code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="123456"
-                    maxLength={6}
-                    pattern="\d{6}"
-                    disabled={isPending}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Only if you have set up two-factor authentication. Otherwise leave this blank.
-                  </p>
-                </div>
+                {needsMfa && (
+                  <div className="space-y-2">
+                    <Label htmlFor="mfa_code">Authenticator code</Label>
+                    <Input
+                      id="mfa_code"
+                      name="mfa_code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                      maxLength={6}
+                      pattern="\d{6}"
+                      required
+                      disabled={isPending}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Your account uses two-factor authentication. Enter the 6-digit code from your
+                      authenticator app.
+                    </p>
+                  </div>
+                )}
                 <Button type="submit" className="w-full" disabled={isPending}>
                   {isPending ? (
                     <>

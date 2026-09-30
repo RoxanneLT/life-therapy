@@ -13,6 +13,7 @@ import { recordAuthEvent } from "@/lib/audit";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import crypto from "crypto";
 import { appBaseUrl } from "@/lib/region";
+import { recoveryLinkMfaHint } from "@/lib/mfa-step-up";
 
 const BASE_URL = appBaseUrl();
 
@@ -248,7 +249,7 @@ export async function sendUserPasswordResetAction(
 
     const actionLink = `${BASE_URL}/reset-password?token_hash=${encodeURIComponent(
       linkData.properties.hashed_token,
-    )}&type=recovery`;
+    )}&type=recovery${await recoveryLinkMfaHint(linkData.user?.id)}`;
 
     const { subject, html } = await renderEmail("password_reset", { resetUrl: actionLink });
     const result = await sendEmail({

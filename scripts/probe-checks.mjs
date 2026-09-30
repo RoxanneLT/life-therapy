@@ -495,8 +495,8 @@ const MUTATIONS = [
     // The reset page spending the token as it loads, which is what a mail scanner's visit then does.
     path: "app/(public)/reset-password/page.tsx",
     named: true,
-    find: "  useEffect(() => {\n    setTokenHash(",
-    replace: "  useEffect(() => {\n    void createClient().auth.verifyOtp;\n    setTokenHash(",
+    find: "  useEffect(() => {\n    const params = ",
+    replace: "  useEffect(() => {\n    void createClient().auth.verifyOtp;\n    const params = ",
     expects: ["auth: a recovery link survives a mail scanner: straight to /reset-password, spent only on submit"],
   },
   // The next five are the fixes of 2026-09-10/11, reverted one at a time. Each keeps the setter and
