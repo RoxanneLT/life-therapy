@@ -226,7 +226,10 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
     other: "other",
   };
 
-  const relationshipsFrom = (client.relationshipsFrom as {
+  // From mergedClient, never the page's `client` prop: since 1c43d48 the page query no longer
+  // selects relationships (fetchClientFinances does), so reading `client` yielded [] for every
+  // client and the whole "Session Billing Assignment" block silently never rendered.
+  const relationshipsFrom = (mergedClient.relationshipsFrom as {
     id: string;
     relatedStudentId?: string | null;
     relatedStudent?: { firstName: string; lastName: string } | null;
@@ -235,7 +238,7 @@ export function FinancesTab({ client, section = "billing" }: FinancesTabProps) {
     relationshipType: string;
     relationshipLabel?: string | null;
   }[]) || [];
-  const relationshipsTo = (client.relationshipsTo as {
+  const relationshipsTo = (mergedClient.relationshipsTo as {
     id: string;
     student?: { firstName: string; lastName: string } | null;
     relationshipType: string;
