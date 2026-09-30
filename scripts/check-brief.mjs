@@ -2,10 +2,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // check-brief — conformance for `brief/`, per standards/BRIEF-STANDARD.md v1.1
 //
-// @kit check-brief v7 — tracked. Edit it in dev-standards and re-adopt; a local change
+// @kit check-brief v9 — tracked. Edit it in dev-standards and re-adopt; a local change
 // here is a fork, and `check-kit-drift.mjs` will say so.
 //
-// Nine checks (B-1…B-9), one generator (--status), one probe (--selftest).
+// Ten checks (B-1…B-10), one generator (--status), one probe (--selftest).
 //
 // WHY --selftest EXISTS AND RUNS IN THE GATE. CLAUDE-MD-STANDARD §4: a
 // never-matching pattern reports zero violations, so tool failure and a clean
@@ -14,7 +14,7 @@
 // known-good tree must pass. `check-gated-routes.mjs` established the shape.
 //
 // Usage:
-//   node check-brief.mjs <projectDir>              run B-1…B-8
+//   node check-brief.mjs <projectDir>              run B-1…B-10
 //   node check-brief.mjs <projectDir> --status     also rewrite brief/STATUS.md
 //   node check-brief.mjs --selftest                probe both directions
 //
@@ -67,6 +67,24 @@ const RESERVED = ["NOW.md", "OUTSTANDING.md", "ROADMAP.md", "PROGRESS.md", "TODO
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const read = (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } };
+
+/** Flat `key: value` front-matter between leading `---` fences, surrounding quotes stripped. */
+function frontMatter(text) {
+  // Split by line, not one regex: pleks's lint (sonarjs/super-linear-regex) rejects `\s*(.*)$`, and
+  // canon's bytes must pass every adopter's own lint (check-kit-lint).
+  const lines = (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).split(/\r?\n/);
+  const out = {};
+  if (lines[0]?.trim() !== "---") return out;
+  for (const line of lines.slice(1)) {
+    if (line.trim() === "---") return out;
+    const at = line.indexOf(":");
+    if (at < 1 || !/^[A-Za-z_][\w-]*$/.test(line.slice(0, at))) continue;
+    let v = line.slice(at + 1).trim();
+    if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v.at(-1) === v[0]) v = v.slice(1, -1).trim();
+    out[line.slice(0, at)] = v;
+  }
+  return {};   // no closing fence: not front-matter
+}
 
 /** Markdown table rows, minus the header and the |---| separator. */
 function tableRows(text) {
@@ -362,7 +380,8 @@ export function checkBrief(projectDir, { strictMarkers = false } = {}) {
   else if (!sweep) {
     add("B-4", false,
       `${decRows.length} rows is over the ${ROTATE_ROWS}-row sweep trigger and no sweep is recorded. ` +
-      `Apply §2.4's test to every row — does any file in the tree today behave the way it does because of this row? ` +
+      `Apply §2.4's test to every row — does this row still govern anything, a file in the tree or work still queued, with nothing since having superseded it? ` +
+      `A row fails only on evidence: its subject retired, its work cancelled, or a later row superseding it. ` +
       `— archive the rows that fail it, and record \`**Swept:** YYYY-MM-DD — N of M rows still bind\` (M tested, N kept).`);
   } else if (bind > tested) {
     add("B-4", false,
@@ -498,6 +517,11 @@ export function checkBrief(projectDir, { strictMarkers = false } = {}) {
   // NO SKIP CASE. If brief/ exists its root exists, so B-9 always has a subject; if brief/ is
   // absent the whole run returns at B-1. A check that cannot be vacuous should say so rather than
   // carry a skip branch nothing can reach.
+  //
+  // `decisions/` FAILS (v9). v8 admitted it through a ROOT_DIRS list so pleks would pass, while
+  // ARCHIVE_TO above already routed the archive to `_ARCHIVE/` — one archive, two legal homes. It was
+  // retracted the same day, and the list went with it: an always-empty list is one pleks's own lint
+  // rejects (sonarjs/no-empty-collection). A new root entry comes back through §3, with its reason.
   const strays = readdirSync(briefDir, { withFileTypes: true })
     .filter((e) => !e.name.startsWith("_"))
     .filter((e) => (e.isDirectory() ? !FOLDERS.includes(e.name) : !SPINE.includes(e.name)))
@@ -506,6 +530,78 @@ export function checkBrief(projectDir, { strictMarkers = false } = {}) {
     strays.length
       ? `unfiled at brief/ root: ${strays.join(", ")} — move each into a role folder and index it, or add it to the spine in BRIEF-STANDARD §3`
       : `${SPINE.length} spine files + ${FOLDERS.filter((f) => existsSync(join(briefDir, f))).length} role folders, nothing unfiled`);
+
+  // B-10 · every `status: reference` document names a `decision_authority:` that RESOLVES
+  //
+  // A reference holds wording or values copied from a ruling, and keeps reading as authoritative
+  // after the ruling moves. pleks hit the class three times (BRIEF-STANDARD §4, B-10). The field
+  // names what overrules the document, and this check proves each pointer lands somewhere.
+  //
+  // ⚠ RESOLVES, NEVER "IS RIGHT". A pointer to a section that exists but governs something else
+  // passes — pleks's header cited ADDENDUM_57G §11.3 "(when they fire)" and §11.3 is a purge step.
+  // Whether the section says what the citing document claims is BU-4, a person's job. So the pass
+  // note says "resolve" and nothing stronger; a probe holds it to that.
+  //
+  // `README.md` indexes are out of scope wherever they sit, and `_`-prefixed paths are history
+  // (§3.2). `draft` and `superseded` are out of scope by status. None in scope → skipped (§4.2).
+  const refDocs = walk(briefDir, [], { skipArchives: true })
+    .filter((f) => f.endsWith(".md") && f.split(/[\\/]/).pop() !== "README.md")
+    .map((f) => ({ rel: relative(briefDir, f).replaceAll("\\", "/"), fm: frontMatter(read(f) ?? "") }))
+    .filter((d) => d.fm.status?.toLowerCase() === "reference");
+  let tracked = null;   // the project's git index, read once and only if a path pointer needs it
+  const trackedFiles = () => {
+    if (tracked === null) {
+      const r = spawnSync("git", ["ls-files", "-z"], { cwd: projectDir, encoding: "utf8" });
+      tracked = r.status === 0 ? new Set(r.stdout.split("\0").filter(Boolean)) : false;
+    }
+    return tracked;
+  };
+  const addendumDir = join(briefDir, "build", "_ADDENDUM");
+  const decDates = new Set(decRows.map((r) => (r[0] ?? "").match(/\d{4}-\d{2}-\d{2}/)?.[0]).filter(Boolean));
+  /** Why `ptr` does not resolve, or null when it does. */
+  const unresolved = (ptr) => {
+    const sp = ptr.search(/\s/);
+    const add = sp > 0 && /^ADDENDUM_[A-Za-z0-9]+$/.test(ptr.slice(0, sp));
+    if (add) {
+      const id = ptr.slice("ADDENDUM_".length, sp);
+      const rest = ptr.slice(sp);
+      const secs = [...rest.matchAll(/§(\d+(?:\.\d+)*)/g)].map((m) => m[1]);
+      if (secs.length === 0) return `names no §section`;
+      const hits = existsSync(addendumDir)
+        ? readdirSync(addendumDir).filter((n) => n.startsWith(`ADDENDUM_${id}_`) && n.endsWith(".md")) : [];
+      if (hits.length === 0) return `no build/_ADDENDUM/ADDENDUM_${id}_*.md`;
+      if (hits.length > 1) return `${hits.length} files match ADDENDUM_${id}_*.md — B-7 owns the collision`;
+      const heads = (read(join(addendumDir, hits[0])) ?? "").split("\n")
+        .filter((l) => /^#{1,6}\s/.test(l)).map((l) => l.replace(/^#+/, "").trim());
+      // `§4.1` or `4.1`, then a NON-DIGIT or the end — so `4.1` is not satisfied by `4.10`.
+      const has = (n) => heads.some((h) => new RegExp(`^§?${n.replaceAll(".", "\\.")}(?!\\d)`).test(h));
+      const gone = secs.filter((n) => !has(n));
+      return gone.length ? `${hits[0]} has no heading ${gone.map((n) => `§${n}`).join(", ")}` : null;
+    }
+    const dated = /^DECISIONS\.md\s+(\d{4}-\d{2}-\d{2})$/.exec(ptr);
+    if (dated) return decDates.has(dated[1]) ? null : `no DECISIONS.md row dated ${dated[1]}`;
+    const idx = trackedFiles();
+    if (!idx) return `no git index at the project root to resolve a path against`;
+    const hit = ptr.endsWith("/") ? [...idx].some((f) => f.startsWith(ptr)) : idx.has(ptr);
+    return hit ? null : `not in the project's git index`;
+  };
+  const b10bad = [];
+  let pointers = 0;
+  for (const d of refDocs) {
+    const ptrs = (d.fm.decision_authority ?? "").split(";").map((p) => p.trim()).filter(Boolean);
+    if (ptrs.length === 0) { b10bad.push(`${d.rel}: no decision_authority`); continue; }
+    for (const p of ptrs) {
+      pointers++;
+      const why = unresolved(p);
+      if (why) b10bad.push(`${d.rel}: "${p}" — ${why}`);
+    }
+  }
+  if (refDocs.length === 0) add("B-10", true, "no `status: reference` document — nothing to point", true);
+  else
+    add("B-10", b10bad.length === 0,
+      b10bad.length
+        ? `unresolved: ${b10bad.join(" · ")}`
+        : `${refDocs.length} reference document(s), ${pointers} pointer(s), each resolves — whether each names the RIGHT section is not measured (BU-4)`);
 
   return results;
 }
@@ -689,6 +785,37 @@ function selftest() {
     ["B-9 an unclassified dotfile at brief/ root fires — the set is named entries, not a dotfile pass", { ...GOOD, "brief/.notes.md": "# n\n" }, "B-9"],
     ["B-9 KNOWN-GOOD: a _SUPERSEDED_ file at root passes — retained-but-not-authoritative (§3.2)", { ...GOOD, "brief/_SUPERSEDED_PLAN.md": "# Old plan\n" }, null],
     ["B-9 KNOWN-GOOD: the conformant spine has nothing unfiled", GOOD, null],
+    // v8 asserted the opposite of this pair and was retracted: the archive has ONE home (§2.4).
+    ["B-9 `decisions/` at brief/ root fires — v8's admission is retracted",
+      { ...GOOD, "brief/decisions/ARCHIVE-2026-09.md": "# Archive\n" }, "B-9"],
+    ["B-9 KNOWN-GOOD: the archive where §2.4 puts it, `_ARCHIVE/DECISIONS-2026-09.md`, passes",
+      { ...GOOD, "brief/_ARCHIVE/DECISIONS-2026-09.md": "# Archive\n" }, null],
+
+    // ── B-10 · a reference names what overrules it (2026-09-30) ──────────────
+    // FIXTURES, NEVER LIVE DOCUMENTS: a live document changes under the probe. The five known-goods
+    // and five plants are the ones BRIEF-STANDARD §4 lists, in its order.
+    ["B-10 KNOWN-GOOD: an ADDENDUM pointer whose file and section exist", ref("ADDENDUM_00J §10.6"), null],
+    ["B-10 KNOWN-GOOD: one pointer naming two sections", ref("ADDENDUM_00J §10.6, §4.1"), null],
+    ["B-10 KNOWN-GOOD: a heading spelled WITHOUT § (`### 4.1 …`) satisfies §4.1", ref("ADDENDUM_00J §4.1"), null],
+    ["B-10 KNOWN-GOOD: a tracked-path pointer, file and directory, resolved against the git index",
+      ref("lib/legal/purposes.ts; lib/legal/"), null, { git: ["lib/legal/purposes.ts"] }],
+    ["B-10 KNOWN-GOOD: a DECISIONS.md date that a row carries", ref("DECISIONS.md 2026-01-01"), null],
+    ["B-10 the addendum file absent fires", ref("ADDENDUM_99Z §1"), "B-10"],
+    ["B-10 the file present but a section missing fires — and a heading `4.10` does not satisfy §4.1",
+      { ...ref("ADDENDUM_00J §4.1"), "brief/build/_ADDENDUM/ADDENDUM_00J_MARKETING.md": "# 00J\n\n### §10.6 — Cadence\n\n### 4.10 Other\n" },
+      "B-10"],
+    ["B-10 a path on disk but NOT in the git index fires", ref("lib/legal/draft.ts"), "B-10",
+      { git: ["lib/legal/purposes.ts"], untracked: ["lib/legal/draft.ts"] }],
+    ["B-10 a DECISIONS.md date with no row fires", ref("DECISIONS.md 2026-02-30"), "B-10"],
+    ["B-10 a `status: reference` document with NO decision_authority fires", ref(null), "B-10"],
+    ["B-10 skips when no document is `status: reference` — draft and superseded are out of scope",
+      { ...ref("ADDENDUM_99Z §1"), "brief/legal/REF.md": "---\nstatus: draft\ndecision_authority: \"ADDENDUM_99Z §1\"\n---\n\n# R\n" },
+      { skip: "B-10" }],
+    ["B-10 skips a `status: reference` line in the BODY — only front-matter opened by `---` on line 1 counts",
+      { ...ref("ADDENDUM_99Z §1"), "brief/legal/REF.md": "# R\n\nstatus: reference\ndecision_authority: \"ADDENDUM_99Z §1\"\n\n---\n\nmore\n" },
+      { skip: "B-10" }],
+    ["B-10 the PASS note claims resolution, never correctness (BU-4)", ref("ADDENDUM_00J §10.6"), null,
+      { expectNote: /^(?![\s\S]*\bcorrect)[\s\S]*resolves[\s\S]*not measured/, noteOf: "B-10" }],
     // ── B-7 · the false zero pleks found, 2026-09-09 ────────────────────────
     // The KNOWN-GOOD is listed first because the defect was a PASS, not a failure: a check whose
     // pattern matched nothing announced "no collisions" and read as clean. What must be probed is
@@ -714,6 +841,16 @@ function selftest() {
   let failures = 0;
   for (const [name, files, expect, opts = {}] of cases) {
     const root = fixture(files);
+    if (opts.git) {
+      // A real index, because B-10 reads `git ls-files` and nothing else. `untracked` lands on disk
+      // beside it, so the plant fails on the INDEX and not merely on a missing file.
+      for (const p of [...opts.git, ...(opts.untracked ?? [])]) {
+        mkdirSync(dirname(join(root, p)), { recursive: true });
+        writeFileSync(join(root, p), "// fixture\n");
+      }
+      execFileSync("git", ["init", "-q"], { cwd: root, stdio: "ignore" });
+      execFileSync("git", ["add", "--", ...opts.git], { cwd: root, stdio: "ignore" });
+    }
     if (opts.touchAfter) {
       const p = join(root, opts.touchAfter);
       writeFileSync(p, read(p) + "\nmore\n");
@@ -731,7 +868,7 @@ function selftest() {
     // note. A verdict alone cannot distinguish a check that measured its subject from one that
     // matched nothing, which is the whole of L-01.
     if (opts.expectNote || opts.expectSkipped) {
-      const row = res.find((r) => r.id === (opts.expectSkipped ?? "B-7"));
+      const row = res.find((r) => r.id === (opts.expectSkipped ?? opts.noteOf ?? "B-7"));
       if (opts.expectNote && !opts.expectNote.test(row?.note ?? "")) {
         failures++;
         console.log(`  ✗ ${name} — note did not match ${opts.expectNote}: ${row?.note ?? "(no row)"}`);
@@ -856,6 +993,14 @@ function selftest() {
 }
 
 const omit = (obj, key) => Object.fromEntries(Object.entries(obj).filter(([k]) => k !== key));
+/** GOOD plus one indexed `status: reference` document carrying `authority` (null → no field), and
+    an addendum whose headings are spelled both ways a project spells them. */
+const ref = (authority) => ({
+  ...GOOD,
+  "brief/legal/README.md": "# Legal\n\n| File | |\n|---|---|\n| `REF.md` | r |\n",
+  "brief/legal/REF.md": `---\nstatus: reference\n${authority === null ? "" : `decision_authority: "${authority}"\n`}---\n\n# R\n`,
+  "brief/build/_ADDENDUM/ADDENDUM_00J_MARKETING.md": "# 00J\n\n### §10.6 — Cadence\n\n### 4.1 `lib/legal/purposes.ts`\n",
+});
 /** A log of `n` rows carrying a sweep dated `date` that tested `tested` rows and kept `bind`. */
 const swept = (n, bind, date, tested = n) =>
   bigLog(n) + `\n**Swept:** ${date} — ${bind} of ${tested} rows still bind\n`;
