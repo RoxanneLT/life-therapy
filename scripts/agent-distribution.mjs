@@ -2,7 +2,7 @@
 /**
  * scripts/agent-distribution.mjs — what agents actually cost, per type, against their budgets.
  *
- * @kit agent-distribution v1 — tracked OUTSIDE its `KIT:CONFIG` region. Edit it in dev-standards and
+ * @kit agent-distribution v2 — tracked OUTSIDE its `KIT:CONFIG` region. Edit it in dev-standards and
  * re-adopt; a local change outside the region is a fork, and `check-kit-drift.mjs` will say so.
  *
  * PORTED FROM `pleks/scripts/agent-distribution.mjs` (pleks M-062), where it was written and run
@@ -50,6 +50,12 @@
  * a parent over its type's `width` is named. It REPORTS, it does not fail: a width exceeded once is
  * a fact worth seeing, not a build worth breaking. yoros read the cap from the census spine's
  * sentence; here it is the marker's `width`, which check-agent-spines holds equal to that sentence.
+ *
+ * v2 (2026-09-30), from the first two adoptions. yoros 236a8a4: v1 dropped the sentence yoros's own
+ * copy printed when nothing fanned out — "the cap is untested rather than respected" — so a report
+ * with no fan-out read as a cap holding. It is back, per capped type. And RECORD's default named
+ * pleks's `docs/EXPERIMENTS.md E4`, a file neither life-therapy nor yoros has; both overrode it on
+ * adoption. The default is now empty, and a MET trigger with no RECORD says so.
  *
  * NOT ON THE GATE. It reads the live transcript tree under ~/.claude/projects, which no CI runner
  * has. Its `--selftest` IS on the gate: the probes are hermetic, plus one KNOWN-GOOD read of the real
@@ -315,6 +321,20 @@ export function overWidth(width, budgets) {
     else if (w.children > cap) over.push({ ...w, cap });
   }
   return { over, uncapped: [...uncapped].sort() };
+}
+
+/**
+ * The types that carry a `width` but have no parent run in `width` — their cap has never been
+ * exercised. yoros's first live run printed this and v1 of the port dropped it (yoros 236a8a4): with no
+ * fan-out, "no parent exceeded its cap" is vacuously true, and a report that prints nothing about the
+ * cap reads as the cap holding. Untested is a different claim from respected.
+ */
+export function untestedCaps(width, budgets) {
+  const exercised = new Set(width.map((w) => w.parent));
+  return Object.entries(budgets)
+    .filter(([type, b]) => b.state === "marker" && b.width !== null && b.width !== undefined && !exercised.has(type))
+    .map(([type, b]) => ({ type, cap: b.width }))
+    .sort((a, b) => a.type.localeCompare(b.type));
 }
 
 const med = (a) => {
@@ -641,6 +661,15 @@ if (isEntry && argv.includes("--selftest")) {
     }));
     ok(widthByParent(main).length === 0, "KNOWN-GOOD: runs the MAIN session asked for produce no width rows");
     ok(widthByParent(new Map()).length === 0, "no runs yields no width rows");
+
+    // Untested caps (yoros 236a8a4): a capped type no parent run exercised is named, never silent.
+    const capped = { census: { state: "marker", width: 4 }, walker: { state: "marker", width: null } };
+    const none = untestedCaps(widthByParent(main), capped);
+    ok(none.length === 1 && none[0].type === "census" && none[0].cap === 4,
+      "with no fan-out, a capped type is UNTESTED and named — a cap nothing exercised is not respected", JSON.stringify(none));
+    ok(untestedCaps(width, capped).length === 0, "KNOWN-GOOD: a capped type with a parent run is tested, not named");
+    ok(untestedCaps([], { census: { state: "malformed", width: 4 } }).length === 0, "only a readable marker states a cap — a malformed one is not called untested");
+    ok(untestedCaps([], { census: { state: "marker", width: 0 } })[0]?.cap === 0, "a cap of 0 is a cap — named, not dropped as falsy");
   }
 
   // ── nesting: depth from the sidecar, parent by containment ──
@@ -769,6 +798,11 @@ if (isEntry) {
   } else {
     console.log("\n   spawn depth: every run is top-level (d1). No agent has spawned an agent.");
   }
+  // yoros's sentence (236a8a4), in both branches: fan-out by one type says nothing about another's cap.
+  for (const u of untestedCaps(widthByParent(byType), budgets)) {
+    console.log(`   · ${u.type}: the cap of ${u.cap} is untested rather than respected, which is a different claim —`);
+    console.log("     no run of this type has spawned a child.");
+  }
 
   const compacted = rows.reduce((s, r) => s + r.compacted, 0);
   const peak = Math.max(...rows.map((r) => r.peakMax));
@@ -814,6 +848,9 @@ if (isEntry) {
     console.log(`     NOT COUNTED — no committed marker to date them by: ${trig.undated.join(", ")}. An uncommitted marker`);
     console.log("     dates nothing, so their runs cannot be told from the previous generation's.");
   }
-  if (trig.n >= TRIGGER) console.log(`     Record this table in ${RECORD} beside the first distribution, then tighten against current-generation runs only.`);
+  if (trig.n >= TRIGGER) {
+    if (RECORD) console.log(`     Record this table in ${RECORD} beside the first distribution, then tighten against current-generation runs only.`);
+    else console.log("     Record this table beside the first distribution — but RECORD in KIT:CONFIG measure names nowhere. Set it first.");
+  }
   console.log("     Runs before a type's generation are excluded; nested runs never count — one ask that fans out to six is one ask.");
 }
