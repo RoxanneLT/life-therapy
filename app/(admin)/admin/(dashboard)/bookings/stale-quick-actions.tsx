@@ -13,7 +13,11 @@ export function StaleQuickActions({ bookingId }: { bookingId: string }) {
   function markAs(status: "completed" | "no_show" | "cancelled") {
     startTransition(async () => {
       try {
-        await updateBookingStatus(bookingId, status);
+        const result = await updateBookingStatus(bookingId, status);
+        if (result?.error) {
+          toast.error(result.error);
+          return;
+        }
         toast.success(`Marked as ${status.replace("_", " ")}`);
         router.refresh();
       } catch {

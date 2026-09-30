@@ -76,9 +76,8 @@ export default async function BookingDetailPage({ params }: Props) {
   const config = getSessionTypeConfig(booking.sessionType);
 
   // Reinstate is offered only for a cancelled session that is still in the future.
-  const canReinstate =
-    booking.status === "cancelled" &&
-    bookingStartsAt(booking).getTime() > new Date().getTime();
+  const hasStarted = bookingStartsAt(booking).getTime() <= new Date().getTime();
+  const canReinstate = booking.status === "cancelled" && !hasStarted;
 
   // Count future bookings in this series (for edit series button)
   const futureSeriesCount = booking.recurringSeriesId
@@ -408,7 +407,9 @@ export default async function BookingDetailPage({ params }: Props) {
                   </Button>
                 </form>
               )}
-              {booking.status !== "completed" && (
+              {/* Completed / No Show only once the session has started — updateBookingStatus
+                  refuses earlier, and a server form has nowhere to show that refusal. */}
+              {booking.status !== "completed" && hasStarted && (
                 <form action={handleStatusChange}>
                   <input type="hidden" name="status" value="completed" />
                   <Button type="submit" variant="outline" size="sm">
@@ -417,7 +418,7 @@ export default async function BookingDetailPage({ params }: Props) {
                   </Button>
                 </form>
               )}
-              {booking.status !== "no_show" && (
+              {booking.status !== "no_show" && hasStarted && (
                 <form action={handleStatusChange}>
                   <input type="hidden" name="status" value="no_show" />
                   <Button type="submit" variant="outline" size="sm">

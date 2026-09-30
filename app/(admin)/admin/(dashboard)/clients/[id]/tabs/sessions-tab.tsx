@@ -252,8 +252,13 @@ function QuickStatusEdit({
       return;
     }
     startTransition(async () => {
-      await updateBookingStatus(bookingId, newStatus as BookingStatus);
+      const result = await updateBookingStatus(bookingId, newStatus as BookingStatus);
       setEditing(false);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Marked as ${newStatus.replace("_", " ")}`);
       onSuccess?.();
     });
   }

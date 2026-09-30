@@ -40,6 +40,11 @@ export function RescheduleDialog({
         const result = await rescheduleBooking(bookingId, date, startTime, endTime);
         if (result && !result.success) {
           toast.error(result.error ?? "Could not reschedule that booking.");
+        } else if (result?.success) {
+          // A clean success returns rather than redirecting. The dialog used to stay open and say
+          // nothing, which read as "didn't work" and got a second Confirm (2026-09-30).
+          setOpen(false);
+          toast.success("Booking rescheduled — the client has been emailed.");
         }
       } catch (err) {
         const digest = (err as { digest?: unknown })?.digest;

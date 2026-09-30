@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import { randomUUID } from "node:crypto";
 import { expandRecurringDatesUntil, type RecurringPattern } from "@/lib/recurring-dates";
 import type { BookingStatus, SessionMode, SessionType } from "@/lib/generated/prisma/client";
-import { saDateStr, saInstant, calendarDate, saToday } from "@/lib/dates";
+import { saDateStr, saInstant, calendarDate, saToday, bookingStartsAt, saFormat } from "@/lib/dates";
 import { weeklyOccurrenceDates } from "@/lib/graph-recurrence";
 import { getBaseUrlForCurrency, appBaseUrl } from "@/lib/region";
 import { escapeHtml } from "@/lib/utils";
@@ -25,7 +25,10 @@ import { resolvePartnerEmail, sendCouplesPartnerInvite } from "@/lib/couples-inv
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { parseLineItems, readLineItems } from "@/lib/billing-types";
 
-export async function updateBookingStatus(id: string, status: BookingStatus) {
+export async function updateBookingStatus(
+  id: string,
+  status: BookingStatus,
+): Promise<{ error?: string }> {
   const { adminUser } = await requireRole("super_admin", "editor");
 
   const billingNotes: Partial<Record<BookingStatus, string>> = {
@@ -36,8 +39,25 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
 
   const prev = await prisma.booking.findUnique({
     where: { id },
-    select: { status: true },
+    select: { status: true, date: true, startTime: true },
   });
+
+  // A session cannot be completed, or missed, before it starts. On 2026-09-29 three bookings were
+  // marked completed in 26 seconds from the client Sessions tab dropdown, and one of them —
+  // Genevieve Chang's — was the next day's. Reconcile only expects events for confirmed/pending
+  // bookings, so her live Outlook occurrence became an "orphan", the approved repair deleted it on
+  // the morning of the session, and she was sent a cancellation nobody meant. Refused rather than
+  // confirmed: there is no legitimate case, and a confirm is what gets clicked through.
+  if (
+    (status === "completed" || status === "no_show") &&
+    prev &&
+    bookingStartsAt(prev).getTime() > Date.now()
+  ) {
+    const when = saFormat(bookingStartsAt(prev), "EEE d MMM 'at' HH:mm");
+    return {
+      error: `This session hasn't started yet (${when}), so it can't be marked ${status === "completed" ? "completed" : "a no-show"}. If it was moved, reschedule it instead.`,
+    };
+  }
 
   const booking = await prisma.booking.update({
     where: { id },
@@ -79,6 +99,7 @@ export async function updateBookingStatus(id: string, status: BookingStatus) {
   if (calendarWarning) {
     redirect(`/admin/bookings/${id}?calendarWarning=${encodeURIComponent(calendarWarning)}`);
   }
+  return {};
 }
 
 export async function updateBookingNotes(id: string, formData: FormData) {
@@ -157,10 +178,19 @@ export async function rescheduleBooking(
   newStartTime: string,
   newEndTime: string,
 ): Promise<{ success: boolean; error?: string }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const booking = await prisma.booking.findUnique({ where: { id } });
   if (!booking) return { success: false, error: "That booking no longer exists." };
+
+  // Already there: nothing to move. Until 2026-09-30 this went ahead — a new Outlook event, the
+  // previous one removed, a second "rescheduled" email, rescheduleCount 2 — because the dialog
+  // stayed open and silent after a success, so the admin pressed Confirm again (Genevieve Chang,
+  // 30 Sep → 1 Oct, two identical emails 11 seconds apart). The dialog now closes; this makes a
+  // repeat submit harmless whatever the client does.
+  if (saDateStr(booking.date) === newDate && booking.startTime === newStartTime) {
+    return { success: false, error: `This booking is already on ${newDate} at ${newStartTime} — nothing to change.` };
+  }
 
   const config = getSessionTypeConfig(booking.sessionType);
   const dateObj = calendarDate(newDate);
@@ -179,10 +209,8 @@ export async function rescheduleBooking(
   // exactly the case the 24-hour notice rule is not meant to block.
   const { slots } = await getAvailableSlots(newDate, config, { skipMinNotice: true });
   const slotFree = slots.some((s) => s.start === newStartTime);
-  const movingToSameSlot =
-    saDateStr(booking.date) === newDate && booking.startTime === newStartTime;
 
-  if (!slotFree && !movingToSameSlot) {
+  if (!slotFree) {
     return {
       success: false,
       error: `${newStartTime} on ${newDate} is not available — it may have been booked, blocked, or fall on a public holiday. Pick another time.`,
@@ -230,6 +258,12 @@ export async function rescheduleBooking(
       endTime: newEndTime,
       graphEventId: calResult?.eventId || null,
       teamsMeetingUrl: calResult?.teamsMeetingUrl || booking.teamsMeetingUrl,
+      // The reminder stamps belong to the OLD time. Left set, the reminder cron — which only picks
+      // bookings whose stamp is null — sends nothing for the new one: Genevieve's 1 Oct session
+      // carried the stamp of the 29 Sep reminder for the 30 Sep slot it had left.
+      reminderSentAt: null,
+      whatsappReminder24hSentAt: null,
+      whatsappReminderMorningSentAt: null,
     },
     });
   } catch (err) {
@@ -246,6 +280,15 @@ export async function rescheduleBooking(
     }
     throw err;
   }
+
+  await recordAudit({
+    action: "booking_rescheduled",
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    before: { date: saDateStr(booking.date), startTime: booking.startTime, endTime: booking.endTime },
+    after: { date: newDate, startTime: newStartTime, endTime: newEndTime },
+  });
 
   // Notify client
   const email = await renderEmail("booking_reschedule", {
