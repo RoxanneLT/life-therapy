@@ -33,24 +33,7 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-### CF-6 · `agent-brief-gate` v1 fails canon's own `check-hook-registration`
-OBSERVED   Adopted byte-for-byte from `a4ff0b5` and registered as its header says, the hook turned
-           the gate red: it carries no `@event`, `@matcher`, `@twin` or `@no-twin` declaration.
-           `agent-write-scope.js` at the same commit carries all three.
-COMMAND    `node scripts/check-hook-registration.mjs`
-           ❌ 2 hook-registration finding(s):
-             .claude/hooks/agent-brief-gate.js: declares no "// @event <Event>" and "// @matcher <pattern>" — without them nothing can check it is registered for the calls it gates
-             .claude/hooks/agent-brief-gate.js: declares neither a settings twin nor @no-twin with a reason — add "// @twin <settings pattern>" per rule, or "// @no-twin <why settings cannot express it>"
-WHY IT IS  Any project running the kit's registration check fails on adoption, whatever its stack.
-CANON'S    Canon's probe for the hook passes (77 of 77), because it tests decisions, not declarations,
-           so canon's own gate presumably never ran the registration check over it.
-SMALLEST   Add the declarations above the `import`. LT carries them as a four-line marked fork until
-FIX        re-adoption: `@event PreToolUse`, `@matcher Agent|Task`, and a `@no-twin` saying a
-           settings rule reads a tool name and argument prefix, never a prompt's contents. One thing
-           to decide in canon, not here: the REDIRECT half (refusing `Explore`/`general-purpose`)
-           *is* expressible in settings, e.g. as a deny on `Agent(Explore)`. So a twin there is
-           possible, and a `@no-twin` covering the whole file overstates the case. It must not
-           break: a pass emitting no decision, per the header.
+Empty. CF-6 was answered by `agent-brief-gate` v2 at canon `77f1c58` (below).
 
 ---
 
@@ -116,6 +99,7 @@ never *exempt*, so the reason has to argue it.
 | `check-brief` | v9 | moved 2026-09-30 from canon's history at `86d123f` (`git show 86d123f:kit/project-kit/scripts/check-brief.mjs`), with the `KIT:CONFIG names` region kept. `diff` against canon's bytes shows that region's LT comment block and nothing else. Everything canon predicted matched. Two things in the instruction did not match: it said to copy canon's working-tree file, and CLAUDE.md §1 takes kit bytes from history. The bytes are the same, since the file was clean at canon's HEAD `86d123f`. It also said `lib/cron/whatsapp-reminders.ts` was staged here. At adoption it was not: it had been committed in `7d5f0f7` first, and the adoption commit holds `scripts/check-brief.mjs` alone. **Record v9 in `kitAdopted`.** | `c886de4` · `--selftest` → `selftest: all probes green (both directions)` · `.` → `brief: conformant · 2 of 10 not measured` (B-5 no unresolved markers, B-10 no `status: reference` document) · `npm run check` → exit 0 |
 | `settings` | v3 | the M-KIT-22 claim is now committed here — `"PowerShell"` in `permissions.deny`. Nothing to record in `kitAdopted` (the row is asserted, not adopted); listed so canon sees the claim is held by a commit and not by a working tree | `2ea2ca6` |
 | artefact-first agents | `agent-brief-gate` v1 · `agent-brief-gate-config` v1 · `agent-brief-gate-probe` v1 · `check-handoff-contract` v6 · `agent-write-scope-config` v2 | moved 2026-09-30 from canon's history at `a4ff0b5` (`git show`). Spines are via `propagate-spines`: census v10→v11, db-inspector v5→v6, grounder v7→v8, implementer v5→v6, walker v8→v9, and `scout` v1 is new, its frontmatter and `## Project surface` written here. `check-handoff-contract` v6 is canon's bytes whole: the previous v5 copy had no local drift. `agent-write-scope.config.mjs` is v2 with LT's dated reading comment kept inside the `scopes` region, extended for scout. The `briefs` region is canon's default unedited: it is exactly LT's six contract spines, with crawler-doctrine absent. `agent-brief-gate.js` is v1 plus the four declaration lines from CF-6, marked as a fork. `settings.json` registers the hook as `Agent\|Task`; `test:gate` runs its probe; CLAUDE.md §7 carries the scout row and the brief paragraph, tagged `@enforced hook:agent-brief-gate` (so `minD` 25→26); `/walk` numbers one artefact per spawn. **Live verification, 2026-09-30, fresh session after the push of `f1d9fbb`:** (a) scout, no path → `agent-brief-gate: the scout brief names no artefact (.handoff/<task-slug>/<NN>-scout.md). Re-brief it as: …` · (b) `Explore` → `agent-brief-gate: "Explore" is not spawned in this project — it has no spine, so nothing sends its work to an artefact, and every run comes back inline. Spawn "scout" instead. …` · (c) scout briefed `artefact: .handoff/adopt-check/01-scout.md` → the reply was the fenced contract block only (`Verdict ✅ proceed — answered`, `Promote none`). The artefact ends in `## Contract`, and `check-handoff-contract` → `🤝 handoff-contract: 4 artefact(s) carry a well-formed contract block`, `L-39 · 4 stamped, 0 ran a spine their commit did not hold`, exit 0. **Record the five rows in `kitAdopted`.** | the commit that adds this row · `agent-brief-gate.probe` → `✅ agent-brief-gate: 77 of 77 probes pass (6 briefed types, 2 redirects)` · `agent-write-scope.probe` → `✅ 145 agent-write-scope probes pass (31 derived from your 7 agent(s), …)` · `check-hook-registration` → green after CF-6's lines · `npm run check` → exit 0 |
+| brief-gate v2 · hold | `agent-brief-gate` v2 | moved 2026-09-30 from canon's history at `77f1c58`, replacing v1 and the CF-6 fork. `agent-brief-gate.js` is canon's bytes whole, so the local fork is gone. `agent-brief-gate.config.mjs`, `agent-brief-gate.probe.mjs` and `check-handoff-contract.mjs` are byte-identical to `77f1c58`. `agent-write-scope.config.mjs` differs only by LT's reading comment, inside its region. **Item 2, `build.md`: n/a.** LT has no `.claude/commands/build.md` (only `walk.md` and `wrap.md`), so there is nothing to patch; `walk.md` already carries per-spawn artefact lines (`f1d9fbb`). **Item 3, spine hold: no lag to pin today.** Each LT spine equals canon `main` at `77f1c58`: census v11, db-inspector v6, grounder v8, implementer v6, walker v9, scout v1. The spine edits in canon's working tree (`kit/batch-1`) were not propagated. LT holds at this generation until batch 2 lands on `main`, and then re-propagates. Review 2026-10-14. If batch 2 lands before then, the lag starts then, and so does the pin. **Item 4, the fresh-session live check:** pending, recorded in a follow-up commit. **Record `agent-brief-gate` v2 in `kitAdopted`.** | the commit that adds this row · `agent-brief-gate.probe` → `✅ agent-brief-gate: 77 of 77 probes pass (6 briefed types, 2 redirects)` · `check-hook-registration` → green with no local lines · `npm run check` → exit 0 |
 
 No pins.
 
@@ -135,6 +119,7 @@ A pointer, not a restatement — the canon entry is the record.
 | CF-3 | The spines' anchor carried no spine version | `spine=<agent> vN` on every anchor; `check-handoff-contract` v5 prints L-39's stamp tell | `61bd006` |
 | CF-4 | `check-handoff-contract` read the anchor and never compared it | v5 prints L-41's QUARANTINED tell | `61bd006` |
 | CF-5 | A settings ask prompts beside a live hook, and canon said it did not | L-15 corrected on measurement; bash-gate v7's fallbacks region says the same; `check-hook-registration` v7 says "the fallback layer" | `98f9636` |
+| CF-6 | `agent-brief-gate` v1 failed canon's own `check-hook-registration` | the same defect as yoros CF-14, filed the same day. v2 carries the three markers, and `tools/check-kit-hooks.mjs` now reads every kit hook for them. One point from CF-6 is left for canon, not reopened here: v2's `@no-twin` is argued for the brief half only, and the REDIRECT half (`Explore`/`general-purpose`) could still be twinned as a settings deny | `77f1c58` |
 | §3 | `canon-findings` v1, adopted 2026-09-10 | recorded in `kitAdopted` | `31ed513` |
 | §3 | `check-brief` v7 (`beabdc0`); canon's v6 pin was finished work | pin removed | `a152e89` |
 | §3 | Thirteen rows moved to canon `2e79fdb` (`8d29b98`); their thirteen pins were finished work | all pins removed | `c06491c` |

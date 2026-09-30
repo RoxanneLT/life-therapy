@@ -2,7 +2,7 @@
  * .claude/hooks/agent-brief-gate.js — PreToolUse on the Agent tool: a spawn of a contract-bearing
  * agent must name its artefact, and must not ask for the answer inline.
  *
- * @kit agent-brief-gate v1 — tracked. Edit it in dev-standards and re-adopt; a local change here is
+ * @kit agent-brief-gate v2 — tracked. Edit it in dev-standards and re-adopt; a local change here is
  * a fork, and `check-kit-drift.mjs` will say so. The tables are in `agent-brief-gate.config.mjs`.
  *
  * Register: settings.json → hooks.PreToolUse, matcher "Agent|Task" (the tool was `Task` before it was
@@ -44,15 +44,19 @@
  *     common phrasings, each probed in both directions, with negation honoured ("do not return it
  *     inline" passes). A caller determined to ask for an inline answer can.
  *   - Whether the slug is a good one, or NN the right step. It checks the shape, not the routing.
+ *
+ * v2 (2026-09-30) carries the three markers below. v1 shipped without them, and the kit's own
+ * check-hook-registration fails a hook that lacks them, so every project adopting v1 exactly as
+ * shipped went red. Found by yoros (CF-14), whose local fork these lines are, verbatim. Canon's
+ * gate could not see it because canon does not install this hook; `tools/check-kit-hooks.mjs` now
+ * reads every kit hook for these markers, whether canon runs it or not.
  */
-// LOCAL FORK of kit v1, these four lines only: canon a4ff0b5 ships the hook without the declarations
-// its own check-hook-registration requires. Filed as CANON-FINDINGS §1 CF-6; drop on re-adopt.
 // @event PreToolUse
 // @matcher Agent|Task
-// @no-twin A settings.json permission rule reads a tool's name and argument prefix, never a prompt's
-// contents, so "names a .handoff artefact" and "asks for the answer inline" are inexpressible there.
-// The probe suite in agent-brief-gate.probe.mjs is the backstop: if this hook is deleted or stops
-// matching, `npm run check` goes red.
+// @no-twin A settings.json permission rule sees the agent type and never the prompt, so the brief
+// half (an artefact named, nothing asked inline) cannot be spelled there at all. The probe suite in
+// agent-brief-gate.probe.mjs is the backstop: if this hook is deleted or stops matching, `npm run
+// check` goes red.
 import { BRIEFED, REDIRECT } from "./agent-brief-gate.config.mjs";
 
 const SPAWN_TOOLS = new Set(["Agent", "Task"]);
