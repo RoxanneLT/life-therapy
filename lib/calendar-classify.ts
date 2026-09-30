@@ -98,8 +98,24 @@ export interface ClassifiedOrphan {
    */
   deletable: boolean;
   proposal: ProposedAction;
-  /** Why the guard refused, when it did. */
+  /** Why it is deletable or protected — shown against the row, so an approval is informed. */
   reason?: string;
+  /** Which booking, in any status, owns this event — null when none does. */
+  owner?: { bookingId: string; status: string } | null;
+}
+
+/**
+ * A booking in ANY status whose `graphEventId` may own a leftover event. The forward pass
+ * only sees confirmed/pending bookings, so without these an event owned by a booking that
+ * was marked completed a day early read exactly like one nobody owns — and was deleted on
+ * the morning of the session (Genevieve Chang, 2026-09-30).
+ */
+export interface ClassifyOwner {
+  id: string;
+  graphEventId: string;
+  date: string; // YYYY-MM-DD (SAST)
+  startTime: string; // "HH:mm"
+  status: string;
 }
 
 export interface ClassifiedDuplicate {
@@ -270,6 +286,7 @@ export function isStillProposed(item: RepairItem, fresh: Classification): boolea
 export function classify(
   bookings: ClassifyBooking[],
   events: ClassifyEvent[],
+  owners: ClassifyOwner[] = [],
 ): Classification {
   const out: Classification = {
     checked: 0,
@@ -311,7 +328,7 @@ export function classify(
 
   // The guard's input: clients that still have at least one eventless booking.
   const clientsWithMissingBookings = new Set(out.missing.map((m) => normName(m.clientName)));
-  out.orphaned.push(...collectOrphans(events, consumed, clientsWithMissingBookings));
+  out.orphaned.push(...collectOrphans(events, consumed, clientsWithMissingBookings, owners));
 
   return out;
 }
@@ -368,29 +385,92 @@ function surplusInSlot(
     }));
 }
 
+/**
+ * The booking that owns this event: one pointing at the event itself, or at its series
+ * master. For a series every sibling shares the master id, so prefer the booking that sits
+ * at THIS occurrence's day and time; any holder of the id still proves the event is ours.
+ */
+function findOwner(ev: ClassifyEvent, owners: ClassifyOwner[]): { owner: ClassifyOwner; atSlot: boolean } | null {
+  const holders = owners.filter(
+    (o) => o.graphEventId === ev.id || (!!ev.seriesMasterId && o.graphEventId === ev.seriesMasterId),
+  );
+  if (!holders.length) return null;
+  const atSlot = holders.find((o) => o.date === ev.date && o.startTime === ev.start);
+  return atSlot ? { owner: atSlot, atSlot: true } : { owner: holders[0], atSlot: false };
+}
+
+/**
+ * Why a leftover event may go, or must stay. Rules in order — the first that speaks decides:
+ *
+ * 1. The client still has an eventless booking → protected as a suspected wrong-day twin
+ *    (the July rule, on `ClassifiedOrphan.deletable`).
+ * 2. A booking at this very slot is marked completed / no-show → protected. Every event
+ *    here lies ahead, so a session that has not happened carries a status that is wrong;
+ *    the fix is the booking, not the calendar. This is the 2026-09-30 incident.
+ * 3. A booking at this slot is cancelled → deletable: the cancel left its entry behind.
+ * 4. Owned (by id or series), but no booking at this slot → deletable: left over from a
+ *    reschedule or a series change.
+ * 5. Owned by nothing we hold → deletable, but said plainly, because it may have been added
+ *    by hand in Outlook — the one kind whose owner nobody here can name.
+ */
+function judgeOrphan(
+  ev: ClassifyEvent,
+  clientsWithMissingBookings: Set<string>,
+  owners: ClassifyOwner[],
+): Pick<ClassifiedOrphan, "deletable" | "reason" | "owner"> {
+  const found = findOwner(ev, owners);
+  const owner = found ? { bookingId: found.owner.id, status: found.owner.status } : null;
+
+  if (!isGhostDeletable(normName(ev.clientName), clientsWithMissingBookings)) {
+    return {
+      deletable: false,
+      owner,
+      reason:
+        "Suspected wrong-day session — this client still has sessions with no event. Rebuild their series instead of deleting.",
+    };
+  }
+  if (found?.atSlot && (found.owner.status === "completed" || found.owner.status === "no_show")) {
+    return {
+      deletable: false,
+      owner,
+      reason: `Its booking is marked ${found.owner.status === "completed" ? "completed" : "no-show"}, but the session hasn't happened yet. If it is still on, set the booking back to confirmed — don't delete the event.`,
+    };
+  }
+  if (found?.atSlot && found.owner.status === "cancelled") {
+    return { deletable: true, owner, reason: "Its booking was cancelled — the calendar entry was never removed." };
+  }
+  if (found) {
+    return {
+      deletable: true,
+      owner,
+      reason: "Left over from a reschedule or series change — no booking is at this time any more.",
+    };
+  }
+  return {
+    deletable: true,
+    owner: null,
+    reason: "Not linked to any booking — it may have been added by hand in Outlook. Check before deleting.",
+  };
+}
+
 function collectOrphans(
   events: ClassifyEvent[],
   consumed: Set<string>,
   clientsWithMissingBookings: Set<string>,
+  owners: ClassifyOwner[],
 ): ClassifiedOrphan[] {
   const out: ClassifiedOrphan[] = [];
   for (const ev of events) {
     if (consumed.has(matchKey(ev.date, ev.start, ev.clientName))) continue;
-    const deletable = isGhostDeletable(normName(ev.clientName), clientsWithMissingBookings);
+    const judged = judgeOrphan(ev, clientsWithMissingBookings, owners);
     out.push({
       graphEventId: ev.id,
       subject: ev.subject,
       clientName: ev.clientName,
       date: ev.date,
       start: ev.start,
-      deletable,
-      proposal: deletable ? "delete" : "none",
-      ...(deletable
-        ? {}
-        : {
-            reason:
-              "Suspected wrong-day session — this client still has sessions with no event. Rebuild their series instead of deleting.",
-          }),
+      ...judged,
+      proposal: judged.deletable ? "delete" : "none",
     });
   }
   return out;

@@ -20,6 +20,7 @@ import {
   summariseMissingByClient,
   type ClassifyBooking,
   type ClassifyEvent,
+  type ClassifyOwner,
 } from "./calendar-classify";
 
 const bk = (
@@ -131,6 +132,74 @@ test("JUNE-24: matched bookings + duplicate events → duplicates remain deletab
   assert.equal(c.missing.length, 0, "nothing missing → guard stays out of the way");
   assert.equal(c.orphaned.length, 2, "the two stale events are ghosts");
   assert.ok(c.orphaned.every((o) => o.deletable), "and they are still deletable");
+});
+
+// ── Fixture 5: ownership — whose leftover is it? (2026-09-30) ───────────────
+//
+// Genevieve Chang's 30 Sep occurrence belonged to her series master; her booking had been
+// marked completed the day before it happened, so the forward pass (confirmed/pending only)
+// did not see it and the approved repair deleted a real session. Owners in ANY status are
+// now an input, and each ghost says whose it is.
+
+const owner = (over: Partial<ClassifyOwner> & Pick<ClassifyOwner, "id" | "status">): ClassifyOwner => ({
+  graphEventId: "master-g",
+  date: "2026-09-30",
+  startTime: "13:00",
+  ...over,
+});
+const gEvent = ev({ id: "occ-30", date: "2026-09-30", start: "13:00", end: "14:00", clientName: "Genevieve Chang", seriesMasterId: "master-g" });
+
+test("INCIDENT 2026-09-30: an occurrence whose booking is marked completed early is PROTECTED", () => {
+  const c = classify([], [gEvent], [owner({ id: "g1", status: "completed" })]);
+  assert.equal(c.orphaned.length, 1);
+  const o = c.orphaned[0];
+  assert.equal(o.deletable, false, "a real upcoming session must not be offered for deletion");
+  assert.equal(o.proposal, "none");
+  assert.match(o.reason ?? "", /marked completed/);
+  assert.deepEqual(o.owner, { bookingId: "g1", status: "completed" });
+});
+
+test("…and the same for a no-show marked before the session", () => {
+  const c = classify([], [gEvent], [owner({ id: "g1", status: "no_show" })]);
+  assert.equal(c.orphaned[0].deletable, false);
+  assert.match(c.orphaned[0].reason ?? "", /no-show/);
+});
+
+test("a cancelled booking's leftover occurrence stays DELETABLE, and says why", () => {
+  const c = classify([], [gEvent], [owner({ id: "g1", status: "cancelled" })]);
+  assert.equal(c.orphaned[0].deletable, true);
+  assert.equal(c.orphaned[0].proposal, "delete");
+  assert.match(c.orphaned[0].reason ?? "", /cancelled/);
+});
+
+test("owned by the series but no booking at this slot → deletable leftover (a reschedule moved it)", () => {
+  // The sibling that owns the master sits on another date; nothing is at 30 Sep any more.
+  const c = classify([], [gEvent], [owner({ id: "g2", status: "confirmed", date: "2026-10-01" })]);
+  assert.equal(c.orphaned[0].deletable, true);
+  assert.match(c.orphaned[0].reason ?? "", /reschedule/);
+  assert.equal(c.orphaned[0].owner?.bookingId, "g2");
+});
+
+test("a completed booking at a DIFFERENT slot does not protect this occurrence", () => {
+  // Only the booking at THIS day and time speaks for it; a sibling's status says nothing.
+  const c = classify([], [gEvent], [owner({ id: "g3", status: "completed", date: "2026-09-23" })]);
+  assert.equal(c.orphaned[0].deletable, true);
+});
+
+test("an event no booking holds is deletable but flagged as possibly hand-made", () => {
+  const c = classify([], [gEvent], []);
+  assert.equal(c.orphaned[0].deletable, true);
+  assert.equal(c.orphaned[0].owner, null);
+  assert.match(c.orphaned[0].reason ?? "", /by hand/);
+});
+
+test("the wrong-day rule still wins over ownership", () => {
+  // The client has an eventless booking, so even a cancelled owner does not make it deletable.
+  const bookings = [bk({ id: "b1", date: "2026-10-06", clientName: "Genevieve Chang", startTime: "13:00", endTime: "14:00" })];
+  const c = classify(bookings, [gEvent], [owner({ id: "g1", status: "cancelled" })]);
+  const o = c.orphaned.find((x) => x.graphEventId === "occ-30");
+  assert.equal(o?.deletable, false);
+  assert.match(o?.reason ?? "", /wrong-day/);
 });
 
 // ── Fixture 3: in-person end-to-end ─────────────────────────────────────────

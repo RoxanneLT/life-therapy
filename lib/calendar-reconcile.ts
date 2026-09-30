@@ -141,6 +141,21 @@ export async function reconcileCalendar(options?: {
     });
   }
 
+  // 3b. Who owns each event, in ANY status. The bookings above are only the live ones, so an
+  //     event whose booking was marked completed early looked unowned and was proposed for
+  //     deletion (2026-09-30). The classifier uses these to say whose event it is and why.
+  const eventIds = new Set<string>();
+  for (const ev of sessionEvents) {
+    eventIds.add(ev.id);
+    if (ev.seriesMasterId) eventIds.add(ev.seriesMasterId);
+  }
+  const owners = eventIds.size
+    ? await prisma.booking.findMany({
+        where: { graphEventId: { in: [...eventIds] } },
+        select: { id: true, graphEventId: true, date: true, startTime: true, status: true },
+      })
+    : [];
+
   // 4. Classify — the pure core in lib/calendar-classify.ts, fixture-tested against the
   //    real 2026-06/07 incidents. Production and the tests share one brain.
   const classified = classify(
@@ -154,6 +169,13 @@ export async function reconcileCalendar(options?: {
       isRecurring: !!b.recurringSeriesId,
     })),
     sessionEvents,
+    owners.map((o) => ({
+      id: o.id,
+      graphEventId: o.graphEventId as string, // the `in` filter excludes null
+      date: saDateStr(o.date),
+      startTime: o.startTime,
+      status: o.status,
+    })),
   );
 
   result.checked = classified.checked;

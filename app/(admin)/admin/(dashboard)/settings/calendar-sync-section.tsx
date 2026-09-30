@@ -155,20 +155,23 @@ function buildReport(r: ReconcileResult, ranAt: Date): string {
     for (const d of dupReview) lines.push(`  • ${d.subject} — ${d.date} ${d.start}`);
   }
 
-  const ghosts = r.orphaned.filter((o) => o.deletable);
+  const ghosts = r.orphaned.filter((o) => o.deletable && o.owner);
+  const unlinkedGhosts = r.orphaned.filter((o) => o.deletable && !o.owner);
   const protectedGhosts = r.orphaned.filter((o) => !o.deletable);
   if (ghosts.length) {
-    lines.push("", `UNMATCHED EVENTS — no booking, safe to delete (${ghosts.length}):`);
-    for (const o of ghosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start}`);
+    lines.push("", `LEFTOVER EVENTS — their booking no longer needs them (${ghosts.length}):`);
+    for (const o of ghosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start} — ${o.reason}`);
+  }
+  if (unlinkedGhosts.length) {
+    lines.push("", `EVENTS NOT LINKED TO ANY BOOKING — check before deleting (${unlinkedGhosts.length}):`);
+    for (const o of unlinkedGhosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start}`);
   }
   if (protectedGhosts.length) {
     lines.push(
       "",
-      `SUSPECTED WRONG-DAY SESSIONS (${protectedGhosts.length}) — DO NOT DELETE.`,
-      "  These clients still have sessions with no event. Rebuild their series instead;",
-      "  deleting these wipes real sessions off the calendar.",
+      `PROTECTED — DO NOT DELETE (${protectedGhosts.length}). Each is very likely a real session:`,
     );
-    for (const o of protectedGhosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start}`);
+    for (const o of protectedGhosts) lines.push(`  • ${o.subject} — ${o.date} ${o.start} — ${o.reason}`);
   }
 
   if (r.onHoliday.length) {
@@ -306,7 +309,8 @@ function ReconcileReport({
   const needsRebuild = result.missing.filter((m) => m.proposal === "reschedule_series");
   const dupDelete = result.duplicates.filter((d) => d.proposal === "delete");
   const dupReview = result.duplicates.filter((d) => d.proposal !== "delete");
-  const ghosts = result.orphaned.filter((o) => o.deletable);
+  const ghosts = result.orphaned.filter((o) => o.deletable && o.owner);
+  const unlinkedGhosts = result.orphaned.filter((o) => o.deletable && !o.owner);
   const protectedGhosts = result.orphaned.filter((o) => !o.deletable);
 
   const issueCount =
@@ -471,10 +475,24 @@ function ReconcileReport({
       />
 
       <FindingGroup
-        title="Events with no booking"
-        note="Nothing in the portal corresponds to these, and the client they belong to has no missing sessions — safe to remove."
+        title="Leftover events"
+        note="Each belongs to a booking that no longer needs it — cancelled, or moved to another time. Safe to remove."
         tone="warn"
         items={ghosts.map((o) => ({
+          key: `delete:${o.graphEventId}`,
+          label: `${o.subject} — ${o.date} ${o.start}`,
+          sub: o.reason,
+        }))}
+        selected={selected}
+        onToggle={toggle}
+        onToggleAll={toggleAll}
+      />
+
+      <FindingGroup
+        title="Not linked to any booking — check before deleting"
+        note="No booking in the portal holds these events, so nothing here can say whose they are. They may have been added by hand in Outlook. Open each one in Outlook before ticking it."
+        tone="warn"
+        items={unlinkedGhosts.map((o) => ({
           key: `delete:${o.graphEventId}`,
           label: `${o.subject} — ${o.date} ${o.start}`,
         }))}
@@ -484,8 +502,8 @@ function ReconcileReport({
       />
 
       <FindingGroup
-        title="Suspected wrong-day sessions — do NOT delete"
-        note="These clients still have sessions with no calendar event, so these are very likely their real sessions sitting on the wrong day. Rebuild the client's series instead; deleting them wipes real sessions off the calendar."
+        title="Protected — do NOT delete"
+        note="Each of these is very likely a real session. The reason on each row says what to fix instead: rebuild the client's series, or correct a booking marked completed before it happened."
         tone="bad"
         items={protectedGhosts.map((o) => ({
           key: `protected:${o.graphEventId}`,
