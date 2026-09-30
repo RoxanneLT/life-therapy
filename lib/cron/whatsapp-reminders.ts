@@ -1,14 +1,17 @@
 /**
- * WhatsApp reminder processor — runs as part of the daily cron.
+ * WhatsApp reminder processor — runs as part of the daily cron (Vercel, 06:00 UTC; it
+ * starts at ~08:46 SAST, measured 2026-09-30 — inside lib/quiet-hours.ts's window already,
+ * so this file does not gate on it: a gate here would only lose the day on a late re-run).
  *
- * Date-based categories only (08:00 SAST is the right time for these):
- *   1. Billing reminders (request sent, 2 days before due, overdue)
+ * Date-based categories only:
+ *   1. Billing reminders (request sent, 2 days before due, due today, overdue)
  *   2. Credit expiry warnings (14 days + 3 days before)
  *
  * Session reminders (24h + ~2h before) are time-of-day sensitive and live
- * in lib/cron/session-reminders.ts, triggered by the every-2h reminders cron.
+ * in lib/cron/session-reminders.ts.
  *
- * Tracking fields on each record prevent duplicate sends.
+ * Every send CLAIMS its stamp first (one conditional update) and releases it on failure,
+ * so two overlapping runs cannot both send. Until 2026-09-30 these read, sent, then stamped.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -20,8 +23,8 @@ import {
   getOverdueDate,
   loadRequestAmounts,
 } from "@/lib/billing";
-import { saToday, calendarDate, isSameSaDay } from "@/lib/dates";
-import { addDays, format } from "date-fns";
+import { saToday, saFormat, calendarDate, isSameSaDay } from "@/lib/dates";
+import { addDays } from "date-fns";
 import { formatPrice } from "@/lib/utils";
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -29,6 +32,46 @@ import { formatPrice } from "@/lib/utils";
 /** Start of today's SAST calendar day, as a deterministic UTC-midnight Date. */
 function getSASTToday(): Date {
   return calendarDate(saToday());
+}
+
+type PaymentRequestStamp =
+  | "whatsappSentAt"
+  | "whatsappReminderSentAt"
+  | "whatsappDueTodaySentAt"
+  | "whatsappOverdueSentAt";
+type CreditWarning = "expiryWarning14" | "expiryWarning3";
+type Send = () => Promise<{ success: boolean }>;
+
+/** Claim → send → release on failure. Only the run whose conditional update matched sends. */
+async function sendOnce(
+  claim: () => Promise<{ count: number }>,
+  release: () => Promise<unknown>,
+  send: Send,
+): Promise<boolean> {
+  if ((await claim()).count !== 1) return false;
+  try {
+    if ((await send()).success) return true;
+  } catch (err) {
+    console.error("[whatsapp-reminders] send threw:", err);
+  }
+  await release().catch((err) => console.error("[whatsapp-reminders] release failed:", err));
+  return false;
+}
+
+function onceForRequest(id: string, field: PaymentRequestStamp, send: Send): Promise<boolean> {
+  return sendOnce(
+    () => prisma.paymentRequest.updateMany({ where: { id, [field]: null }, data: { [field]: new Date() } }),
+    () => prisma.paymentRequest.updateMany({ where: { id }, data: { [field]: null } }),
+    send,
+  );
+}
+
+function onceForCredit(id: string, field: CreditWarning, send: Send): Promise<boolean> {
+  return sendOnce(
+    () => prisma.sessionCreditBalance.updateMany({ where: { id, [field]: false }, data: { [field]: true } }),
+    () => prisma.sessionCreditBalance.updateMany({ where: { id }, data: { [field]: false } }),
+    send,
+  );
 }
 
 // ─── Billing Reminders ───────────────────────────────────────
@@ -71,12 +114,12 @@ async function processBillingReminders(
       const contact = await resolveStudentPhone(pr.studentId);
       if (!contact) continue;
 
-      const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
+      const monthLabel = saFormat(pr.periodEnd, "MMMM yyyy");
       const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
       // The balance, not the original total — a WhatsApp that asks a client for
       // money they already paid is the one they screenshot.
       const { balance } = await loadRequestAmounts(pr);
-      const result = await sendAndLogTemplate({
+      const sent = await onceForRequest(pr.id, "whatsappSentAt", () => sendAndLogTemplate({
         studentId: contact.studentId,
         phone: contact.phone,
         templateName: "billing_request",
@@ -86,20 +129,13 @@ async function processBillingReminders(
             { type: "text", text: contact.firstName },
             { type: "text", text: monthLabel },
             { type: "text", text: formatPrice(balance, pr.currency) },
-            { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
+            { type: "text", text: saFormat(pr.dueDate, "d MMMM yyyy") },
             { type: "text", text: pr.paymentUrl || portalUrl },
           ],
         }],
         metadata: { paymentRequestId: pr.id },
-      });
-
-      if (result.success) {
-        await prisma.paymentRequest.update({
-          where: { id: pr.id },
-          data: { whatsappSentAt: new Date() },
-        });
-        sentRequest++;
-      }
+      }));
+      if (sent) sentRequest++;
     }
   }
 
@@ -122,7 +158,7 @@ async function processBillingReminders(
 
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
     const { balance } = await loadRequestAmounts(pr);
-    const result = await sendAndLogTemplate({
+    const sent = await onceForRequest(pr.id, "whatsappReminderSentAt", () => sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
       templateName: "billing_reminder",
@@ -131,20 +167,13 @@ async function processBillingReminders(
         parameters: [
           { type: "text", text: contact.firstName },
           { type: "text", text: formatPrice(balance, pr.currency) },
-          { type: "text", text: format(pr.dueDate, "d MMMM yyyy") },
+          { type: "text", text: saFormat(pr.dueDate, "d MMMM yyyy") },
           { type: "text", text: pr.paymentUrl || portalUrl },
         ],
       }],
       metadata: { paymentRequestId: pr.id },
-    });
-
-    if (result.success) {
-      await prisma.paymentRequest.update({
-        where: { id: pr.id },
-        data: { whatsappReminderSentAt: new Date() },
-      });
-      sentReminder++;
-    }
+    }));
+    if (sent) sentReminder++;
   }
 
   // 3. Due today notice — on the actual due date
@@ -165,7 +194,7 @@ async function processBillingReminders(
 
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
     const { balance } = await loadRequestAmounts(pr);
-    const result = await sendAndLogTemplate({
+    const sent = await onceForRequest(pr.id, "whatsappDueTodaySentAt", () => sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
       templateName: "billing_due_today",
@@ -178,15 +207,8 @@ async function processBillingReminders(
         ],
       }],
       metadata: { paymentRequestId: pr.id },
-    });
-
-    if (result.success) {
-      await prisma.paymentRequest.update({
-        where: { id: pr.id },
-        data: { whatsappDueTodaySentAt: new Date() },
-      });
-      sentDueToday++;
-    }
+    }));
+    if (sent) sentDueToday++;
   }
 
   // 4. Overdue notice — 1 business day after due
@@ -206,10 +228,10 @@ async function processBillingReminders(
     const contact = await resolveStudentPhone(pr.studentId);
     if (!contact) continue;
 
-    const monthLabel = format(new Date(pr.periodEnd), "MMMM yyyy");
+    const monthLabel = saFormat(pr.periodEnd, "MMMM yyyy");
     const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices`;
     const { balance } = await loadRequestAmounts(pr);
-    const result = await sendAndLogTemplate({
+    const sent = await onceForRequest(pr.id, "whatsappOverdueSentAt", () => sendAndLogTemplate({
       studentId: contact.studentId,
       phone: contact.phone,
       templateName: "billing_overdue",
@@ -223,15 +245,8 @@ async function processBillingReminders(
         ],
       }],
       metadata: { paymentRequestId: pr.id },
-    });
-
-    if (result.success) {
-      await prisma.paymentRequest.update({
-        where: { id: pr.id },
-        data: { whatsappOverdueSentAt: new Date() },
-      });
-      sentOverdue++;
-    }
+    }));
+    if (sent) sentOverdue++;
   }
 
   return { sentRequest, sentReminder, sentDueToday, sentOverdue };
@@ -264,27 +279,22 @@ async function processCreditExpiryReminders(
   for (const cb of expiring14d) {
     if (!cb.student.smsOptIn || !cb.student.phone || !cb.expiresAt) continue;
 
-    const result = await sendAndLogTemplate({
+    const { expiresAt } = cb;
+    const { phone } = cb.student;
+    const sent = await onceForCredit(cb.id, "expiryWarning14", () => sendAndLogTemplate({
       studentId: cb.studentId,
-      phone: cb.student.phone,
+      phone,
       templateName: "credits_expiry_14d",
       components: [{
         type: "body",
         parameters: [
           { type: "text", text: cb.student.firstName },
           { type: "text", text: String(cb.balance) },
-          { type: "text", text: format(cb.expiresAt, "d MMMM yyyy") },
+          { type: "text", text: saFormat(expiresAt, "d MMMM yyyy") },
         ],
       }],
-    });
-
-    if (result.success) {
-      await prisma.sessionCreditBalance.update({
-        where: { id: cb.id },
-        data: { expiryWarning14: true },
-      });
-      sent14d++;
-    }
+    }));
+    if (sent) sent14d++;
   }
 
   // 3-day warning
@@ -301,27 +311,22 @@ async function processCreditExpiryReminders(
   for (const cb of expiring3d) {
     if (!cb.student.smsOptIn || !cb.student.phone || !cb.expiresAt) continue;
 
-    const result = await sendAndLogTemplate({
+    const { expiresAt } = cb;
+    const { phone } = cb.student;
+    const sent = await onceForCredit(cb.id, "expiryWarning3", () => sendAndLogTemplate({
       studentId: cb.studentId,
-      phone: cb.student.phone,
+      phone,
       templateName: "credits_expiry_3d",
       components: [{
         type: "body",
         parameters: [
           { type: "text", text: cb.student.firstName },
           { type: "text", text: String(cb.balance) },
-          { type: "text", text: format(cb.expiresAt, "d MMMM yyyy") },
+          { type: "text", text: saFormat(expiresAt, "d MMMM yyyy") },
         ],
       }],
-    });
-
-    if (result.success) {
-      await prisma.sessionCreditBalance.update({
-        where: { id: cb.id },
-        data: { expiryWarning3: true },
-      });
-      sent3d++;
-    }
+    }));
+    if (sent) sent3d++;
   }
 
   return { sent14d, sent3d };
