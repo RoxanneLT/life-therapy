@@ -33,7 +33,36 @@ SMALLEST   the narrowest fix, and what it must not break
 FIX
 ```
 
-Empty. CF-6 was answered by `agent-brief-gate` v2 at canon `77f1c58` (below).
+CF-6 was answered by `agent-brief-gate` v2 at canon `77f1c58` (below).
+
+### CF-7 · Nothing in the method asks what a change does to a value that already exists, once the value gains authority
+OBSERVED   Guest buy-now (`afd4253`) let a thank-you page serve a download on the order's
+           payment reference alone, and made references random so that was safe. The same change
+           made CART references random too, and those were already written into
+           `/checkout/success?reference=…`, a URL analytics records. A reference that had been
+           inert became a credential, and every copy of it already on a third party's servers
+           came with it. Neither the author nor the first walk saw it. The third walk did.
+COMMAND    walker, `.handoff/guest-buy-now/03-walker.md` N1, verbatim: "Before this commit, cart
+           references were `Date.now()` and the regex rejected them, so the change turned an
+           existing analytics URL into a credential." Fixed before push: references carry their
+           channel (`lib/order-reference.ts`), only a buy-now one unlocks the page, and
+           `lib/order-reference.test.ts` fails if a cart reference would. GA is not loaded on
+           the page that does unlock.
+WHY IT IS  Every stack has values that start as identifiers and are later given authority: an
+CANON'S    order id becomes a share link, an invite code becomes a login, a reset token is
+           re-used as a session. The authority applies to every copy already made: URLs, logs,
+           analytics, referrers, email bodies, older formats still in circulation. Walker's
+           surfaces look at the diff (fail-open, composition). This defect lives in data the
+           diff never touches, so a diff-shaped review finds it only by luck. L-72 is the
+           nearest entry, and it covers credentials SET by a code path, not values PROMOTED to
+           be credentials.
+SMALLEST   A LESSONS entry, and one question in walker's method: "Does this change give a value
+FIX        authority it did not have, or widen which values carry it? Then list every place that
+           value already appears (URLs, logs, analytics, third parties, emails, older formats)
+           and settle each." It must not turn into a general secrets audit. It fires only when a
+           diff makes something accept a value as proof. A second instance from the same walk
+           is the inverse shape, and L-72 already covers it: a refusal added inside an
+           answer-identically path became the oracle (04-walker.md W1). Recorded, not refiled.
 
 ---
 

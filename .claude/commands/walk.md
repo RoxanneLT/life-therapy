@@ -66,6 +66,11 @@ paid for them. Evidence is project property; canon ships this empty.
 - **Money** → no hardcoded price or currency, `formatPrice(cents, currency)`, `priceZarCents` is
   misnamed (cents in `priceCurrency`).
 - **Actions** → `requireRole()` first, `revalidatePath()` after, `recordAudit()` on state changes,
-  no side effects in a "save".<!-- /* KIT:CONFIG /surfaces */ -->
+  no side effects in a "save".
+- **A value given authority.** If the diff makes anything accept a value as proof (a token, a
+  reference, an id in a URL), list where that value ALREADY appears: URLs that analytics records,
+  logs, emails, older formats. Precedent: buy-now made order references random so a page could
+  serve a download on one, and that turned cart references, already recorded by GA on
+  /checkout/success, into credentials (CANON-FINDINGS CF-7).<!-- /* KIT:CONFIG /surfaces */ -->
 
 $ARGUMENTS
