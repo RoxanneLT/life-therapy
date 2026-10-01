@@ -58,6 +58,29 @@ export async function initializeTransaction(
 
 // --- Verify Transaction ---
 
+export interface VerifiedTransaction {
+  status: string; // "success" | "failed" | "abandoned" | …
+  amount: number; // minor units of `currency`
+  currency: string;
+  reference: string;
+}
+
+/**
+ * Ask Paystack what happened to `reference`. The return from the hosted page proves nothing:
+ * the reference sits in the query string, so a page that grants on it alone gives the product
+ * away for an order nobody paid. Null when Paystack has no such transaction.
+ */
+export async function verifyTransaction(reference: string): Promise<VerifiedTransaction | null> {
+  const res = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
+    headers: headers(),
+    cache: "no-store",
+  });
+  const data = await res.json();
+  if (!data.status || !data.data) return null;
+  const { status, amount, currency, reference: ref } = data.data;
+  return { status, amount, currency, reference: ref };
+}
+
 // --- Webhook Signature Verification ---
 
 export function verifyWebhookSignature(

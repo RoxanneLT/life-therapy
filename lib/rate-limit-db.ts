@@ -72,6 +72,16 @@ export async function rateLimitBookingDb(ip: string): Promise<boolean> {
   return checkAndRecord(limitKey("booking", "ip", ip), 10, HOUR_MS);
 }
 
+/**
+ * Buy-now (guest purchase): 10/hr/IP and 5/hr/address, durable. A purchase creates a client record and
+ * opens a Paystack transaction; a "resend my link" can send an email, so the per-address cap is
+ * what stops the page being used to mail someone.
+ */
+export async function rateLimitGuestBuyDb(ip: string, email: string): Promise<boolean> {
+  if (await checkAndRecord(limitKey("guest_buy", "ip", ip), 10, HOUR_MS)) return true;
+  return checkAndRecord(limitKey("guest_buy", "email", email.trim().toLowerCase()), 5, HOUR_MS);
+}
+
 /** Portal self-registration: 5/hr/IP, durable. */
 export async function rateLimitRegisterDb(ip: string): Promise<boolean> {
   return checkAndRecord(limitKey("register", "ip", ip), 5, HOUR_MS);

@@ -85,6 +85,13 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     tempPassword: "TempPass#2025", // NOSONAR — sample data for admin preview, not a real credential
     loginUrl: "https://life-therapy.co.za/portal/login",
   },
+  digital_product_download: {
+    firstName: "Jane",
+    downloadLinks: `<div style="text-align: center; margin: 16px 0;"><a href="https://life-therapy.co.za/api/products/download?token=sample" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600;">Download Sample Workbook</a></div>`,
+    linkDays: "30",
+    forgotPasswordUrl: "https://life-therapy.co.za/forgot-password",
+    portalUrl: "https://life-therapy.co.za/portal/downloads",
+  },
   password_reset: {
     resetUrl: "https://life-therapy.co.za/reset-password?token=sample",
   },
@@ -257,6 +264,7 @@ const TEMPLATE_TITLES: Record<string, string> = {
   order_confirmation: "Order Confirmation",
   account_created: "Welcome to Life-Therapy!",
   account_provisioned: "Your Account is Ready",
+  digital_product_download: "Your Download is Ready",
   client_welcome: "Welcome to Life-Therapy!",
   course_completed: "Course Completed!",
   gift_received: "You've Received a Gift!",
@@ -314,7 +322,7 @@ export function replacePlaceholders(
 const RAW_HTML_VARIABLES = new Set([
   "bankingDetails",   // send-invoice.ts — EFT details table
   "sessionSummary",   // send-invoice.ts — line-item table, incl. the balance rows
-  "orderItemsTable",  // paystack webhook — order line rows
+  "orderItemsTable",  // order-paid.ts — order line rows
   "clientDetails",    // bookings/actions.ts — admin notification block
   "creditsInfo",      // clients/actions.ts — "you have N credits" with <strong>
   "dateList",         // bookings/actions.ts — <ul> of series dates
@@ -323,8 +331,9 @@ const RAW_HTML_VARIABLES = new Set([
   "teamsSection",     // book actions — client's "join your session" panel
   "teamsButton",      // cron/session-reminders.ts — the "join" button in a reminder
   "priceSection",     // book actions — <p> with the fee, or "" when free
-  "discountRow",      // paystack webhook — a <tr> inside the order totals table
+  "discountRow",      // order-paid.ts — a <tr> inside the order totals table
   "messageBlock",     // gift.ts — the buyer's note (escaped at the call site)
+  "downloadLinks",    // order-paid.ts — one button per product (titles escaped at the call site)
 ]);
 
 /**
@@ -609,6 +618,15 @@ export function renderFallback(
         firstName: variables.firstName || "",
         tempPassword: variables.tempPassword || "",
         loginUrl: variables.loginUrl || "",
+        baseUrl,
+      });
+    case "digital_product_download":
+      return fallback.digitalProductDownloadEmail({
+        firstName: variables.firstName || "",
+        downloadLinks: variables.downloadLinks || "",
+        linkDays: variables.linkDays || "",
+        forgotPasswordUrl: variables.forgotPasswordUrl || "",
+        portalUrl: variables.portalUrl || "",
         baseUrl,
       });
     case "course_completed":

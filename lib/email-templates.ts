@@ -148,6 +148,30 @@ export function accountProvisionedEmail(params: {
   };
 }
 
+/** downloadLinks is pre-built HTML (titles already escaped by the caller). */
+export function digitalProductDownloadEmail(params: {
+  firstName: string;
+  downloadLinks: string;
+  linkDays: string;
+  forgotPasswordUrl: string;
+  portalUrl: string;
+  baseUrl?: string;
+}): {
+  subject: string;
+  html: string;
+} {
+  const body = `<p>Hi ${escapeHtml(params.firstName)},</p>
+<p>Thank you for your purchase. Your download is ready:</p>
+${params.downloadLinks}
+<p style="color: #6b7280; font-size: 13px;">The link works for ${params.linkDays} days. After that, everything you have bought is always in <a href="${params.portalUrl}" style="color: #5C7A52;">your downloads</a> &mdash; your account uses this email address, and you can <a href="${params.forgotPasswordUrl}" style="color: #5C7A52;">set a password here</a>.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`;
+
+  return {
+    subject: "Your Life-Therapy Download",
+    html: baseTemplate("Your Download is Ready", body, params.baseUrl),
+  };
+}
+
 export function courseCompletedEmail(params: {
   firstName: string;
   courseTitle: string;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getOptionalStudent } from "@/lib/student-auth";
 import { initializeTransaction } from "@/lib/paystack";
 import { resolveCartItems, validateCoupon } from "@/lib/cart";
-import { createOrderNumber, processCheckoutCompleted } from "@/lib/order";
+import { createPendingOrder, processCheckoutCompleted } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
 import { getBaseUrl } from "@/lib/get-region";
 import type { CartItemLocal } from "@/lib/cart-store";
@@ -227,33 +227,14 @@ export async function POST(request: Request) {
     await persistGiftCartItems(student.id, resolved);
 
     // Create order in our DB
-    const orderNumber = await createOrderNumber();
-    const reference = `${orderNumber}-${Date.now()}`;
-    const order = await prisma.order.create({
-      data: {
-        orderNumber,
-        studentId: student.id,
-        status: "pending",
-        subtotalCents,
-        discountCents,
-        totalCents,
-        couponId,
-        paystackReference: reference,
-        items: {
-          create: resolved.map((r) => ({
-            courseId: r.product.type === "course" ? r.product.id : null,
-            hybridPackageId: r.product.type === "package" ? r.product.id : null,
-            moduleId: r.product.type === "module" ? r.product.id : null,
-            digitalProductId: r.product.type === "digital_product" ? r.product.id : null,
-            packageSelections: r.packageSelections || undefined,
-            description: r.product.title,
-            unitPriceCents: r.product.priceCents,
-            quantity: r.quantity,
-            totalCents: r.product.priceCents * r.quantity,
-            isGift: r.isGift,
-          })),
-        },
-      },
+    const { order, reference } = await createPendingOrder({
+      studentId: student.id,
+      resolved,
+      subtotalCents,
+      discountCents,
+      totalCents,
+      couponId,
+      channel: "cart",
     });
 
     const baseUrl = await getBaseUrl();

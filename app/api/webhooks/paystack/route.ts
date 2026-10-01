@@ -1,93 +1,10 @@
 import { verifyWebhookSignature } from "@/lib/paystack";
-import { processCheckoutCompleted } from "@/lib/order";
+import { settleOrderPayment } from "@/lib/order-paid";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
-import { renderEmail } from "@/lib/email-render";
-import { formatPrice } from "@/lib/utils";
-import { format } from "date-fns";
-import type { Currency } from "@/lib/region";
-import {
-  createInvoiceFromPayment,
-  createInvoiceFromPaymentRequest,
-  determineInvoiceType,
-  buildLineItemsFromOrder,
-} from "@/lib/create-invoice";
+import { createInvoiceFromPaymentRequest } from "@/lib/create-invoice";
 import { recordAudit } from "@/lib/audit";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
-import { appBaseUrl } from "@/lib/region";
-
-/** Send order confirmation email to the buyer */
-async function sendOrderConfirmation(orderId: string) {
-  const fullOrder = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: true, student: true },
-  });
-  if (!fullOrder) return;
-
-  const currency = (fullOrder.currency || "ZAR") as Currency;
-  const fmt = (cents: number) => formatPrice(cents, currency);
-
-  const orderItemsTable = fullOrder.items
-    .map(
-      (item) => `<tr>
-        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
-        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-        <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb; text-align: right;">${fmt(item.totalCents)}</td>
-      </tr>`,
-    )
-    .join("");
-
-  const discountRow =
-    fullOrder.discountCents > 0
-      ? `<tr>
-          <td colspan="2" style="padding: 4px 0; text-align: right; color: #16a34a;">Discount</td>
-          <td style="padding: 4px 0; text-align: right; color: #16a34a;">-${fmt(fullOrder.discountCents)}</td>
-        </tr>`
-      : "";
-
-  const { subject, html } = await renderEmail("order_confirmation", {
-    firstName: fullOrder.student.firstName,
-    orderNumber: fullOrder.orderNumber,
-    orderDate: format(new Date(fullOrder.createdAt), "d MMMM yyyy"),
-    orderItemsTable,
-    subtotal: fmt(fullOrder.subtotalCents),
-    discountRow,
-    total: fmt(fullOrder.totalCents),
-    portalUrl: `${appBaseUrl()}/portal`,
-  });
-
-  await sendEmail({
-    to: fullOrder.student.email,
-    subject,
-    html,
-    templateKey: "order_confirmation",
-    studentId: fullOrder.studentId,
-    metadata: { orderId: fullOrder.id, orderNumber: fullOrder.orderNumber },
-  });
-}
-
-/** Generate an invoice for a completed order (best-effort, non-blocking) */
-async function generateOrderInvoice(orderId: string, paystackRef: string) {
-  const fullOrder = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: true, coupon: { select: { code: true } } },
-  });
-  if (!fullOrder) return;
-
-  await createInvoiceFromPayment({
-    type: determineInvoiceType(fullOrder.items),
-    studentId: fullOrder.studentId,
-    orderId: fullOrder.id,
-    amountCents: fullOrder.totalCents,
-    currency: fullOrder.currency,
-    paymentReference: paystackRef || fullOrder.paystackReference || "",
-    paymentMethod: "paystack",
-    lineItems: buildLineItemsFromOrder(fullOrder.items),
-    invoiceDiscountCents: fullOrder.discountCents || undefined,
-    couponCode: fullOrder.coupon?.code || undefined,
-  });
-}
 
 /**
  * POST /api/webhooks/paystack
@@ -116,27 +33,14 @@ export async function POST(request: Request) {
     // ── Order payment ──────────────────────────────────────
     if (orderId) {
       try {
-        const existingOrder = await prisma.order.findUnique({
-          where: { id: orderId },
-          select: { status: true },
+        // Shared with the buy-now thank-you page, which may have settled it first.
+        await settleOrderPayment({
+          orderId,
+          amountCents: data.amount,
+          currency: data.currency ?? null,
+          reference: data.reference,
+          actor: "paystack-webhook",
         });
-
-        if (existingOrder?.status === "paid") {
-          console.log(`Order ${orderId} already processed, skipping`);
-          return new Response("OK", { status: 200 });
-        }
-
-        const order = await processCheckoutCompleted(orderId);
-
-        if (order) {
-          await sendOrderConfirmation(orderId).catch((err) =>
-            console.error("Failed to send order confirmation:", err),
-          );
-
-          await generateOrderInvoice(orderId, data.reference).catch((err) =>
-            console.error("Failed to create invoice:", err),
-          );
-        }
       } catch (err) {
         console.error("Paystack webhook order error:", err);
       }

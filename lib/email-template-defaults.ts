@@ -164,6 +164,14 @@ const defaults: Record<string, TemplateDefault> = {
 </div>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
+  digital_product_download: {
+    subject: "Your Life-Therapy Download",
+    bodyHtml: `<p>Hi {{firstName}},</p>
+<p>Thank you for your purchase. Your download is ready:</p>
+{{downloadLinks}}
+<p style="color: #6b7280; font-size: 13px;">The link works for {{linkDays}} days. After that, everything you have bought is always in <a href="{{portalUrl}}" style="color: #5C7A52;">your downloads</a> &mdash; your account uses this email address, and you can <a href="{{forgotPasswordUrl}}" style="color: #5C7A52;">set a password here</a>.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
   password_reset: {
     subject: "Reset Your Password — Life-Therapy",
     bodyHtml: `<p>Hi there,</p>

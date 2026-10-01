@@ -1122,6 +1122,9 @@ check("money: no hardcoded currency in business logic", () => {
     // Paystack only charges ZAR. Stamping any other currency on an Order row
     // would contradict the rest of the table.
     "app/(admin)/admin/(dashboard)/clients/actions.ts",
+    // Buy-now (guest purchase) is the same Order pipeline as checkout, so it is ZAR for the
+    // same reason: resolves in ZAR, charges Paystack in ZAR, settles a ZAR order.
+    "lib/guest-purchase.ts",
     // The revenue CHART is a single Rand-denominated bar series, so it pins
     // currency: "ZAR" deliberately rather than fabricating a mixed-currency bar.
     // International revenue needs its own series before it can appear there.

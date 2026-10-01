@@ -71,6 +71,9 @@ async function resolveCreditIntent(wantsCredit: boolean, isFree: boolean): Promi
   return { ok: true, useCredit: true, studentId: student.id };
 }
 
+/** Rows a free-consultation booking may complete: contacts nobody at the practice wrote. */
+const CONTACT_SOURCES = new Set(["newsletter", "guest_purchase"]);
+
 /** Auto-provision portal access for free consultation bookings */
 async function provisionFreeConsultation(
   bookingId: string,
@@ -86,6 +89,24 @@ async function provisionFreeConsultation(
       where: { id: bookingId },
       data: { studentId: existingStudent.id },
     });
+    // A newsletter signup or a buy-now guest is a contact whose name was typed by whoever typed
+    // the address. Their booking is the first form they filled in as a client, so it sets the name
+    // and records consent, as the paid path does through upsertContact. Only those sources, and
+    // only without a login: a client the practice entered (manual, import) has no login either,
+    // and a public form must not rewrite what the practice wrote.
+    if (!existingStudent.supabaseUserId && CONTACT_SOURCES.has(existingStudent.source)) {
+      await prisma.student.update({
+        where: { id: existingStudent.id },
+        data: {
+          firstName: client.firstName,
+          lastName: client.lastName,
+          ...(client.phone ? { phone: client.phone } : {}),
+          ...(existingStudent.consentGiven
+            ? {}
+            : { consentGiven: true, consentDate: new Date(), consentMethod: "booking_form" }),
+        },
+      });
+    }
     return existingStudent.id;
   }
 

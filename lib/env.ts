@@ -59,6 +59,9 @@ const OPTIONAL = [
   "MS_GRAPH_CLIENT_SECRET",
   "MS_GRAPH_USER_EMAIL",
   "PAYSTACK_SECRET_KEY",
+  // Signs the login-free download links a buy-now guest gets (lib/download-token.ts). Absent,
+  // the buy-now page refuses to take payment rather than sell something it cannot deliver.
+  "DOWNLOAD_LINK_SECRET",
   "WHATSAPP_ACCESS_TOKEN",
   "BUNNY_STORAGE_ZONE_NAME",
   "BUNNY_STORAGE_API_KEY",

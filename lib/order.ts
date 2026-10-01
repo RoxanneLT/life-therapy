@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import type { resolveCartItems } from "@/lib/cart";
+import { orderReference, type OrderChannel } from "@/lib/order-reference";
 import { createGiftFromOrderItem, sendGiftEmail, type GiftDb } from "@/lib/gift";
 import { saToday, saDayStart, addSaDays } from "@/lib/dates";
 import { creditExpiry } from "@/lib/credits";
@@ -14,6 +16,56 @@ type Db = GiftDb;
  * from local midnight — they only agreed because the server runs UTC, and both
  * were wrong for orders placed between midnight and 02:00 SAST.
  */
+type ResolvedCartItem = Awaited<ReturnType<typeof resolveCartItems>>[number];
+
+/**
+ * Create a pending order for `resolved`, priced by the caller. The cart checkout and the buy-now
+ * page come through here. Not yet the only order writer: app/api/upgrade/route.ts and the admin
+ * clients actions still create their own (no digital products, so no download rides on them).
+ *
+ * The reference is `orderReference` (lib/order-reference.ts): random, and marked by channel.
+ */
+
+export async function createPendingOrder(input: {
+  studentId: string;
+  resolved: ResolvedCartItem[];
+  subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  couponId: string | null;
+  channel: OrderChannel;
+}) {
+  const orderNumber = await createOrderNumber();
+  const reference = orderReference(orderNumber, input.channel);
+  const order = await prisma.order.create({
+    data: {
+      orderNumber,
+      studentId: input.studentId,
+      status: "pending",
+      subtotalCents: input.subtotalCents,
+      discountCents: input.discountCents,
+      totalCents: input.totalCents,
+      couponId: input.couponId,
+      paystackReference: reference,
+      items: {
+        create: input.resolved.map((r) => ({
+          courseId: r.product.type === "course" ? r.product.id : null,
+          hybridPackageId: r.product.type === "package" ? r.product.id : null,
+          moduleId: r.product.type === "module" ? r.product.id : null,
+          digitalProductId: r.product.type === "digital_product" ? r.product.id : null,
+          packageSelections: r.packageSelections || undefined,
+          description: r.product.title,
+          unitPriceCents: r.product.priceCents,
+          quantity: r.quantity,
+          totalCents: r.product.priceCents * r.quantity,
+          isGift: r.isGift,
+        })),
+      },
+    },
+  });
+  return { order, reference };
+}
+
 export async function createOrderNumber(): Promise<string> {
   const today = saToday();
   const dateStr = today.replace(/-/g, "");
