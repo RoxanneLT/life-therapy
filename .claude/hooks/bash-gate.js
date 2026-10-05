@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v8 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v9 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -200,17 +200,23 @@
 // `@probed-kit` moves to v8 and the dates stay. The probe run `--against` this file's v7 found 195
 // cases through both, 4 looser (all 4 in canon's `LOOSENED`, each a message now read as a
 // message), and 3 stricter.
+//
+// v9 (2026-10-05, canon `aa901cc`): every rule above is byte-identical again. What moved is how much
+// work one command may cost — the branch replay is computed once, and the later-position backstop
+// stops at a token budget and ASKS past it (pleks CF-17: v8 ran out of heap on 100 KB and gave no
+// decision, which fails open). `@probed-kit` moves to v9 and the dates stay. `--against` v8: 203
+// cases, 0 looser, 0 stricter, and 3 SIZE cases v8 crashed on rather than answered.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v8
+// @probed-kit bash-gate v9
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v8
+// @probed-kit bash-gate v9
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -1020,19 +1026,29 @@ function pushTargets(rest) {
   return out;
 }
 
+/** The branch checked out when segment `index` runs: `head`, moved by every segment before it. */
+function branchBefore(plan, index, head, root) {
+  let current = head;
+  for (let i = 0; i < index; i++) current = branchStep(plan[i], current, root);
+  return current;
+}
+
+function branchStep(s, current, root) {
+  if (s.kind === "git") return branchAfter(s.args, current);
+  if (s.kind === "cd") return branchAfterCd(s.args.find((t) => !t.startsWith("-")), current, root);
+  if (s.kind === "popd") return UNKNOWN;
+  return current;
+}
+
 /**
  * Does segment `index` merge, pull or push into the protected branch? `plan` is every segment as
  * `{ kind: "git" | "cd" | "popd" | "other", args }`; the segments before `index` say which branch is
  * checked out when this one runs.
  */
-function reachesProtected(plan, index, { protectedBranch, head, root }) {
-  let current = head;
-  for (let i = 0; i < index; i++) {
-    const s = plan[i];
-    if (s.kind === "git") current = branchAfter(s.args, current);
-    else if (s.kind === "cd") current = branchAfterCd(s.args.find((t) => !t.startsWith("-")), current, root);
-    else if (s.kind === "popd") current = UNKNOWN;
-  }
+function reachesProtected(plan, index, { protectedBranch, head, root, before }) {
+  // `before`, when given, is the branch checked out before each segment, computed once per command
+  // (v9, pleks CF-17): replaying the prefix per git segment was quadratic in the segment count.
+  const current = before ? before(index) : branchBefore(plan, index, head, root);
   const s = plan[index];
   if (s.kind !== "git") return false;
   const { verb, rest, elsewhere } = gitVerb(s.args);
@@ -1077,7 +1093,7 @@ function targetsProtectedBranch(tokens, _text, _command, ctx) {
     args.some((t) => t === b || t === `origin/${b}` || t === `refs/heads/${b}` || t.endsWith(`:${b}`))) return true;
   // BY REFERENCE: everything else that lands there.
   if (!ctx) return false;
-  return reachesProtected(ctx.plan, ctx.index, { protectedBranch: b, head: headBranch(), root: process.env.CLAUDE_PROJECT_DIR || null });
+  return reachesProtected(ctx.plan, ctx.index, { protectedBranch: b, head: headBranch(), root: process.env.CLAUDE_PROJECT_DIR || null, before: ctx.before });
 }
 
 /**
@@ -1149,32 +1165,80 @@ const fires = (rule, seg, command, ctx) =>
 const GATED_NAMES = new Set(["git", "rm", "gh"]);
 const PROSE = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "man", "help", "info", "whatis", "apropos", "which", "type", "whereis", ":", "true", "false"]);
 
-/** Each later command position the backstop tries in one segment, as that position's segment. */
-function laterPositions(seg) {
+/**
+ * Each later command position the backstop tries in one segment, as that position's segment, and the
+ * tokens they span. Stops copying once the span passes `budget`, and says so with `over` — a copy per
+ * position is the O(n·k) that exhausted v8's heap.
+ */
+function laterPositions(seg, budget) {
   const cw = commandWordIndex(seg.tokens);
-  if (cw === -1 || PROSE.has(seg.tokens[cw].replace(/^.*\//, ""))) return [];
-  const out = [];
+  const out = { positions: [], span: 0, over: false };
+  if (cw === -1 || PROSE.has(seg.tokens[cw].replace(/^.*\//, ""))) return out;
   for (let i = cw + 1; i < seg.tokens.length; i++) {
     if (!seg.bare[i]) continue;
     if (seg.tokens[i].startsWith("#")) break;
-    if (GATED_NAMES.has(seg.tokens[i].replace(/^.*\//, ""))) out.push({ ...seg, tokens: seg.tokens.slice(i), bare: seg.bare.slice(i) });
+    if (!GATED_NAMES.has(seg.tokens[i].replace(/^.*\//, ""))) continue;
+    out.span += seg.tokens.length - i;
+    if (out.span > budget) {
+      out.over = true;
+      break;
+    }
+    out.positions.push({ ...seg, tokens: seg.tokens.slice(i), bare: seg.bare.slice(i) });
   }
   return out;
 }
+
+// ── BOUNDED WORK (v9, pleks CF-17) ──
+//
+// A hook that can be made to crash has failed open: Claude Code reads an exit other than 0 or 2 as a
+// non-blocking error. v8 ran out of heap on 100 KB of `rm x rm x …` (exit 134, no decision), because
+// the backstop copied the rest of the segment once per later `rm`, which is O(n·k), and every rule
+// sliced each copy again. Two quadratics in the segment count went with it: the branch replay per
+// git segment, and a copy of the whole plan per later position.
+//
+// Those two are now linear. The backstop's work cannot be, because every rule reads a later position
+// as a token array, so it has a BUDGET instead: the tokens all its later positions span. Past it, the
+// deny rules still run at every command word, and anything they do not deny is ASKED, never allowed.
+// No verdict loosens; only a command too long to read in full is stopped for a human.
+const LATER_BUDGET = 100_000;
+const OVER_BUDGET = "too long to read past each command word (bash-gate's work budget) — failing to a prompt, not to silence";
+
+/** `plan` with segment `index` read as `self` — a view, so building one per later position is O(1). */
+const withSelf = (plan, index, self) =>
+  new Proxy(plan, { get: (t, k, r) => (k === String(index) ? self : Reflect.get(t, k, r)) });
 
 function decide(command) {
   // Flag scans run on the message-masked text; the rm rule on the unmasked text, so
   // `-m "rm -rf /"` is prose either way (rm is not at command position there).
   const segs = segments(maskMessageText(command));
   const plan = planOf(segs);
-  const later = segs.map(laterPositions);
+  let span = 0;
+  let overBudget = false;
+  const later = segs.map((s) => {
+    if (overBudget) return [];
+    const l = laterPositions(s, LATER_BUDGET - span);
+    span += l.span;
+    overBudget = l.over;
+    return l.positions;
+  });
+  // The branch checked out before each segment, computed once and only if a rule asks.
+  let states = null;
+  const before = (i) => {
+    if (states === null) {
+      const root = process.env.CLAUDE_PROJECT_DIR || null;
+      states = [headBranch()];
+      for (let k = 0; k < plan.length; k++) states.push(branchStep(plan[k], states[k], root));
+    }
+    return states[i];
+  };
   const hit = (rule) =>
     segs.some((s, index) =>
-      fires(rule, s, command, { plan, index }) ||
-      later[index].some((l) => fires(rule, l, command, { plan: plan.map((p, k) => (k === index ? planOf([l])[0] : p)), index })));
+      fires(rule, s, command, { plan, index, before }) ||
+      (!overBudget && later[index].some((l) => fires(rule, l, command, { plan: withSelf(plan, index, planOf([l])[0]), index, before }))));
   for (const [rule, why] of [...CANON_DENY, ...PROJECT_DENY]) {
     if (hit(rule)) return ["deny", why];
   }
+  if (overBudget) return ["ask", OVER_BUDGET];
   for (const [rule, why] of [...CANON_ASK, ...PROJECT_ASK]) {
     if (hit(rule)) return ["ask", why];
   }

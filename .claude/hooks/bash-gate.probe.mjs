@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v8 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v9 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -247,10 +247,10 @@ export function fallbackFindings(inv, seenReasons) {
  *   "hard reset discards uncommitted work with no undo": "deny",
  *   [`pushing ${WORKING_BRANCH} is not the deployment`]: "ask",
  */
-/* LT holds two of canon's verdicts tighter, and the twenty-nine entries below are those two policies
- * meeting canon's cases — not twenty-nine separate decisions.
+/* LT holds two of canon's verdicts tighter, and the thirty entries below are those two policies
+ * meeting canon's cases — not thirty separate decisions.
  *
- * PUSH (twenty-five entries; fifteen arrived with canon's v5 cases, four with v7's). A dry-run push
+ * PUSH (twenty-six entries; fifteen arrived with canon's v5 cases, four with v7's, one with v9's). A dry-run push
  * asks too: the rule reads `git push`, and a flag that makes it harmless is still a push command a
  * human can glance at. Loosening that was Stéan's call, and on 2026-09-14 Stéan kept it asking. The
  * hook alone could not have loosened it anyway: the `Bash(git push*)` settings ask prompts beside a
@@ -301,6 +301,9 @@ const PROJECT_VERDICTS = {
   "a lease push behind a wrapper is still the safe form": "ask",
   "PUSH -n is --dry-run, not --no-verify (yoros CF-10)": "ask",
   "PUSH --dry-run likewise": "ask",
+  // v9's SIZE case (adopted 2026-10-05): canon's proof that the plan reaches the last of 9,000
+  // segments ends in a push off the protected branch. Here that push asks; the proof survives at `ask`.
+  "SIZE: …and the same plan on the working branch pushes freely": "ask",
   "hard reset discards uncommitted work with no undo": "deny",
   "WRAPPER: a hard reset behind timeout": "deny",
   "KEYWORD: a hard reset after then": "deny",
@@ -668,6 +671,18 @@ const CASES = [
   { want: "allow", why: "SUBSTITUTION: one that names nothing gated still passes", payload: bash('git commit -m "build $(date +%F)"') },
   { want: "deny", why: "QUOTED -m: a -m inside quotes starts no message", payload: bash(`echo " -m '" && git push -f && echo "'"`) },
 
+  // ── v9: a long command gets a decision, never a crash (pleks CF-17) ──
+  // v8 died on 100 KB of `rm x rm x …` with "JavaScript heap out of memory", exit 134 and no decision —
+  // which Claude Code reads as a non-blocking error, so the gate failed open. Timing is asserted below.
+  { want: "ask", why: "SIZE: 100 KB of later rm positions passes the backstop's budget — asked, not crashed (pleks CF-17)", payload: bash("rm x ".repeat(20_000)) },
+  { want: "deny", why: "SIZE: over the budget, a deny at a command word still denies", payload: bash(`rm -rf / ${"rm x ".repeat(20_000)}`) },
+  { want: "deny", why: "SIZE: …and in a later segment", payload: bash(`${"rm x ".repeat(20_000)}; git push -f origin ${W}`) },
+  { want: "allow", why: "SIZE: 100 KB of ordinary segments is read in full and allowed", payload: bash("git status; ".repeat(9_000)) },
+  { want: "ask", why: "SIZE: the plan reaches the last of 9,000 segments — a checkout of the protected branch, then a bare push", payload: bash(`git checkout ${P}; ${"git status; ".repeat(9_000)}git push`) },
+  { want: "allow", why: "SIZE: …and the same plan on the working branch pushes freely", payload: bash(`git checkout ${W}; ${"git status; ".repeat(9_000)}git push`) },
+  { want: "ask", root: WORKTREE, why: "SIZE: a later push is read from the branch BEFORE its segment, not after the branch that segment creates", payload: bash(`git switch -c ${W} git push`) },
+  { want: "allow", why: "SIZE: a 100 KB commit body to a sink heredoc is data, read once", payload: bash(`git commit -F - <<'MSG'\n${"never rm -rf / here\n".repeat(5_000)}MSG`) },
+
   /* KIT:CONFIG cases — this project's own gates, beyond the canonical set above.
    * ONE PROBE PER RULE YOU ADDED TO THE HOOK'S DENY/ASK BLOCKS, both directions: the
    * violation, and the near-miss that must still pass. A rule with no probe is a rule
@@ -720,6 +735,8 @@ const RUN_CASES = SAMPLE === null ? EFFECTIVE : EFFECTIVE.slice(0, SAMPLE);
 let tightened = 0;
 const seenReasons = new Set();
 const UNPARSED = "could not parse hook input — failing to a prompt, not to silence";
+// v9: the backstop's budget is a failure mode like UNPARSED, not a rule, so it has no fallback to list.
+const OVER_BUDGET = "too long to read past each command word (bash-gate's work budget) — failing to a prompt, not to silence";
 try {
   for (const c of RUN_CASES) {
     const got = await run(c.payload, { raw: c.raw === true, root: c.root });
@@ -728,7 +745,7 @@ try {
     if (!ok) failed++;
     if (c.overridden) tightened++;
     const why = got.reason.replace(/^bash-gate: /, "");
-    if ((got.decision === "deny" || got.decision === "ask") && why !== UNPARSED) seenReasons.add(why);
+    if ((got.decision === "deny" || got.decision === "ask") && why !== UNPARSED && why !== OVER_BUDGET) seenReasons.add(why);
     // The override is NAMED on its own line. A project reading a green run must be able to see
     // which verdicts are its own and which are canon's, or the next reader cannot tell a policy
     // decision from a default.
@@ -736,6 +753,27 @@ try {
       `${ok ? "✓" : "✗"} want ${c.want.padEnd(5)} got ${got.decision.padEnd(5)}  ${c.why}` +
         (c.overridden ? `  [tightened from ${c.overridden}]` : ""),
     );
+  }
+  // v9 (pleks CF-17): every shape that was superlinear in v8, at up to 500 KB, answers inside the bound.
+  // v8 took 5.6 s on 50 KB of the first and crashed on 100 KB; v9 measured 112–220 ms on each at
+  // 500 KB. The bound is ~10× that, so a slow machine passes and a quadratic does not. The last shape
+  // stays UNDER the backstop's budget, so every later position is read against every segment.
+  if (SAMPLE === null) {
+    const BOUND_MS = 2_500;
+    const fill = (unit) => unit.repeat(Math.ceil(500 * 1024 / unit.length));
+    for (const [shape, command] of [
+      ["later rm positions", fill("rm x ")],
+      ["git segments", fill("git status; ")],
+      ["gated words in many segments", fill("x git y; ")],
+      ["later positions across many segments, within budget", "x git status; ".repeat(15_000)],
+    ]) {
+      const t = Date.now();
+      const got = await run(bash(command));
+      const ms = Date.now() - t;
+      const ok = got.decision !== "(no output)" && ms < BOUND_MS;
+      if (!ok) failed++;
+      console.log(`${ok ? "✓" : "✗"} size: ${Math.round(command.length / 1024)} KB of ${shape} → ${got.decision} in ${ms} ms (bound ${BOUND_MS} ms)`);
+    }
   }
   for (const [from, want, why] of ORIGIN_SELFTEST) {
     const got = originHead(from);
