@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v10 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v11 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -67,6 +67,13 @@
  * message at a `-m` that was itself inside quotes, so `echo " -m '" && git push -f && echo "'"` was
  * masked from the inner quote onward and allowed. See "THE FLAG IS `-m`". Against v7: 4 verdicts
  * looser, all four the message, and 3 stricter.
+ *
+ * v10 (2026-10-05): a quoted separator after a data command is text. See "A QUOTED SEPARATOR".
+ *
+ * v11 (2026-10-06) is blindly's walk 02 of its G-10 gate: `git -c alias.q="!rm -rf /*" q` was
+ * ALLOWED by every version, because git runs a config value that no rule read at command position.
+ * See "A STRING GIT RUNS IS A COMMAND". No rule is added, so no fallback is owed: the existing rules
+ * read one more kind of position, as the backstop's do.
  *
  * A REASON IS ALWAYS SET, INCLUDING ON ALLOW. An empty reason makes an allow
  * indistinguishable from a hook that ran and decided nothing.
@@ -212,17 +219,23 @@
 // quoted `;` `&` `|` is text, not a split. `@probed-kit` moves to v10 and the dates stay. `--against`
 // v9: 219 cases, 3 looser and 0 stricter. All three are that change's own cases, and canon left them
 // out of `LOOSENED` (CANON-FINDINGS CF-8).
+//
+// v11 (2026-10-06, canon `c34cc93`, carried): the rules are byte-identical again. What moved is where
+// they read: a value set through `git -c k=v`, `git config k v` or a leading GIT_*/EDITOR/VISUAL/PAGER
+// assignment is tried as a command position, because git runs it (`-c alias.q="!rm -rf /*" q`).
+// `@probed-kit` moves to v11 and the dates stay. `--against` v10: 243 cases, 0 looser, 17 stricter.
+// v10's three loosenings are now in `LOOSENED`, which answers CF-8.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v10
+// @probed-kit bash-gate v11
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v10
+// @probed-kit bash-gate v11
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -1230,19 +1243,109 @@ const PROSE = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "
 function laterPositions(seg, budget) {
   const cw = commandWordIndex(seg.tokens);
   const out = { positions: [], span: 0, over: false };
+  const take = (tokens, bare = tokens.map(() => true)) => {
+    out.span += tokens.length;
+    if (out.span > budget) out.over = true;
+    else out.positions.push({ ...seg, tokens, bare });
+    return !out.over;
+  };
+  for (const run of envStrings(seg)) if (!take(run)) return out;
   if (cw === -1 || PROSE.has(seg.tokens[cw].replace(/^.*\//, ""))) return out;
+  if (isGit(seg.tokens[cw])) for (const run of configStrings(seg, cw)) if (!take(run)) return out;
   for (let i = cw + 1; i < seg.tokens.length; i++) {
     if (!seg.bare[i]) continue;
     if (seg.tokens[i].startsWith("#")) break;
     if (!GATED_NAMES.has(seg.tokens[i].replace(/^.*\//, ""))) continue;
-    out.span += seg.tokens.length - i;
-    if (out.span > budget) {
-      out.over = true;
-      break;
-    }
-    out.positions.push({ ...seg, tokens: seg.tokens.slice(i), bare: seg.bare.slice(i) });
+    if (!take(seg.tokens.slice(i), seg.bare.slice(i))) break;
+    if (isGit(seg.tokens[i])) for (const run of configStrings(seg, i)) if (!take(run)) return out;
   }
   return out;
+}
+
+// ── A STRING GIT RUNS IS A COMMAND (v11, blindly G-10, walk 02) ──
+//
+// `git -c alias.q="!rm -rf /*" q` runs `rm -rf /*`, and v10 allowed it: the value is one quoted
+// argument of git, so no rule reads it at command position. The same holds for every config key
+// whose value git runs — `core.pager`, `core.sshCommand`, `core.editor`, `diff.external`, … — and
+// for the environment that sets them (`GIT_SSH_COMMAND`, `GIT_PAGER`, `EDITOR`, `GIT_CONFIG_VALUE_0`).
+// Found by blindly's own walk of its DB-ask gate, which had exempted git as a search.
+//
+// Which keys run code is an open set, so this does not list them. EVERY value set through `-c`,
+// `git config <key> <value>` or a git-read variable is tried as a command position by every rule,
+// exactly as the backstop tries a bare `rm`. An inert value (`color.ui=always`, `user.name=x`) names
+// no gated command and passes; a lethal one is denied whatever key carries it. Two spellings:
+//   - a `!` value is a shell command, and git appends the alias's arguments to it, so the rest of
+//     the segment goes on the end (`git -c alias.q='!rm -rf' q /` runs `rm -rf /`);
+//   - an `alias.*` value without `!` is git arguments, so it is read behind a `git`
+//     (`-c alias.p="push --force" p` is a force-push).
+// A value runs to the last token that began inside quotes, because the tokens keep no quotes.
+// NOT COVERED: `--config-env=<key>=<VAR>` and an `include.path` file (the value is not in the
+// command), a `GIT_CONFIG_PARAMETERS` string (its own quoting), and an alias already in a config
+// file — `git q` names nothing. A `git config` that WRITES one is read here, which is where it is seen.
+const GIT_RUNS_ENV = /^(?:GIT_\w+|EDITOR|VISUAL|PAGER)=/;
+const CONFIG_WITH_VALUE = new Set(["-f", "--file", "--blob", "--type", "--default", "--comment", "--value"]);
+const isGit = (t) => t.replace(/^.*\//, "") === "git";
+
+/** The tokens of a value that starts after the `=` of token `i` (or at `i`), and the index past it. */
+function valueAt(seg, i, afterEq) {
+  const t = seg.tokens[i];
+  const head = afterEq ? t.slice(t.indexOf("=") + 1) : t;
+  let j = i + 1;
+  while (j < seg.tokens.length && !seg.bare[j]) j++;
+  return { value: [head, ...seg.tokens.slice(i + 1, j)].filter(Boolean), end: j };
+}
+
+/** A config value as the command it runs: a shell command after `!`, git arguments for an alias. */
+function asCommand(key, value, rest) {
+  if (value.length === 0) return null;
+  const [head, ...more] = value;
+  if (head.startsWith("!")) return [head.slice(1), ...more, ...rest].filter(Boolean);
+  return /^alias\./i.test(key) ? ["git", ...value, ...rest] : value;
+}
+
+/** Each leading `GIT_*=`, `EDITOR=`, `VISUAL=` or `PAGER=` value in a segment. */
+function envStrings(seg) {
+  const runs = [];
+  let i = seg.tokens[0] === "export" || seg.tokens[0] === "env" ? 1 : 0;
+  while (i < seg.tokens.length && /^[A-Za-z_]\w*=/.test(seg.tokens[i])) {
+    const { value, end } = valueAt(seg, i, true);
+    const run = GIT_RUNS_ENV.test(seg.tokens[i]) ? asCommand("", value, []) : null;
+    if (run) runs.push(run);
+    i = end;
+  }
+  return runs;
+}
+
+/** Each config value the `git` at index `g` is given: global `-c k=v`, and `git config k v`. */
+function configStrings(seg, g) {
+  const { tokens } = seg;
+  const runs = [];
+  let i = g + 1;
+  while (i < tokens.length && tokens[i].startsWith("-")) {
+    if (tokens[i] === "-c" && i + 1 < tokens.length && tokens[i + 1].includes("=")) {
+      const { value, end } = valueAt(seg, i + 1, true);
+      const run = asCommand(tokens[i + 1].slice(0, tokens[i + 1].indexOf("=")), value, tokens.slice(end));
+      if (run) runs.push(run);
+      i = end;
+    } else {
+      i += GLOBAL_WITH_VALUE.has(tokens[i]) ? 2 : 1;
+    }
+  }
+  if (tokens[i] !== "config") return runs;
+  for (i++; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.startsWith("-")) {
+      if (CONFIG_WITH_VALUE.has(t)) i++;
+      continue;
+    }
+    if (t === "set" || t === "--add") continue;
+    if (/^[A-Za-z][\w-]*\.\S+$/.test(t)) {
+      const run = asCommand(t, tokens.slice(i + 1), []);
+      if (run) runs.push(run);
+    }
+    break;
+  }
+  return runs;
 }
 
 // ── BOUNDED WORK (v9, pleks CF-17) ──
