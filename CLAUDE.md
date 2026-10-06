@@ -120,8 +120,13 @@ other machine changed a key) · `secrets:push` (here → OneDrive, after YOU cha
 can see a write to a sibling checkout, so this is a claim about the world and it is held by you.
 
 Read it freely: the playbooks, the standards, the kit, `ledgers/LESSONS.md`. Write nothing — not the
-kit, not `tools/`, not a MANIFEST version, not `ledgers/projects.json`, not `kitAdopted`. Never run
-`apply-kit --write`; the dry run is read-only and is the right way to read the plan.
+kit, not `tools/`, not a MANIFEST version, not `ledgers/projects.json`, not `kitAdopted`.
+
+**Plain kit upgrades: `node ../dev-standards/tools/apply-kit.mjs life-therapy --carry-only --write`,
+run from this checkout** (Stéan, 2026-10-05). It writes this project's tracked kit files and nothing
+in canon. Run it without `--write` first and read the plan. The `canon-inbox` SessionStart hook
+names a lag when one exists. A new kit row, a template, or a `brief/` tree row is not a carry: that
+still goes by hand, from history, as below.
 
 **The incident, 2026-09-09.** Two project sessions adopting kit rows fixed real defects *inside
 canon* while the dev-standards session ran its gate. That gate read a `MANIFEST.json` which changed
@@ -152,7 +157,10 @@ carry a version number that no commit anywhere has. Adopting from it produces a 
 byte-correct for as long as that session doesn't revert, and unattributable afterwards — the same
 class as the incident above, in the other direction. It happened here on 2026-09-09:
 `check-claude-md` was taken at v14 from canon's uncommitted tree. It was committed identical within
-the hour, so the copy is honest, and the honesty was luck rather than method.
+the hour, so the copy is honest, and the honesty was luck rather than method. `apply-kit` reads
+canon's working tree, so carry only when `git -C <canon> status --short` is empty. Then prove the
+result: outside the `KIT:CONFIG` regions each file equals `git show HEAD:` in canon, and every region
+is unchanged from this project's HEAD (done this way at `c44420b`).
 
 ---
 
