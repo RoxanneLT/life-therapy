@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v9 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v10 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -206,17 +206,23 @@
 // stops at a token budget and ASKS past it (pleks CF-17: v8 ran out of heap on 100 KB and gave no
 // decision, which fails open). `@probed-kit` moves to v9 and the dates stay. `--against` v8: 203
 // cases, 0 looser, 0 stricter, and 3 SIZE cases v8 crashed on rather than answered.
+//
+// v10 (2026-10-06, canon `e13d3f0`, carried by `apply-kit --carry-only`): the rules are byte-identical
+// again. What moved is segmentation: after a bare grep/rg/echo/printf whose quoting pairs exactly, a
+// quoted `;` `&` `|` is text, not a split. `@probed-kit` moves to v10 and the dates stay. `--against`
+// v9: 219 cases, 3 looser and 0 stricter. All three are that change's own cases, and canon left them
+// out of `LOOSENED` (CANON-FINDINGS CF-8).
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v9
+// @probed-kit bash-gate v10
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v9
+// @probed-kit bash-gate v10
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -672,8 +678,10 @@ function segments(command) {
     }
     if (tokens.length > 0) out.push({ text: src.slice(from, to).trim(), tokens, bare });
   };
+  const plain = plainQuoting(src, quoted);
   let from = 0;
   for (const sep of src.matchAll(/[;&|\n]+|\$\(|[<>]\(|`/g)) {
+    if (plain && quoted[sep.index] !== 0 && leadsData(src.slice(from, sep.index))) continue;
     piece(from, sep.index);
     from = sep.index + sep[0].length;
   }
@@ -682,9 +690,57 @@ function segments(command) {
 }
 
 /**
+ * A QUOTED SEPARATOR IS TEXT — BUT ONLY WHERE THAT IS PROVABLE (v10).
+ *
+ * Until v10 every `;`, `&`, `|` and newline split a segment, quoted or not, so
+ * `grep -E "x|npm install|y" f` read as a command `npm install` and was denied: a gate that refuses
+ * a search for the rule it enforces. Measured in dev-standards, three refusals in one session.
+ *
+ * Splitting blindly was not only a bug, though: it is what catches a SECOND command inside a
+ * runner's string. `bash -c "echo hi; rm -rf /*"` reads its command word as `echo`, and the
+ * `rm` is denied only because the quoted `;` splits it off. The same holds for `ssh host "…"`,
+ * `watch "…"`, and every command that runs a string — an open set. So a quoted separator stays a
+ * split everywhere EXCEPT both of:
+ *   - the segment is led, as its very first word, by a command whose arguments are data and never
+ *     run (`DATA_ARGS`): no wrapper, no runner, no assignment in front of it;
+ *   - this file's quote map pairs the command exactly as bash does. It cannot when a substitution
+ *     opens a fresh quoting context (`"$(echo "a" ; rm …)"` re-pairs every quote after it), inside
+ *     `$'…'`, across a heredoc, when a quote never closes, or when a quoted span holds a newline —
+ *     which is also the only way an apostrophe in a `# comment` can mis-pair, since a comment ends
+ *     at its newline. Any of those, and the whole command splits exactly as v9 did.
+ * Wrong in either direction, the cost differs: a split too many is a false deny, one too few is a
+ * hidden command. So the list is short and closed, and unsure means v9.
+ *
+ * WHAT IT DOES NOT FIX. `gh pr create --title "a; npm i b" --body "$(cat <<'EOF' … )"` still splits
+ * at the title's `;` — the command holds a substitution, and `gh` runs strings (`gh codespace ssh`),
+ * so neither condition holds. Write such a body with `--body-file` and the title without a
+ * separator, or commit with `-F <file>`. Proving a masked substitution inert is a larger change.
+ */
+const DATA_ARGS = new Set(["grep", "egrep", "fgrep", "rg", "echo", "printf"]);
+
+function plainQuoting(src, q) {
+  if (q.open || /\$\(|`|<<|\$'/.test(src)) return false;
+  for (let i = 0; i < src.length; i++) {
+    if (q[i] !== 0 && src[i] === "\n") return false;
+    // Data piped on is data only if what receives it reads stdin as data: `echo "a; rm -rf /" | sh`.
+    if (q[i] === 0 && src[i] === "|" && src[i - 1] !== "|") {
+      if (src[i + 1] === "|") continue;
+      const stage = /^&?\s*(\S+)/.exec(src.slice(i + 1))?.[1] ?? "";
+      if (!HEREDOC_SINKS.has(stage)) return false;
+    }
+  }
+  return true;
+}
+
+function leadsData(text) {
+  const first = /\S+/.exec(text)?.[0] ?? "";
+  return !/["'\\]/.test(first) && DATA_ARGS.has(first);
+}
+
+/**
  * For each character inside quotes (or a quote itself) 1 if single, 2 if double, else 0. Bash's
  * rules: nothing escapes in single quotes; in double quotes `\` escapes the next character; outside,
- * `\` quotes one.
+ * `\` quotes one. `.open` is true when the string ends inside a quote.
  */
 function quoteMap(s) {
   const q = new Uint8Array(s.length);
@@ -704,6 +760,7 @@ function quoteMap(s) {
       else if (c === state) state = "";
     }
   }
+  q.open = state !== "";
   return q;
 }
 

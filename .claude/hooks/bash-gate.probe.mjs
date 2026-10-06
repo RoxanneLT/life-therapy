@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v9 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v10 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -594,6 +594,27 @@ const CASES = [
   { want: "deny", why: "RUNNER: bash -c and its string", payload: bash(`bash -c "git push -f origin ${W}"`) },
   { want: "deny", why: "RUNNER: sh -c and its string", payload: bash("sh -c 'rm -rf /*'") },
   { want: "deny", why: "RUNNER: eval", payload: bash(`eval "git push -f origin ${W}"`) },
+
+  // ── v10: A QUOTED SEPARATOR AFTER A DATA COMMAND IS TEXT — and nowhere else ──
+  // The allows are the false denies dev-standards measured; every deny below is a command v9 caught
+  // ONLY because it split on a quoted separator, so each one is the price the allow must not pay.
+  { want: "allow", why: "v10: a grep pattern holding `|` is a pattern, not a pipe into a command", payload: bash('grep -E "x|git push -f origin main|y" notes.md') },
+  { want: "allow", why: "v10: a quoted `;` in an echo is text", payload: bash("echo 'done; rm -rf / was never run'") },
+  { want: "allow", why: "v10: a quoted pattern, then a pipe into a sink", payload: bash('grep -E "a|rm -rf /" f | head -5') },
+  { want: "allow", why: "a PR body written by a heredoc into gh is a message (v9 already: gh is a sink) — held here beside the v10 cases it must survive",
+    payload: bash("gh pr create --title t --body \"$(cat <<'EOF'\nthis no longer denies git push -f origin main\nEOF\n)\"") },
+  { want: "deny", why: "v10 floor: a second command inside a RUNNER's string — bash -c reads only its first word", payload: bash('bash -c "echo hi; rm -rf /*"') },
+  { want: "deny", why: "v10 floor: the same through ssh, a runner no table lists", payload: bash('ssh host "uptime; rm -rf /*"') },
+  { want: "deny", why: "v10 floor: data piped into a shell is code", payload: bash('echo "a; rm -rf /*" | sh') },
+  { want: "deny", why: "v10 floor: data piped through xargs into a shell is code", payload: bash('echo "a; rm -rf /*" | xargs sh -c') },
+  { want: "deny", why: "v10 floor: a wrapper in front of the data command — the first word is not data", payload: bash('sudo echo "a; rm -rf /*"') },
+  { want: "deny", why: "v10 floor: a substitution re-pairs the quotes after it, so nothing is trusted", payload: bash('echo "$(echo "a" ; rm -rf /*)"') },
+  { want: "deny", why: "v10 floor: an apostrophe in a comment shifts every quote after it", payload: bash("echo a # it's\nrm -rf /* ; echo 'b'") },
+  { want: "deny", why: "v10 floor: …and when the shifted quotes all CLOSE, only the quoted newline gives it away", payload: bash("echo a # it's\nrm -rf /* ; echo \\'") },
+  { want: "deny", why: "v10 floor: a quote that never closes is not a quote this file can pair", payload: bash('echo "a; rm -rf /*') },
+  { want: "deny", why: "v10 floor: a heredoc substituted into a RUNNER is code, whoever receives it", payload: bash("bash -c \"$(cat <<'EOF'\nrm -rf /*\nEOF\n)\"") },
+  { want: "deny", why: "v10 floor: a heredoc substituted into a non-sink and piped to a shell keeps its body", payload: bash("echo \"$(cat <<'EOF'\nrm -rf /*\nEOF\n)\" | sh") },
+  { want: "deny", why: "v10 floor: an unquoted separator after a data command still splits", payload: bash("echo 'x' ; rm -rf /*") },
   { want: "deny", why: "KEYWORD: then opens a command", payload: bash("if true; then git push -f; fi") },
   { want: "deny", why: "KEYWORD: do opens a command", payload: bash("for i in 1; do rm -rf /; done") },
   { want: "deny", why: "KEYWORD: ! opens a command", payload: bash("! git push -f") },
