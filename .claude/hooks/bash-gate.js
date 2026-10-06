@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v11 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v13 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -74,6 +74,19 @@
  * ALLOWED by every version, because git runs a config value that no rule read at command position.
  * See "A STRING GIT RUNS IS A COMMAND". No rule is added, so no fallback is owed: the existing rules
  * read one more kind of position, as the backstop's do.
+ *
+ * v12 (2026-10-06) is blindly CF-6 and CF-7, both measured on win32 and reproduced in canon: the
+ * command word was compared as typed, so `git.exe push --force` and `rm.exe -rf /*` were ALLOWED (see
+ * "HOW A COMMAND IS SPELLED"); and v11's strings missed an assignment behind a wrapper, `SSH_ASKPASS`,
+ * and the `ext::` transport. No rule is added, so no fallback is owed.
+ *
+ * v13 (2026-10-06) is pleks CF-18: every bare act was gated, and the same act was ALLOWED once text
+ * carried it to something that runs text — `echo 'rm -rf ~' | bash`, `sh <<< '…'`, `pwsh -c "…"`,
+ * `python -c "os.system('…')"`, `sed '1e …'`, `awk 'BEGIN{system("…")}'`, a heredoc into `node -`,
+ * and `rm -rf $(echo ~)`. The gate decided quoted text was prose from the token that held it, never
+ * from what consumed it. See "WHAT CONSUMES TEXT DECIDES WHETHER IT IS TEXT". No rule is added, so
+ * no fallback is owed: the existing rules read the consumed text, and the rm rule reads one more
+ * kind of target.
  *
  * A REASON IS ALWAYS SET, INCLUDING ON ALLOW. An empty reason makes an allow
  * indistinguishable from a hook that ran and decided nothing.
@@ -225,17 +238,26 @@
 // assignment is tried as a command position, because git runs it (`-c alias.q="!rm -rf /*" q`).
 // `@probed-kit` moves to v11 and the dates stay. `--against` v10: 243 cases, 0 looser, 17 stricter.
 // v10's three loosenings are now in `LOOSENED`, which answers CF-8.
+//
+// v13 (2026-10-06, canon `003dad8`, carried; canon's floor): the command is read a second time as
+// shell words, and every string an interpreter is handed (sh/pwsh stdin and -c, python/node/perl
+// literals, sed's e, awk's system) goes back through every rule. ONE RULE CHANGED: `isDestructiveRm`
+// also denies a recursive rm whose target is a whole command substitution. It only widened: every
+// LETHAL_TARGET case is untouched, so the `rm -rf /*` twin's hook-disabled record still describes
+// the settings rule exactly. That rule now covers less of the hook's, as it already did for `$HOME`.
+// Not re-measured with the hook off: that needs a restart, and only the operator sees the prompt.
+// `@probed-kit` moves to v13 and the dates stay. `--against` v11: 317 cases, 0 looser, 56 stricter.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v11
+// @probed-kit bash-gate v13
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v11
+// @probed-kit bash-gate v13
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -567,6 +589,25 @@ function pastWrapper(tokens, i, w) {
   return i;
 }
 
+// ── HOW A COMMAND IS SPELLED (v12, blindly CF-6) ──
+//
+// On Windows, Git Bash finds `GIT`, `git.exe` and `Git.EXE` as /mingw64/bin/git.exe, and `rm.exe` as
+// /usr/bin/rm.exe, and macOS's default filesystem ignores case too. Every rule compared the command
+// word as typed, so `git.exe push --force origin main` and `rm.exe -rf /*` were ALLOWED by v11 and
+// every version before it, measured by blindly on win32. So a word that might BE a command is read as
+// the system finds it: its basename, lowercased, without `.exe`/`.cmd`/`.bat`/`.com`.
+//
+// ONLY WHERE THE GATE FINDS A COMMAND, NEVER WHERE IT EXCUSES ONE. The rules (`atCommand`), the
+// wrapper table and the backstop's names use `commandName`; the lists that make a command's words
+// text — prose, heredoc sinks, data commands — still match exactly. Normalising those would loosen:
+// `ECHO` read as `echo` makes its words prose. So every verdict this changes gets stricter, and a
+// spelling no list names is read as a command, which is the direction a gate fails.
+//
+// NOT COVERED: a settings twin matches the spelling it names, so `Bash(git push --force *)` is no
+// floor for `git.exe push --force`. A project that wants one lists the spelling in its settings.
+const EXECUTABLE_SUFFIX = /\.(?:exe|cmd|bat|com)$/;
+const commandName = (t) => t.slice(Math.max(t.lastIndexOf("/"), t.lastIndexOf("\\")) + 1).toLowerCase().replace(EXECUTABLE_SUFFIX, "");
+
 /** Index of the command word in a segment: past assignments, keywords, wrappers and runners. */
 function commandWordIndex(tokens) {
   let i = 0;
@@ -576,19 +617,17 @@ function commandWordIndex(tokens) {
       i++;
       continue;
     }
-    const w = WRAPPERS.get(t.slice(t.lastIndexOf("/") + 1));
+    const w = WRAPPERS.get(commandName(t));
     if (!w || w.query?.includes(tokens[i + 1])) break;
     i = pastWrapper(tokens, i + 1, w);
   }
   return i < tokens.length ? i : -1;
 }
 
-/** Is `name` this segment's command (as `name`, `/usr/bin/name`, `\name`, or after `sudo`)? */
+/** Is `name` this segment's command — as `name`, `/usr/bin/name`, `\name`, `NAME.exe`, or after `sudo`? */
 function atCommand(tokens, name) {
   const i = commandWordIndex(tokens);
-  if (i === -1) return false;
-  const t = tokens[i];
-  return t === name || t.endsWith("/" + name);
+  return i !== -1 && commandName(tokens[i]) === name.toLowerCase();
 }
 
 /** Everything after the command word — the arguments, as tokens. */
@@ -675,12 +714,17 @@ function maskSinkHeredocs(command) {
  *
  * `bare` says, per token, whether it stood OUTSIDE quotes. Only the backstop reads it: a
  * quoted word is an argument (`--body "never rm -rf /"`), and a bare one may be a command.
+ *
+ * `unknowable` (v13, pleks CF-18) marks a segment whose LAST WORD is a whole substitution — `rm -rf
+ * $(echo ~)`, `` rm -rf `x` `` — which splitting cut off, so the segment's rule saw no target. What a
+ * substitution prints is not in the command. Only the rm rule reads it. `$(pwd)/build` is not whole:
+ * a named path follows, as `~/projects` is not `~`.
  */
 function segments(command) {
   const src = maskSinkHeredocs(command).replace(/\\\r?\n/g, " ");
   const quoted = quoteMap(src);
   const out = [];
-  const piece = (from, to) => {
+  const piece = (from, to, unknowable) => {
     const tokens = [];
     const bare = [];
     for (const m of src.slice(from, to).matchAll(/\S+/g)) {
@@ -689,17 +733,55 @@ function segments(command) {
       tokens.push(t);
       bare.push(quoted[from + m.index] === 0);
     }
-    if (tokens.length > 0) out.push({ text: src.slice(from, to).trim(), tokens, bare });
+    if (tokens.length > 0) out.push({ text: src.slice(from, to).trim(), tokens, bare, unknowable });
   };
   const plain = plainQuoting(src, quoted);
+  const whole = substitutedWords(src);
   let from = 0;
   for (const sep of src.matchAll(/[;&|\n]+|\$\(|[<>]\(|`/g)) {
     if (plain && quoted[sep.index] !== 0 && leadsData(src.slice(from, sep.index))) continue;
-    piece(from, sep.index);
+    piece(from, sep.index, whole(sep));
     from = sep.index + sep[0].length;
   }
-  piece(from, src.length);
+  piece(from, src.length, false);
   return out;
+}
+
+/**
+ * Given a separator match, is it the opening of a substitution that is a WHOLE word: after a space
+ * (or a `"` after one), and closed before a space, a separator or the end? Every `(` is paired once,
+ * in one pass, on first need: a scan to the close per `$(` is quadratic in nested openers.
+ */
+function substitutedWords(src) {
+  let close = null;
+  const startsWord = (i) => {
+    const b = src[i - 1] === '"' ? i - 2 : i - 1;
+    return b < 0 || isSpace(src[b]);
+  };
+  const endsWord = (end) => {
+    const e = src[end] === '"' ? end + 1 : end;
+    return e >= src.length || /[\s;&|)]/.test(src[e]);
+  };
+  return (sep) => {
+    const i = sep.index;
+    // A closing backtick is read as an opening one too. It ends the substitution's OWN text, so the
+    // flag lands on a piece that is the substitution — harmless unless that is itself a recursive rm.
+    if (sep[0] === "`") {
+      if (!startsWord(i)) return false;
+      const end = src.indexOf("`", i + 1);
+      return end !== -1 && endsWord(end + 1);
+    }
+    if (sep[0] !== "$(" || !startsWord(i)) return false;
+    if (close === null) {
+      close = new Int32Array(src.length).fill(-1);
+      const open = [];
+      for (let j = 0; j < src.length; j++) {
+        if (src[j] === "(") open.push(j);
+        else if (src[j] === ")" && open.length) close[open.pop()] = j;
+      }
+    }
+    return close[i + 1] !== -1 && endsWord(close[i + 1] + 1);
+  };
 }
 
 /**
@@ -855,8 +937,16 @@ const FORCE_LONG = /^--force(?:=.*)?$/;
 // nothing to backtrack over. `[A-Za-z]*f` accepted the same strings in quadratic time.
 const SHORT_CLUSTER_WITH_F = /^-[A-Za-eg-z]*f[A-Za-z]*$/;
 
-function isDestructiveRm(tokens) {
-  return atCommand(tokens, "rm") && argsOf(tokens).some((t) => LETHAL_TARGET.test(t));
+// v13 (pleks CF-18): a recursive rm whose target is a whole substitution (`segments`' `unknowable`).
+// The target is printed at run time, so it cannot be shown not to be a root — and `rm -rf $(echo ~)`
+// was allowed because splitting left the rm with no target at all.
+// Before the first r or R, letters other than those, as SHORT_CLUSTER_WITH_F: one way to match.
+const RECURSIVE = /^(?:-[A-QS-Za-qs-z]*[rR][A-Za-z]*|--recursive)$/;
+
+function isDestructiveRm(tokens, _text, _command, ctx) {
+  if (!atCommand(tokens, "rm")) return false;
+  const args = argsOf(tokens);
+  return args.some((t) => LETHAL_TARGET.test(t)) || (ctx?.unknowable === true && args.some((t) => RECURSIVE.test(t)));
 }
 
 /**
@@ -1198,7 +1288,7 @@ function isForceClean(tokens) {
 }
 
 const CANON_DENY = [
-  [isDestructiveRm, "rm aimed at a filesystem root or home directory"],
+  [isDestructiveRm, "rm aimed at a filesystem root or home directory, or recursively at a substitution that could print one"],
   [isForcePush, "force-push without --force-with-lease (--mirror is one)"],
   [isForceRefspec, "a +refspec force-pushes that ref — push without the +, or use --force-with-lease"],
   [isNoVerify, "--no-verify (or -n on commit, or core.hooksPath) skips the project's own gate"],
@@ -1249,15 +1339,17 @@ function laterPositions(seg, budget) {
     else out.positions.push({ ...seg, tokens, bare });
     return !out.over;
   };
-  for (const run of envStrings(seg)) if (!take(run)) return out;
-  if (cw === -1 || PROSE.has(seg.tokens[cw].replace(/^.*\//, ""))) return out;
-  if (isGit(seg.tokens[cw])) for (const run of configStrings(seg, cw)) if (!take(run)) return out;
+  const prose = cw !== -1 && PROSE.has(seg.tokens[cw].replace(/^.*\//, ""));
+  for (const run of envStrings(seg, prose ? cw : seg.tokens.length)) if (!take(run)) return out;
+  if (cw === -1 || prose) return out;
+  const gitStrings = (g) => [...configStrings(seg, g), ...extStrings(seg, g)];
+  if (isGit(seg.tokens[cw])) for (const run of gitStrings(cw)) if (!take(run)) return out;
   for (let i = cw + 1; i < seg.tokens.length; i++) {
     if (!seg.bare[i]) continue;
     if (seg.tokens[i].startsWith("#")) break;
-    if (!GATED_NAMES.has(seg.tokens[i].replace(/^.*\//, ""))) continue;
+    if (!GATED_NAMES.has(commandName(seg.tokens[i]))) continue;
     if (!take(seg.tokens.slice(i), seg.bare.slice(i))) break;
-    if (isGit(seg.tokens[i])) for (const run of configStrings(seg, i)) if (!take(run)) return out;
+    if (isGit(seg.tokens[i])) for (const run of gitStrings(i)) if (!take(run)) return out;
   }
   return out;
 }
@@ -1279,12 +1371,23 @@ function laterPositions(seg, budget) {
 //   - an `alias.*` value without `!` is git arguments, so it is read behind a `git`
 //     (`-c alias.p="push --force" p` is a force-push).
 // A value runs to the last token that began inside quotes, because the tokens keep no quotes.
+//
+// v12 (blindly CF-7) closes three neighbours v11 missed:
+//   - an assignment BEHIND a wrapper (`sudo GIT_SSH_COMMAND='rm -rf /*' git fetch`, `env -i …`):
+//     every assignment in the segment is read, not only a leading one — except after a prose
+//     command, whose words are text;
+//   - variables git honours that are not `GIT_`-prefixed: `SSH_ASKPASS`, and the `LESSOPEN` /
+//     `LESSCLOSE` preprocessors of the default pager;
+//   - the `ext::` transport, which runs its URL as a command (`fetch 'ext::sh -c rm% -rf% /*'`);
+//     `% ` is its escaped space, so a trailing `%` is dropped from each word.
 // NOT COVERED: `--config-env=<key>=<VAR>` and an `include.path` file (the value is not in the
-// command), a `GIT_CONFIG_PARAMETERS` string (its own quoting), and an alias already in a config
-// file — `git q` names nothing. A `git config` that WRITES one is read here, which is where it is seen.
-const GIT_RUNS_ENV = /^(?:GIT_\w+|EDITOR|VISUAL|PAGER)=/;
+// command), a `GIT_CONFIG_PARAMETERS` string (its own quoting), an alias already in a config
+// file — `git q` names nothing — and a value computed by a substitution (`GIT_SSH_COMMAND="$(…)"`):
+// the substitution is a segment of its own, read as the command that PRINTS the value, and `echo`
+// prints. A `git config` that WRITES one is read here, which is where it is seen.
+const GIT_RUNS_ENV = /^(?:GIT_\w+|EDITOR|VISUAL|PAGER|SSH_ASKPASS|LESSOPEN|LESSCLOSE)=/;
 const CONFIG_WITH_VALUE = new Set(["-f", "--file", "--blob", "--type", "--default", "--comment", "--value"]);
-const isGit = (t) => t.replace(/^.*\//, "") === "git";
+const isGit = (t) => commandName(t) === "git";
 
 /** The tokens of a value that starts after the `=` of token `i` (or at `i`), and the index past it. */
 function valueAt(seg, i, afterEq) {
@@ -1303,15 +1406,31 @@ function asCommand(key, value, rest) {
   return /^alias\./i.test(key) ? ["git", ...value, ...rest] : value;
 }
 
-/** Each leading `GIT_*=`, `EDITOR=`, `VISUAL=` or `PAGER=` value in a segment. */
-function envStrings(seg) {
+/** Each unquoted `GIT_*=`, `EDITOR=`, … assignment's value in a segment, before index `upTo`. */
+function envStrings(seg, upTo) {
   const runs = [];
-  let i = seg.tokens[0] === "export" || seg.tokens[0] === "env" ? 1 : 0;
-  while (i < seg.tokens.length && /^[A-Za-z_]\w*=/.test(seg.tokens[i])) {
+  let i = 0;
+  while (i < upTo) {
+    if (!seg.bare[i] || !GIT_RUNS_ENV.test(seg.tokens[i])) {
+      i++;
+      continue;
+    }
     const { value, end } = valueAt(seg, i, true);
-    const run = GIT_RUNS_ENV.test(seg.tokens[i]) ? asCommand("", value, []) : null;
+    const run = asCommand("", value, []);
     if (run) runs.push(run);
     i = end;
+  }
+  return runs;
+}
+
+/** Each `ext::<command>` URL the `git` at index `g` is given, as the command it runs. */
+function extStrings(seg, g) {
+  const runs = [];
+  for (let i = g + 1; i < seg.tokens.length; i++) {
+    if (!/^ext::/i.test(seg.tokens[i])) continue;
+    const { value } = valueAt(seg, i, false);
+    const run = [value[0].slice(5), ...value.slice(1)].map((t) => t.replace(/%$/, "")).filter(Boolean);
+    if (run.length) runs.push(run);
   }
   return runs;
 }
@@ -1348,6 +1467,371 @@ function configStrings(seg, g) {
   return runs;
 }
 
+// ── WHAT CONSUMES TEXT DECIDES WHETHER IT IS TEXT (v13, pleks CF-18) ──
+//
+// Every earlier version decided that quoted text, an echo's arguments and a heredoc's body were
+// PROSE from the token that held them. Measured by pleks and reproduced in canon against v12: every
+// bare act was gated, and every one of these was ALLOWED —
+//
+//   echo 'rm -rf ~' | bash          sh <<< 'rm -rf ~'            pwsh -c "git push -f origin x"
+//   cmd.exe /c "git push -f …"      python -c "import os; os.system('git reset --hard')"
+//   perl -e 'system("git push -f …")'   awk 'BEGIN{system("…")}'   sed -n '1e git push -f …' x.txt
+//   node - <<'EOF' … execSync('git reset --hard') … EOF          sed -f - / awk -f - <<'EOF' … EOF
+//
+// Text is prose until something RUNS it, and what runs it is a different token: a pipe into an
+// interpreter, a here-string or heredoc into one, an interpreter's code argument, or a sink that is
+// secretly an interpreter (sed's `e`, awk's `system(`). So the command is read a second time, as
+// shell WORDS rather than tokens — quotes removed the way bash removes them, a heredoc's body kept
+// with the command that receives it — and each string an interpreter is given goes back through
+// every rule as a command of its own:
+//   - a SHELL (`sh`, `bash`, …) or a WINDOWS shell (`pwsh`, `cmd`) runs its stdin, its here-string,
+//     and its `-c` / `-Command` / `/c` string as shell;
+//   - a CODE interpreter (`python`, `node`, `perl`, `ruby`, …) is given code, and code reaches a
+//     shell through a string: every quoted literal in its arguments and its stdin is read as a
+//     command, and so are all of them joined, which is `execFileSync('git', ['push', '-f'])`;
+//   - `sed` runs its `e` command and an `s///e` replacement; `awk` runs the literals of a program
+//     holding `system(` or a `|`. Both read their program from stdin under `-f -`. Without those,
+//     sed and awk stay the heredoc sinks they were, and `awk '{print "rm -rf /"}'` is still prose.
+// Stdin is what the command's own here-strings and heredocs give it, and what every earlier stage
+// of its pipeline was given. A string read so is read again, to CONSUMED_DEPTH, so `bash -c "echo
+// '…' | sh"` is seen. Every change is stricter: a string is ADDED to what the rules read, never
+// taken away, and what a prose command is given stays prose until something consumes it — `echo
+// 'rm -rf ~'`, `| cat` and `| grep` still pass.
+//
+// THE COST, declared: a code interpreter that only PRINTS a string naming a gated act (`node -e
+// "console.log('git push -f')"`) is denied as if it ran it. A literal cannot be told from a command
+// without reading the language, and unknown fails toward the gate.
+//
+// NOT COVERED: a string built at run time (a variable, `q{…}`, base64, `-EncodedCommand`, a
+// concatenation of words that are not each a literal); a file an interpreter or `sed -f` reads;
+// sed's bare `e`, which runs the pattern space; an interpreter's own deletion API
+// (`shutil.rmtree('/')`, `fs.rmSync`), which names no command; and `xargs` composing piped words
+// into another command's ARGUMENTS (`echo ~ | xargs rm -rf`) — reading those as a target would deny
+// `find / -name x | xargs rm -f`, since rm's targets are then find's arguments.
+const CONSUMED_DEPTH = 3;
+const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
+const WINDOWS_SHELLS = new Set(["pwsh", "powershell", "cmd"]);
+const CODE = /^(?:python[\d.]*|py|node|nodejs|deno|bun|perl|ruby|php)$/;
+
+function interpreterKind(name) {
+  if (SHELLS.has(name)) return "shell";
+  if (WINDOWS_SHELLS.has(name)) return "windows";
+  if (CODE.test(name)) return "code";
+  if (/^g?sed$/.test(name)) return "sed";
+  if (/^[gmn]?awk$/.test(name)) return "awk";
+  return null;
+}
+
+/** The command a list of words runs, as `commandWordIndex` finds it — but stopping AT a shell. */
+function commandAt(words) {
+  let i = 0;
+  while (i < words.length) {
+    const t = words[i];
+    if (KEYWORDS.has(t) || /^[A-Za-z_]\w*=/.test(t)) {
+      i++;
+      continue;
+    }
+    const name = commandName(t);
+    if (interpreterKind(name)) return { name, i };
+    const w = WRAPPERS.get(name);
+    if (!w || w.query?.includes(words[i + 1])) return { name, i };
+    i = pastWrapper(words, i + 1, w);
+  }
+  return null;
+}
+
+/**
+ * A command string as shell COMMANDS of WORDS: `{ words, stdin, pipe }`, `pipe` when `|` follows it.
+ * Quotes come off the way bash takes them (nothing escapes in `'…'`; `$'…'` decodes `\n`); a
+ * substitution stays inside its word, unread; a here-string and each heredoc's body go to `stdin`
+ * of the command that opened them. Approximate, and only additive: what it misreads is a string the
+ * rules read in vain, or one they miss — never one the token reading above loses. One pass.
+ */
+function lexCommands(src) {
+  const cmds = [];
+  const fresh = () => ({ words: [], stdin: [], pipe: false });
+  let cur = fresh();
+  let word = null;
+  let hereString = false;
+  let heredocs = [];
+  const add = (s) => {
+    word = (word ?? "") + s;
+  };
+  const endWord = () => {
+    if (word === null) return;
+    (hereString ? cur.stdin : cur.words).push(word);
+    hereString = false;
+    word = null;
+  };
+  const endCommand = (pipe) => {
+    endWord();
+    hereString = false;
+    if (cur.words.length > 0 || cur.stdin.length > 0) {
+      cur.pipe = pipe;
+      cmds.push(cur);
+      cur = fresh();
+    } else if (pipe && cmds.length > 0) cmds[cmds.length - 1].pipe = true; // `(echo x) | sh`
+  };
+  // The index just past a `(…)` that opens at `i`, quotes inside it respected.
+  const balanced = (i) => {
+    let depth = 0;
+    let q = "";
+    for (let j = i; j < src.length; j++) {
+      const c = src[j];
+      if (q) {
+        if (c === "\\" && q !== "'") j++;
+        else if (c === q) q = "";
+      } else if (c === "\\") j++;
+      else if (c === "'" || c === '"' || c === "`") q = c;
+      else if (c === "(") depth++;
+      else if (c === ")" && --depth === 0) return j + 1;
+    }
+    return src.length;
+  };
+  // `&>`, `2>&1`: a redirection, not a separator — it stays in the word.
+  const redirects = (i) => src[i + 1] === ">" || src[i - 1] === ">" || src[i - 1] === "<";
+  const pastTick = (i) => {
+    let j = i + 1;
+    while (j < src.length && src[j] !== "`") j += src[j] === "\\" ? 2 : 1;
+    return Math.min(j + 1, src.length);
+  };
+  const opener = (j) => {
+    const strip = src[j] === "-";
+    if (strip) j++;
+    while (src[j] === " " || src[j] === "\t") j++;
+    let delim = "";
+    for (; j < src.length && !/[\s;&|<>()]/.test(src[j]); j++) if (!"'\"\\".includes(src[j])) delim += src[j];
+    if (delim) heredocs.push({ cmd: cur, delim, strip });
+    return j;
+  };
+  const bodies = (j) => {
+    for (const h of heredocs) {
+      const lines = [];
+      while (j < src.length) {
+        let e = src.indexOf("\n", j);
+        if (e === -1) e = src.length;
+        const line = src.slice(j, e).replace(/\r$/, "");
+        j = e + 1;
+        if ((h.strip ? line.replace(/^\t+/, "") : line) === h.delim) break;
+        lines.push(line);
+      }
+      h.cmd.stdin.push(lines.join("\n"));
+    }
+    heredocs = [];
+    return j;
+  };
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (c === "'") {
+      let e = src.indexOf("'", i + 1);
+      if (e === -1) e = src.length;
+      add(src.slice(i + 1, e));
+      i = e + 1;
+    } else if (c === "$" && n === "'") {
+      let j = i + 2;
+      let s = "";
+      for (; j < src.length && src[j] !== "'"; j++) {
+        if (src[j] === "\\" && j + 1 < src.length) s += { n: "\n", t: "\t" }[src[++j]] ?? src[j];
+        else s += src[j];
+      }
+      add(s);
+      i = j + 1;
+    } else if (c === '"') {
+      let j = i + 1;
+      let s = "";
+      while (j < src.length && src[j] !== '"') {
+        if (src[j] === "\\" && j + 1 < src.length) {
+          s += "$`\"\\".includes(src[j + 1]) ? src[j + 1] : src.slice(j, j + 2);
+          j += 2;
+        } else s += src[j++];
+      }
+      add(s);
+      i = j + 1;
+    } else if (c === "\\") {
+      add(n ?? "");
+      i += 2;
+    } else if (c === "`") {
+      const e = pastTick(i);
+      add(src.slice(i, e));
+      i = e;
+    } else if ((c === "$" || c === "<" || c === ">") && n === "(") {
+      const e = balanced(i + 1);
+      add(src.slice(i, e));
+      i = e;
+    } else if (c === "#" && word === null) {
+      while (i < src.length && src[i] !== "\n") i++;
+    } else if (c === " " || c === "\t" || c === "\r") {
+      endWord();
+      i++;
+    } else if (c === "\n") {
+      endCommand(false);
+      i = bodies(i + 1);
+    } else if (c === ";" || c === "(" || c === ")" || (c === "&" && !redirects(i))) {
+      endCommand(false);
+      i++;
+    } else if (c === "|") {
+      endCommand(n !== "|");
+      i += n === "|" || n === "&" ? 2 : 1;
+    } else if (c === "<" && src.startsWith("<<<", i)) {
+      endWord();
+      hereString = true;
+      i += 3;
+    } else if (c === "<" && n === "<") {
+      endWord();
+      i = opener(i + 2);
+    } else {
+      add(c);
+      i++;
+    }
+  }
+  endCommand(false);
+  return cmds;
+}
+
+/** What a pipeline stage writes on, approximately: the words it is given, and its own stdin. */
+function givenTo(cmd) {
+  const cw = commandWordIndex(cmd.words);
+  const args = cw === -1 ? [] : cmd.words.slice(cw + 1);
+  // `printf 'a\nb'` writes two lines, and so does `echo -e`; reading `\n` as a newline always is
+  // the stricter error.
+  return [args.join(" ").replace(/\\n/g, "\n"), ...cmd.stdin];
+}
+
+// A quoted literal in code: '…', "…" or `…`, each with backslash escapes. No nesting, so no backtracking.
+const LITERAL = /'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;
+
+/** Every quoted literal in a piece of code, unescaped — and, if several, all of them joined. */
+function literals(code) {
+  const found = [...code.matchAll(LITERAL)].map((m) => (m[1] ?? m[2] ?? m[3]).replace(/\\n/g, "\n").replace(/\\(.)/g, "$1"));
+  return found.length > 1 ? [...found, found.join(" ")] : found;
+}
+
+/** `-c STRING` for a shell, as a cluster too (`-lc`, `-ec`): the string, or null. */
+function shellString(args) {
+  const i = args.findIndex((t) => /^-[A-Za-z]*c$/.test(t));
+  return i === -1 || i + 1 >= args.length ? null : args[i + 1];
+}
+
+/** pwsh's `-Command` and every prefix of it down to `-c`, and cmd's `/c`, `/k`, `/r`. */
+const windowsRun = (t) => /^\/[ckr]$/i.test(t) || (t.length >= 2 && "-command".startsWith(t.toLowerCase()));
+
+/**
+ * A sed or awk program, from its words: each `-e`/`--expression`/`--source` value, stdin under
+ * `-f -`, else the first word that is not an option. `flag` says which options take the program;
+ * `valued` are the others that take the next word. `stdin` is a function, called only under `-f -`.
+ */
+function programs(args, stdin, flag, valued) {
+  const out = { programs: [], fromStdin: false };
+  let explicit = false;
+  let first = null;
+  for (let i = 0; i < args.length; i++) {
+    const t = args[i];
+    const long = /^--(expression|source|file)(?:=([\s\S]*))?$/.exec(t);
+    if (long || flag.test(t)) {
+      explicit = true;
+      const v = long?.[2] ?? args[++i] ?? "";
+      const file = long ? long[1] === "file" : t.endsWith("f");
+      if (!file) out.programs.push(v);
+      else if ((v === "-" || v === "/dev/stdin") && !out.fromStdin) {
+        out.fromStdin = true;
+        out.programs.push(...stdin());
+      }
+    } else if (valued.has(t)) i++;
+    else if (!t.startsWith("-") && first === null) first = t;
+  }
+  if (!explicit && first !== null) out.programs.push(first);
+  return out;
+}
+
+// sed: an `e command` after an optional address, to the end of its line; and an `s///e` replacement.
+const SED_ADDRESS = String.raw`(?:\d+(?:~\d+)?|\$|\/(?:[^\/\\\n]|\\.)*\/[IM]*)`;
+const SED_E = new RegExp(String.raw`(?:^|[;{}\n])[ \t]*(?:${SED_ADDRESS}(?:[ \t]*,[ \t]*${SED_ADDRESS})?[ \t]*)?(?:![ \t]*)?e[ \t]+([^\n]+)`, "g");
+
+/**
+ * The replacement of every `s` command whose flags include `e`. A scan, not one regex: the delimiter
+ * is whatever follows the `s`, and the regex that said so failed pleks's sonarjs/regex-complexity.
+ * Every `s` is tried as a start, as a global regex tries every position, and a part ends at its line.
+ */
+function sedSubstituteE(program) {
+  const out = [];
+  for (let i = program.indexOf("s"); i !== -1; i = program.indexOf("s", i + 1)) {
+    const d = program[i + 1];
+    if (d === undefined || d === "\\" || d === "\n") continue;
+    const parts = [];
+    let part = "";
+    let j = i + 2;
+    for (; j < program.length && program[j] !== "\n" && parts.length < 2; j++) {
+      if (program[j] === "\\" && j + 1 < program.length) part += program[j] + program[++j];
+      else if (program[j] === d) {
+        parts.push(part);
+        part = "";
+      } else part += program[j];
+    }
+    if (parts.length === 2 && /^[gpiImMw\d]*e/.test(program.slice(j))) out.push(parts[1]);
+  }
+  return out;
+}
+
+function sedRuns(program) {
+  return [...[...program.matchAll(SED_E)].map((m) => m[1]), ...sedSubstituteE(program)];
+}
+
+// awk runs a command through `system(…)`, `print … | "cmd"` and `"cmd" | getline`.
+const AWK_RUNS = /\bsystem\s*\(|\|/;
+const SED_VALUED = new Set(["-l", "--line-length"]);
+const AWK_VALUED = new Set(["-F", "-v", "--field-separator", "--assign", "-i", "--include", "-l", "--load"]);
+
+/**
+ * Every string something in `command` runs as a command: see the section above.
+ *
+ * `piped` is what the stages since the last one that RAN its input have written on. A stage that
+ * runs its input empties it: what an interpreter prints is not in the command, and re-reading every
+ * earlier stage at every later one is quadratic in a pipeline's length.
+ */
+function consumedStrings(command) {
+  const out = [];
+  let piped = [];
+  for (const cmd of lexCommands(command.replace(/\\\r?\n/g, " "))) {
+    const at = commandAt(cmd.words);
+    const kind = at && interpreterKind(at.name);
+    const args = kind ? cmd.words.slice(at.i + 1) : [];
+    const stdin = () => [...cmd.stdin, ...piped];
+    let ran = kind === "shell" || kind === "windows" || kind === "code";
+    if (kind === "shell") {
+      out.push(...stdin());
+      const s = shellString(args);
+      if (s !== null) out.push(s);
+    } else if (kind === "windows") {
+      out.push(...stdin());
+      const f = args.findIndex(windowsRun);
+      if (f !== -1) out.push(args.slice(f + 1).join(" "));
+    } else if (kind === "code") {
+      for (const t of [...args, ...stdin()]) out.push(...literals(t));
+    } else if (kind) {
+      const sed = kind === "sed";
+      const read = programs(args, stdin, sed ? /^-[A-Za-z]*[ef]$/ : /^-[ef]$/, sed ? SED_VALUED : AWK_VALUED);
+      ran = read.fromStdin;
+      for (const p of read.programs) {
+        if (sed) out.push(...sedRuns(p));
+        else if (AWK_RUNS.test(p)) out.push(...literals(p));
+      }
+    }
+    if (ran || !cmd.pipe) piped = [];
+    if (cmd.pipe && !ran) piped.push(...givenTo(cmd));
+  }
+  return out;
+}
+
+/** The segments of every consumed string, and of the strings THEY consume, to CONSUMED_DEPTH. */
+function consumedSegments(command, depth = 1) {
+  if (depth > CONSUMED_DEPTH) return [];
+  const out = [];
+  for (const s of consumedStrings(command)) out.push(...segments(maskMessageText(s)), ...consumedSegments(s, depth + 1));
+  return out;
+}
+
 // ── BOUNDED WORK (v9, pleks CF-17) ──
 //
 // A hook that can be made to crash has failed open: Claude Code reads an exit other than 0 or 2 as a
@@ -1370,7 +1854,9 @@ const withSelf = (plan, index, self) =>
 function decide(command) {
   // Flag scans run on the message-masked text; the rm rule on the unmasked text, so
   // `-m "rm -rf /"` is prose either way (rm is not at command position there).
-  const segs = segments(maskMessageText(command));
+  // v13: after the command's own segments, those of every string something in it runs. Appended,
+  // so the branch each of the command's own segments lands on is computed exactly as before.
+  const segs = [...segments(maskMessageText(command)), ...consumedSegments(command)];
   const plan = planOf(segs);
   let span = 0;
   let overBudget = false;
@@ -1393,8 +1879,8 @@ function decide(command) {
   };
   const hit = (rule) =>
     segs.some((s, index) =>
-      fires(rule, s, command, { plan, index, before }) ||
-      (!overBudget && later[index].some((l) => fires(rule, l, command, { plan: withSelf(plan, index, planOf([l])[0]), index, before }))));
+      fires(rule, s, command, { plan, index, before, unknowable: s.unknowable }) ||
+      (!overBudget && later[index].some((l) => fires(rule, l, command, { plan: withSelf(plan, index, planOf([l])[0]), index, before, unknowable: l.unknowable }))));
   for (const [rule, why] of [...CANON_DENY, ...PROJECT_DENY]) {
     if (hit(rule)) return ["deny", why];
   }

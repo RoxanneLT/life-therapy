@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v11 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v13 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -43,6 +43,11 @@
  * payloads every earlier version allowed — `$(…)` and backticks in a double-quoted message, and a
  * `-m` inside quotes. `LOOSENED` now accumulates across versions: an adopter at v6 runs `--against`
  * its v6, and a table describing only v7→v8 would have called v7's declared loosenings undeclared.
+ *
+ * v13 (2026-10-06, pleks CF-18) carries the twenty payloads v12 allowed once text reached something
+ * that runs it — a pipe or here-string into a shell, an interpreter's code string, sed's `e`, awk's
+ * `system(` — and `rm -rf $(…)`; a case per part of the reading that found them, and the allows it
+ * must not cost. Three more timed shapes, one per work bound the new reading carries.
  *
  * Run: node .claude/hooks/bash-gate.probe.mjs   (wire into the `probe` script)
  *      node .claude/hooks/bash-gate.probe.mjs --against <the gate you are replacing>
@@ -251,8 +256,8 @@ export function fallbackFindings(inv, seenReasons) {
  *   "hard reset discards uncommitted work with no undo": "deny",
  *   [`pushing ${WORKING_BRANCH} is not the deployment`]: "ask",
  */
-/* LT holds two of canon's verdicts tighter, and the thirty entries below are those two policies
- * meeting canon's cases — not thirty separate decisions.
+/* LT holds two of canon's verdicts tighter, and the thirty-five entries below are those two policies
+ * meeting canon's cases — not thirty-five separate decisions.
  *
  * PUSH (twenty-six entries; fifteen arrived with canon's v5 cases, four with v7's, one with v9's). A dry-run push
  * asks too: the rule reads `git push`, and a flag that makes it harmless is still a push command a
@@ -267,7 +272,7 @@ export function fallbackFindings(inv, seenReasons) {
  * arriving through a compound command; they are canon's proof that a gate reads segments rather
  * than substrings, and that proof survives at `ask`.
  *
- * RESET (four entries; three arrived with v7's wrapper, keyword and abbreviation cases). §3 lists `git reset --hard` under hook-denied by name. Canon asks because
+ * RESET (nine entries; three arrived with v7's wrapper, keyword and abbreviation cases, five with v13's interpreter cases). §3 lists `git reset --hard` under hook-denied by name. Canon asks because
  * discarding uncommitted work is sometimes what you meant; this repo lost a working day to
  * OneDrive eating the tree (§6) and does not want the one-keystroke version of that available.
  * The recovery is `git stash`, which loses nothing.
@@ -312,6 +317,13 @@ const PROJECT_VERDICTS = {
   "WRAPPER: a hard reset behind timeout": "deny",
   "KEYWORD: a hard reset after then": "deny",
   "ABBREVIATED: --har is --hard to git": "deny",
+  // v13's cases (carried 2026-10-06): a string an interpreter runs is read as a command, and canon's
+  // example act is `git reset --hard`, which asks there and is denied here. The proof survives at deny.
+  "v13: an echo piped into sh asks as its act does": "deny",
+  "v13: python -c reaches a shell through os.system's literal": "deny",
+  "v13: a heredoc into node - is code, and its literals are commands": "deny",
+  "v13: python runs its stdin, and its literals are commands": "deny",
+  "v13: an escaped quote inside double quotes is the quote": "deny",
 }
 /* KIT:CONFIG /verdicts */
 
@@ -647,6 +659,25 @@ const CASES = [
   { want: "allow", why: "v11: git config reads and inert writes pass", payload: bash("git config --get alias.st && git config user.name 'A B' && git config --file .git/config core.autocrlf false") },
   { want: "allow", why: "v11: a pager variable that names a pager passes", payload: bash('GIT_PAGER="less -R" git log') },
   { want: "allow", why: "v11: an assignment git does not read is not a command", payload: bash('MSG="rm -rf /" node x.js') },
+
+  // ── v12: HOW A COMMAND IS SPELLED (blindly CF-6), and v11's three neighbours (blindly CF-7) ──
+  // Every deny below was ALLOWED by v11, measured by blindly on win32 and reproduced in canon.
+  { want: "deny", why: "v12: git.exe is git — Git Bash runs it", payload: bash(`git.exe push --force origin ${W}`) },
+  { want: "deny", why: "v12: GIT is git on a case-insensitive filesystem", payload: bash(`GIT push --force origin ${W}`) },
+  { want: "deny", why: "v12: rm.exe is rm", payload: bash("rm.exe -rf /*") },
+  { want: "deny", why: "v12: a full path to git.exe, as Git Bash spells it", payload: bash(`/mingw64/bin/git.exe push -f origin ${W}`) },
+  { want: "deny", why: "v12: git.cmd, the Windows shim", payload: bash(`git.cmd push -f origin ${W}`) },
+  { want: "deny", why: "v12: a runner spelled with .exe is still a runner — its quoted string is out of the backstop's reach", payload: bash("bash.exe -c 'rm -rf /*'") },
+  { want: "deny", why: "v12: the backstop's later positions are spelled the same way — find -exec is in no table", payload: bash("find . -exec RM.exe -rf / \\;") },
+  { want: "deny", why: "v12: a v11 string under a v12 spelling", payload: bash("Git.EXE -c alias.q='!rm -rf /*' q") },
+  { want: "deny", why: "v12: an assignment behind sudo", payload: bash("sudo GIT_SSH_COMMAND='rm -rf /*' git fetch") },
+  { want: "deny", why: "v12: an assignment behind env -i", payload: bash("env -i GIT_SSH_COMMAND='rm -rf /*' git fetch") },
+  { want: "deny", why: "v12: SSH_ASKPASS is run by git, and is not GIT_-prefixed", payload: bash("SSH_ASKPASS='rm -rf /*' git fetch") },
+  { want: "deny", why: "v12: the ext:: transport runs its URL", payload: bash("git -c protocol.ext.allow=always fetch 'ext::sh -c rm% -rf% /*'") },
+  { want: "allow", why: "v12: git.exe reading is reading", payload: bash("git.exe status && GIT log --oneline -3") },
+  { want: "allow", why: "v12: an excusing list still matches exactly — ECHO is not read as prose, and this one names nothing", payload: bash("ECHO hello") },
+  { want: "allow", why: "v12: an assignment after a prose command is text", payload: bash("echo GIT_PAGER='rm -rf /*'") },
+  { want: "allow", why: "v12: an ssh URL is not ext::", payload: bash("git fetch ssh://host/repo.git") },
   { want: "deny", why: "KEYWORD: then opens a command", payload: bash("if true; then git push -f; fi") },
   { want: "deny", why: "KEYWORD: do opens a command", payload: bash("for i in 1; do rm -rf /; done") },
   { want: "deny", why: "KEYWORD: ! opens a command", payload: bash("! git push -f") },
@@ -736,6 +767,69 @@ const CASES = [
   { want: "ask", root: WORKTREE, why: "SIZE: a later push is read from the branch BEFORE its segment, not after the branch that segment creates", payload: bash(`git switch -c ${W} git push`) },
   { want: "allow", why: "SIZE: a 100 KB commit body to a sink heredoc is data, read once", payload: bash(`git commit -F - <<'MSG'\n${"never rm -rf / here\n".repeat(5_000)}MSG`) },
 
+  // ── v13: WHAT CONSUMES TEXT DECIDES WHETHER IT IS TEXT (pleks CF-18) ──
+  // The first twenty are pleks's payloads, every one ALLOWED by v12 (measured in canon, 2026-10-06),
+  // each wanting what its bare act gets. The rest are one case per part of the reading, and the cost.
+  { want: "deny", why: "v13: an echo piped into bash is code", payload: bash("echo 'rm -rf ~' | bash") },
+  { want: "ask", why: "v13: an echo piped into sh asks as its act does", payload: bash("echo 'git reset --hard' | sh") },
+  { want: "deny", why: "v13: a printf piped into bash is code", payload: bash("printf 'git push -f origin x' | bash") },
+  { want: "ask", why: "v13: git clean piped into sh", payload: bash("echo 'git clean -fdx' | sh") },
+  { want: "deny", why: "v13: a here-string into sh is code", payload: bash("sh <<< 'rm -rf ~'") },
+  { want: "deny", why: "v13: a here-string into bash is code", payload: bash("bash <<< 'git push -f origin x'") },
+  { want: "deny", why: "v13: rm -r of a $(…) target cannot be shown not to be home", payload: bash("rm -rf $(echo ~)") },
+  { want: "deny", why: "v13: …nor of a backtick target", payload: bash("rm -rf `echo ~`") },
+  { want: "deny", why: "v13: …nor of one holding a separator", payload: bash("rm -rf $(cd ~; pwd)") },
+  { want: "deny", why: "v13: …nor of one printing the root", payload: bash("rm -rf $(echo /)") },
+  { want: "deny", why: "v13: pwsh -c runs its quoted string", payload: bash('pwsh -c "git push -f origin x"') },
+  { want: "deny", why: "v13: cmd.exe /c runs its quoted string", payload: bash('cmd.exe /c "git push -f origin x"') },
+  { want: "ask", why: "v13: python -c reaches a shell through os.system's literal", payload: bash(`python -c "import os; os.system('git reset --hard')"`) },
+  { want: "ask", why: "v13: a heredoc into node - is code, and its literals are commands", payload: bash("node - <<'EOF'\nrequire('child_process').execSync('git reset --hard')\nEOF") },
+  { want: "deny", why: "v13: sed's e command runs its line", payload: bash("sed -n '1e git push -f origin x' x.txt") },
+  { want: "deny", why: "v13: sed -f - takes its program from the heredoc", payload: bash("sed -f - x.txt <<'EOF'\n1e git push -f origin x\nEOF") },
+  { want: "deny", why: "v13: awk -f - takes its program from the heredoc", payload: bash("awk -f - <<'EOF'\nBEGIN{system(\"git push -f origin x\")}\nEOF") },
+  { want: "deny", why: "v13: perl -e system()", payload: bash(`perl -e 'system("git push -f origin x")'`) },
+  { want: "deny", why: "v13: ruby -e system()", payload: bash(`ruby -e 'system("git push -f origin x")'`) },
+  { want: "deny", why: "v13: awk's system() runs its literal", payload: bash(`awk 'BEGIN{system("git push -f origin x")}'`) },
+  { want: "deny", why: "v13: printf's \\n is a newline, so the second line runs", payload: bash("printf 'x\\ngit push -f origin x' | sh") },
+  { want: "deny", why: "v13: $'…' is a quote too", payload: bash("echo $'rm -rf ~' | sh") },
+  { want: "deny", why: "v13: a consumed string is read again — a pipe inside bash -c", payload: bash(`bash -c "echo 'rm -rf ~' | sh"`) },
+  { want: "deny", why: "v13: cmd runs its stdin", payload: bash("echo 'git push -f origin x' | cmd") },
+  { want: "ask", why: "v13: python runs its stdin, and its literals are commands", payload: bash(`echo "import os; os.system('git reset --hard')" | python3`) },
+  { want: "deny", why: "v13: a code interpreter's literals joined — execFileSync's argument list", payload: bash(`node -e "require('child_process').execFileSync('git', ['push', '-f', 'origin', 'x'])"`) },
+  { want: "deny", why: "v13: sed's s///e runs its replacement", payload: bash("sed 's/.*/git push -f origin x/e' x.txt") },
+  { want: "deny", why: "v13: awk's \"cmd\" | getline runs cmd", payload: bash(`awk 'BEGIN{"git push -f origin x" | getline}'`) },
+  { want: "deny", why: "v13: a subshell piped on is still a stage", payload: bash("(echo 'rm -rf ~') | sh") },
+  { want: "deny", why: "v13: 2>&1 is a redirection, not a separator", payload: bash("echo 'git push -f origin x' 2>&1 | sh") },
+  { want: "deny", why: "v13: a $(…) word is one word", payload: bash("echo $(date) 'git push -f origin x' | sh") },
+  { want: "deny", why: "v13: a backtick word is one word", payload: bash("echo 'git push -f origin x' `a; b` | sh") },
+  { want: "ask", why: "v13: an escaped quote inside double quotes is the quote", payload: bash('python -c "import os; os.system(\\"git reset --hard\\")"') },
+  { want: "deny", why: "v13: a filter between the text and the shell passes it on", payload: bash("echo 'rm -rf ~' | sed 's/x/y/' | sh") },
+  { want: "deny", why: "v13: a here-string behind a wrapper", payload: bash("sudo bash <<< 'rm -rf ~'") },
+  { want: "deny", why: "v13: a quoted $(…) target is still the substitution", payload: bash('rm -rf "$(echo ~)"') },
+  { want: "deny", why: "v13: …and at a later position the backstop finds", payload: bash("find . -exec rm -rf $(echo ~) \\;") },
+  { want: "deny", why: "v13: an escaped space joins a word", payload: bash("echo rm\\ -rf\\ ~ | sh") },
+  { want: "deny", why: "v13: a literal's \\n is a newline to the language, so its second line runs", payload: bash(`python -c "import os; os.system('cd x\\ngit push -f origin x')"`) },
+  { want: "deny", why: "v13: a literal's other escapes come off, as the shell it reaches takes them", payload: bash(`python -c "import os; os.system('g\\it push -f origin x')"`) },
+  { want: "deny", why: "v13: sed -e names its program", payload: bash("sed -e '1e git push -f origin x' x.txt") },
+  { want: "deny", why: "v13: awk -F's value is not the program", payload: bash(`awk -F , 'BEGIN{system("git push -f origin x")}'`) },
+  { want: "deny", why: "v13: pwsh's -Command spelled in full", payload: bash('powershell -Command "git push -f origin x"') },
+  { want: "deny", why: "v13: <<- strips the terminator's tabs, and the command after it is read", payload: bash("cat <<-EOF\n\tx\n\tEOF\necho 'rm -rf ~' | sh") },
+  // MUST NOT BREAK (pleks's list), and the cost each part of the reading must not charge.
+  { want: "allow", why: "v13: a commit message naming rm -rf ~", payload: bash('git commit -m "never rm -rf ~ here"') },
+  { want: "allow", why: "v13: grepping for rm -rf", payload: bash('grep "rm -rf" notes.md') },
+  { want: "allow", why: "v13: a PR body naming rm -rf /", payload: bash('gh pr create --body "rm -rf / is denied"') },
+  { want: "allow", why: "v13: an echo that nothing consumes", payload: bash("echo 'rm -rf ~'") },
+  { want: "allow", why: "v13: an echo piped into cat", payload: bash("echo 'rm -rf ~' | cat") },
+  { want: "allow", why: "v13: a printf piped into grep", payload: bash("printf 'x' | grep x") },
+  { want: "allow", why: "v13: a consumed string's -m message is a message", payload: bash(`echo 'git commit -m "never git push -f"' | sh`) },
+  { want: "allow", why: "v13: a pipe after a # is a comment", payload: bash("ls # echo 'rm -rf ~' | sh") },
+  { want: "allow", why: "v13: $(…) followed by a named path is not a whole target", payload: bash("rm -rf $(pwd)/build") },
+  { want: "allow", why: "v13: $(…) after a name is not a whole target", payload: bash("rm -rf build-$(date +%s)") },
+  { want: "allow", why: "v13: a non-recursive rm of a substitution", payload: bash("rm $(ls *.tmp)") },
+  { want: "allow", why: "v13: a code interpreter with no gated literal", payload: bash(`python -c "print('hello')"`) },
+  { want: "allow", why: "v13: sed -f - without e is a filter", payload: bash("sed -f - x.txt <<'EOF'\ns/a/b/\nEOF") },
+  { want: "allow", why: "v13: a `;` ends a pipeline — the shell after it is not given what the pipeline wrote", payload: bash("echo 'rm -rf ~' | cat; bash -c ls") },
+
   /* KIT:CONFIG cases — this project's own gates, beyond the canonical set above.
    * ONE PROBE PER RULE YOU ADDED TO THE HOOK'S DENY/ASK BLOCKS, both directions: the
    * violation, and the near-miss that must still pass. A rule with no probe is a rule
@@ -814,11 +908,23 @@ try {
   if (SAMPLE === null) {
     const BOUND_MS = 2_500;
     const fill = (unit) => unit.repeat(Math.ceil(500 * 1024 / unit.length));
+    // v13: each string a shell is given is read again, so a heredoc nested in a heredoc is read once
+    // per level — quadratic without CONSUMED_DEPTH. And a stage's stdin is what the earlier stages
+    // wrote — quadratic in a pipeline's length unless a stage that runs its input empties it, a filter
+    // reads it only when told to, and one told twice reads it once.
+    const levels = Math.ceil(500 * 1024 / 22);
+    const nested = Array.from({ length: levels }, (_, i) => `sh <<'H${i}'`).join("\n") + "\n" +
+      Array.from({ length: levels }, (_, i) => `H${levels - 1 - i}`).join("\n");
     for (const [shape, command] of [
       ["later rm positions", fill("rm x ")],
       ["git segments", fill("git status; ")],
       ["gated words in many segments", fill("x git y; ")],
       ["later positions across many segments, within budget", "x git status; ".repeat(15_000)],
+      ["v13: heredocs nested in heredocs into sh", nested],
+      ["v13: a pipeline of echoes into shells", `${fill("echo x | sh | ")}sh`],
+      ["v13: a pipeline of filters into a shell", `echo x | ${fill("sed s/a/b/ | ")}sh`],
+      ["v13: a pipeline of filters that read their program from stdin", `echo x | ${fill("sed -f - | ")}sh`],
+      ["v13: one filter told to read stdin many times", `echo ${"x ".repeat(125_000)}| sed ${"-f - ".repeat(50_000)}`],
     ]) {
       const t = Date.now();
       const got = await run(bash(command));

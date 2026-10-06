@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // check-brief — conformance for `brief/`, per standards/BRIEF-STANDARD.md v1.1
 //
-// @kit check-brief v9 — tracked. Edit it in dev-standards and re-adopt; a local change
+// @kit check-brief v10 — tracked. Edit it in dev-standards and re-adopt; a local change
 // here is a fork, and `check-kit-drift.mjs` will say so.
 //
 // Ten checks (B-1…B-10), one generator (--status), one probe (--selftest).
@@ -1012,7 +1012,14 @@ const bigLog = (n) =>
 // ── entry ────────────────────────────────────────────────────────────────────
 
 const argv = process.argv.slice(2);
-if (argv.includes("--selftest")) process.exit(selftest());
+if (argv.includes("--selftest")) {
+  // pleks CF-14: run from a git hook in a linked worktree, git exports an ABSOLUTE GIT_DIR, which
+  // beats `-C` — so the scratch repo's init, config and commits landed in the REAL repository
+  // (core.bare, user.email=probe, four commits on a branch mid-merge). A selftest's subject is its
+  // fixtures, never the repo the hook was called for, so nothing it or its children run inherits one.
+  for (const k of Object.keys(process.env)) if (k.startsWith("GIT_")) delete process.env[k];
+  process.exit(selftest());
+}
 
 const dir = argv.find((a) => !a.startsWith("--")) ?? ".";
 if (!existsSync(join(dir, "brief"))) {
