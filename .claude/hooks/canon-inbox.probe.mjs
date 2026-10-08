@@ -2,7 +2,7 @@
 /**
  * .claude/hooks/canon-inbox.probe.mjs — canon-inbox.js in both directions, run as Claude Code runs it.
  *
- * @kit canon-inbox-probe v4 — tracked. It has no config region: its cases are the hook's contract.
+ * @kit canon-inbox-probe v5 — tracked. It has no config region: its cases are the hook's contract.
  *
  * Run: `node .claude/hooks/canon-inbox.probe.mjs` — exit 0 only if every case holds.
  *
@@ -159,7 +159,9 @@ try {
   {
     const c = fakeCanon("push", "console.log(JSON.stringify(process.argv.slice(2)));\n");
     const hook = plant("push-hook", { canon: c, project: "named" });
-    for (const command of ["git push origin feature", "git -C ../x push -u origin main", "npm run check && git push"]) {
+    for (const command of ["git push origin feature", "git -C ../x push -u origin main", "npm run check && git push",
+      // v5 (blindly CF-11): a quoted path to git is one word, as bash reads it.
+      `"C:/Program Files/Git/cmd/git.exe" push origin main`, `'C:/Program Files/Git/cmd/git.exe' -C "my repo" push`]) {
       const r = run(hook, dir("push-proj"), bashCall(command));
       const args = (() => { try { return JSON.parse(msg(r)); } catch { return null; } })();
       check(`after \`${command}\`: canon is asked with --after-task, and the line is relayed under PostToolUse`,
@@ -175,7 +177,8 @@ try {
   {
     const c = fakeCanon("unasked", "console.error('asked'); process.exit(4);\n");
     const hook = plant("unasked-hook", { canon: c });
-    for (const command of ["git status", "npm test", "echo pushing is later", "git log --oneline -- push.md"]) {
+    for (const command of ["git status", "npm test", "echo pushing is later", "git log --oneline -- push.md",
+      `"C:/Program Files/Git/cmd/git.exe" status`, `git commit -m "then git push; later"`]) {
       const r = run(hook, dir("unasked-proj"), bashCall(command));
       check(`KNOWN-GOOD: after \`${command}\` the hook prints nothing and does not ask canon`, r.status === 0 && r.raw === "", r);
     }

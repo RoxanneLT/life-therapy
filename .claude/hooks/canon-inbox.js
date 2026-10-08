@@ -1,7 +1,7 @@
 /**
  * .claude/hooks/canon-inbox.js — SessionStart, and after a push: one line from canon about this project, or nothing.
  *
- * @kit canon-inbox v3 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything
+ * @kit canon-inbox v4 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything
  * else is canon's, and `check-kit-drift.mjs` says so if it changes here.
  *
  * Register it TWICE, with the same command `node "$CLAUDE_PROJECT_DIR/.claude/hooks/canon-inbox.js"`:
@@ -34,6 +34,8 @@
  * with `--after-task`: the line tells the session to take the updates once its current task is
  * done, not to interleave them, and a row below canon's floor before its next push. Any other Bash
  * call prints nothing and does not ask canon. It still refuses nothing.
+ *
+ * v4 (2026-10-08, blindly CF-11): a quoted path to git is one word — see `segments`.
  */
 // @event SessionStart
 // @matcher startup
@@ -83,9 +85,41 @@ const hook = input();
 const event = hook.hook_event_name === "PostToolUse" ? "PostToolUse" : "SessionStart";
 // After a tool call, only a push is a moment to speak: `push` as git's subcommand, after any global
 // options. A miss costs one reminder and a false hit one extra line — this hook decides nothing.
+/**
+ * The command's segments as shell words: a quoted span is one word, its quotes dropped, and a
+ * separator inside quotes separates nothing. v4 (blindly CF-11): v3 split at every space, so
+ * `"C:/Program Files/Git/cmd/git.exe" push` was two words and neither was git.
+ */
+function segments(command) {
+  const out = [[]];
+  let word = null;
+  let quote = null;
+  const end = () => {
+    if (word !== null) out.at(-1).push(word);
+    word = null;
+  };
+  for (const ch of command) {
+    if (quote) {
+      if (ch === quote) quote = null;
+      else word += ch;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      word ??= "";
+    } else if (/[;&|\n]/.test(ch)) {
+      end();
+      out.push([]);
+    } else if (/\s/.test(ch)) {
+      end();
+    } else {
+      word = (word ?? "") + ch;
+    }
+  }
+  end();
+  return out;
+}
+
 function pushes(command) {
-  for (const segment of command.split(/[;&|\n]+/)) {
-    const words = segment.trim().split(/\s+/);
+  for (const words of segments(command)) {
     let i = words.findIndex((w) => /(?:^|[\\/])git(?:\.exe)?$/i.test(w));
     if (i === -1) continue;
     for (i++; i < words.length && words[i].startsWith("-"); i++) {
