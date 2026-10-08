@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v14 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v15 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -52,6 +52,9 @@
  * v14 (2026-10-06, blindly CF-8) carries the quoted Windows paths v13 allowed — `"C:/Program Files/…/
  * git.exe"` force-pushing, skipping hooks, pushing main, and `rm.exe` at the root — and the allows
  * they must not cost: the same path reading status, another program, a quoted argument.
+ *
+ * v15 (2026-10-08, blindly CF-10) carries the same cases with a quoted whitespace-only word after
+ * them, which v14 allowed, and a word that differs from its token at the same count.
  *
  * Run: node .claude/hooks/bash-gate.probe.mjs   (wire into the `probe` script)
  *      node .claude/hooks/bash-gate.probe.mjs --against <the gate you are replacing>
@@ -260,8 +263,8 @@ export function fallbackFindings(inv, seenReasons) {
  *   "hard reset discards uncommitted work with no undo": "deny",
  *   [`pushing ${WORKING_BRANCH} is not the deployment`]: "ask",
  */
-/* LT holds two of canon's verdicts tighter, and the thirty-five entries below are those two policies
- * meeting canon's cases — not thirty-five separate decisions.
+/* LT holds two of canon's verdicts tighter, and the thirty-six entries below are those two policies
+ * meeting canon's cases — not thirty-six separate decisions.
  *
  * PUSH (twenty-six entries; fifteen arrived with canon's v5 cases, four with v7's, one with v9's). A dry-run push
  * asks too: the rule reads `git push`, and a flag that makes it harmless is still a push command a
@@ -276,7 +279,7 @@ export function fallbackFindings(inv, seenReasons) {
  * arriving through a compound command; they are canon's proof that a gate reads segments rather
  * than substrings, and that proof survives at `ask`.
  *
- * RESET (nine entries; three arrived with v7's wrapper, keyword and abbreviation cases, five with v13's interpreter cases). §3 lists `git reset --hard` under hook-denied by name. Canon asks because
+ * RESET (ten entries; three arrived with v7's wrapper, keyword and abbreviation cases, five with v13's interpreter cases, one with v15's). §3 lists `git reset --hard` under hook-denied by name. Canon asks because
  * discarding uncommitted work is sometimes what you meant; this repo lost a working day to
  * OneDrive eating the tree (§6) and does not want the one-keystroke version of that available.
  * The recovery is `git stash`, which loses nothing.
@@ -328,6 +331,8 @@ const PROJECT_VERDICTS = {
   "v13: a heredoc into node - is code, and its literals are commands": "deny",
   "v13: python runs its stdin, and its literals are commands": "deny",
   "v13: an escaped quote inside double quotes is the quote": "deny",
+  // v15 (carried 2026-10-08): a quoted git.exe path followed by a comment that carries a quote.
+  "v15: …reset --hard asks as git does": "deny",
 }
 /* KIT:CONFIG /verdicts */
 
@@ -848,6 +853,15 @@ const CASES = [
   { want: "allow", why: "v14: a quoted path to git.exe reading status", payload: bash(`"C:/Program Files/Git/cmd/git.exe" status`) },
   { want: "allow", why: "v14: a quoted path to another program", payload: bash(`"C:/Program Files/nodejs/node.exe" -v`) },
   { want: "allow", why: "v14: a quoted argument holding a gated act's words is still one argument", payload: bash(`echo "git push --force" > notes.txt`) },
+
+  // ── v15: THE READINGS DIFFER BY POSITION, NOT BY COUNT (blindly CF-10) ──
+  // A quoted `" "` is one word and no token; v14 compared counts, so it cancelled the path's split.
+  { want: "deny", why: "v15: a quoted space in a comment cancelled the count — force push", payload: bash(`"C:/Program Files/Git/cmd/git.exe" push --force origin main # " "`) },
+  { want: "ask", why: "v15: …and pushing main", payload: bash(`"C:/Program Files/Git/cmd/git.exe" push origin main # " "`) },
+  { want: "deny", why: "v15: …rm.exe at the root, the quoted space as an argument", payload: bash(`"C:/Program Files/Git/usr/bin/rm.exe" -rf /* " "`) },
+  { want: "ask", why: "v15: …reset --hard asks as git does", payload: bash(`"C:/Program Files/Git/cmd/git.exe" reset --hard # " "`) },
+  { want: "deny", why: "v15: two quoted spaces against two splits", payload: bash(`"C:/Program Files/My Git/git.exe" push --force " " " "`) },
+  { want: "allow", why: "v15: the same path reading status with the quoted space", payload: bash(`"C:/Program Files/Git/cmd/git.exe" status # " "`) },
 
   /* KIT:CONFIG cases — this project's own gates, beyond the canonical set above.
    * ONE PROBE PER RULE YOU ADDED TO THE HOOK'S DENY/ASK BLOCKS, both directions: the
