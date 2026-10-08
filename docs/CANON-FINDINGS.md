@@ -37,26 +37,7 @@ CF-6 was answered by `agent-brief-gate` v2 at canon `77f1c58` (below).
 
 CF-7 and CF-8 are filed (below): canon took them at `647fd38` and `c4bc731`.
 
-### CF-9 · `context-budget` v1 tells every adopter that pleks's numbers were measured on its own repo
-
-    OBSERVED   context-budget v1's advice to the model reads "measured on this repo, compaction resets
-               1,001,754 …", and its header says "Measured on this repo's own transcript metadata" and
-               "From this repo's own `compactMetadata`". The figures are pleks's (the header's own v1
-               note: "the measurements below are pleks's and are kept as its evidence").
-    COMMAND    grep -n "measured on this repo\|this repo's own" .claude/hooks/context-budget.js
-               18: * the spend; output tokens were ~2% of it. Measured on this repo's own transcript metadata —
-               21: * Compaction is the lever, by a distance. From this repo's own `compactMetadata`:
-               108: * bounded the PARSING and not the READING. On this repo's own transcript that was a 41.5MB read
-               394:      + `Run /compact if this starts a new task: measured on this repo, compaction resets 1,001,754 `
-    WHY IT IS  "This repo" is true in exactly one project, pleks, and false in every other one that adopts
-    CANON'S    the row, whatever its stack. Line 394 is not only a comment: it is injected into the model's
-               context on every prompt, so each adopter tells its own model, every turn, that it measured
-               something it never measured. That is the claim-without-its-source that EVIDENCE.md exists to
-               forbid. Before this adoption, life-therapy's port said "measured next door in pleks".
-    SMALLEST   Name the source rather than "this repo": "measured in pleks" at lines 18, 21, 108 and 394.
-    FIX        It must not change the numbers, the two audiences, or the thresholds region, and
-               check-context-budget's assertions on the message must still pass. Taken here as canon's
-               bytes, unedited, so that canon's fix arrives as a carry.
+CF-9 is filed too: canon took it at `baba8d8`.
 
 ---
 
@@ -139,6 +120,7 @@ never *exempt*, so the reason has to argue it.
 | two rows | `canon-inbox` v4 · `canon-inbox-probe` v5 | carried 2026-10-08 by `apply-kit life-therapy --carry-only --write` from canon `b876694` (v4 at `597b37e`: a quoted path to git is one word). Canon's `status --short` was empty before and after. Outside the `KIT:CONFIG` regions, each file equals `git show HEAD:` in canon. The `canon` region is unchanged from this project's HEAD. Registration is unchanged. **Record both at these versions.** | the commit that adds this row · `canon-inbox.probe` → `21 held, 1 advisory` · `check-hook-registration` → green · `npm run check` → exit 0 |
 | two rows | `bash-gate` v17 · `bash-gate-probe` v17 | carried 2026-10-08 by `apply-kit life-therapy --carry-only --write` from canon `2c2bbb9`. That covers v16 (`2263b93`) and v17 (`b9f9979`, pleks CF-21). Canon's `status --short` was empty before and after. Outside the `KIT:CONFIG` regions, each file equals `git show HEAD:` in canon. Every region is unchanged from this project's HEAD. Two new cases reach `reset --hard`, which this project denies (§3), so `verdicts` now holds 38. No bash-gate rule changed (isForcePush and LETHAL_TARGET are untouched by the diff), so the two `@probed-kit` twin records move to v17 with their dates kept. **Clears the v17 floor; record both at v17.** | the commit that adds this row · `bash-gate.probe` → `385 probes pass, both directions, 38 verdict(s) tightened by this project` · `--against` v15 → `385 cases through both gates — 0 looser (0 declared), 33 stricter` · `check-hook-registration` → green · `npm run check` → exit 0 |
 | two rows | `context-budget` v1 · `check-context-budget` v1 | adopted 2026-10-08 from canon `2c2bbb9` (`git show HEAD:`), at the inbox's request: both files were at a kit path and were not canon's copy. They were this project's earlier port of pleks's bytes. Canon's changes over that port are `liveMode` / `snapshotNow`, the `\uFEFF` escape, and the probe's `--hook` / `--settings` flags with `process.execPath`. The `thresholds` region is new here and holds this project's values, unchanged (WARN 180,000, STOP 450,000, either side of `autoCompactWindow` 300,000). Canon's `status --short` was empty before and after. Outside the region, each file equals canon HEAD. Taken with CF-9 open, unedited. **Record both as adopted at v1.** | the commit that adds this row · `check-context-budget` → `probes green` · `check-hook-registration` → green · `npm run check` → exit 0 |
+| six rows | `bash-gate` v18 · `bash-gate-probe` v18 · `canon-inbox` v5 · `canon-inbox-probe` v6 · `context-budget` v2 · `check-context-budget` v2 | carried 2026-10-08 by `apply-kit life-therapy --carry-only --write` from canon `37a030c`. Canon's `status --short` was empty before and after. Outside the `KIT:CONFIG` regions, each file equals `git show HEAD:` in canon. Every region is unchanged from this project's HEAD. context-budget v2 answers CF-9 (now filed). No bash-gate rule changed, so the `@probed-kit` twin records move to v18 with their dates kept. No new case reaches `reset --hard`, so `verdicts` stays at 38. **Clears the v18 floor; record all six at these versions.** | the commit that adds this row · `bash-gate.probe` → `409 probes pass, both directions, 38 verdict(s) tightened by this project` · `--against` v17 → `409 cases through both gates — 0 looser (0 declared), 16 stricter` · `canon-inbox.probe` → `29 held, 1 advisory` · `check-context-budget` → green · `npm run check` → exit 0 |
 
 No pins.
 
@@ -159,6 +141,7 @@ A pointer, not a restatement — the canon entry is the record.
 | CF-4 | `check-handoff-contract` read the anchor and never compared it | v5 prints L-41's QUARANTINED tell | `61bd006` |
 | CF-7 | Nothing in the method asks what a change does to a value that already exists, once the value gains authority | L-109, with this project's Applied line at `afd4253`. The walker question CF-7 proposed is a spine change still open in canon | `647fd38` |
 | CF-8 | bash-gate v10 left its three intended loosenings out of `LOOSENED` | fixed in `bash-gate` v11 (`c34cc93`), which declares them. Canon recorded taking it in `c4bc731` | `c4bc731` |
+| CF-9 | `context-budget` v1 told every adopter that pleks's numbers were measured on its own repo | `context-budget` v2 names pleks, including in the line injected into the model; carried here at v2 | `baba8d8` |
 | CF-5 | A settings ask prompts beside a live hook, and canon said it did not | L-15 corrected on measurement; bash-gate v7's fallbacks region says the same; `check-hook-registration` v7 says "the fallback layer" | `98f9636` |
 | CF-6 | `agent-brief-gate` v1 failed canon's own `check-hook-registration` | the same defect as yoros CF-14, filed the same day. v2 carries the three markers, and `tools/check-kit-hooks.mjs` now reads every kit hook for them. One point from CF-6 is left for canon, not reopened here: v2's `@no-twin` is argued for the brief half only, and the REDIRECT half (`Explore`/`general-purpose`) could still be twinned as a settings deny | `77f1c58` |
 | §3 | `canon-findings` v1, adopted 2026-09-10 | recorded in `kitAdopted` | `31ed513` |
