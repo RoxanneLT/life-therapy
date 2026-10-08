@@ -2,12 +2,17 @@
 /**
  * scripts/check-context-budget.mjs — probes for the context-budget hook.
  *
- * Ported with the hook it probes. The three SHIPPED defects below were shipped in the sibling
- * project (pleks) that built this, not here — but the fixtures come across for a reason: this repo
- * inherits the CODE, so it inherits every way that code can regress. A port that dropped the
- * regression suite would keep the fix and lose the only thing preventing its removal.
+ * @kit check-context-budget v1 — tracked. No config region: its cases are the hook's contract.
  *
- * A reminder hook has several ways to be useless, and that build shipped three of them:
+ * Run: node scripts/check-context-budget.mjs
+ *      node scripts/check-context-budget.mjs --hook <path> --settings <path>   (canon's gate, on the
+ *      kit's own copies — defaults are the installed paths)
+ *
+ * v1 (2026-10-08, nortiercupboards CF-4) is pleks's bytes at `4635041c` plus the two paths as options,
+ * and three spots pleks's own lint refused once the file was linted as a kit row: a one-line `if`
+ * body braced, and two regexes rewritten to match the same strings without backtracking.
+ *
+ * A reminder hook has several ways to be useless, and this repo has now shipped three of them:
  *   quiet when it should be     — a warning on every prompt is wallpaper and gets ignored
  *   silent when it should warn  — the failure that costs money, and the invisible one
  *   noisy on a broken payload   — this hook only ever ADDS a line, so a parse failure must degrade
@@ -29,9 +34,15 @@
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, openSync, writeSync, closeSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 
-const HOOK = ".claude/hooks/context-budget.js"
+const opt = (name, fallback) => {
+  const i = process.argv.indexOf(name)
+  return i === -1 ? fallback : process.argv[i + 1]
+}
+const HOOK = resolve(opt("--hook", ".claude/hooks/context-budget.js"))
+const SETTINGS = opt("--settings", ".claude/settings.json")
 
 if (!existsSync(HOOK)) {
   console.log(`❌ ${HOOK} is missing — the hook this probe exists to verify is not installed`)
@@ -76,7 +87,8 @@ function freshCwd() {
 }
 
 function run(payload) {
-  const r = spawnSync("node", [HOOK], { input: payload, encoding: "utf8" })
+  // `process.execPath`, not "node" — the hook must run under the interpreter running this check.
+  const r = spawnSync(process.execPath, [HOOK], { input: payload, encoding: "utf8" })
   if (r.status !== 0) return { error: `hook exited ${r.status}: ${r.stderr.slice(0, 200)}` }
   try {
     const j = JSON.parse(r.stdout)
@@ -90,7 +102,10 @@ const payload = (transcript_path, cwd = freshCwd(), prompt = "do a thing") =>
   JSON.stringify({ hook_event_name: "UserPromptSubmit", transcript_path, prompt, cwd })
 
 let failed = 0
-const ok = (cond, label, detail = "") => { if (!cond) failed++; console.log(`  ${cond ? "✓" : "✗"} ${label}${cond ? "" : `\n      ${detail}`}`) }
+const ok = (cond, label, detail = "") => {
+  if (!cond) failed++
+  console.log(`  ${cond ? "✓" : "✗"} ${label}${cond ? "" : `\n      ${detail}`}`)
+}
 
 // ── quiet below the threshold ────────────────────────────────────────────────────────────────
 {
@@ -163,13 +178,13 @@ const ok = (cond, label, detail = "") => { if (!cond) failed++; console.log(`  $
   // hook's output instead, every field came back undefined, and `(undefined ?? 0) - (undefined ?? 0)`
   // is 0 — which is less than any threshold. The probe passed while asserting nothing. Hence the
   // marker, and hence the explicit "rss is a positive number" assertion below it.
+  // The driver loads the hook by `await import`, NOT `createRequire`. The hook became an ES module
+  // when `.claude/package.json` declared the kind (dev-standards M-KIT-17 / L-94); a createRequire
+  // driver would throw ERR_REQUIRE_ESM here and the probe would then be measuring its own harness
+  // rather than the hook's RSS — the same class of self-measurement the marker above records.
   const driver = join(tmp, "rss-driver.mjs")
   writeFileSync(driver, [
-    // `import`, not `createRequire`, since the hook became ESM on 2026-09-09. The driver must load
-    // it the way the RUNTIME will — a probe that reaches its subject through a channel the real
-    // caller does not use is measuring its own harness.
-    `import { pathToFileURL } from "node:url"`,
-    `const h = await import(pathToFileURL(${JSON.stringify(join(process.cwd(), HOOK))}).href)`,
+    `const h = await import(${JSON.stringify(pathToFileURL(HOOK).href)})`,
     `const t0 = Date.now()`,
     `h.measure(process.argv[2], process.argv[3])`,
     `console.log("RSSPROBE:" + JSON.stringify({ rss: process.memoryUsage().rss, ms: Date.now() - t0 }))`,
@@ -189,7 +204,10 @@ const ok = (cond, label, detail = "") => { if (!cond) failed++; console.log(`  $
   }
 
   const measureRss = (p) => {
-    const r = spawnSync("node", [driver, p, freshCwd()], { encoding: "utf8" })
+    // `process.execPath` matters MORE here than in the probe above: this measures RSS, and a
+    // different Node major has a different baseline heap. A PATH-resolved interpreter would make
+    // the number meaningless rather than merely unpinned.
+    const r = spawnSync(process.execPath, [driver, p, freshCwd()], { encoding: "utf8" })
     const line = r.stdout.split("\n").find((l) => l.startsWith("RSSPROBE:"))
     if (!line) return { error: `no RSSPROBE line. stderr: ${r.stderr.slice(0, 200)}` }
     try { return JSON.parse(line.slice("RSSPROBE:".length)) } catch { return { error: `bad RSSPROBE payload: ${line.slice(0, 120)}` } }
@@ -246,9 +264,9 @@ const ok = (cond, label, detail = "") => { if (!cond) failed++; console.log(`  $
     ccc: { type: "implementer", turns: Array.from({ length: 40 }, () => 900_000) },
   })
   const rh = run(payload(heavy))
-  ok(/\d+\.\d M?|\d+\.\dM/.test(rh.ctx ?? "") && /M billable/.test(rh.ctx ?? ""),
+  ok(/\d\.\d[ M]/.test(rh.ctx ?? "") && /M billable/.test(rh.ctx ?? ""),
     "spend in the millions renders as M, not as five digits of k", JSON.stringify(rh.ctx))
-  ok(!/\d{4,}k/.test(rh.ctx ?? ""), "…and no four-plus-digit k value survives anywhere in the message", JSON.stringify(rh.ctx))
+  ok(!/\d{4}k/.test(rh.ctx ?? ""), "…and no four-plus-digit k value survives anywhere in the message", JSON.stringify(rh.ctx))
 
   // The other direction, which is the one that rots silently: no agents must mean EXACTLY zero,
   // reported as an absence, never as a null rendered into a number.
@@ -330,9 +348,9 @@ const ok = (cond, label, detail = "") => { if (!cond) failed++; console.log(`  $
 // installed and say nothing, forever. This is the one relationship between the two that nothing
 // else can check, because it spans a JS constant and a JSON setting.
 {
-  const settings = JSON.parse(readFileSync(".claude/settings.json", "utf8"))
+  const settings = JSON.parse(readFileSync(SETTINGS, "utf8"))
   const window = settings.autoCompactWindow
-  const { WARN, STOP } = await import("../.claude/hooks/context-budget.js").then((m) => m.default ?? m)
+  const { WARN, STOP } = await import(pathToFileURL(HOOK).href).then((m) => m.default ?? m)
 
   ok(typeof window === "number", "settings.json sets autoCompactWindow — compaction is configured, not left at the ~1M default", JSON.stringify(window))
   ok(window >= 100_000 && window <= 1_000_000, `…and it is inside the CLI's accepted 100k-1M range (${window})`, String(window))

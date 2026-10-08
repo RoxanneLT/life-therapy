@@ -1,20 +1,24 @@
 /**
  * .claude/hooks/context-budget.js — UserPromptSubmit annotator that keeps the token budget in view.
  *
- * PORTED, NOT DERIVED HERE. Built and paid for in the sibling project (pleks) on 2026-08-20, and
- * canonised as `dev-standards/playbooks/3-TOKEN-ECONOMY.md` tier 2. Every measurement below is
- * THAT project's, and none of it has been re-measured against this transcript — the method travels
- * between repos, the evidence stays with the repo that bought it. Nothing here is stack-specific,
- * which is why porting rather than re-deriving is the right call: the numbers describe the harness,
- * not the codebase. If this project ever measures its own, the figures belong in an EXPERIMENTS
- * record, not in this header pretending to have been local all along.
+ * @kit context-budget v1 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything
+ * else is canon's, and `check-kit-drift.mjs` says so if it changes here.
+ *
+ * Register: settings.json → hooks.UserPromptSubmit, command
+ * `node "$CLAUDE_PROJECT_DIR/.claude/hooks/context-budget.js"`. Ignore `.claude/.context-budget.state.json`
+ * (playbooks/3-TOKEN-ECONOMY.md §2: a `.claude/*` ignore with negations must still list it).
+ *
+ * v1 (2026-10-08, nortiercupboards CF-4) is pleks's bytes at `4635041c`, which nortiercupboards and
+ * blindly had copied byte for byte, so a fix in pleks reached neither. The thresholds became the
+ * project's region; the measurements below are pleks's and are kept as its evidence. A literal BOM
+ * in a regex became `\uFEFF` (canon's no-irregular-whitespace).
  *
  * WHY THIS EXISTS: every turn re-sends the whole conversation, so at 600k of context a one-line
  * `grep` costs the same billable-equivalent as a 200-line file write. Turn count × context size IS
- * the spend; output tokens were ~2% of it. Measured there on transcript metadata —
+ * the spend; output tokens were ~2% of it. Measured on this repo's own transcript metadata —
  * `cumulativeDroppedTokens: 4,344,909` across three compactions in one session.
  *
- * Compaction is the lever, by a distance. From that session's `compactMetadata`:
+ * Compaction is the lever, by a distance. From this repo's own `compactMetadata`:
  *   preTokens 1,001,754 → postTokens 16,754   (auto)
  *   preTokens   998,784 → postTokens 18,203   (auto)
  *   preTokens   687,984 → postTokens 15,444   (manual)
@@ -26,8 +30,7 @@
  * UserPromptSubmit hook re-injects at the top of every prompt, from OUTSIDE the conversation, and
  * costs a few dozen tokens to do it. It cannot go stale and it cannot fall out of context.
  *
- * TWO AUDIENCES, AND THEY GET DIFFERENT TEXT. The first version of this file shipped a defect here
- * — in the sibling project, before the port; this repo inherits the fix and the reason for it. It put
+ * TWO AUDIENCES, AND THEY GET DIFFERENT TEXT. The first version shipped a defect here: it put
  * "run /compact" into `additionalContext`, which goes to the MODEL — the one participant that
  * cannot run a slash command. The human, who can, saw nothing.
  *   systemMessage     → the human. The /compact ask, because only they can act on it.
@@ -42,7 +45,7 @@
  * Delegation is a trade: an agent keeps 50 files out of the main window and pays for its own. The
  * trade is only judgeable if both sides are visible, which is why agent spend is reported at all.
  *
- * WHERE AGENT SPEND ACTUALLY LIVES. Not in the main transcript. Measured on that session: 6,750
+ * WHERE AGENT SPEND ACTUALLY LIVES. Not in the main transcript. Measured on this session: 6,750
  * main turns, ZERO carrying `isSidechain`, despite 32 `Agent` tool calls. Subagent transcripts are
  * separate files under `<transcript-dir>/<sessionId>/subagents/agent-*.jsonl`, each with an
  * `agent-*.meta.json` naming its `agentType`. An earlier version of this hook skipped
@@ -64,12 +67,6 @@
 // @no-twin settings permissions match TOOLS, and this gates no tool — it annotates a prompt with a
 // measurement. There is no permission rule that can express "tell me how big the context is", so
 // the coarse layer has nothing to fall back to and the gap is recorded rather than implied.
-// ESM, and by declaration rather than by the runtime's guess. Converted 2026-09-09 alongside
-// `package.json` in this directory, which sets `"type": "module"` for `.claude/hooks/` only. This
-// file was the one CommonJS holdout here, so it is the whole cost of that declaration — the two
-// hooks that already used `import` (agent-write-scope since v1, bash-gate since v3) stop depending
-// on Node >= 22.7 reparsing them, which is version-dependent and fails at LOAD on an older Node.
-// dev-standards M-KIT-17 / L-94.
 import { openSync, readSync, closeSync, statSync, existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -78,8 +75,12 @@ import { pathToFileURL } from "node:url";
 // WARN sits deliberately BELOW the 300k --autocompact threshold this repo recommends. If the two
 // were equal the tier could never fire: compaction would pre-empt its own warning and the text
 // would be unreachable.
+/* KIT:CONFIG thresholds — WARN below your autoCompactWindow, STOP above it.
+ * scripts/check-context-budget.mjs fails if either is on the wrong side of the window.
+ */
 const WARN = 180_000;
 const STOP = 450_000;
+/* KIT:CONFIG /thresholds */
 
 // ── pricing ──────────────────────────────────────────────────────────────────────────────────
 // Anthropic bills a cache READ at ~10% of the base input rate and a cache WRITE at ~125%. These
@@ -211,7 +212,37 @@ function readMain(path, prevOffset) {
     if (u) context = inputTokens(u);
   }
 
-  return { context, size, addedTokens, addedBillable, addedTurns, sawBoundary, gap };
+  // The session's permission mode, read from the record field `permissionMode`.
+  //
+  // ⚠ THIS READ WAS WRONG ONCE, AND THE FIELD IT USED LOOKED PERFECT. An earlier cut took the
+  // transcript's `{"type":"mode"}` record, on the reasoning that a payload's `permission_mode` is the
+  // CONFIGURED default out of settings.json while the transcript holds the LIVE state. The first half
+  // of that is still true. The second half was not, and the discriminator is CARDINALITY:
+  //
+  //     {"type":"mode"}.mode    1735 records across 12 transcripts, EVERY ONE `normal`  → cardinality 1
+  //     record.permissionMode   `acceptEdits` x540, `auto` x8, `default` x1            → cardinality 3
+  //
+  // A field that never varies across any session on the machine cannot be reporting a state the user
+  // toggles — a constant is not a state, it is an unset default being shouted. `normal` is not in the
+  // permission vocabulary at all (`default` is, and it is on the OTHER field); `normal` is the vim/
+  // editor mode's word. `permissionMode` also TRANSITIONS mid-session (`auto → acceptEdits`,
+  // `default → auto`), which is the positive evidence: it tracks something that changes.
+  //
+  // The lesson is the general one, and it is why this comment is long: BEFORE BELIEVING A CHANNEL
+  // IDENTIFICATION, MEASURE THE FIELD'S CARDINALITY ACROSS SESSIONS. Both wrong readings here were
+  // argued from plausibility — the name fit, the story fit — and a two-minute count refuted the
+  // second one outright. Reading one session's transcript could never have caught it, because within
+  // one session a constant and a genuine steady state are byte-identical.
+  //
+  // Costs no extra I/O: `parsed` is the window this function already read for the token count.
+  let liveMode = null;
+  // BACKWARDS, and the two ordering probes in check-statusline.mjs both fail on a forward scan.
+  // The first record is the mode the session STARTED in, which after one change is permanently wrong.
+  for (let i = parsed.length - 1; i >= 0 && liveMode === null; i--) {
+    if (typeof parsed[i].permissionMode === "string") liveMode = parsed[i].permissionMode;
+  }
+
+  return { context, size, addedTokens, addedBillable, addedTurns, sawBoundary, gap, liveMode };
 }
 
 /**
@@ -225,6 +256,18 @@ function readMain(path, prevOffset) {
  */
 function contextNow(transcriptPath) {
   return readMain(transcriptPath, Number.MAX_SAFE_INTEGER).context;
+}
+
+/**
+ * Context AND live permission mode from ONE positioned read.
+ *
+ * Exists so the statusline can show both without reading the transcript twice — `contextNow` stays
+ * for any caller that wants only the gauge. See `readMain`'s `liveMode` comment for why the mode
+ * must come from here and not from a hook payload's `permission_mode`.
+ */
+function snapshotNow(transcriptPath) {
+  const m = readMain(transcriptPath, Number.MAX_SAFE_INTEGER);
+  return { context: m.context, liveMode: m.liveMode };
 }
 
 /**
@@ -316,6 +359,7 @@ function measure(transcriptPath, cwd) {
 
   return {
     context: main.context,
+    liveMode: main.liveMode,                            // the transcript's mode, not the payload's
     mainBillable: state.main.billable,
     mainTurns: state.main.turns,
     mainPartial: state.main.partial,
@@ -347,7 +391,7 @@ function adviseUser(m) {
 
   if (m.context >= STOP) {
     return `⚠ CONTEXT ${k(m.context)} — ~${perTurn} billable-equivalent per turn before any work happens. `
-      + `Run /compact if this starts a new task: measured next door in pleks, compaction resets 1,001,754 `
+      + `Run /compact if this starts a new task: measured on this repo, compaction resets 1,001,754 `
       + `tokens to 16,754. To stop doing it by hand, start with --autocompact 300000 (accepts 100k-1M; `
       + `the default fires at ~1M). ${spend}`;
   }
@@ -393,12 +437,12 @@ function adviseAgent(m) {
 // same collision made this hook's own RSS probe pass vacuously before it was caught, so the
 // failure mode is demonstrated rather than hypothetical.
 //
-// ⚠ `require.main === module` IS THE CJS SPELLING AND IT SURVIVED THE 2026-09-09 CONVERSION BY A
-// WHOLE STEP. The grep that found this file's CommonJS was `require\(|module\.exports`, and
-// `require.main` has no parenthesis — so the imports and the export were converted, the file
-// loaded, and it threw `require is not defined in ES module scope` at THIS line instead. A
-// module-kind conversion is not a search for two spellings; the bare globals (`require.main`,
-// `module`, `__dirname`, `__filename`, `exports`) have no punctuation to grep for.
+// ESM SPELLING, and it is not interchangeable with the CommonJS one it replaces. `require.main`
+// carries no parenthesis and `module` no dot-exports, so a `require\(|module\.exports` search — the
+// obvious way to find conversion sites — matches NEITHER token and reports this file clean. It
+// converts, it loads, and it throws here at runtime. Found by the life-therapy session hitting
+// exactly this, 2026-09-09 (dev-standards M-KIT-17 / L-94). `process.argv[1]` is a path and
+// `import.meta.url` a URL, so the comparison must go through pathToFileURL rather than string-match.
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   let raw = "";
   process.stdin.on("data", (c) => (raw += c));
@@ -406,12 +450,37 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     let additionalContext = "";
     let systemMessage = null;
     try {
-      const input = JSON.parse(raw.replace(/^﻿/, ""));
+      const input = JSON.parse(raw.replace(/^\uFEFF/, ""));
       if (input.transcript_path) {
         const m = measure(input.transcript_path, input.cwd);
         additionalContext = adviseAgent(m) ?? "";
         systemMessage = adviseUser(m);
       }
+      // ⚠ A `[perm]` LINE USED TO BE APPENDED HERE, TELLING THE MODEL THE SESSION WOULD PROMPT ON
+      // WRITES. It is deleted rather than repaired, and both reasons are worth keeping:
+      //
+      // 1. IT NEVER RAN, ONCE, IN ANY SESSION. `const m` is declared inside the
+      //    `if (input.transcript_path)` block above; the branch sat AFTER that block closed. Every
+      //    invocation threw a ReferenceError, which the `catch` below swallowed by design — and
+      //    because `additionalContext` had already been assigned, the hook still emitted its normal
+      //    `ctx 80k` line. Working output, dead feature, green `npm run check`: `eslint.config.mjs`
+      //    ignores `.claude/**`, so `no-undef` never looked at it, and no probe in
+      //    check-context-budget.mjs touched the perm line. The green-and-unfailable class, in the
+      //    instrument built to catch exactly that class.
+      // 2. ITS PREMISE WAS REFUTED. It fired when the mode was not `acceptEdits`, on the reading that
+      //    anything else prompts on writes. See `readMain` — the field it read has cardinality 1
+      //    across every transcript on this machine, so the branch would have been a permanent false
+      //    alarm had it ever executed. The two defects hid each other: the dead code was never
+      //    noticed because nothing missed its output, and the wrong premise was never noticed
+      //    because the code was dead.
+      //
+      // Not rebuilt against the corrected field either, and that is the deliberate part. This tier is
+      // always-on and token-costed, and a line saying "the mode is X" is only worth its budget if X
+      // PREDICTS something the model can act on. Whether a given mode predicts a prompt is exactly
+      // what is still unmeasured — this session ran in `acceptEdits` and a prompt happened anyway.
+      // Until there is an instrument that detects a prompt, an assertion here would be a third guess
+      // dressed as a measurement. The statusline shows the value to the human, who can see the
+      // prompt; that is the honest half and it costs no tokens.
     } catch {
       // A hook that cannot measure must not guess, and must not block: this one only ever ADDS a
       // line, so failing silent costs a missed reminder rather than a stalled session.
@@ -424,6 +493,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 }
 
 export {
-  adviseUser, adviseAgent, measure, readMain, readAgents, readRange, contextNow, loadState,
+  adviseUser, adviseAgent, measure, readMain, readAgents, readRange, contextNow, snapshotNow, loadState,
   WARN, STOP, CACHE_READ_MULTIPLIER, CACHE_WRITE_MULTIPLIER, STATE_FILE,
 };
