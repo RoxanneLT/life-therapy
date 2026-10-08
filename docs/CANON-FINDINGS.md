@@ -39,6 +39,28 @@ CF-7 and CF-8 are filed (below): canon took them at `647fd38` and `c4bc731`.
 
 CF-9 is filed too: canon took it at `baba8d8`.
 
+### CF-10 · `dates` v2 carries L-108: its zoned-string fast path rolls a day that does not exist
+
+    OBSERVED   toInstant() in kit lib/dates.ts sends an ISO string that already carries an offset down
+               a branch that checks only for NaN (line 129: `if (ZONED_ISO.test(value)) return
+               assertRealDate(new Date(value), fn, value)`). The date-only branch beside it runs
+               assertSaDateStr, which round-trips the day. So L-108's own inputs roll silently in every
+               public helper that takes a string (saDateStr, and diffSaDays and the others through toInstant).
+    COMMAND    a scratch tsx script importing saDateStr from ./lib/dates (dates v2, canon's bytes):
+               "2026-02-30T10:00Z" -> 2026-03-02
+               "2026-11-31T10:00:00.000Z" -> 2026-12-01
+               "2026-02-30" -> throws: calendarDate: "2026-02-30" is not a real date.
+    WHY IT IS  The file is a tracked kit row with no config region over toInstant, so every adopter runs
+    CANON'S    these bytes and has the same defect, whatever its stack. It is the incident L-108 records
+               for pleks's saWallClockToInstant, in canon's own helper. The suite misses it the way L-108
+               predicts: dates.test.ts holds must-throw cases for the date-only branch, and none for the
+               zoned branch.
+    SMALLEST   In toInstant's ZONED_ISO branch, run assertSaDateStr(value.slice(0, 10), fn) before parsing
+    FIX        (the slice is of a string, not a Date). Add one must-throw case per branch to the kit's
+               dates.test.ts, using the two inputs above. It must not break the fast path's acceptance
+               of a real zoned instant, or the Date and date-only branches. This project answers L-108
+               with a date once the carry lands, and not before.
+
 ---
 
 ## 2 · Lesson answers
