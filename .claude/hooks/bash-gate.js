@@ -1,7 +1,7 @@
 /**
  * bash-gate.js — PreToolUse gate for Bash. KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate v15 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
+ * @kit bash-gate v17 — tracked OUTSIDE its `KIT:CONFIG` regions. Those regions are yours;
  * everything else is canon's, and `check-kit-drift.mjs` reconciles it.
  *
  * WHY THIS EXISTS, and it is not the reason you would guess. Allow-rules in
@@ -98,6 +98,18 @@
  * and a quoted whitespace-only word (`# " "`) is one word and no token, which cancelled the path's
  * split and re-opened every case CF-8 closed. The words are now read whenever the two lists differ
  * at any position. Deciding by a count fails open to any input that moves both counts alike.
+ *
+ * v16 (2026-10-08) is pleks's v15 scout: a shell can be handed text no word of the command holds —
+ * a process substitution's output (`source <(…)`, `bash <(…)`), a substitution's output as the
+ * command word, a file written and run in the same command, and `npx -c`. All seven measured shapes
+ * were ALLOWED; see "WHAT A COMMAND RUNS THAT IT NEVER QUOTED". No rule is added, so no fallback is
+ * owed. A file written by an EARLIER Bash call is out of reach of any reader of command text.
+ *
+ * v17 (2026-10-08) is pleks CF-21: the set of runners is open — `cmd //c`, wsl, find -exec, su, flock,
+ * busybox, ssh, docker exec, `npm pkg set scripts.x=`, git's filters and --exec were all ALLOWED. So a
+ * program the gate does not know has every multi-word argument, and every `key=value`'s value, read
+ * as a command; see "A STRING HANDED TO A PROGRAM THE GATE DOES NOT KNOW". The declared cost: such a
+ * string naming a gated act is gated as if run. No rule is added, so no fallback is owed.
  *
  * A REASON IS ALWAYS SET, INCLUDING ON ALLOW. An empty reason makes an allow
  * indistinguishable from a hook that ran and decided nothing.
@@ -269,17 +281,27 @@
 // in a trailing comment (`# " "`) evened the counts, so v14 skipped the second reading and allowed a
 // force push through a quoted git.exe path. No rule changed. `@probed-kit` moves to v15 and the
 // dates stay. `--against` v14: 334 cases, 0 looser, 5 stricter.
+//
+// v16 + v17 (2026-10-08, canon `2c2bbb9`, carried together; canon's floor is 17). v16 reads what a
+// command runs without quoting it: process substitution, a substitution as the command word, a file
+// written and then run. v17 turns the runner list around (pleks CF-21): an argument containing
+// whitespace, passed to a program the gate does not know, is read as a command; so is a key=value
+// argument's value. Git is read only where git runs a shell. Canon's declared cost: a quoted string
+// naming a gated act, passed to an unknown program, is gated as if it ran
+// (`npx vitest run -t "rejects rm -rf ~"` denies). No definition of isForcePush or LETHAL_TARGET
+// changed, so `@probed-kit` moves to v17 and the dates stay. `--against` v15: 385 cases, 0 looser,
+// 33 stricter.
 
 // ── Backing CANON's rules (CANON_DENY / CANON_ASK — not this project's bytes) ──
 // @twin Bash(git push --force*)
 // @probed 2026-08-19 hook-disabled: intercepts — denied · `git push --force --dry-run`
-// @probed-kit bash-gate v15
+// @probed-kit bash-gate v17
 // Settings carries `--force*` and `-f*`; canon's isForcePush additionally catches `-fu` clusters
 // and `git -C … push --force`, which a prefix glob cannot express. Ask is the floor, and settings
 // DENIES — so the twin is stronger than the floor, not weaker.
 // @twin Bash(rm -rf /*)
 // @probed 2026-08-19 hook-disabled: intercepts — prompted · `rm -rf /tmp/<nonexistent>`
-// @probed-kit bash-gate v15
+// @probed-kit bash-gate v17
 // Narrowed from a bare `rm -rf*`, which would have prompted on every scratch-dir cleanup. The
 // dangerous shapes are the rooted ones; canon's LETHAL_TARGET is that rule made exact, and it
 // additionally catches `\rm`, `(rm`, `/"*"` and `$HOME`, none of which settings can spell.
@@ -1761,7 +1783,8 @@ function shellString(args) {
 }
 
 /** pwsh's `-Command` and every prefix of it down to `-c`, and cmd's `/c`, `/k`, `/r`. */
-const windowsRun = (t) => /^\/[ckr]$/i.test(t) || (t.length >= 2 && "-command".startsWith(t.toLowerCase()));
+// v17 (pleks CF-21): `//c` too — Git Bash rewrites a lone `/c` as a path, so `cmd //c` is how it is typed there.
+const windowsRun = (t) => /^\/{1,2}[ckr]$/i.test(t) || (t.length >= 2 && "-command".startsWith(t.toLowerCase()));
 
 /**
  * A sed or awk program, from its words: each `-e`/`--expression`/`--source` value, stdin under
@@ -1829,6 +1852,159 @@ const AWK_RUNS = /\bsystem\s*\(|\|/;
 const SED_VALUED = new Set(["-l", "--line-length"]);
 const AWK_VALUED = new Set(["-F", "-v", "--field-separator", "--assign", "-i", "--include", "-l", "--load"]);
 
+// ── WHAT A COMMAND RUNS THAT IT NEVER QUOTED (v16, pleks's v15 scout) ──
+//
+// v13 read the text an interpreter is GIVEN. Measured by pleks against v15 and reproduced in canon,
+// four shapes hand a shell text that no word of the command holds as an argument, and each was
+// ALLOWED with a pushing, forcing payload:
+//   source <(echo …)  . <(echo …)  bash <(echo …)   a process substitution's OUTPUT, run as a script
+//   $(printf 'git push') origin x                   a substitution's OUTPUT, run as the command word
+//   printf '…' > x.sh && sh x.sh                    a file written and then run, in ONE command
+//   npx -c '…'  (npm exec -c, --call)               npm's own shell string — read since v17 by the
+//                                                   unknown-program rule below, which covers it
+// What a substitution writes is approximated as `givenTo` approximates a pipeline stage: the words
+// and stdin of each of its commands. A file written by `>`/`>>`/`tee` earlier in the same command is
+// remembered by name, and a shell, `source` or `.` that runs that name — or a command word that is
+// it — is given its text. Every change is stricter: strings are added to what the rules read.
+//
+// NOT COVERED, and no reader of command text can cover it: a file written by one Bash call and run
+// by a LATER one. The second call is `sh x.sh`, and the text it runs is in no command the gate sees.
+
+/** What a command line writes, approximately: what each of its commands is given. */
+const writtenBy = (src) => lexCommands(src).flatMap((c) => givenTo({ ...c, words: dropRedirections(c.words) })).join("\n");
+
+/** A word that is wholly a substitution, `<(…)`, `$(…)` or `` `…` ``, as `{ inner, rest }`; else null. */
+function substitution(word) {
+  const open = /^[<$]\(/.test(word) ? 2 : word.startsWith("`") ? 1 : 0;
+  if (!open) return null;
+  const end = open === 2 ? word.lastIndexOf(")") : word.indexOf("`", 1);
+  return end > open - 1 ? { inner: word.slice(open, end), rest: word.slice(end + 1) } : null;
+}
+
+// BOUNDED WORK, as v9's: a file's text is a pipeline's text, and a pipeline that writes a file at every
+// stage made v16's first cut quadratic — 500 KB took 20 s. So a file holds a READER, not its text, read
+// only when something runs it, and every read is counted. Past WRITTEN_BUDGET the consumed reading
+// stops and `decide` asks: the deny rules still read the command's own segments.
+const WRITTEN_BUDGET = 1_000_000;
+class OverBudget extends Error {}
+let writtenSpent = 0;
+
+/** Files written earlier in one command line, by name (`./x.sh` is `x.sh`). */
+function fileTable() {
+  const map = new Map();
+  const key = (name) => name.replace(/^\.\//, "");
+  return {
+    set: (name, read) => map.set(key(name), read),
+    get(name) {
+      const read = map.get(key(name));
+      if (read === undefined) return null;
+      const text = read();
+      writtenSpent += text.length;
+      if (writtenSpent > WRITTEN_BUDGET) throw new OverBudget();
+      return text;
+    },
+  };
+}
+
+/** The files a command writes, by name, with a reader of what it writes: `>`, `>>`, `n>`, and tee's file arguments. */
+function filesWritten(cmd, at, piped) {
+  const out = [];
+  // `piped` only grows past `len` or is replaced, so this slice is what this stage was given.
+  const len = piped.length;
+  const given = () => piped.slice(0, len);
+  for (let i = 0; i < cmd.words.length; i++) {
+    const m = /^\d*>>?(.*)$/.exec(cmd.words[i]);
+    const name = m && (m[1] || cmd.words[i + 1]);
+    if (name) out.push([name, () => [...givenTo({ ...cmd, words: dropRedirections(cmd.words) }), ...given()].join("\n")]);
+  }
+  if (at?.name === "tee") {
+    for (const w of cmd.words.slice(at.i + 1)) if (!w.startsWith("-") && !/^\d*[<>]/.test(w)) out.push([w, () => [...cmd.stdin, ...given()].join("\n")]);
+  }
+  return out;
+}
+
+/** The first argument that is not an option or a redirection — `<(…)` is an argument, not a redirection. */
+function firstOperand(args) {
+  for (let i = 0; i < args.length; i++) {
+    const w = args[i];
+    if (w.startsWith("<(")) return w;
+    if (/^\d*[<>]{1,2}&?$/.test(w)) i++;
+    else if (!w.startsWith("-") && !/^\d*[<>]/.test(w)) return w;
+  }
+  return undefined;
+}
+
+/** The script a shell, `source` or `.` runs from its first operand, as text it can be read as. */
+function scriptOf(word, files) {
+  if (word === undefined) return null;
+  const sub = substitution(word);
+  if (sub && word.startsWith("<(")) return writtenBy(sub.inner);
+  return files.get(word);
+}
+
+// ── A STRING HANDED TO A PROGRAM THE GATE DOES NOT KNOW (v17, pleks CF-21) ──
+//
+// v13 and v16 read the strings of runners the gate LISTS, and the set of runners is open. pleks
+// measured on Windows + Git Bash, and canon reproduced against v16, every one ALLOWED:
+//   cmd //c "…"  (Git Bash's spelling of /c)   wsl sh -c "…"   find -exec sh -c "…" \;   start cmd //c "…"
+//   git filter-branch --tree-filter "…"   npm pkg set scripts.x="…"   npx concurrently "…"   npm --yes exec -c "…"
+// and the same class: su -c, flock -c, busybox sh -c, ssh host "…", docker exec c sh -c "…".
+// No list of runners can finish, so the rule is inverted for programs the gate does not know: every
+// argument of an UNKNOWN program that is more than one word — it was quoted to be one argument — is
+// read as a command, and so is the value of a `key=value` argument. Each act then gets its own verdict,
+// not a flat deny. KNOWN programs keep their reading: an interpreter's is above; a PROSE or data
+// command's words stay text (echo, grep, curl, jq, gh — so a PR body naming a runner is prose); and git
+// is read only where git itself runs a shell — filter-branch's filters and rebase's --exec / -x — so a
+// commit message stays a message. v16's `npx -c` reading is this rule's special case, and is removed.
+//
+// THE COST, declared: an unknown program given a quoted string that names a gated act is gated as if
+// it ran it — `npx vitest -t "rejects rm -rf on root"` is read as `rm -rf on root`. Unknown fails
+// toward the gate, as an unlisted heredoc receiver already does.
+// NOT COVERED: expansions — `$VAR`, `$'…'` read as text, `${IFS}`, brace expansion — which no reader of
+// text can resolve; and a runner given its command as separate unquoted words, which only the backstop's
+// bare `git`/`rm`/`gh` reading sees.
+const TEXT_TAKERS = new Set([...PROSE, ...HEREDOC_SINKS]);
+const GIT_SHELL_OPTION = /^(?:--(?:tree|index|msg|commit|env|parent|tag-name)-filter|--exec|-x)(?:=([\s\S]*))?$/;
+
+/** v17's strings for one command: what an unknown program, or git's shell-running options, are handed. */
+function foreignStrings(cmd, at, kind) {
+  if (!at || kind) return [];
+  const args = cmd.words.slice(at.i + 1);
+  const out = [];
+  if (at.name === "git") {
+    for (let i = 0; i < args.length; i++) {
+      const m = GIT_SHELL_OPTION.exec(args[i]);
+      if (m) out.push(m[1] ?? args[i + 1] ?? "");
+    }
+    return out;
+  }
+  if (TEXT_TAKERS.has(at.name)) return out;
+  for (const w of args) {
+    if (!/\s/.test(w)) continue;
+    const kv = /^[^\s=]+=([\s\S]*)$/.exec(w);
+    out.push(kv ? kv[1] : w);
+  }
+  return out;
+}
+
+/** v16's strings for one command: see the section above. `files` is updated with what it writes. */
+function unquotedRuns(cmd, at, kind, files, piped) {
+  const out = foreignStrings(cmd, at, kind);
+  if (at) {
+    const sub = substitution(cmd.words[at.i]);
+    if (sub && !cmd.words[at.i].startsWith("<(")) out.push([writtenBy(sub.inner) + sub.rest, ...cmd.words.slice(at.i + 1)].join(" "));
+    const runsFile = files.get(cmd.words[at.i]);
+    if (runsFile !== null) out.push(runsFile);
+    const sourced = at.name === "source" || at.name === ".";
+    if ((kind === "shell" && shellString(cmd.words.slice(at.i + 1)) === null) || sourced) {
+      const script = scriptOf(firstOperand(cmd.words.slice(at.i + 1)), files);
+      if (script !== null) out.push(script);
+    }
+  }
+  for (const [name, read] of filesWritten(cmd, at, piped)) files.set(name, read);
+  return out;
+}
+
 /**
  * Every string something in `command` runs as a command: see the section above.
  *
@@ -1839,9 +2015,11 @@ const AWK_VALUED = new Set(["-F", "-v", "--field-separator", "--assign", "-i", "
 function consumedStrings(command) {
   const out = [];
   let piped = [];
+  const files = fileTable();
   for (const cmd of lexCommands(command.replace(/\\\r?\n/g, " "))) {
     const at = commandAt(cmd.words);
     const kind = at && interpreterKind(at.name);
+    out.push(...unquotedRuns(cmd, at, kind, files, piped));
     const args = kind ? cmd.words.slice(at.i + 1) : [];
     const stdin = () => [...cmd.stdin, ...piped];
     let ran = kind === "shell" || kind === "windows" || kind === "code";
@@ -1903,7 +2081,17 @@ function decide(command) {
   // v13: after the command's own segments, those of every string something in it runs. Appended,
   // so the branch each of the command's own segments lands on is computed exactly as before.
   // v14: then each segment again as its shell WORDS where they differ from its tokens — appended too.
-  const read = [...segments(maskMessageText(command)), ...consumedSegments(command)];
+  // v16: a command whose written files exceed WRITTEN_BUDGET is read without its consumed strings, and asked.
+  writtenSpent = 0;
+  let consumed = [];
+  let unread = false;
+  try {
+    consumed = consumedSegments(command);
+  } catch (e) {
+    if (!(e instanceof OverBudget)) throw e;
+    unread = true;
+  }
+  const read = [...segments(maskMessageText(command)), ...consumed];
   const segs = [...read, ...read.filter((s) => s.words).map((s) => ({ ...s, tokens: s.words.tokens, bare: s.words.bare }))];
   const plan = planOf(segs);
   let span = 0;
@@ -1932,7 +2120,7 @@ function decide(command) {
   for (const [rule, why] of [...CANON_DENY, ...PROJECT_DENY]) {
     if (hit(rule)) return ["deny", why];
   }
-  if (overBudget) return ["ask", OVER_BUDGET];
+  if (overBudget || unread) return ["ask", OVER_BUDGET];
   for (const [rule, why] of [...CANON_ASK, ...PROJECT_ASK]) {
     if (hit(rule)) return ["ask", why];
   }
