@@ -35,63 +35,7 @@ FIX
 
 CF-6 was answered by `agent-brief-gate` v2 at canon `77f1c58` (below).
 
-### CF-7 · Nothing in the method asks what a change does to a value that already exists, once the value gains authority
-OBSERVED   Guest buy-now (`afd4253`) let a thank-you page serve a download on the order's
-           payment reference alone, and made references random so that was safe. The same change
-           made CART references random too, and those were already written into
-           `/checkout/success?reference=…`, a URL analytics records. A reference that had been
-           inert became a credential, and every copy of it already on a third party's servers
-           came with it. Neither the author nor the first walk saw it. The third walk did.
-COMMAND    walker, `.handoff/guest-buy-now/03-walker.md` N1, verbatim: "Before this commit, cart
-           references were `Date.now()` and the regex rejected them, so the change turned an
-           existing analytics URL into a credential." Fixed before push: references carry their
-           channel (`lib/order-reference.ts`), only a buy-now one unlocks the page, and
-           `lib/order-reference.test.ts` fails if a cart reference would. GA is not loaded on
-           the page that does unlock.
-WHY IT IS  Every stack has values that start as identifiers and are later given authority: an
-CANON'S    order id becomes a share link, an invite code becomes a login, a reset token is
-           re-used as a session. The authority applies to every copy already made: URLs, logs,
-           analytics, referrers, email bodies, older formats still in circulation. Walker's
-           surfaces look at the diff (fail-open, composition). This defect lives in data the
-           diff never touches, so a diff-shaped review finds it only by luck. L-72 is the
-           nearest entry, and it covers credentials SET by a code path, not values PROMOTED to
-           be credentials.
-SMALLEST   A LESSONS entry, and one question in walker's method: "Does this change give a value
-FIX        authority it did not have, or widen which values carry it? Then list every place that
-           value already appears (URLs, logs, analytics, third parties, emails, older formats)
-           and settle each." It must not turn into a general secrets audit. It fires only when a
-           diff makes something accept a value as proof. A second instance from the same walk
-           is the inverse shape, and L-72 already covers it: a refusal added inside an
-           answer-identically path became the oracle (04-walker.md W1). Recorded, not refiled.
-
-CF-8 was answered by `bash-gate` v11 at canon `c34cc93`: v10's three loosenings are declared in
-`LOOSENED`, and `--against` v10 here reports `0 looser (0 declared)`.
-
-### CF-8 · bash-gate v10 loosens three verdicts on purpose and leaves them out of `LOOSENED`, so every `--against` fails
-OBSERVED   Taking v10 (canon `e13d3f0`) by `apply-kit --carry-only`, the install step's
-           `--against` run on the committed v9 failed. The three loosenings that failed are the
-           ones v10's commit message describes as its purpose. None of them is in `LOOSENED`, and
-           the probe's header says that table "now accumulates across versions".
-COMMAND    canon's own bytes, run in a scratch directory: `git show HEAD:kit/project-kit/hooks/
-           {bash-gate.js,bash-gate.probe.mjs,bash-gate.config.mjs}`, then
-           `node bash-gate.probe.mjs --against <git show e13d3f0~1:…/bash-gate.js>` →
-           `✗ against: LOOSER: "v10: a grep pattern holding `|` is a pattern, not a pipe into a
-           command" was deny and is now allow, and this version does not say why` (likewise
-           "v10: a quoted `;` in an echo is text" and "v10: a quoted pattern, then a pipe into a
-           sink") · `219 cases through both gates — 3 looser (0 declared), 0 stricter` ·
-           `❌ bash-gate: 3 of 219 probes FAILED.` This project's copy gives the same three,
-           against its own v9.
-WHY IT IS  The differential exists so that an adopter can tell canon's intended loosening apart
-CANON'S    from an accident. An undeclared loosening shows up as red in every project, whatever
-           its stack, and each adopter then either reads the commit message to clear it or learns
-           to ignore `--against`. Ignoring it is what the v7 corpus run (195 green over 15
-           regressions) showed to be dangerous. The plain probe is green, so the gate never sees
-           this. Only the install step does.
-SMALLEST   Three `LOOSENED` entries keyed by those `why` strings, each with its `v10:` reason. A
-FIX        cheaper guard for later versions: canon's own pre-release run of `--against` the
-           previous version must report `0 undeclared`. Nothing else in the probe has to change.
-           It must not mark them in `verdicts` or `PROJECT_LOOSENED`. They are canon's step, and
-           that region is for a project's own gate.
+CF-7 and CF-8 are filed (below): canon took them at `647fd38` and `c4bc731`.
 
 ---
 
@@ -189,6 +133,8 @@ A pointer, not a restatement — the canon entry is the record.
 | CF-2 | Canon's kit checks did not carry canon's L-51 | every kit check spawns itself for each exit path (yoros CF-7 alongside) | `61bd006`, completed in `a108fd9` |
 | CF-3 | The spines' anchor carried no spine version | `spine=<agent> vN` on every anchor; `check-handoff-contract` v5 prints L-39's stamp tell | `61bd006` |
 | CF-4 | `check-handoff-contract` read the anchor and never compared it | v5 prints L-41's QUARANTINED tell | `61bd006` |
+| CF-7 | Nothing in the method asks what a change does to a value that already exists, once the value gains authority | L-109, with this project's Applied line at `afd4253`. The walker question CF-7 proposed is a spine change still open in canon | `647fd38` |
+| CF-8 | bash-gate v10 left its three intended loosenings out of `LOOSENED` | fixed in `bash-gate` v11 (`c34cc93`), which declares them. Canon recorded taking it in `c4bc731` | `c4bc731` |
 | CF-5 | A settings ask prompts beside a live hook, and canon said it did not | L-15 corrected on measurement; bash-gate v7's fallbacks region says the same; `check-hook-registration` v7 says "the fallback layer" | `98f9636` |
 | CF-6 | `agent-brief-gate` v1 failed canon's own `check-hook-registration` | the same defect as yoros CF-14, filed the same day. v2 carries the three markers, and `tools/check-kit-hooks.mjs` now reads every kit hook for them. One point from CF-6 is left for canon, not reopened here: v2's `@no-twin` is argued for the brief half only, and the REDIRECT half (`Explore`/`general-purpose`) could still be twinned as a settings deny | `77f1c58` |
 | §3 | `canon-findings` v1, adopted 2026-09-10 | recorded in `kitAdopted` | `31ed513` |
