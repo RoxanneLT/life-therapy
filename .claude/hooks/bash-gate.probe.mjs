@@ -1,7 +1,7 @@
 /**
  * bash-gate.probe.mjs — KIT FILE, install at `.claude/hooks/`.
  *
- * @kit bash-gate-probe v13 — tracked OUTSIDE its `KIT:CONFIG` regions.
+ * @kit bash-gate-probe v14 — tracked OUTSIDE its `KIT:CONFIG` regions.
  *
  * BOTH DIRECTIONS, per `ledgers/LESSONS.md` L-01: a planted violation must FAIL
  * and a known-good case must PASS. A pattern that matches nothing reports 100%
@@ -48,6 +48,10 @@
  * that runs it — a pipe or here-string into a shell, an interpreter's code string, sed's `e`, awk's
  * `system(` — and `rm -rf $(…)`; a case per part of the reading that found them, and the allows it
  * must not cost. Three more timed shapes, one per work bound the new reading carries.
+ *
+ * v14 (2026-10-06, blindly CF-8) carries the quoted Windows paths v13 allowed — `"C:/Program Files/…/
+ * git.exe"` force-pushing, skipping hooks, pushing main, and `rm.exe` at the root — and the allows
+ * they must not cost: the same path reading status, another program, a quoted argument.
  *
  * Run: node .claude/hooks/bash-gate.probe.mjs   (wire into the `probe` script)
  *      node .claude/hooks/bash-gate.probe.mjs --against <the gate you are replacing>
@@ -829,6 +833,21 @@ const CASES = [
   { want: "allow", why: "v13: a code interpreter with no gated literal", payload: bash(`python -c "print('hello')"`) },
   { want: "allow", why: "v13: sed -f - without e is a filter", payload: bash("sed -f - x.txt <<'EOF'\ns/a/b/\nEOF") },
   { want: "allow", why: "v13: a `;` ends a pipeline — the shell after it is not given what the pipeline wrote", payload: bash("echo 'rm -rf ~' | cat; bash -c ls") },
+
+  // ── v14: A QUOTED PATH IS ONE WORD (blindly CF-8) ──
+  // Git for Windows' default install path has a space, and a quoted path to it was split at the
+  // space, so the command word read as `C:/Program`. Every one of these was ALLOWED by v13.
+  { want: "deny", why: "v14: a quoted path to git.exe force-pushes", payload: bash(`"C:/Program Files/Git/cmd/git.exe" push --force origin main`) },
+  { want: "deny", why: "v14: …single-quoted", payload: bash(`'C:/Program Files/Git/cmd/git.exe' push -f origin x`) },
+  { want: "deny", why: "v14: …with backslashes", payload: bash(String.raw`"C:\Program Files\Git\cmd\git.exe" push --force`) },
+  { want: "deny", why: "v14: a quoted path to git.exe skips hooks", payload: bash(`"C:/Program Files/Git/cmd/git.exe" commit --no-verify`) },
+  { want: "deny", why: "v14: a quoted path to rm.exe at the root", payload: bash(`"C:/Program Files/Git/usr/bin/rm.exe" -rf /*`) },
+  { want: "ask", why: "v14: a quoted path to git.exe pushing main asks as git does", payload: bash(`"C:/Program Files/Git/cmd/git.exe" push origin main`) },
+  { want: "deny", why: "v14: …behind a wrapper", payload: bash(`sudo "/opt/my tools/git" push --force`) },
+  { want: "deny", why: "v14: an ESCAPED space was never split from its word — the backstop held it, and still does", payload: bash(String.raw`/c/Program\ Files/Git/cmd/git.exe push --force`) },
+  { want: "allow", why: "v14: a quoted path to git.exe reading status", payload: bash(`"C:/Program Files/Git/cmd/git.exe" status`) },
+  { want: "allow", why: "v14: a quoted path to another program", payload: bash(`"C:/Program Files/nodejs/node.exe" -v`) },
+  { want: "allow", why: "v14: a quoted argument holding a gated act's words is still one argument", payload: bash(`echo "git push --force" > notes.txt`) },
 
   /* KIT:CONFIG cases — this project's own gates, beyond the canonical set above.
    * ONE PROBE PER RULE YOU ADDED TO THE HOOK'S DENY/ASK BLOCKS, both directions: the
