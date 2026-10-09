@@ -91,6 +91,18 @@ export const CLIENT_STATUS_BADGE: Record<string, string> = {
 
 // ─── Campaign ─────────────────────────────────────────────────────────────────
 
+/** The Badge variant for a campaign status; CAMPAIGN_STATUS_BADGE adds the colour on top. */
+export const CAMPAIGN_STATUS_VARIANT: Record<string, "default" | "secondary" | "outline-solid" | "destructive"> = {
+  draft: "outline-solid",
+  sending: "default",
+  sent: "secondary",
+  failed: "destructive",
+  scheduled: "default",
+  active: "default",
+  completed: "secondary",
+  paused: "outline-solid",
+};
+
 export const CAMPAIGN_STATUS_BADGE: Record<string, string> = {
   scheduled: "bg-blue-100 text-blue-800 hover:bg-blue-100",
   active: "bg-green-100 text-green-800 hover:bg-green-100",

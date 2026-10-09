@@ -34,18 +34,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline-solid" | "destructive"> = {
-  draft: "outline-solid",
-  sending: "default",
-  sent: "secondary",
-  failed: "destructive",
-  scheduled: "default",
-  active: "default",
-  completed: "secondary",
-  paused: "outline-solid",
-};
-
-import { CAMPAIGN_STATUS_BADGE } from "@/lib/status-styles";
+import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_VARIANT } from "@/lib/status-styles";
 
 export default async function CampaignDetailPage({
   params,
@@ -136,7 +125,7 @@ export default async function CampaignDetailPage({
           badges={
             <>
             <Badge
-              variant={STATUS_VARIANTS[campaign.status] || "outline-solid"}
+              variant={CAMPAIGN_STATUS_VARIANT[campaign.status] || "outline-solid"}
               className={statusColor || ""}
             >
               {campaign.status}

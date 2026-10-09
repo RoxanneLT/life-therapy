@@ -1165,10 +1165,9 @@ const MONEY_FORMAT_ALLOW = new Set([
   // Per-currency settings INPUT fields: each currency has its own labelled field,
   // so the value is a bare number being typed, not a mixed-currency display.
   "components/admin/finance-settings-form.tsx",
-  // Rand-denominated chart axes, fed by queries that pin currency: "ZAR".
-  "components/admin/revenue-chart.tsx",
-  "app/(admin)/admin/(dashboard)/reports/report-charts.tsx",
-  "app/(admin)/admin/(dashboard)/reports/page.tsx",
+  // (Until 2026-10-09 the Rand-only charts and the reports page were exempt here, for formatting
+  //  "R" by hand. Rand-only is a reason to pass "ZAR", not to keep a private formatter: they now
+  //  call formatPrice / formatPriceAxis with it.)
 ]);
 
 // Named for the bug class alone. It used to carry `— use formatPrice(cents, currency)`, which is
@@ -1202,8 +1201,15 @@ check("money: no local currency formatter", () => {
       );
     }
 
-    // A raw currency-formatting primitive outside the SSOT.
-    if (/Intl\.NumberFormat\s*\(/.test(raw) || /style:\s*["']currency["']/.test(raw)) {
+    // A raw currency-formatting primitive outside the SSOT. The third form is cents grouped by
+    // hand. Until 2026-10-09 a formatter named plain `fmt` (which the name test above cannot catch
+    // without flagging every date fmt) carried its own symbol-and-locale table in
+    // upcoming-billing-section, and the charts pinned "R" the same way.
+    if (
+      /Intl\.NumberFormat\s*\(/.test(raw) ||
+      /style:\s*["']currency["']/.test(raw) ||
+      /\/\s*100\)\.toLocaleString\(/.test(raw)
+    ) {
       fail(
         "money",
         rel(f),

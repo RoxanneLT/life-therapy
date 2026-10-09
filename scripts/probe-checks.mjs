@@ -56,6 +56,16 @@ export const tracked = (e: string) => \`https://life-therapy.co.za/api/track/cli
     ],
   },
   {
+    // A money formatter whose NAME the check cannot see (plain `fmt`, the upcoming-billing shape),
+    // so only the body pattern can catch it. The live tree's CSV `toFixed(2)` columns and amount
+    // inputs are the known-good half: the audit passing on them is what shows the pattern is narrow.
+    path: "lib/__probe-money.ts",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+export const fmt = (cents: number) => \`R \${(cents / 100).toLocaleString("en-ZA")}\`;
+`,
+    expects: ["money: no local currency formatter"],
+  },
+  {
     path: "lib/__probe-queries.ts",
     // Violations whose marker is a literal inside a Prisma call — `status: "paid"`,
     // `status: "cancelled"`, a marketing template key. Separate file so a syntax-shaped

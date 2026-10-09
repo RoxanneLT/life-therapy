@@ -28,6 +28,7 @@ import {
 } from "./report-charts";
 import { ExportTab } from "./export-tab";
 import Link from "next/link";
+import { formatPrice } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 
 // --------------- FY Helpers ---------------
@@ -153,21 +154,21 @@ export default async function ReportsPage({
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <KPICard
               label="Total Revenue"
-              value={formatZAR(financialSummary.totalRevenueCents)}
+              value={formatPrice(financialSummary.totalRevenueCents, "ZAR")}
               variant="green"
             />
             <KPICard
               label="This Month"
-              value={formatZAR(financialSummary.thisMonthRevenueCents)}
+              value={formatPrice(financialSummary.thisMonthRevenueCents, "ZAR")}
             />
             <KPICard
               label="Outstanding"
-              value={formatZAR(financialSummary.outstandingCents)}
+              value={formatPrice(financialSummary.outstandingCents, "ZAR")}
               variant="yellow"
             />
             <KPICard
               label="Avg Invoice"
-              value={formatZAR(financialSummary.avgInvoiceValueCents)}
+              value={formatPrice(financialSummary.avgInvoiceValueCents, "ZAR")}
               sub={`${financialSummary.invoiceCount} invoices`}
             />
           </div>
@@ -325,12 +326,7 @@ export default async function ReportsPage({
 
 // --------------- Shared Components ---------------
 
-function formatZAR(cents: number): string {
-  return `R ${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+// Every amount here is Rand: the queries behind it pin currency "ZAR".
 
 function KPICard({
   label,

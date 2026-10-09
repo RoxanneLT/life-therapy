@@ -15,6 +15,7 @@ import {
   Area,
   ComposedChart,
 } from "recharts";
+import { formatPrice, formatPriceAxis } from "@/lib/utils";
 import {
   ChartContainer,
   ChartTooltip,
@@ -26,16 +27,9 @@ import {
 
 // --------------- Helpers ---------------
 
-function formatZAR(cents: number): string {
-  return "R " + (cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+// Every amount here is Rand: the queries behind it pin currency "ZAR".
 
-function formatYAxis(value: number) {
-  if (value === 0) return "R0";
-  if (value >= 10000000) return "R" + (value / 100000).toFixed(0) + "k";
-  if (value >= 100000) return "R" + (value / 100).toLocaleString("en-ZA", { maximumFractionDigits: 0 });
-  return "R" + (value / 100).toFixed(0);
-}
+const formatYAxis = (cents: number) => formatPriceAxis(cents, "ZAR");
 
 const SOURCE_LABELS: Record<string, string> = {
   monthly_postpaid: "Sessions (Monthly)",
@@ -106,7 +100,7 @@ export function RevenueBySourceChart({ data }: RevenueBySourceProps) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => formatZAR(value as number)}
+              formatter={(value) => formatPrice(value as number, "ZAR")}
             />
           }
         />
@@ -152,8 +146,8 @@ export function PaymentStatusChart({ data }: PaymentStatusProps) {
       <BarChart data={data} accessibilityLayer>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={0} fontSize={11} />
-        <YAxis tickLine={false} axisLine={false} width={65} tickFormatter={(v) => `R${(v / 100).toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`} />
-        <ChartTooltip content={<ChartTooltipContent formatter={(value) => `R ${((value as number) / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`} />} />
+        <YAxis tickLine={false} axisLine={false} width={65} tickFormatter={formatYAxis} />
+        <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPrice(value as number, "ZAR")} />} />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar dataKey="paid" stackId="revenue" fill="var(--color-paid)" radius={[0, 0, 0, 0]} />
         <Bar dataKey="pending" stackId="revenue" fill="var(--color-pending)" />
@@ -187,7 +181,7 @@ export function OutstandingAgingChart({ data }: AgingProps) {
             <ChartTooltipContent
               formatter={(value, name, item) => {
                 const count = (item.payload as { count: number }).count;
-                return `${formatZAR(value as number)} (${count} invoice${count !== 1 ? "s" : ""})`;
+                return `${formatPrice(value as number, "ZAR")} (${count} invoice${count !== 1 ? "s" : ""})`;
               }}
             />
           }
@@ -479,7 +473,9 @@ const STATUS_COLORS: Record<string, string> = {
   active: COLORS.green,
   inactive: COLORS.amber,
   archived: COLORS.red,
-  new: COLORS.blue,
+  // "potential", not "new": the client statuses are potential/active/inactive/archived
+  // (CLIENT_STATUS_BADGE), so potential clients were falling through to the brand colour.
+  potential: COLORS.blue,
 };
 
 export function ClientStatusChart({ data }: ClientStatusProps) {

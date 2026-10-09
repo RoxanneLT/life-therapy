@@ -22,6 +22,20 @@ export function formatPrice(cents: number, currency = "ZAR"): string {
 }
 
 /**
+ * A chart axis tick: whole units, compact past 100 000 ("R12 400", "R150K"). Ticks are read at a
+ * glance, so the cents formatPrice shows are noise there; the currency still comes from the caller.
+ */
+export function formatPriceAxis(cents: number, currency = "ZAR"): string {
+  const units = cents / 100;
+  return new Intl.NumberFormat(CURRENCY_LOCALES[currency] || "en-ZA", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+    ...(Math.abs(units) >= 100_000 ? { notation: "compact" as const } : {}),
+  }).format(units);
+}
+
+/**
  * Render a set of per-currency amounts as ONE display string, e.g.
  * `"R12 400,00 + $560.00"`.
  *

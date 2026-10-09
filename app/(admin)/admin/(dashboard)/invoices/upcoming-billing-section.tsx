@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { format } from "date-fns";
 import { Receipt, ChevronRight, MoreHorizontal, Eye, X, Ban, Plus, ChevronsUpDown } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, formatPrice } from "@/lib/utils";
 import { EmptyState } from "@/components/admin/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,20 +54,7 @@ function applyDiscount(
   return Math.max(0, priceCents - disc);
 }
 
-const CURRENCY_FMT: Record<string, { symbol: string; locale: string }> = {
-  ZAR: { symbol: "R", locale: "en-ZA" },
-  USD: { symbol: "$", locale: "en-US" },
-  EUR: { symbol: "\u20ac", locale: "en-IE" },
-  GBP: { symbol: "\u00a3", locale: "en-GB" },
-};
-
-function fmt(cents: number, currency = "ZAR") {
-  const { symbol, locale } = CURRENCY_FMT[currency] ?? CURRENCY_FMT.ZAR;
-  return `${symbol}\u00a0${(cents / 100).toLocaleString(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+const fmt = formatPrice;
 
 const SESSION_LABELS: Record<string, string> = {
   individual: "Individual",

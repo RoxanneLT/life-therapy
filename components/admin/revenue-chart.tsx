@@ -10,6 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { MonthlyRevenueData } from "@/lib/dashboard-queries";
+import { formatPrice, formatPriceAxis } from "@/lib/utils";
 
 const chartConfig = {
   actual: {
@@ -26,11 +27,8 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-function formatYAxis(value: number) {
-  if (value === 0) return "R0";
-  if (value >= 100000) return `R${(value / 100).toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
-  return `R${(value / 100).toFixed(0)}`;
-}
+// The revenue series are Rand-only (lib/dashboard-queries.ts pins currency "ZAR").
+const formatYAxis = (cents: number) => formatPriceAxis(cents, "ZAR");
 
 interface RevenueChartProps {
   readonly data: MonthlyRevenueData[];
@@ -51,7 +49,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value) => `R${((value as number) / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              formatter={(value) => formatPrice(value as number, "ZAR")}
             />
           }
         />
