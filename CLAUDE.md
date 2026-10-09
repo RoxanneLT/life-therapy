@@ -214,7 +214,7 @@ work before it goes out. This is a standing rule, not a formality.
 
 ```
 tsc --noEmit
-  && eslint . --max-warnings 0        ← warnings are errors; they never accumulate
+  && node scripts/lint.mjs            ← ESLint, warnings are errors; on 4 workers when uncached (kit `lint`)
   && npm run audit:selftest           ← the audit's own fixtures, in the same gate as the audit
   && node scripts/architecture-audit.mjs
   && npm run check:claude-md          ← canon's checker, on THIS file: every @enforced marker
