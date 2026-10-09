@@ -127,7 +127,9 @@ export async function exportSessionRegister(
     "Session Type",
     "Session Mode",
     "Status",
-    "Price (ZAR)",
+    // priceZarCents holds cents in the booking's own currency, despite the name (CLAUDE.md §9).
+    "Price",
+    "Currency",
     "Couples Partner",
     // Who cancelled and whether it was late, never the typed reason or the admin notes: a
     // register is a list of sessions, and free text about a client does not leave in a CSV.
@@ -150,6 +152,7 @@ export async function exportSessionRegister(
       b.sessionMode,
       b.status,
       formatCurrency(b.priceZarCents),
+      b.priceCurrency,
       b.couplesPartnerName,
       b.cancelledBy,
       b.isLateCancel ? "Yes" : "",
