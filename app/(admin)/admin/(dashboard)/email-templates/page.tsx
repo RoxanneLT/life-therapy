@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { EmptyState } from "@/components/admin/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,17 +40,7 @@ export default async function EmailTemplatesPage() {
       />
 
       {templates.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <Mail className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="font-heading text-lg font-semibold">
-              No templates found
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Run the migration SQL to seed email templates.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Mail} message="No templates yet." description="Run the migration SQL to seed email templates." />
       ) : (
         <div className="space-y-8">
           {grouped.map((group) => {

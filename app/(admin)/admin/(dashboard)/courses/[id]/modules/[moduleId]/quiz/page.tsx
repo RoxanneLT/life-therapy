@@ -53,7 +53,7 @@ export default async function QuizPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{ href: `/admin/courses/${id}/modules`, to: `${mod.course.title} — Modules` }}
+        breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: mod.course.title, href: `/admin/courses/${id}` }, { label: "Modules", href: `/admin/courses/${id}/modules` }, { label: mod.title, href: `/admin/courses/${id}/modules/${moduleId}` }, { label: "Quiz" }]}
         title={`${mod.title} — Quiz`}
       />
       <QuizEditor

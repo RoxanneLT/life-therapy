@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { BackLink } from "./back-link";
+import { Breadcrumbs, type Crumb } from "./breadcrumbs";
 
 interface PageHeaderProps {
   readonly title: ReactNode;
@@ -9,6 +10,8 @@ interface PageHeaderProps {
   readonly action?: ReactNode;
   /** A back link above the title. */
   readonly back?: { href: string; to: string };
+  /** The trail above the title on deeply nested pages. Takes the place of `back`. */
+  readonly breadcrumbs?: Crumb[];
   /** Status badges or a status control, beside the title. */
   readonly badges?: ReactNode;
   /** A tab strip below the title row. */
@@ -24,17 +27,23 @@ interface PageHeaderProps {
  * The one header for every admin page. Until 2026-10-09 there were two components (this one and
  * a SettingsPageHeader with its own back link and spacing) plus about forty hand-rolled copies.
  */
-export function PageHeader({ title, description, action, back, badges, tabs, sticky }: PageHeaderProps) {
+export function PageHeader({ title, description, action, back, breadcrumbs, badges, tabs, sticky }: PageHeaderProps) {
   return (
     <div
       className={cn(
         sticky && "sticky -top-6 z-20 -mx-6 -mt-6 mb-6 border-b border-border bg-background px-6 pb-4 pt-5",
       )}
     >
-      {back && (
+      {breadcrumbs ? (
         <div className="mb-2">
-          <BackLink href={back.href} to={back.to} />
+          <Breadcrumbs items={breadcrumbs} />
         </div>
+      ) : (
+        back && (
+          <div className="mb-2">
+            <BackLink href={back.href} to={back.to} />
+          </div>
+        )
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">

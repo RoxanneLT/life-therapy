@@ -60,6 +60,7 @@ export default async function EditCoursePage({
         </p>
       )}
       <PageHeader
+        breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: course.title }]}
         title="Edit Course"
         description={course.title}
         action={

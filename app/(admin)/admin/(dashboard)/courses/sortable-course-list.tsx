@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState } from "@/components/admin/empty-state";
 import {
   DndContext,
   closestCenter,
@@ -188,8 +189,8 @@ export function SortableCourseList({ courses: initial }: { readonly courses: Cou
                 ))}
                 {courses.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      No courses yet.
+                    <td colSpan={7}>
+                      <EmptyState message="No courses yet." framed={false} />
                     </td>
                   </tr>
                 )}

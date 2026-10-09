@@ -41,10 +41,7 @@ export default async function EditLecturePage({
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{
-          href: `/admin/courses/${id}/modules/${moduleId}/lectures`,
-          to: `${mod.course.title} — ${mod.title} — Lectures`,
-        }}
+        breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: mod.course.title, href: `/admin/courses/${id}` }, { label: "Modules", href: `/admin/courses/${id}/modules` }, { label: mod.title, href: `/admin/courses/${id}/modules/${moduleId}` }, { label: "Lectures", href: `/admin/courses/${id}/modules/${moduleId}/lectures` }, { label: lecture.title }]}
         title="Edit Lecture"
         description={lecture.title}
       />

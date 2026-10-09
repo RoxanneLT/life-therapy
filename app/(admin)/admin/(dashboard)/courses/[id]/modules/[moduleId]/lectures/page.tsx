@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { EmptyState } from "@/components/admin/empty-state";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Video } from "lucide-react";
 import { SortableLectureList } from "./sortable-lecture-list";
 
@@ -35,7 +35,7 @@ export default async function LecturesPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{ href: `/admin/courses/${id}/modules`, to: `${mod.course.title} — Modules` }}
+        breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: mod.course.title, href: `/admin/courses/${id}` }, { label: "Modules", href: `/admin/courses/${id}/modules` }, { label: mod.title, href: `/admin/courses/${id}/modules/${moduleId}` }, { label: "Lectures" }]}
         title={`${mod.title} — Lectures`}
         description={`${mod.lectures.length} lecture${mod.lectures.length !== 1 ? "s" : ""}${totalMin > 0 ? ` · ${totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m` : `${totalMin}m`} total` : ""}`}
         action={
@@ -49,17 +49,7 @@ export default async function LecturesPage({
       />
 
       {mod.lectures.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <Video className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="font-heading text-lg font-semibold">
-              No lectures yet
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add your first lecture to this module.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Video} message="No lectures yet." description="Add your first lecture to this module." />
       ) : (
         <SortableLectureList
           lectures={mod.lectures.map((l) => ({

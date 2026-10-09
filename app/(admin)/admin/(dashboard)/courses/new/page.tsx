@@ -7,7 +7,7 @@ import { createCourse } from "../actions";
 export default function NewCoursePage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Add Course" description="Create a new course in the catalog." />
+      <PageHeader breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: "New course" }]} title="Add Course" description="Create a new course in the catalog." />
       <CourseForm onSubmit={createCourse} />
     </div>
   );

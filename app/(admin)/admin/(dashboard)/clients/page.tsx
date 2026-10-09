@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { EmptyState } from "@/components/admin/empty-state";
 import { PageHeader } from "@/components/admin/page-header";
 import { requireRole } from "@/lib/auth";
 import Link from "next/link";
@@ -227,12 +228,7 @@ export default async function ClientsPage({
       {/* Scrollable content — only this region scrolls, not the whole page */}
       <div className="mt-4 min-h-0 flex-1">
       {clients.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <Users className="mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            {q ? "No clients match your search." : "No clients found."}
-          </p>
-        </div>
+        <EmptyState icon={Users} message={q ? "No clients match your search." : "No clients yet."} />
       ) : (
         <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">
           <Table containerClassName="min-h-0 flex-1">

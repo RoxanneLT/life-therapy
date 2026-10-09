@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { EmptyState } from "@/components/admin/empty-state";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Plus, BookOpen } from "lucide-react";
 import { SortableModuleList } from "./sortable-module-list";
 
@@ -40,7 +40,7 @@ export default async function ModulesPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{ href: `/admin/courses/${course.id}`, to: course.title }}
+        breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: course.title, href: `/admin/courses/${id}` }, { label: "Modules" }]}
         title="Modules"
         description={`${course.modules.length} module${course.modules.length !== 1 ? "s" : ""}`}
         action={
@@ -54,17 +54,11 @@ export default async function ModulesPage({
       />
 
       {course.modules.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="font-heading text-lg font-semibold">
-              No modules yet
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Add your first module to start building course content.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={BookOpen}
+          message="No modules yet."
+          description="Add your first module to start building course content."
+        />
       ) : (
         <SortableModuleList modules={modules} courseId={course.id} />
       )}

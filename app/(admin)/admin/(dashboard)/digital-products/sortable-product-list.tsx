@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState } from "@/components/admin/empty-state";
 import {
   DndContext,
   closestCenter,
@@ -169,8 +170,8 @@ export function SortableProductList({ products: initial }: { readonly products: 
                 ))}
                 {products.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      No digital products yet.
+                    <td colSpan={7}>
+                      <EmptyState message="No digital products yet." framed={false} />
                     </td>
                   </tr>
                 )}

@@ -1,10 +1,24 @@
+/**
+ * The outline of PageHeader (components/admin/page-header.tsx): a title, a description line and,
+ * when the page has one, an action button. Kept to its dimensions so the page does not jump when it
+ * loads.
+ */
+function PageHeaderSkeleton({ action = false }: { readonly action?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-2">
+        <div className="h-8 w-48 rounded-md bg-muted" />
+        <div className="h-4 w-72 max-w-full rounded bg-muted" />
+      </div>
+      {action && <div className="h-9 w-32 rounded-md bg-muted" />}
+    </div>
+  );
+}
+
 export function TablePageSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="flex items-center justify-between">
-        <div className="h-8 w-40 rounded-md bg-muted" />
-        <div className="h-9 w-32 rounded-md bg-muted" />
-      </div>
+      <PageHeaderSkeleton action />
       <div className="rounded-md border">
         <div className="border-b p-4">
           <div className="h-4 w-full max-w-xs rounded bg-muted" />
@@ -25,7 +39,7 @@ export function TablePageSkeleton() {
 export function FormPageSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="h-8 w-40 rounded-md bg-muted" />
+      <PageHeaderSkeleton />
       <div className="rounded-xl border bg-card p-6 space-y-4">
         <div className="h-5 w-32 rounded bg-muted" />
         <div className="space-y-3">
@@ -45,10 +59,7 @@ export function FormPageSkeleton() {
 export function CardGridSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="flex items-center justify-between">
-        <div className="h-8 w-48 rounded-md bg-muted" />
-        <div className="h-9 w-32 rounded-md bg-muted" />
-      </div>
+      <PageHeaderSkeleton action />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="rounded-xl border bg-card p-5 space-y-3">

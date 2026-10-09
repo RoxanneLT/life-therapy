@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState } from "@/components/admin/empty-state";
 import {
   DndContext,
   closestCenter,
@@ -180,8 +181,8 @@ export function SortablePackageList({ packages: initial }: { readonly packages: 
                 ))}
                 {packages.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      No packages yet.
+                    <td colSpan={7}>
+                      <EmptyState message="No packages yet." framed={false} />
                     </td>
                   </tr>
                 )}

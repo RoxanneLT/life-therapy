@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { EmptyState } from "@/components/admin/empty-state";
 import { PageHeader } from "@/components/admin/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
@@ -62,11 +63,11 @@ export default async function CampaignsPage() {
         </div>
 
         {manualCampaigns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border py-16 text-muted-foreground">
-            <Send className="mb-4 h-12 w-12 opacity-40" />
-            <p className="text-lg font-medium">No campaigns yet</p>
-            <p className="text-sm">Create your first campaign to start reaching your contacts.</p>
-          </div>
+          <EmptyState
+            icon={Send}
+            message="No campaigns yet."
+            description="Create your first campaign to start reaching your contacts."
+          />
         ) : (
           <div className="rounded-lg border bg-card">
             <Table>
@@ -155,12 +156,11 @@ export default async function CampaignsPage() {
         </div>
 
         {automatedCampaigns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-10 text-muted-foreground">
-            <Cake className="mb-3 h-10 w-10 opacity-40" />
-            <p className="text-sm font-medium">No automated campaigns yet</p>
-            <p className="mb-4 text-xs">Birthday campaigns send automatically when a client&apos;s DOB matches today.</p>
-            <p className="text-xs text-muted-foreground">Run the birthday seed SQL to create one, or build one from the campaign editor.</p>
-          </div>
+          <EmptyState
+            icon={Cake}
+            message="No automated campaigns yet."
+            description="Birthday campaigns send automatically when a client's date of birth matches today. Run the birthday seed SQL to create one, or build one from the campaign editor."
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {automatedCampaigns.map((campaign) => {

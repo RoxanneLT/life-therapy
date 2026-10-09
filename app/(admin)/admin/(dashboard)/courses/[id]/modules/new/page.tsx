@@ -27,7 +27,7 @@ export default async function NewModulePage({
   return (
     <div className="space-y-6">
       <PageHeader
-        back={{ href: `/admin/courses/${course.id}/modules`, to: `${course.title} — Modules` }}
+        breadcrumbs={[{ label: "Courses", href: "/admin/courses" }, { label: course.title, href: `/admin/courses/${id}` }, { label: "Modules", href: `/admin/courses/${id}/modules` }, { label: "New module" }]}
         title="New Module"
       />
       <ModuleForm onSubmit={handleCreate} />
