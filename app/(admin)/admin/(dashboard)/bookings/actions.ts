@@ -24,6 +24,7 @@ import { emailRefusal } from "@/lib/email-address";
 import { resolvePartnerEmail, sendCouplesPartnerInvite } from "@/lib/couples-invite";
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { parseLineItems, readLineItems } from "@/lib/billing-types";
+import { canSeeClinical } from "@/lib/clinical-access";
 
 export async function updateBookingStatus(
   id: string,
@@ -103,7 +104,8 @@ export async function updateBookingStatus(
 }
 
 export async function updateBookingNotes(id: string, formData: FormData) {
-  const { adminUser } = await requireRole("super_admin", "editor");
+  // Notes are clinical: only a role that may read them may write them (lib/clinical-access.ts).
+  const { adminUser } = await requireRole("super_admin");
 
   const adminNotes = formData.get("adminNotes") as string;
   await prisma.booking.update({
@@ -124,7 +126,7 @@ export async function updateBookingNotes(id: string, formData: FormData) {
 }
 
 export async function updateSessionNotes(id: string, formData: FormData) {
-  const { adminUser } = await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin");
   const sessionNotes = formData.get("sessionNotes") as string;
   await prisma.booking.update({
     where: { id },
@@ -853,6 +855,7 @@ export async function checkSeriesConflictsAction(
       date: { gte: today },
     },
     orderBy: { date: "asc" },
+    select: { id: true, date: true, durationMinutes: true },
   });
 
   if (bookings.length === 0) return [];
@@ -1030,7 +1033,7 @@ export async function adminCreateBookingAction(
       clientEmail: student.email,
       clientPhone: student.phone || null,
       status: "confirmed",
-      adminNotes: data.adminNotes || null,
+      adminNotes: canSeeClinical(adminUser.role) ? data.adminNotes || null : null,
       couplesPartnerName: data.couplesPartnerName || null,
       // The RESOLVED address, so the row records who was actually written to rather
       // than what the form happened to hold. A booking whose stored address differs
@@ -1332,7 +1335,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
         clientEmail: student.email,
         clientPhone: student.phone || null,
         status: "confirmed",
-        adminNotes: data.adminNotes || null,
+        adminNotes: canSeeClinical(adminUser.role) ? data.adminNotes || null : null,
         couplesPartnerName: data.couplesPartnerName || null,
         // The RESOLVED address, so the row records who was written to.
         couplesPartnerEmail: partnerTo,
@@ -2064,7 +2067,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
       clientEmail: student.email,
       clientPhone: student.phone || null,
       status: "completed",
-      adminNotes: data.adminNotes
+      adminNotes: data.adminNotes && canSeeClinical(adminUser.role)
         ? `[Historical entry] ${data.adminNotes}`
         : "[Historical entry — added in hindsight]",
       couplesPartnerName: data.couplesPartnerName || null,

@@ -551,6 +551,20 @@ const MUTATIONS = [
     expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
   },
   {
+    path: "app/(admin)/admin/(dashboard)/bookings/actions.ts",
+    // Editors writing session notes again, which they can no longer read: overwriting them blind.
+    find: 'export async function updateSessionNotes(id: string, formData: FormData) {\n  const { adminUser } = await requireRole("super_admin");\n',
+    replace: 'export async function updateSessionNotes(id: string, formData: FormData) {\n  const { adminUser } = await requireRole("super_admin", "editor");\n',
+    expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
+  },
+  {
+    path: "app/(admin)/admin/(dashboard)/bookings/page.tsx",
+    // The calendar handing every role the booking notes again.
+    find: "    adminNotes: clinical ? b.adminNotes : null,\n",
+    replace: "    adminNotes: b.adminNotes,\n",
+    expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
+  },
+  {
     path: "app/(admin)/admin/(dashboard)/reports/actions.ts",
     // The typed cancellation reason back in the session register: a super_admin export, still a copy.
     find: '      b.isLateCancel ? "Yes" : "",\n',

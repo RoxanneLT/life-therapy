@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/admin/page-header";
 import { requireAccess } from "@/lib/auth";
+import { canSeeClinical } from "@/lib/clinical-access";
 import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getSiteSettings, getBusinessHours } from "@/lib/settings";
 import { format } from "date-fns";
@@ -98,7 +99,9 @@ interface Props {
 }
 
 export default async function BookingsPage({ searchParams }: Props) {
-  await requireAccess("/admin/bookings");
+  const { adminUser } = await requireAccess("/admin/bookings");
+  // Booking notes are clinical; the calendar gets them only for a role that may read them.
+  const clinical = canSeeClinical(adminUser.role);
 
   const sp = await searchParams;
   const statusFilter = sp.status || undefined;
@@ -248,7 +251,7 @@ export default async function BookingsPage({ searchParams }: Props) {
     sessionType: b.sessionType,
     status: b.status,
     teamsMeetingUrl: b.teamsMeetingUrl,
-    adminNotes: b.adminNotes,
+    adminNotes: clinical ? b.adminNotes : null,
     studentId: b.studentId,
   }));
 
@@ -267,7 +270,7 @@ export default async function BookingsPage({ searchParams }: Props) {
         description="Manage session bookings and client appointments."
         action={
         <div className="flex gap-2">
-          <CreateBookingDialog />
+          <CreateBookingDialog canWriteNotes={clinical} />
           <Link href="/admin/bookings/availability">
             <Button variant="outline" size="sm">
               <ShieldOff className="mr-2 h-4 w-4" />
@@ -498,6 +501,7 @@ export default async function BookingsPage({ searchParams }: Props) {
       {!seriesFilter && (view === "day" || view === "week") && (
         <div className="h-full overflow-y-auto">
           <CalendarShell
+            canWriteNotes={clinical}
             view={view}
             bookings={serialisedBookings}
             date={selectedDate}

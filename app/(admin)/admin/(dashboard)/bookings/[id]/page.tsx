@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { requireAccess } from "@/lib/auth";
+import { canSeeClinical, withoutClinicalBookingFields } from "@/lib/clinical-access";
 import { recordView } from "@/lib/access-log";
 import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
@@ -68,9 +69,13 @@ export default async function BookingDetailPage({ params }: Props) {
   const { id } = await params;
   const { adminUser } = await requireAccess("/admin/bookings");
 
-  const booking = await prisma.booking.findUnique({
+  // Session, booking and client notes are clinical: a role that may not read them gets the row
+  // with them blanked, and none of the note cards (lib/clinical-access.ts).
+  const clinical = canSeeClinical(adminUser.role);
+  const found = await prisma.booking.findUnique({
     where: { id },
   });
+  const booking = found && !clinical ? withoutClinicalBookingFields(found) : found;
   // Session, client and admin notes are on this page (lib/access-log.ts).
   if (booking) await recordView({ actorEmail: adminUser.email, entityType: "booking", entityId: id, area: "booking detail" });
 
@@ -95,7 +100,7 @@ export default async function BookingDetailPage({ params }: Props) {
       })
     : 0;
 
-  const previousBookings = booking.studentId
+  const previousBookings = booking.studentId && clinical
     ? await prisma.booking.findMany({
         where: {
           studentId: booking.studentId,
@@ -461,7 +466,7 @@ export default async function BookingDetailPage({ params }: Props) {
       )}
 
       {/* Session Notes — only for completed sessions */}
-      {(booking.status === "completed" || booking.status === "no_show") && (
+      {clinical && (booking.status === "completed" || booking.status === "no_show") && (
         <Card>
           <CardHeader>
             <CardTitle>Session Notes</CardTitle>
@@ -489,6 +494,7 @@ export default async function BookingDetailPage({ params }: Props) {
       )}
 
       {/* Admin Notes */}
+      {clinical && (
       <Card>
         <CardHeader>
           <CardTitle>Admin Notes</CardTitle>
@@ -514,9 +520,10 @@ export default async function BookingDetailPage({ params }: Props) {
           </form>
         </CardContent>
       </Card>
+      )}
 
       {/* Previous Session Notes */}
-      {booking.studentId && (
+      {clinical && booking.studentId && (
         <Card>
           <CardHeader>
             <CardTitle>Previous Session Notes</CardTitle>

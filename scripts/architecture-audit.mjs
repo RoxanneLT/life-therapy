@@ -1096,10 +1096,15 @@ check("clinical: clinical text reaches only roles that may read it, and never an
   // booking rows. The Assessment tab was visible, and even a hidden tab would not have helped,
   // since props and query results reach the browser regardless (lib/clinical-access.ts).
   //
-  // So code reachable by marketing that loads the intake or whole booking rows must decide
-  // through canSeeClinical() or strip with withoutClinicalBookingFields(). Two surfaces: server
-  // actions whose requireRole admits marketing, and pages whose ADMIN_ACCESS key admits it.
-  // Scans codeKeepingLiterals(): the role is a string literal, which code() blanks.
+  // The editor role could read and write booking notes on the bookings pages, the same day.
+  //
+  // So code reachable by a non-clinical role (marketing, editor) that loads the intake or whole
+  // booking rows must decide through canSeeClinical() or strip with withoutClinicalBookingFields().
+  // Two surfaces: READ actions whose requireRole admits such a role, and pages whose ADMIN_ACCESS
+  // key admits one. A mutating action loads bookings to change them, not to hand them over, so it
+  // is held to one thing only: it may not write session notes, which a role that cannot read them
+  // could only overwrite blind. Scans codeKeepingLiterals(): roles are string literals.
+  const NON_CLINICAL = /"(?:marketing|editor)"|\bALL\b/;
   const DECIDES = /\b(?:canSeeClinical|withoutClinicalBookingFields)\s*\(/;
   // The intake decided by a literal is never decided: a file can call canSeeClinical for one prop
   // and still send the assessment unconditionally, so this fails whatever else the file does.
@@ -1134,10 +1139,17 @@ check("clinical: clinical text reaches only roles that may read it, and never an
     if (!isActionModule(raw)) continue;
     for (const fn of serverActions(codeKeepingLiterals(raw))) {
       const guard = fn.body.match(/\brequireRole\(([^)]*)\)/);
-      if (!guard || !/"marketing"/.test(guard[1])) continue;
+      if (!guard || !NON_CLINICAL.test(guard[1])) continue;
       const body = strip(fn.body);
+      if (MUTATION.test(body)) {
+        // Shorthand counts: `data: { sessionNotes }` writes the column with no colon after it.
+        if (/\b(?:sessionNotes|adminNotes)\b/.test(body) && !DECIDES.test(body)) {
+          fail("clinical", `${rel(f)} → ${fn.name}`, `${guard[1].trim()} can call it, and it writes booking notes`, `requireRole("super_admin") — a role that cannot read the notes would overwrite them blind`);
+        }
+        continue;
+      }
       if (ALWAYS.test(body) || (LOADS.test(body) && !DECIDES.test(body))) {
-        fail("clinical", `${rel(f)} → ${fn.name}`, "marketing can call it, and it loads the intake or whole booking rows", "decide with canSeeClinical(adminUser.role), or strip with withoutClinicalBookingFields() (lib/clinical-access.ts)");
+        fail("clinical", `${rel(f)} → ${fn.name}`, `${guard[1].trim()} can call it, and it loads the intake or whole booking rows`, "decide with canSeeClinical(adminUser.role), or strip with withoutClinicalBookingFields() (lib/clinical-access.ts)");
       }
     }
   }
@@ -1161,7 +1173,7 @@ check("clinical: clinical text reaches only roles that may read it, and never an
     const e = entries
       .filter(({ key }) => (key === "/admin" ? route === key : route === key || route.startsWith(key + "/")))
       .sort((a, b) => b.key.length - a.key.length)[0];
-    return !!e && /"marketing"|\bALL\b/.test(e.roles);
+    return !!e && NON_CLINICAL.test(e.roles);
   };
   const base = join(APP, "(admin)", "admin", "(dashboard)");
   for (const file of walk(base).filter((f) => /[\\/]page\.tsx$/.test(f))) {
@@ -1169,7 +1181,7 @@ check("clinical: clinical text reaches only roles that may read it, and never an
     if (!admits(route)) continue;
     const src = strip(codeKeepingLiterals(read(file)));
     if (ALWAYS.test(src) || (LOADS.test(src) && !DECIDES.test(src))) {
-      fail("clinical", rel(file), `marketing can open ${route}, and the page loads the intake or whole booking rows`, "load them only when canSeeClinical(adminUser.role) (lib/clinical-access.ts)");
+      fail("clinical", rel(file), `a non-clinical role can open ${route}, and the page loads the intake or whole booking rows`, "load them only when canSeeClinical(adminUser.role) (lib/clinical-access.ts)");
     }
   }
 });

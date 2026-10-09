@@ -108,6 +108,8 @@ interface CreateBookingDialogProps {
   /** Pre-fill date/time from slot click (yyyy-MM-dd / HH:mm) */
   prefilledDate?: string;
   prefilledTime?: string;
+  /** Admin notes are clinical; the input shows only for a role that may read them (lib/clinical-access.ts). */
+  canWriteNotes?: boolean;
 }
 
 export function CreateBookingDialog({
@@ -115,6 +117,7 @@ export function CreateBookingDialog({
   onOpenChange: controlledOnOpenChange,
   prefilledDate,
   prefilledTime,
+  canWriteNotes = false,
 }: Readonly<CreateBookingDialogProps> = {}) {
   const router = useRouter();
   const isControlled = controlledOpen !== undefined;
@@ -915,7 +918,8 @@ export function CreateBookingDialog({
               </div>
             )}
 
-            {/* Admin notes */}
+            {/* Admin notes: clinical, so only for a role that may read them (lib/clinical-access.ts) */}
+            {canWriteNotes && (
             <div className="space-y-2">
               <Label htmlFor="bookingNotes">Admin Notes (optional)</Label>
               <textarea
@@ -927,6 +931,7 @@ export function CreateBookingDialog({
                 placeholder="Internal notes..."
               />
             </div>
+            )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 

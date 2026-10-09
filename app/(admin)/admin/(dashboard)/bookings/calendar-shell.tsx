@@ -34,6 +34,8 @@ interface CalendarShellProps {
   date: string;
   businessHours: BusinessHours | null;
   overrides: ShellOverride[];
+  /** Booking notes are clinical (lib/clinical-access.ts). */
+  canWriteNotes: boolean;
 }
 
 export function CalendarShell({
@@ -42,6 +44,7 @@ export function CalendarShell({
   date,
   businessHours,
   overrides,
+  canWriteNotes,
 }: Readonly<CalendarShellProps>) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [prefilledDate, setPrefilledDate] = useState<string | undefined>();
@@ -64,6 +67,7 @@ export function CalendarShell({
   return (
     <>
       <CreateBookingDialog
+        canWriteNotes={canWriteNotes}
         open={dialogOpen}
         onOpenChange={handleOpenChange}
         prefilledDate={prefilledDate}

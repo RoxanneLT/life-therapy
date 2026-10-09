@@ -56,6 +56,8 @@ export default async function ClientDetailPage({
   });
 
   const coreClient = JSON.parse(JSON.stringify(client)) as Record<string, unknown>;
+  // The client's admin notes are clinical too (lib/popia/plan.ts), and they ride on the row itself.
+  if (!clinical) coreClient.adminNotes = null;
 
   return (
     <div className="flex h-full flex-col">

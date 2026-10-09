@@ -67,9 +67,10 @@ interface SerializedInsights {
 
 interface OverviewTabProps {
   client: Record<string, unknown>;
+  canSeeClinical?: boolean;
 }
 
-export function OverviewTab({ client }: OverviewTabProps) {
+export function OverviewTab({ client, canSeeClinical = false }: Readonly<OverviewTabProps>) {
   const { data: insightsRaw } = useClientInsights(client.id as string);
   const insights = insightsRaw as SerializedInsights | undefined;
   const [editingNotes, setEditingNotes] = useState(false);
@@ -158,7 +159,8 @@ export function OverviewTab({ client }: OverviewTabProps) {
         </Card>
       </div>
 
-      {/* Admin notes */}
+      {/* Admin notes: clinical, so only for a role that may read them (lib/clinical-access.ts) */}
+      {canSeeClinical && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Admin Notes</CardTitle>
@@ -212,6 +214,7 @@ export function OverviewTab({ client }: OverviewTabProps) {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Client Insights */}
       <InsightsPanel insights={insights} />

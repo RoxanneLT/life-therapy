@@ -106,7 +106,7 @@ export function ClientProfileTabs({ client, activeTab, canSeeActivity = false, c
       {/* Tab content — scrolls */}
       <div className="min-h-0 flex-1 overflow-y-auto pt-6">
         {currentTab === "overview" && (
-          <OverviewTab client={client} />
+          <OverviewTab client={client} canSeeClinical={canSeeClinical} />
         )}
 
         {currentTab === "personal" && (

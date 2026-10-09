@@ -193,7 +193,8 @@ export async function bulkAssignBranchAction(
 // ────────────────────────────────────────────────────────────
 
 export async function updateAdminNotesAction(clientId: string, notes: string) {
-  const { adminUser } = await requireRole("super_admin", "marketing");
+  // Notes are clinical: only a role that may read them may write them (lib/clinical-access.ts).
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.student.update({
     where: { id: clientId },
