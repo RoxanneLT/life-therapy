@@ -1093,6 +1093,39 @@ check("step-up: an action that grants or removes admin access re-verifies 2FA", 
   }
 });
 
+check("portal-ownership: a portal action that loads a client's record by id checks it is theirs", () => {
+  // Shape from Pleks's gateway, which scopes every query to the caller's organisation. LT is
+  // single-tenant, so the boundary that matters is the client: an id arrives from the browser,
+  // and a portal action that loads a booking by that id alone hands one client another's session.
+  // Every such site was guarded by hand when this was written (bookings/actions.ts compares
+  // studentId, the settings actions scope their where). Nothing held the next one.
+  //
+  // The owned models are DERIVED from the schema (every model carrying a studentId, plus the
+  // invite, which carries its two ends), so a new client-owned table is covered the day it lands.
+  // Function-level on purpose: the guard is usually a findUnique followed by a comparison, and the
+  // update that follows reuses the id.
+  const schema = read(join(ROOT, "prisma", "schema.prisma"));
+  const owned = [];
+  for (const m of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    if (/^\s+(?:studentId|fromStudentId|toStudentId)\s/m.test(m[2])) owned.push(m[1][0].toLowerCase() + m[1].slice(1));
+  }
+  if (owned.length < 10) {
+    fail("portal-ownership", "prisma/schema.prisma", `derived only ${owned.length} client-owned models — the derivation has stopped matching`, "fix the model/field regex in this check");
+    return;
+  }
+  const BY_ID = new RegExp(String.raw`prisma\.(?:${owned.join("|")})\.(?:findUnique|findFirst|findUniqueOrThrow|update|delete|upsert)\(\s*\{\s*where:\s*\{\s*id\s*[:,}]`);
+  const OWNS = /\.studentId\s*!==?\s*student\.id\b|\b(?:student|fromStudent|toStudent)Id\s*:\s*student\.id\b/;
+  for (const f of walk(join(APP, "(portal)"), /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(code(raw))) {
+      if (BY_ID.test(fn.body) && !OWNS.test(fn.body)) {
+        fail("portal-ownership", `${rel(f)} → ${fn.name}`, "loads a client-owned record by id without checking it belongs to the signed-in client", "add studentId: student.id to the where, or compare record.studentId !== student.id and return a refusal — see bookings/actions.ts");
+      }
+    }
+  }
+});
+
 check("auth: every place that sets a password is classified by what authorises it", () => {
   const seen = new Map();
   for (const f of allSource()) {

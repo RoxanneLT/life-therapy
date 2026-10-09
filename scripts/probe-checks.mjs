@@ -120,6 +120,22 @@ export async function probePromote(id: string) {
     expects: ["step-up: an action that grants or removes admin access re-verifies 2FA"],
   },
   {
+    // A portal action that trusts the id the browser sent: signed in, revalidated, never asks whose.
+    path: "app/(portal)/portal/(dashboard)/bookings/__probe-peek.ts",
+    content: `"use server";
+// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedStudent } from "@/lib/student-auth";
+import { revalidatePath } from "next/cache";
+export async function probePeek(bookingId: string) {
+  await getAuthenticatedStudent();
+  await prisma.booking.update({ where: { id: bookingId }, data: { clientNotes: null } });
+  revalidatePath("/portal/bookings");
+}
+`,
+    expects: ["portal-ownership: a portal action that loads a client's record by id checks it is theirs"],
+  },
+  {
     // A read-only API route with no guard and no PUBLIC_ROUTES entry.
     path: "app/api/__probe-read/route.ts",
     content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
@@ -496,6 +512,13 @@ const MUTATIONS = [
     find: "model Booking {\n  id                 String        @id @default(cuid())\n",
     replace: "model Booking {\n  id                 String        @id @default(cuid())\n  probeTherapyNotes  String?\n",
     expects: ["pii: a personal-data column is encrypted or says why not"],
+  },
+  {
+    path: "app/(portal)/portal/(dashboard)/bookings/actions.ts",
+    // The notes guard removed: the shape of every portal by-id action before someone remembered.
+    find: "  if (booking.studentId !== student.id) {\n    return { success: false, error: \"That session doesn't belong to your account.\" };\n  }\n  if (booking.status === \"cancelled\")",
+    replace: "  if (booking.status === \"cancelled\")",
+    expects: ["portal-ownership: a portal action that loads a client's record by id checks it is theirs"],
   },
   {
     path: "CLAUDE.md",
