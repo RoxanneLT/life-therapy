@@ -17,6 +17,7 @@
 import { prisma } from "@/lib/prisma";
 import type { AudienceFilters } from "@/lib/audience-filters";
 import { normalizePhoneForStorage } from "@/lib/phone";
+import { recordAudit } from "@/lib/audit";
 
 interface UpsertContactData {
   email: string;
@@ -29,10 +30,27 @@ interface UpsertContactData {
   consentMethod?: string;
 }
 
+/** What a contact created without a name is called. It counts as blank, so a real name can replace it. */
+const PLACEHOLDER_FIRST_NAME = "Friend";
+
+const isBlank = (v: string | null | undefined): boolean => !v || !v.trim();
+const sameText = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
+
 /**
- * Upsert a client (Student record) — creates if not exists, merges fields if exists.
- * Never downgrades consentGiven from true→false.
- * Never overwrites source (keeps the original).
+ * Upsert a client (Student record): creates one if the address is new, otherwise FILLS ONLY BLANK
+ * FIELDS. Never downgrades consentGiven from true to false. Never overwrites source.
+ *
+ * Why fill-blank only (owner's ruling, 2026-10-09): the existing record is curated client data, and
+ * every caller hands this unauthenticated or bulk input (the public booking form, the newsletter
+ * footer, a CSV import). "Ann" on a newsletter signup must never rename the client "Anne". Until
+ * 2026-10-09 the code overwrote any field a new value arrived for, while this comment said it
+ * didn't. Deliberate changes go through the admin client page or the client's own portal.
+ *
+ * A non-blank incoming value that DIFFERS from the stored one is not silently dropped: it is
+ * recorded as a `contact_field_conflict` audit entry, so a genuine change of number can be found.
+ * Name and gender values are recorded. Phone is recorded as differing, never by value, because the
+ * column is encrypted and the audit log is not; the booking path stores the new number, encrypted,
+ * on the booking itself.
  *
  * For newsletter-only subscribers, creates a Student without a Supabase auth account
  * (supabaseUserId = null). They become full portal users when they later book/register.
@@ -41,11 +59,30 @@ export async function upsertContact(data: UpsertContactData) {
   const normalizedEmail = data.email.toLowerCase().trim();
   const normalizedPhone = normalizePhoneForStorage(data.phone);
 
-  return prisma.student.upsert({
+  const existing = await prisma.student.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, firstName: true, lastName: true, phone: true, gender: true },
+  });
+
+  const fill: { firstName?: string; lastName?: string; phone?: string; gender?: string } = {};
+  const conflicts: Record<string, { stored: string; incoming: string }> = {};
+  const offer = (field: keyof typeof fill, incoming: string | null | undefined, stored: string | null | undefined, blank: boolean, recordValue = true) => {
+    if (isBlank(incoming)) return;
+    if (blank) fill[field] = incoming!;
+    else if (!sameText(stored!, incoming!)) conflicts[field] = recordValue ? { stored: stored!, incoming: incoming! } : { stored: "[encrypted]", incoming: "[differs — not recorded]" };
+  };
+  if (existing) {
+    offer("firstName", data.firstName, existing.firstName, isBlank(existing.firstName) || existing.firstName === PLACEHOLDER_FIRST_NAME);
+    offer("lastName", data.lastName, existing.lastName, isBlank(existing.lastName));
+    offer("phone", normalizedPhone, existing.phone, isBlank(existing.phone), false);
+    offer("gender", data.gender, existing.gender, isBlank(existing.gender));
+  }
+
+  const student = await prisma.student.upsert({
     where: { email: normalizedEmail },
     create: {
       email: normalizedEmail,
-      firstName: data.firstName || "Friend",
+      firstName: data.firstName || PLACEHOLDER_FIRST_NAME,
       lastName: data.lastName || "",
       phone: normalizedPhone,
       gender: data.gender || null,
@@ -56,11 +93,7 @@ export async function upsertContact(data: UpsertContactData) {
       consentMethod: data.consentMethod || null,
     },
     update: {
-      // Only fill in blank fields — don't overwrite existing data
-      ...(data.firstName ? { firstName: data.firstName } : {}),
-      ...(data.lastName ? { lastName: data.lastName } : {}),
-      ...(normalizedPhone ? { phone: normalizedPhone } : {}),
-      ...(data.gender ? { gender: data.gender } : {}),
+      ...fill,
       // Never downgrade consent — only upgrade from false to true
       ...(data.consentGiven
         ? {
@@ -71,6 +104,18 @@ export async function upsertContact(data: UpsertContactData) {
         : {}),
     },
   });
+
+  if (existing && Object.keys(conflicts).length > 0) {
+    await recordAudit({
+      action: "contact_field_conflict",
+      entityType: "student",
+      entityId: existing.id,
+      actorEmail: "system",
+      metadata: { source: data.source, kept: "stored", fields: conflicts },
+    });
+  }
+
+  return student;
 }
 
 // ── Helper: parse "7d" / "30d" / "90d" into a Date ──
