@@ -73,6 +73,12 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "connect-src 'self' https://www.google-analytics.com https://*.supabase.co https://video.bunnycdn.com https://*.bunnycdn.com",
               "media-src 'self' blob: https://*.bunnycdn.com https://iframe.mediadelivery.net",
+              // No plugins, no <base> rewrite, and nobody may frame us (X-Frame-Options' modern twin).
+              // form-action is left out on purpose: checkout ends in a redirect to Paystack, and
+              // form-action also governs where a form submission may redirect to.
+              "object-src 'none'",
+              "base-uri 'self'",
+              "frame-ancestors 'none'",
               "frame-src 'self' https://teams.microsoft.com https://iframe.mediadelivery.net https://*.b-cdn.net https://www.youtube.com https://player.vimeo.com",
             ].join("; "),
           },

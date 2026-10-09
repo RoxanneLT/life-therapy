@@ -615,24 +615,31 @@ check("date-safety: TIMEZONE declared exactly once", () => {
  * and get reported as an unguarded mutation. A false positive in a security check
  * is expensive: it is exactly the finding people learn to wave through.
  */
+/**
+ * Every exported async function, with its BODY, from the TypeScript parser.
+ *
+ * Until 2026-10-09 this took the first `{` after the name as the body. For `({ id }: Props)`, or
+ * `(id: string, data: { name: string })`, or a `Promise<{ ok: boolean }>` return type, that brace
+ * is in the signature, so the "body" was a parameter type: no guard and no mutation in it. The
+ * mutating-action check skipped those actions as read-only, silently, for its whole life. It
+ * surfaced when reads began to need a guard and 59 guarded actions were reported as unguarded.
+ */
 function serverActions(src) {
+  const sf = ts.createSourceFile("action.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const out = [];
-  const re = /export\s+async\s+function\s+(\w+)\s*\(/g;
-  let m;
-  while ((m = re.exec(src))) {
-    // Walk to the opening brace of the function body, then to its matching close.
-    let i = src.indexOf("{", m.index + m[0].length);
-    if (i === -1) continue;
-    let depth = 0;
-    const start = i;
-    for (; i < src.length; i++) {
-      if (src[i] === "{") depth++;
-      else if (src[i] === "}") {
-        depth--;
-        if (depth === 0) break;
+  const exported = (n) => n.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+  const isAsync = (n) => n.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword);
+  for (const st of sf.statements) {
+    if (ts.isFunctionDeclaration(st) && exported(st) && isAsync(st) && st.name && st.body) {
+      out.push({ name: st.name.text, body: st.body.getText(sf) });
+    } else if (ts.isVariableStatement(st) && exported(st)) {
+      for (const d of st.declarationList.declarations) {
+        const init = d.initializer;
+        if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) && isAsync(init) && ts.isIdentifier(d.name)) {
+          out.push({ name: d.name.text, body: init.body.getText(sf) });
+        }
       }
     }
-    out.push({ name: m[1], body: src.slice(start, i + 1) });
   }
   return out;
 }
@@ -684,6 +691,7 @@ const THROTTLES = new Map([
   ["isRateLimitedDb", "lib/rate-limit-db.ts"],
   ["checkAndRecord", "lib/rate-limit-db.ts"],
   ["rateLimitBookingDb", "lib/rate-limit-db.ts"],
+  ["rateLimitGuestBuyDb", "lib/rate-limit-db.ts"],
   ["rateLimitRegisterDb", "lib/rate-limit-db.ts"],
   ["rateLimitNewsletterDb", "lib/rate-limit-db.ts"],
 ]);
@@ -747,24 +755,34 @@ const AUTH_REGIME = [
   },
 ];
 
+/** A module whose first statement is "use server": every export is a callable endpoint. */
+const isActionModule = (raw) => /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*["']use server["']/.test(raw);
+
 check("server-action-auth: every mutating action is guarded for its route group", () => {
-  for (const f of walk(APP, /actions\.ts$/)) {
+  // Every action MODULE, not only files named actions.ts: clients/[id]/queries.ts is one too, and
+  // until 2026-10-09 an unguarded export there passed (Pleks's server-action census walks by the
+  // directive, not the filename). In (admin) and (portal) a READ is guarded as well. A read-only
+  // action is still a POST endpoint anyone can call with the action id, and what it returns is
+  // client data. (public) and pre-auth reads stay open by design.
+  for (const f of walk(APP, /\.tsx?$/)) {
     const raw = read(f);
-    if (!raw.includes('"use server"') && !raw.includes("'use server'")) continue;
+    if (!isActionModule(raw)) continue;
     const path = rel(f);
     const regime = AUTH_REGIME.find((r) => r.match(path));
     if (!regime) continue;
     const throttle = regime.throttled ? throttleCall(raw) : null;
     const guards = (text) => Boolean(regime.guard?.test(text) || throttle?.test(text));
     const fileHasGuard = guards(code(raw)); // module-level throttles count
+    const readsNeedGuard = regime.name === "(admin)" || regime.name === "(portal)";
     for (const fn of serverActions(code(raw))) {
-      if (!MUTATION.test(fn.body)) continue; // read-only action
+      const mutates = MUTATION.test(fn.body);
+      if (!mutates && !readsNeedGuard) continue; // a public read
       if (guards(fn.body)) continue;
       if (regime.name === "pre-auth" && fileHasGuard) continue;
       fail(
         "server-action-auth",
         `${path} → ${fn.name}`,
-        `mutates the DB with no ${regime.name} guard`,
+        `${mutates ? "mutates the DB" : "is a callable read"} with no ${regime.name} guard`,
         regime.fix,
       );
     }
@@ -855,21 +873,34 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
     /requireRole\s*\(|getAuthenticatedAdmin\s*\(|getAuthenticatedStudent\s*\(|getOptionalStudent\s*\(|requirePasswordChanged\s*\(|verifyWebhookSignature\s*\(|isCronAuthorised\s*\(|withCronRun\s*\(|auth\.getUser\s*\(|\bunsubscribeToken\s*:/;
   const guarded = (raw) => ANY_GUARD.test(code(raw)) || Boolean(throttleCall(raw)?.test(code(raw)));
 
-  // 1. API route handlers that mutate.
-  for (const f of walk(join(APP, "api"), /route\.ts$/)) {
+  // 1. Every API route handler, reads included. A GET that returns client data is as exposed
+  //    as a POST that writes it; until 2026-10-09 only mutating routes were checked, and the
+  //    exemptions were an inline regex with no reason attached (Pleks's route census requires
+  //    a reason per public route; this is that).
+  const PUBLIC_ROUTES = {
+    "app/api/track/click/route.ts":
+      "an email link redirector: anyone holding the email may click it. It forwards only to our own hosts or a Teams link already stored on a booking (lib/email-tracking.ts), and its write is a click counter",
+    "app/api/track/open/route.ts":
+      "the 1x1 open pixel: loaded by mail clients with no session. Its write is an open counter",
+  };
+  const routes = walk(join(APP, "api"), /route\.ts$/);
+  for (const f of routes) {
     const raw = read(f);
-    if (!MUTATION.test(code(raw))) continue;
-    // Public-by-design, low-value writes carry their own note; allow the tracking
-    // pixels and the coupon oracle (now rate-limited in slice 3).
-    if (/track\/(?:click|open)/.test(rel(f))) continue;
+    if (PUBLIC_ROUTES[rel(f)]) continue;
     if (!guarded(raw)) {
+      const mutates = MUTATION.test(code(raw));
       fail(
         "server-action-auth",
         rel(f),
-        "an API route mutates the DB with no auth/rate-limit/webhook guard — invisible to the actions.ts check",
-        "guard it (requireRole / getAuthenticatedStudent / a webhook signature / a rate limit)",
+        `an API route ${mutates ? "mutates the DB" : "answers"} with no auth/rate-limit/webhook guard — invisible to the actions.ts check`,
+        "guard it (requireRole / getAuthenticatedStudent / a webhook signature / a rate limit), or add it to PUBLIC_ROUTES with the reason it is public",
       );
     }
+  }
+  for (const p of Object.keys(PUBLIC_ROUTES)) {
+    const f = routes.find((r) => rel(r) === p);
+    if (!f) fail("server-action-auth", p, "PUBLIC_ROUTES names a route that no longer exists", "remove the entry");
+    else if (guarded(read(f))) fail("server-action-auth", p, "PUBLIC_ROUTES excuses a route that is now guarded", "remove the entry; a stale exemption covers whatever is written there next");
   }
 
   // 2. Any lib/**/*.ts that carries a top-level "use server" is an action endpoint

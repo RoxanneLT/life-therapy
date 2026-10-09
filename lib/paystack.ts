@@ -91,5 +91,10 @@ export function verifyWebhookSignature(
     .createHmac("sha512", getSecretKey())
     .update(rawBody)
     .digest("hex");
-  return hash === signature;
+  // Constant-time: `===` returns at the first differing byte, which leaks how much of a forged
+  // signature was right. Both sides are a fixed-length SHA-512 hex digest, so the length check
+  // reveals nothing.
+  const expected = Buffer.from(hash, "hex");
+  const given = Buffer.from(signature, "hex");
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
 }

@@ -90,6 +90,32 @@ export default async function ProbePage() {
     expects: ["admin-access: every admin page is guarded by its area"],
   },
   {
+    // Three blind spots at once, each closed 2026-10-09: an action module not named actions.ts
+    // (clients/[id]/queries.ts is one), a READ with no guard in (admin), and destructured params
+    // plus an object return type, the signature the old brace-walking parser mistook for a body.
+    path: "app/(admin)/admin/(dashboard)/clients/__probe-queries.ts",
+    content: `"use server";
+// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { prisma } from "@/lib/prisma";
+export async function probeRead({ id }: { id: string }): Promise<{ n: number }> {
+  return { n: await prisma.student.count({ where: { id } }) };
+}
+`,
+    expects: ["server-action-auth: every mutating action is guarded for its route group"],
+  },
+  {
+    // A read-only API route with no guard and no PUBLIC_ROUTES entry.
+    path: "app/api/__probe-read/route.ts",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+export async function GET() {
+  return NextResponse.json(await prisma.student.findMany({ select: { email: true } }));
+}
+`,
+    expects: ["server-action-auth: mutating API routes and inline actions are guarded"],
+  },
+  {
     // A second role list beside lib/admin-access.ts — the BOOKINGS/CLIENTS/SUPER shape.
     path: "lib/__probe-roles.ts",
     content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
