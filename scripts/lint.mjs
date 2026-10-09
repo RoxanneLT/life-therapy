@@ -2,7 +2,7 @@
 /**
  * scripts/lint.mjs — run ESLint over the tree; on worker threads where it runs uncached AND that was measured to pay.
  *
- * @kit lint v1 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything else is
+ * @kit lint v2 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything else is
  * canon's, and `check-kit-drift.mjs` says so if it changes here.
  *
  *   node scripts/lint.mjs              lint; gate it as `"lint": "node scripts/lint.mjs"`
@@ -12,7 +12,13 @@
  *
  * WHY (pleks CF-23, 2026-10-09). ESLint ≥ 9.34 has `--concurrency`: every file, every rule, split
  * across worker threads — coverage unchanged, unlike a cache. pleks measured its uncached lint at 150s
- * serial and 69s on 4 workers, and CI's Lint & Typecheck stretch is where its PRs waited.
+ * serial and 69s on 4 workers — ON A 24-CORE DESKTOP.
+ *
+ * ON CI IT SAVED FAR LESS (pleks CF-24, v2). GitHub's 4-vCPU hosted runner took tsc + uncached lint
+ * from 225s to 200s, not to half: each worker builds its own TypeScript program, and four of them
+ * compete for four vCPUs (inferred, not measured). What cut pleks's CI from ~10m to 4m10s was JOB
+ * STRUCTURE — playbook 6 §3a. So a desktop `--measure` decides the LOCAL run only; before WORKERS
+ * applies in CI, run `node scripts/lint.mjs --measure` in a CI job and quote that number too.
  *
  * WHY IT IS OFF UNTIL YOU MEASURE. The same day, uncached, warm disk, 24 cores, ESLint 9.39:
  *   life-therapy      serial 32.9s   4 workers 22.8s

@@ -41,49 +41,7 @@ CF-9 is filed too: canon took it at `baba8d8`.
 
 CF-10 and CF-11 are filed (below): canon took both at `972decc`.
 
-### CF-12 · The db-tests handover's §1 assumes `prisma migrate`; this owner chose re-runnable grouped SQL, and Prisma 7 moved the flags
-
-    OBSERVED   The handover recommends `prisma migrate` with a baseline. On 2026-10-09 the owner ruled
-               against it, in favour of fixed-name group files (00_types … 99_security) that are
-               idempotent and re-run in full every time. Two of the handover's mechanics also don't hold
-               on Prisma 7.10.
-    COMMAND    npx prisma migrate diff --from-url postgresql://x@localhost/x --to-empty --script
-                 Error:
-                 `--from-url` was removed. Please use `--[from/to]-config-datasource` in combination
-                 with a Prisma config file that contains the appropriate datasource instead.
-               (The config's `schema` path resolves relative to the config file, not the cwd.)
-               The prod→schema diff it generates writes the text→enum change on module_access.source
-               and digital_product_access.source as DROP COLUMN + ADD COLUMN. Applied, that would
-               erase 8 grant-source values. Read in the generated script; not executed.
-    WHY IT IS  Every Prisma-7 project with a pre-existing production database meets both: the flag
-    CANON'S    rename, and the destructive diff on a type change. "Migrate plus baseline" also isn't the
-               only legitimate answer to drift. An owner who wants to edit and re-run DDL is answered by
-               idempotent files plus a drift check, and the handover should offer both.
-    SMALLEST   In §1, make the channel the owner's choice, between migrate+baseline and idempotent groups
-    FIX        plus `migrate diff --exit-code` as the drift gate. Use the Prisma 7 flags. Warn that the
-               generated diff must be read for DROP COLUMN before it's used. Over Supabase, introspection
-               and diff run on the session pooler (port 5432, no pgbouncer), not the transaction one.
-               It must not break the advice for projects that keep migrate.
-
-### CF-13 · A probe that builds a scratch git repo inherits the hook's GIT_INDEX_FILE, and corrupts the commit it gates
-
-    OBSERVED   `git commit -a` died inside the pre-commit gate. check-git-hooks.mjs's rebase lab ran
-               `git add .` in a temp repo with cwd set but the caller's env inherited, so the lab's
-               file went into the real commit's index with an object only the lab held.
-    COMMAND    git commit -qam "…"
-                 error: invalid object 100644 587be6b4c3f93f93c489c0111bba5596147a26cb for 'f.txt'
-                 error: Error building trees
-               Reproduced: GIT_INDEX_FILE=<abs copy of .git/index> node scripts/check-git-hooks.mjs
-                 old file → f.txt in the copy: 1 · with GIT_* stripped → 0
-    WHY IT IS  git gives hooks GIT_INDEX_FILE, and under `commit -a` (or `commit <paths>`) it is an
-    CANON'S    absolute path to a temporary index. Any gate step that spawns git in a throwaway repo
-               without clearing GIT_* writes there, whatever the stack. A plain `git commit` passes a
-               relative path that resolves inside the lab, so a repo that never uses `-a` never sees it.
-               Canon's check-scope selftest builds scratch repos as well; it is unchecked here.
-    SMALLEST   Every kit probe that spawns git outside the project's own tree passes an env with GIT_*
-    FIX        removed. A kit probe can test this: run under an absolute GIT_INDEX_FILE that points at a
-               copy, then assert the copy is unchanged. It must not strip GIT_* from spawns that are
-               meant to act on the project's own repo.
+CF-12 and CF-13 are filed (below): canon took both at `64bb5f9`.
 
 ---
 
@@ -200,3 +158,5 @@ A pointer, not a restatement — the canon entry is the record.
 | §3 | Three rows moved to canon `98f9636` (`f04797b`) | read at this project's HEAD: `check-hook-registration`'s pin removed; `bash-gate` and its probe re-pinned at v7, behind v8 | `dc7b225` |
 | CF-10 | `dates` v2 carried L-108: its zoned-string fast path rolled a day that does not exist | `dates` v3 round-trips the date part first; `dates-test` v4 adds the must-throw case. Carried here, and L-108 answered in §2 | `972decc` |
 | CF-11 | `check-scope` v1's selftest could not pass in a project that keeps its own git hooks | `check-scope` v2 drives a project's hooks only when they carry canon's `@kit` marker; its scratch repo defines CHAIN and every PUSH script. Carried here: the selftest is green | `972decc` |
+| CF-12 | The db-tests handover assumed `prisma migrate` + baseline, and Prisma 7 removed `--from-url` | handover §1 records the owner's ruling (idempotent group files + drift gate) beside the migrate option; §2.4 uses the Prisma 7 `--from/--to-config-datasource` flags and warns to read a generated diff for DROP COLUMN | `64bb5f9` |
+| CF-13 | A probe building a scratch repo inherited the hook's GIT_INDEX_FILE and wrote into the gated commit | `check-kit-gitenv` re-runs every repo-building kit selftest under GIT_INDEX_FILE alone, at a copy of the index, and fails if the copy changes. This project's own fix is `b6b4a77` | `64bb5f9` |
