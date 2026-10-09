@@ -4,20 +4,22 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { getClientInsights } from "@/lib/admin/client-insights";
 import { toFeedRow, type AuditFeedRow } from "@/lib/admin/audit-feed";
+import { canSeeClinical, withoutClinicalBookingFields } from "@/lib/clinical-access";
 
 export async function fetchClientBookings(clientId: string) {
-  await requireRole("super_admin", "marketing");
+  const { adminUser } = await requireRole("super_admin", "marketing");
   const result = await prisma.student.findUnique({
     where: { id: clientId },
     select: {
       bookings: { orderBy: { date: "desc" }, take: 200 },
     },
   });
-  return JSON.parse(JSON.stringify(result?.bookings ?? [])) as unknown[];
+  const bookings = canSeeClinical(adminUser.role) ? (result?.bookings ?? []) : (result?.bookings ?? []).map(withoutClinicalBookingFields);
+  return JSON.parse(JSON.stringify(bookings)) as unknown[];
 }
 
 export async function fetchClientFinances(clientId: string) {
-  await requireRole("super_admin", "marketing");
+  const { adminUser } = await requireRole("super_admin", "marketing");
   const result = await prisma.student.findUnique({
     where: { id: clientId },
     select: {
@@ -110,7 +112,11 @@ export async function fetchClientFinances(clientId: string) {
     .filter((s) => s.types.length > 0);
 
   return JSON.parse(
-    JSON.stringify({ ...(result ?? {}), _billedToMe: billedToMe }),
+    JSON.stringify({
+      ...(result ?? {}),
+      ...(result && !canSeeClinical(adminUser.role) ? { bookings: result.bookings.map(withoutClinicalBookingFields) } : {}),
+      _billedToMe: billedToMe,
+    }),
   ) as Record<string, unknown>;
 }
 

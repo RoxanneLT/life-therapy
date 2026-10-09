@@ -537,6 +537,27 @@ const MUTATIONS = [
     expects: ["audit-trail: an admin write to client data records who made it"],
   },
   {
+    path: "app/(admin)/admin/(dashboard)/clients/[id]/page.tsx",
+    // The assessment sent to every role again, while the file still calls canSeeClinical for a prop.
+    find: "      intake: clinical,\n",
+    replace: "      intake: true,\n",
+    expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
+  },
+  {
+    path: "app/(admin)/admin/(dashboard)/clients/[id]/queries.ts",
+    // The Sessions tab query handing marketing whole booking rows, session notes included.
+    find: "  const bookings = canSeeClinical(adminUser.role) ? (result?.bookings ?? []) : (result?.bookings ?? []).map(withoutClinicalBookingFields);\n",
+    replace: "  const bookings = result?.bookings ?? [];\n",
+    expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
+  },
+  {
+    path: "app/(admin)/admin/(dashboard)/reports/actions.ts",
+    // The typed cancellation reason back in the session register: a super_admin export, still a copy.
+    find: '      b.isLateCancel ? "Yes" : "",\n',
+    replace: '      b.isLateCancel ? "Yes" : "",\n      b.cancellationReason,\n',
+    expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
+  },
+  {
     path: "lib/popia/plan.ts",
     // A fate dropped from the plan: gender would survive every erasure.
     find: '    gender: "erase",\n',

@@ -45,9 +45,11 @@ interface ClientProfileTabsProps {
   activeTab: string;
   /** super_admin only: the Activity tab shows who viewed the clinical record. */
   canSeeActivity?: boolean;
+  /** The Assessment section is clinical; the server withholds the intake from other roles too. */
+  canSeeClinical?: boolean;
 }
 
-export function ClientProfileTabs({ client, activeTab, canSeeActivity = false }: Readonly<ClientProfileTabsProps>) {
+export function ClientProfileTabs({ client, activeTab, canSeeActivity = false, canSeeClinical = false }: Readonly<ClientProfileTabsProps>) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -70,7 +72,8 @@ export function ClientProfileTabs({ client, activeTab, canSeeActivity = false }:
   const visibleTabs = TABS.filter((t) => t.key !== "activity" || canSeeActivity);
   const currentTab = mapped.tab;
 
-  const [personalSection, setPersonalSection] = useState(mapped.tab === "personal" ? (mapped.section || "details") : "details");
+  const requestedSection = mapped.tab === "personal" ? (mapped.section || "details") : "details";
+  const [personalSection, setPersonalSection] = useState(requestedSection === "assessment" && !canSeeClinical ? "details" : requestedSection);
   const [financeSection, setFinanceSection] = useState(mapped.tab === "finances" ? (mapped.section || "billing") : "billing");
 
   function handleTabChange(tab: string) {
@@ -110,7 +113,7 @@ export function ClientProfileTabs({ client, activeTab, canSeeActivity = false }:
           <div className="space-y-6">
             {/* Sub-section pills */}
             <div className="flex gap-2">
-              {PERSONAL_SECTIONS.map((s) => (
+              {PERSONAL_SECTIONS.filter((s) => s.key !== "assessment" || canSeeClinical).map((s) => (
                 <button
                   key={s.key}
                   onClick={() => setPersonalSection(s.key)}
@@ -126,7 +129,7 @@ export function ClientProfileTabs({ client, activeTab, canSeeActivity = false }:
               ))}
             </div>
             {personalSection === "details" && <PersonalTab client={client} />}
-            {personalSection === "assessment" && <AssessmentTab client={client} />}
+            {personalSection === "assessment" && canSeeClinical && <AssessmentTab client={client} />}
             {personalSection === "agreements" && <CommitmentTab client={client} />}
             {personalSection === "relationships" && <RelationshipsTab client={client} />}
           </div>

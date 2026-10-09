@@ -1090,6 +1090,90 @@ check("access-log: every export records who took it", () => {
   }
 });
 
+check("clinical: clinical text reaches only roles that may read it, and never an export", () => {
+  // Until 2026-10-09 the client profile sent the intake assessment and every booking's session
+  // notes to the marketing role: the page included the intake and the tab queries loaded whole
+  // booking rows. The Assessment tab was visible, and even a hidden tab would not have helped,
+  // since props and query results reach the browser regardless (lib/clinical-access.ts).
+  //
+  // So code reachable by marketing that loads the intake or whole booking rows must decide
+  // through canSeeClinical() or strip with withoutClinicalBookingFields(). Two surfaces: server
+  // actions whose requireRole admits marketing, and pages whose ADMIN_ACCESS key admits it.
+  // Scans codeKeepingLiterals(): the role is a string literal, which code() blanks.
+  const DECIDES = /\b(?:canSeeClinical|withoutClinicalBookingFields)\s*\(/;
+  // The intake decided by a literal is never decided: a file can call canSeeClinical for one prop
+  // and still send the assessment unconditionally, so this fails whatever else the file does.
+  const ALWAYS = /\bintake\s*:\s*true\b/;
+  // A relation count names the relation without loading a row of it.
+  const strip = (s) => s.replace(/_count\s*:\s*\{\s*select\s*:\s*\{[^}]*\}\s*\}/g, "");
+  const objectAt = (s, open) => {
+    let depth = 0;
+    for (let i = open; i < s.length; i++) {
+      if (s[i] === "{") depth++;
+      else if (s[i] === "}" && --depth === 0) return s.slice(open, i + 1);
+    }
+    return s.slice(open);
+  };
+  // `bookings: { … }` loads whole rows unless it selects (a select naming a clinical field is
+  // caught by the field-name test) or is a relation filter (some / none / every).
+  const loadsWholeBookings = (s) =>
+    /\bbookings\s*:\s*true\b/.test(s) ||
+    [...s.matchAll(/\bbookings\s*:\s*\{/g)].some((m) => {
+      const obj = objectAt(s, m.index + m[0].length - 1);
+      return !/\bselect\s*:/.test(obj) && !/^\{\s*(?:some|none|every|_count)\s*:/.test(obj);
+    });
+  const findsWholeBookings = (s) =>
+    [...s.matchAll(/\bprisma\.booking\.find\w*\(\s*(\{)?/g)].some((m) => !m[1] || !/\bselect\s*:/.test(objectAt(s, m.index + m[0].length - 1)));
+  const LOADS = {
+    test: (s) =>
+      loadsWholeBookings(s) || findsWholeBookings(s) || /\bclientIntake\.find|\b(?:sessionNotes|cancellationReason)\b/.test(s),
+  };
+
+  for (const f of walk(join(APP, "(admin)"), /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(codeKeepingLiterals(raw))) {
+      const guard = fn.body.match(/\brequireRole\(([^)]*)\)/);
+      if (!guard || !/"marketing"/.test(guard[1])) continue;
+      const body = strip(fn.body);
+      if (ALWAYS.test(body) || (LOADS.test(body) && !DECIDES.test(body))) {
+        fail("clinical", `${rel(f)} → ${fn.name}`, "marketing can call it, and it loads the intake or whole booking rows", "decide with canSeeClinical(adminUser.role), or strip with withoutClinicalBookingFields() (lib/clinical-access.ts)");
+      }
+    }
+  }
+
+  // An export is a copy that leaves the system, whoever takes it: no free text about a client in a
+  // CSV. The session register carried admin notes and cancellation reasons until 2026-10-09.
+  for (const f of walk(join(APP, "(admin)"), /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(code(raw))) {
+      if (/\bcsv(?:Document|Row)\s*\(/.test(fn.body) && /\.(?:adminNotes|sessionNotes|cancellationReason|additionalNotes)\b/.test(fn.body)) {
+        fail("clinical", `${rel(f)} → ${fn.name}`, "an export carries free text about a client", "export a category (who cancelled, late or not), never the note itself");
+      }
+    }
+  }
+
+  const MAP = "lib/admin-access.ts";
+  const entries =[...read(join(ROOT, MAP)).matchAll(/^\s+"(\/admin[^"]*)":\s*([^\n]*)/gm)].map((m) => ({ key: m[1], roles: m[2] }));
+  if (entries.length < 10) throw new Error(`read ${entries.length} keys from ${MAP} — the parse has broken`);
+  const admits = (route) => {
+    const e = entries
+      .filter(({ key }) => (key === "/admin" ? route === key : route === key || route.startsWith(key + "/")))
+      .sort((a, b) => b.key.length - a.key.length)[0];
+    return !!e && /"marketing"|\bALL\b/.test(e.roles);
+  };
+  const base = join(APP, "(admin)", "admin", "(dashboard)");
+  for (const file of walk(base).filter((f) => /[\\/]page\.tsx$/.test(f))) {
+    const route = "/admin" + rel(file).slice(rel(base).length).replace(/\/page\.tsx$/, "");
+    if (!admits(route)) continue;
+    const src = strip(codeKeepingLiterals(read(file)));
+    if (ALWAYS.test(src) || (LOADS.test(src) && !DECIDES.test(src))) {
+      fail("clinical", rel(file), `marketing can open ${route}, and the page loads the intake or whole booking rows`, "load them only when canSeeClinical(adminUser.role) (lib/clinical-access.ts)");
+    }
+  }
+});
+
 check("admin-access: every admin page is guarded by its area", () => {
   // lib/admin-access.ts is the one map of which role opens which admin page; the sidebar, the
   // shortcuts, the attention rows and the search read it. Until 2026-10-09 every page carried its

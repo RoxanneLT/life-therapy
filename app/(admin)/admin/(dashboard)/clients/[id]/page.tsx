@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAccess } from "@/lib/auth";
 import { saFormat } from "@/lib/dates";
 import { recordView } from "@/lib/access-log";
+import { canSeeClinical } from "@/lib/clinical-access";
 import { notFound } from "next/navigation";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
@@ -22,19 +23,21 @@ export default async function ClientDetailPage({
   const { adminUser } = await requireAccess("/admin/clients");
 
   const activeTab = tab || "overview";
+  const clinical = canSeeClinical(adminUser.role);
 
   const client = await prisma.student.findUnique({
     where: { id },
     include: {
       _count: { select: { bookings: true, enrollments: true, orders: true } },
       creditBalance: true,
-      intake: true,
+      // The assessment is clinical: a role that may not read it is never sent it (lib/clinical-access.ts).
+      intake: clinical,
     },
   });
 
   if (!client) notFound();
-  // The whole record goes to the browser on every tab, assessment and notes included, so any view
-  // of this page is a view of them (lib/access-log.ts).
+  // The whole record goes to the browser on every tab, assessment and notes included for a role that
+  // may read them, so any view of this page is a view of them (lib/access-log.ts).
   await recordView({ actorEmail: adminUser.email, entityType: "student", entityId: id, area: activeTab });
 
   const contactConflicts = await prisma.auditLog.findMany({
@@ -87,7 +90,7 @@ export default async function ClientDetailPage({
       </div>
 
       <div className="mt-4 min-h-0 flex-1">
-        <ClientProfileTabs client={coreClient} activeTab={activeTab} canSeeActivity={adminUser.role === "super_admin"} />
+        <ClientProfileTabs client={coreClient} activeTab={activeTab} canSeeActivity={adminUser.role === "super_admin"} canSeeClinical={clinical} />
       </div>
     </div>
   );

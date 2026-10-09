@@ -129,8 +129,10 @@ export async function exportSessionRegister(
     "Status",
     "Price (ZAR)",
     "Couples Partner",
-    "Admin Notes",
-    "Cancellation Reason",
+    // Who cancelled and whether it was late, never the typed reason or the admin notes: a
+    // register is a list of sessions, and free text about a client does not leave in a CSV.
+    "Cancelled By",
+    "Late Cancel",
   ];
 
   const rows = bookings.map((b) => {
@@ -149,8 +151,8 @@ export async function exportSessionRegister(
       b.status,
       formatCurrency(b.priceZarCents),
       b.couplesPartnerName,
-      b.adminNotes,
-      b.cancellationReason,
+      b.cancelledBy,
+      b.isLateCancel ? "Yes" : "",
     ]);
   });
 
