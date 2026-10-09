@@ -169,6 +169,8 @@ export async function deleteBooking(id: string) {
     entityId: id,
     actorEmail: adminUser.email,
     before: {
+      // The id identifies the client; recordAudit stores the name as initials.
+      studentId: booking.studentId,
       clientName: booking.clientName,
       date: saDateStr(booking.date),
       startTime: booking.startTime,

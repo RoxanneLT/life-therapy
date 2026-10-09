@@ -67,14 +67,53 @@ const SCRUB_KEYS = new Set([
   "clientSecret",
 ]);
 
+/**
+ * A client's contact details are masked, not stored. audit_logs is append-only (80_ops.sql) and
+ * outlives a POPIA erasure, so whatever lands here stays for good: an email change recorded both
+ * addresses in full until 2026-10-09. A masked value still tells a reader which address it was.
+ *
+ * Admin accounts and auth events keep theirs. Who held admin access, and which account a sign-in
+ * targeted, is the accountability record itself. Only top-level keys are masked: the contact
+ * conflict entry nests names under `fields` on purpose, so an admin can apply a genuine change.
+ */
+const KEEPS_CONTACT_DETAILS = new Set(["admin_user", "auth"]);
+const EMAIL_KEY = /email$/i;
+const NAME_KEY = /^(?:first|last|client|couplesPartner|partner|recipient|guardian)Name$/;
+const PHONE_KEY = /phone$/i;
+
+function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "***";
+  return `${email[0]}***${email.slice(at)}`;
+}
+
+function maskName(name: string): string {
+  return name.split(/\s+/).filter(Boolean).map((w) => `${w[0].toUpperCase()}.`).join(" ");
+}
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length > 2 ? `***${digits.slice(-2)}` : "***";
+}
+
+function mask(key: string, value: unknown): unknown {
+  if (typeof value !== "string" || value === "") return value;
+  if (EMAIL_KEY.test(key)) return maskEmail(value);
+  if (NAME_KEY.test(key)) return maskName(value);
+  if (PHONE_KEY.test(key)) return maskPhone(value);
+  return value;
+}
+
 function scrub(
   obj: Record<string, unknown> | null | undefined,
+  entityType: string,
 ): Record<string, unknown> | null {
   if (!obj) return null;
+  const masks = !KEEPS_CONTACT_DETAILS.has(entityType);
   const cleaned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (SCRUB_KEYS.has(key)) continue;
-    cleaned[key] = value;
+    cleaned[key] = masks ? mask(key, value) : value;
   }
   return cleaned;
 }
@@ -141,9 +180,9 @@ export async function recordAudit(input: AuditInput): Promise<void> {
         entityType: input.entityType,
         entityId: input.entityId,
         actorEmail: input.actorEmail,
-        before: (scrub(input.before) ?? undefined) as Prisma.InputJsonValue | undefined,
-        after: (scrub(input.after) ?? undefined) as Prisma.InputJsonValue | undefined,
-        metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+        before: (scrub(input.before, input.entityType) ?? undefined) as Prisma.InputJsonValue | undefined,
+        after: (scrub(input.after, input.entityType) ?? undefined) as Prisma.InputJsonValue | undefined,
+        metadata: (scrub(input.metadata, input.entityType) ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
   } catch (err) {

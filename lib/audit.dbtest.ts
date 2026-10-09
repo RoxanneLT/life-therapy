@@ -21,6 +21,28 @@ test("a row is written, and can be neither changed nor removed", async () => {
   assert.equal((await prisma.auditLog.findFirstOrThrow({ where: { entityId } })).action, "dbtest_append_only");
 });
 
+test("a client's contact details are masked; an admin account's are kept", async () => {
+  const entityId = `dbtest-${randomUUID()}`;
+  await recordAudit({
+    action: "dbtest_mask",
+    entityType: "student",
+    entityId,
+    actorEmail: "admin@example.test",
+    before: { email: "jane.doe@example.test", clientName: "Jane van Doe", phone: "+27 82 555 0123", status: "active" },
+    after: { billingEmail: "", couplesPartnerName: null },
+    metadata: { recipientEmail: "pay@example.test", fields: { firstName: { stored: "Jane", incoming: "Janet" } } },
+  });
+  const row = await prisma.auditLog.findFirstOrThrow({ where: { entityId } });
+  assert.deepEqual(row.before, { email: "j***@example.test", clientName: "J. V. D.", phone: "***23", status: "active" });
+  assert.deepEqual(row.after, { billingEmail: "", couplesPartnerName: null });
+  // Top level only: a contact conflict nests names under `fields` so an admin can apply them.
+  assert.deepEqual(row.metadata, { recipientEmail: "p***@example.test", fields: { firstName: { stored: "Jane", incoming: "Janet" } } });
+
+  const adminId = `dbtest-${randomUUID()}`;
+  await recordAudit({ action: "dbtest_mask", entityType: "admin_user", entityId: adminId, actorEmail: "admin@example.test", after: { email: "new.admin@example.test" } });
+  assert.deepEqual((await prisma.auditLog.findFirstOrThrow({ where: { entityId: adminId } })).after, { email: "new.admin@example.test" });
+});
+
 test("a write that fails leaves a failed cron_runs row for the digest, without the values", async () => {
   const entityId = `dbtest-${randomUUID()}`;
   // A required column left null: the audit write itself is refused.
