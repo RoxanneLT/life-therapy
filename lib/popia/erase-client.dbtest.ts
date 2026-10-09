@@ -6,6 +6,7 @@ import { addSaDays, calendarDate, saDateStr, saToday } from "@/lib/dates";
 import { eraseClient } from "@/lib/popia/erase-client";
 import { purgeRetainedClinicalRecords } from "@/lib/popia/purge-retained";
 import { erasedEmail } from "@/lib/popia/plan";
+import { externalHolders } from "@/lib/popia/external-holders";
 
 after(() => prisma.$disconnect());
 
@@ -55,6 +56,27 @@ test("identity goes, money stays, clinical content is kept until five years afte
   assert.deepEqual(await eraseClient(student.id, "admin@example.test"), { success: false, error: "This client has already been erased." });
 });
 
+test("after the erase, what outside services hold can still be listed, and the address is returned once", async () => {
+  const { student, past } = await clientWithHistory("external");
+  await prisma.booking.update({ where: { id: past.id }, data: { graphEventId: `evt-${student.id}` } });
+  await prisma.paymentRequest.create({
+    data: { studentId: student.id, billingMonth: "2026-01", status: "paid", paystackReference: `ps-${student.id}`, lineItems: [], subtotalCents: 0, totalCents: 0, dueDate: calendarDate("2026-01-31"), periodStart: calendarDate("2026-01-01"), periodEnd: calendarDate("2026-01-31") },
+  });
+  await prisma.emailLog.create({ data: { to: student.email, subject: "Hi", status: "sent", studentId: student.id } });
+
+  const res = await eraseClient(student.id, "admin@example.test");
+  assert.equal(res.success && res.contactEmail, student.email);
+
+  assert.deepEqual(await externalHolders(student.id), {
+    paystackReferences: [`ps-${student.id}`],
+    calendarEvents: 1,
+    emailsSent: 1,
+    whatsappMessages: 0,
+  });
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "client_erased", entityId: student.id } });
+  assert.equal((audit.metadata as Record<string, unknown>).externalCleanup, "pending");
+});
+
 test("the purge removes the kept clinical content once the window has closed", async () => {
   const { student, past } = await clientWithHistory("purge");
   await eraseClient(student.id, "admin@example.test");
@@ -73,7 +95,7 @@ test("a client with no sessions has nothing to retain, so clinical content goes 
   const student = await makeStudent("nosessions");
   await prisma.clientIntake.create({ data: { studentId: student.id, feelings: ["sad"] } });
   const res = await eraseClient(student.id, "admin@example.test");
-  assert.deepEqual(res, { success: true, retainUntil: null });
+  assert.deepEqual(res, { success: true, retainUntil: null, contactEmail: student.email });
   assert.equal(await prisma.clientIntake.findUnique({ where: { studentId: student.id } }), null);
 });
 

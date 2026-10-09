@@ -40,7 +40,7 @@ const HELD = ["confirmed", "completed", "no_show"] as const;
 export async function eraseClient(
   studentId: string,
   actorEmail: string,
-): Promise<{ success: true; retainUntil: string | null } | { success: false; error: string }> {
+): Promise<{ success: true; retainUntil: string | null; contactEmail: string } | { success: false; error: string }> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     select: { id: true, email: true, phone: true, supabaseUserId: true, erasedAt: true },
@@ -153,8 +153,13 @@ export async function eraseClient(
       clinicalPurged: purgeNow,
       loginRemoved: Boolean(student.supabaseUserId),
       deletedModels: Object.keys(MODEL_FATES).filter((m) => MODEL_FATES[m] === "delete"),
+      // Paystack, Resend, Outlook and Meta are cleaned by hand; a client_erasure_external_done
+      // row closes this (lib/popia/external-holders.ts).
+      externalCleanup: "pending",
     },
   });
 
-  return { success: true, retainUntil: retainUntil && !purgeNow ? saDateStr(retainUntil) : null };
+  // The address is returned once, for the admin to find this client at Resend and Paystack. It is
+  // gone from every row now, so this is the last place it exists.
+  return { success: true, retainUntil: retainUntil && !purgeNow ? saDateStr(retainUntil) : null, contactEmail: student.email };
 }

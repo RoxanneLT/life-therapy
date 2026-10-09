@@ -5,10 +5,11 @@ import { requireAccess } from "@/lib/auth";
 import { saFormat } from "@/lib/dates";
 import { recordView } from "@/lib/access-log";
 import { canSeeClinical } from "@/lib/clinical-access";
+import { externalHolders } from "@/lib/popia/external-holders";
 import { notFound } from "next/navigation";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
-import { PrivacyActions } from "./privacy-actions";
+import { ErasureCleanupNotice, PrivacyActions } from "./privacy-actions";
 import { ContactConflicts } from "./contact-conflicts";
 
 export default async function ClientDetailPage({
@@ -40,6 +41,13 @@ export default async function ClientDetailPage({
   // may read them, so any view of this page is a view of them (lib/access-log.ts).
   await recordView({ actorEmail: adminUser.email, entityType: "student", entityId: id, area: activeTab });
 
+  // An erased client whose outside clean-up nobody has marked done (lib/popia/external-holders.ts).
+  const cleanup =
+    client.erasedAt && adminUser.role === "super_admin" &&
+    !(await prisma.auditLog.findFirst({ where: { entityType: "student", entityId: id, action: "client_erasure_external_done" }, select: { id: true } }))
+      ? await externalHolders(id)
+      : null;
+
   const contactConflicts = await prisma.auditLog.findMany({
     where: { entityType: "student", entityId: id, action: "contact_field_conflict" },
     select: { id: true, createdAt: true, metadata: true },
@@ -63,8 +71,8 @@ export default async function ClientDetailPage({
             }}
             currentStatus={client.clientStatus}
             action={
-              adminUser.role === "super_admin" && !client.erasedAt ? (
-                <PrivacyActions clientId={client.id} clientName={`${client.firstName} ${client.lastName}`} />
+              adminUser.role === "super_admin" ? (
+                <PrivacyActions clientId={client.id} clientName={`${client.firstName} ${client.lastName}`} erased={!!client.erasedAt} />
               ) : undefined
             }
             existingIntake={
@@ -78,10 +86,13 @@ export default async function ClientDetailPage({
             }
           />
           {client.erasedAt ? (
-            <p className="text-sm text-muted-foreground">
-              Erased under POPIA on {saFormat(client.erasedAt, "d MMM yyyy")}
-              {client.retainUntil ? `; clinical records are removed on ${saFormat(client.retainUntil, "d MMM yyyy")}` : ""}.
-            </p>
+            <>
+              <p className="text-sm text-muted-foreground">
+                Erased under POPIA on {saFormat(client.erasedAt, "d MMM yyyy")}
+                {client.retainUntil ? `; clinical records are removed on ${saFormat(client.retainUntil, "d MMM yyyy")}` : ""}.
+              </p>
+              {cleanup && <ErasureCleanupNotice clientId={client.id} holders={cleanup} />}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">{client.email}</p>
           )}

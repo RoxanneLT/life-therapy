@@ -22,6 +22,7 @@ import type { Booking, Student } from "@/lib/generated/prisma/client";
 import { appBaseUrl } from "@/lib/region";
 import { confirmWithTotp } from "@/lib/mfa-step-up";
 import { eraseClient } from "@/lib/popia/erase-client";
+import { externalHolders, type ExternalHolders } from "@/lib/popia/external-holders";
 import { exportClientData } from "@/lib/popia/export-client";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
@@ -2462,7 +2463,7 @@ export async function eraseClientAction(
   clientId: string,
   typedConfirmation: string,
   stepUpCode: string,
-): Promise<{ success?: true; retainUntil?: string | null; error?: string }> {
+): Promise<{ success?: true; retainUntil?: string | null; contactEmail?: string; holders?: ExternalHolders; error?: string }> {
   const { adminUser } = await requireRole("super_admin");
   if (typedConfirmation.trim().toUpperCase() !== "ERASE") return { error: "Type ERASE to confirm." };
   const stepUp = await confirmWithTotp(stepUpCode);
@@ -2470,8 +2471,25 @@ export async function eraseClientAction(
 
   const result = await eraseClient(clientId, adminUser.email);
   if (!result.success) return { error: result.error };
+  const holders = await externalHolders(clientId);
 
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath("/admin/clients");
-  return { success: true, retainUntil: result.retainUntil };
+  return { success: true, retainUntil: result.retainUntil, contactEmail: result.contactEmail, holders };
+}
+
+/** The admin has finished the outside half of an erasure: Paystack, Resend, Outlook, Meta. */
+export async function markErasureExternalDoneAction(clientId: string): Promise<{ success?: true; error?: string }> {
+  const { adminUser } = await requireRole("super_admin");
+  const student = await prisma.student.findUnique({ where: { id: clientId }, select: { erasedAt: true } });
+  if (!student?.erasedAt) return { error: "This client has not been erased." };
+
+  await recordAudit({
+    action: "client_erasure_external_done",
+    entityType: "student",
+    entityId: clientId,
+    actorEmail: adminUser.email,
+  });
+  revalidatePath(`/admin/clients/${clientId}`);
+  return { success: true };
 }
