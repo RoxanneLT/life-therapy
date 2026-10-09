@@ -103,7 +103,7 @@ export async function updateBookingStatus(
 }
 
 export async function updateBookingNotes(id: string, formData: FormData) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const adminNotes = formData.get("adminNotes") as string;
   await prisma.booking.update({
@@ -111,15 +111,31 @@ export async function updateBookingNotes(id: string, formData: FormData) {
     data: { adminNotes },
   });
 
+  // Notes are clinical free text: the field name only, never the content.
+  await recordAudit({
+    action: "booking_notes_updated",
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    metadata: { fields: ["adminNotes"] },
+  });
+
   revalidatePath(`/admin/bookings/${id}`);
 }
 
 export async function updateSessionNotes(id: string, formData: FormData) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
   const sessionNotes = formData.get("sessionNotes") as string;
   await prisma.booking.update({
     where: { id },
     data: { sessionNotes },
+  });
+  await recordAudit({
+    action: "session_notes_updated",
+    entityType: "booking",
+    entityId: id,
+    actorEmail: adminUser.email,
+    metadata: { fields: ["sessionNotes"] },
   });
   revalidatePath(`/admin/bookings/${id}`);
 }
@@ -333,7 +349,7 @@ export async function rescheduleSeriesAction(
   newDayOfWeek: number, // 1=Mon..5=Fri
   newStartTime: string, // HH:mm
 ): Promise<{ updated: number; skipped: { id: string; date: string; reason: string }[]; calendarWarning?: string }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   // `setHours` is LOCAL midnight — UTC only because Vercel happens to run in UTC.
   // On a dev box it is 22:00 UTC the previous day, which drags YESTERDAY's
@@ -495,6 +511,17 @@ export async function rescheduleSeriesAction(
         graphEventId: newSeriesEventId,
         teamsMeetingUrl: newTeamsMeetingUrl || booking.teamsMeetingUrl,
       },
+    });
+  }
+
+  if (updatedBookings.length > 0) {
+    await recordAudit({
+      action: "series_rescheduled",
+      entityType: "booking",
+      entityId: seriesId,
+      actorEmail: adminUser.email,
+      after: { dayOfWeek: newDayOfWeek, startTime: newStartTime, endTime: newEndTime },
+      metadata: { updated, skipped: skipped.length, ids: updatedBookings.map((u) => u.booking.id) },
     });
   }
 
@@ -910,7 +937,7 @@ export async function adminCreateBookingAction(
   | { success: true; bookingId: string; calendarWarning?: string; partnerWarning?: string }
   | { success: false; error: string }
 > {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const student = await prisma.student.findUnique({
     where: { id: data.studentId },
@@ -1036,6 +1063,20 @@ export async function adminCreateBookingAction(
       `${config.label} — ${format(bookingDate, "d MMM yyyy")}`,
     );
   }
+
+  await recordAudit({
+    action: "booking_created",
+    entityType: "booking",
+    entityId: booking.id,
+    actorEmail: adminUser.email,
+    after: { status: "confirmed", date: data.date, startTime: data.startTime, endTime: data.endTime },
+    metadata: {
+      studentId: student.id,
+      sessionType: data.sessionType,
+      sessionMode: data.sessionMode,
+      creditUsed: data.useCredit && !config.isFree && !isPostpaid,
+    },
+  });
 
   // Send confirmation email
   try {
@@ -1164,7 +1205,7 @@ interface AdminCreateRecurringData {
 }
 
 export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurringData) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const student = await prisma.student.findUnique({
     where: { id: data.studentId },
@@ -1385,6 +1426,24 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
     }
   }
 
+  if (createdDates.length > 0) {
+    await recordAudit({
+      action: "booking_series_created",
+      entityType: "booking",
+      entityId: recurringSeriesId,
+      actorEmail: adminUser.email,
+      metadata: {
+        studentId: student.id,
+        sessionType: data.sessionType,
+        pattern: data.pattern,
+        created: createdDates.length,
+        skipped: skippedDates.length,
+        creditsUsed,
+        dates: createdDates,
+      },
+    });
+  }
+
   // Send single summary email
   if (createdDates.length > 0) {
     try {
@@ -1490,7 +1549,7 @@ export async function adminCreateRecurringBookingsAction(data: AdminCreateRecurr
 // ────────────────────────────────────────────────────────────
 
 export async function markStaleSessionsCompletedAction() {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
   // `date` is a `@db.Date` stored at UTC midnight, so comparing it against a real
   // instant completes sessions that have not happened yet: from 02:00 SAST today's
   // rows already read as `< now`, and this action would mark a 15:30 session
@@ -1498,9 +1557,20 @@ export async function markStaleSessionsCompletedAction() {
   //
   // Stale means the same thing here as on the bookings list and its count
   // (`bookings/page.tsx`): confirmed, and on a day BEFORE today.
+  const staleWhere = { status: "confirmed" as const, date: { lt: calendarDate(saToday()) } };
+  // Ids are read first so the one audit row can name what was completed.
+  const staleIds = (await prisma.booking.findMany({ where: staleWhere, select: { id: true } })).map((b) => b.id);
   const result = await prisma.booking.updateMany({
-    where: { status: "confirmed", date: { lt: calendarDate(saToday()) } },
+    where: staleWhere,
     data: { status: "completed" },
+  });
+  await recordAudit({
+    action: "bookings_bulk_completed",
+    entityType: "bulk",
+    entityId: "stale-sessions",
+    actorEmail: adminUser.email,
+    after: { status: "completed" },
+    metadata: { count: result.count, ids: staleIds },
   });
   revalidatePath("/admin/bookings");
   revalidatePath("/admin");
@@ -1512,7 +1582,7 @@ export async function markStaleSessionsCompletedAction() {
 // ────────────────────────────────────────────────────────────
 
 export async function bulkDeleteCancelledFutureBookingsAction(studentId: string): Promise<{ deleted: number; skippedLateCancels: number }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   // Strictly AFTER today, deliberately: this path hard-deletes rows, and a booking
   // cancelled for today stays put rather than being swept up by a bulk action. Same
   // set as the `gt: new Date()` it replaces (a day column at UTC midnight is never
@@ -1567,7 +1637,15 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
     }
   }
 
-  const result = await prisma.booking.deleteMany({ where: { id: { in: toDelete.map((b) => b.id) } } });
+  const deletedIds = toDelete.map((b) => b.id);
+  const result = await prisma.booking.deleteMany({ where: { id: { in: deletedIds } } });
+  await recordAudit({
+    action: "cancelled_bookings_bulk_deleted",
+    entityType: "bulk",
+    entityId: `student:${studentId}`,
+    actorEmail: adminUser.email,
+    metadata: { count: result.count, ids: deletedIds, studentId, skippedLateCancels: lateCancelCount },
+  });
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/clients/${studentId}`);
   return { deleted: result.count, skippedLateCancels: lateCancelCount };
@@ -1648,7 +1726,7 @@ export async function getClientPartnersAction(studentId: string) {
 // ────────────────────────────────────────────────────────────
 
 export async function togglePolicyOverrideAction(bookingId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -1659,6 +1737,15 @@ export async function togglePolicyOverrideAction(bookingId: string) {
   await prisma.booking.update({
     where: { id: bookingId },
     data: { policyOverride: !booking.policyOverride },
+  });
+
+  await recordAudit({
+    action: "booking_policy_override_toggled",
+    entityType: "booking",
+    entityId: bookingId,
+    actorEmail: adminUser.email,
+    before: { policyOverride: booking.policyOverride },
+    after: { policyOverride: !booking.policyOverride },
   });
 
   revalidatePath(`/admin/bookings/${bookingId}`);
@@ -1931,7 +2018,7 @@ interface AdminCreateHistoricalData {
 }
 
 export async function adminCreateHistoricalBookingAction(data: AdminCreateHistoricalData) {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   // Validated like the other two, but DELIBERATELY NOT INVITED. This records a session
   // that already happened; emailing the partner an invitation to a past appointment
@@ -2099,6 +2186,20 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
   }
 
   // "auto" and "defer": booking sits in unbilled queue for next monthly run
+
+  await recordAudit({
+    action: "booking_created",
+    entityType: "booking",
+    entityId: booking.id,
+    actorEmail: adminUser.email,
+    after: { status: "completed", date: data.date, startTime: data.startTime, endTime: data.endTime },
+    metadata: {
+      studentId: student.id,
+      sessionType: data.sessionType,
+      historical: true,
+      billingResolution: data.billingResolution,
+    },
+  });
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);

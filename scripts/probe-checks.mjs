@@ -461,9 +461,10 @@ export async function updateBillingAssignmentProbeAction(studentId: string) {
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { recordAudit } from "@/lib/audit";
 
 export async function probeRemoveBothRowsAction(relationshipId: string, studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   const rel = await prisma.clientRelationship.findUnique({ where: { id: relationshipId } });
   if (!rel) return;
   if (rel.relatedStudentId) {
@@ -472,6 +473,7 @@ export async function probeRemoveBothRowsAction(relationshipId: string, studentI
     });
   }
   await prisma.clientRelationship.delete({ where: { id: relationshipId } });
+  await recordAudit({ action: "client_relationship_removed", entityType: "student", entityId: studentId, actorEmail: adminUser.email });
   revalidatePath(\`/admin/clients/\${studentId}\`);
 }
 `,
@@ -526,6 +528,13 @@ const MUTATIONS = [
     find: '  await recordExport({ actorEmail: adminUser.email, report: "client-list", rows: rows.length });\n',
     replace: "",
     expects: ["access-log: every export records who took it"],
+  },
+  {
+    path: "app/(admin)/admin/(dashboard)/clients/[id]/actions.ts",
+    // Pausing a client's drip with its record removed: a write to client data nobody can attribute.
+    find: '  await recordAudit({\n    action: "drip_paused",\n    entityType: "student",\n    entityId: studentId,\n    actorEmail: adminUser.email,\n    after: { isPaused: true },\n  });\n',
+    replace: "",
+    expects: ["audit-trail: an admin write to client data records who made it"],
   },
   {
     path: "lib/popia/plan.ts",

@@ -56,7 +56,7 @@ export type CreateClientResult =
   | { success: false; error: string; existingClientId?: string };
 
 export async function createClientAction(data: CreateClientData): Promise<CreateClientResult> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   try {
     // Determine email — minors get a placeholder
@@ -122,6 +122,15 @@ export async function createClientAction(data: CreateClientData): Promise<Create
       data: { studentId: client.id, balance: 0 },
     });
 
+    await recordAudit({
+      action: "client_created",
+      entityType: "student",
+      entityId: client.id,
+      actorEmail: adminUser.email,
+      after: { clientStatus: data.clientStatus, billingType: data.billingType, branch: data.branch || null },
+      metadata: { source: "manual" },
+    });
+
     revalidatePath("/admin/clients");
     return { success: true, clientId: client.id };
   } catch (err) {
@@ -161,11 +170,19 @@ export async function bulkAssignBranchAction(
   studentIds: string[],
   branch: string | null,
 ): Promise<{ success: boolean; count: number }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
   if (studentIds.length === 0) return { success: true, count: 0 };
   const res = await prisma.student.updateMany({
     where: { id: { in: studentIds } },
     data: { branch: branch || null },
+  });
+  await recordAudit({
+    action: "clients_branch_bulk_assigned",
+    entityType: "bulk",
+    entityId: "student-branch",
+    actorEmail: adminUser.email,
+    after: { branch: branch || null },
+    metadata: { count: res.count, ids: studentIds },
   });
   revalidatePath("/admin/clients");
   return { success: true, count: res.count };
@@ -176,11 +193,19 @@ export async function bulkAssignBranchAction(
 // ────────────────────────────────────────────────────────────
 
 export async function updateAdminNotesAction(clientId: string, notes: string) {
-  await requireRole("super_admin", "marketing");
+  const { adminUser } = await requireRole("super_admin", "marketing");
 
   await prisma.student.update({
     where: { id: clientId },
     data: { adminNotes: notes.trim() || null },
+  });
+
+  await recordAudit({
+    action: "client_admin_notes_updated",
+    entityType: "student",
+    entityId: clientId,
+    actorEmail: adminUser.email,
+    metadata: { fields: ["adminNotes"] },
   });
 
   revalidatePath(`/admin/clients/${clientId}`);
@@ -198,7 +223,7 @@ export async function updateClientProfileAction(
   clientId: string,
   formData: FormData,
 ): Promise<{ success: boolean; error?: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   try {
     const firstName = (formData.get("firstName") as string)?.trim();
@@ -233,6 +258,19 @@ export async function updateClientProfileAction(
         referralSource,
         referralDetail,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      },
+    });
+
+    await recordAudit({
+      action: "client_profile_updated",
+      entityType: "student",
+      entityId: clientId,
+      actorEmail: adminUser.email,
+      metadata: {
+        fields: [
+          "firstName", "lastName", "phone", "gender", "address", "relationshipStatus",
+          "emergencyContact", "referralSource", "referralDetail", "dateOfBirth",
+        ],
       },
     });
 
@@ -445,6 +483,23 @@ export async function convertToClientAction(clientId: string, data: ConvertData)
   } catch {
     // Email failure shouldn't block conversion
   }
+
+  await recordAudit({
+    action: "client_converted",
+    entityType: "student",
+    entityId: clientId,
+    actorEmail: adminUser.email,
+    before: { clientStatus: "potential" },
+    after: { clientStatus: "active" },
+    metadata: {
+      creditsGranted,
+      hybridPackageId: data.hybridPackageId ?? null,
+      fields: [
+        ...(data.adminNotes ? ["adminNotes"] : []),
+        ...(hasAssessment ? ["behaviours", "feelings", "symptoms"] : []),
+      ],
+    },
+  });
 
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath("/admin/clients");

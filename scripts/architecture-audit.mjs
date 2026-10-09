@@ -3463,6 +3463,48 @@ const AUDIT_EXEMPT = [
   },
 ];
 
+/**
+ * Admin actions that write client data and deliberately record no audit entry, each with why.
+ * The check below fails on any other; an entry that stops matching an unaudited write fails too.
+ */
+const CLIENT_WRITE_EXEMPT = new Map([
+  ["resendPaymentRequestAction", "re-sends an existing request; the send itself is recorded in email_logs, and its only write is the sent-at stamp"],
+  ["createDripEmailAction", "edits a drip TEMPLATE; the dripProgress updateMany only re-indexes every client's position in the sequence, it changes nothing about any one client"],
+  ["deleteDripEmailAction", "edits a drip TEMPLATE; the dripProgress updateMany only re-indexes every client's position in the sequence, it changes nothing about any one client"],
+]);
+
+check("audit-trail: an admin write to client data records who made it", () => {
+  // The name list above caught money and status. It missed every clinical and demographic edit:
+  // 40 of 63 admin actions that change a client's data left no trace (census,
+  // .handoff/data-access-logging/01-census.md, 2026-10-09). This one is by what an action WRITES,
+  // not what it is called: any admin action writing a client-linked model (Student, or any model
+  // carrying a link to one, derived from the schema) must call recordAudit, or be exempted here.
+  const linked = [];
+  for (const m of read(join(ROOT, "prisma/schema.prisma")).matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    if (m[1] === "Student" || /^\s+(?:studentId|fromStudentId|toStudentId|buyerId|recipientId)\s/m.test(m[2])) {
+      linked.push(m[1][0].toLowerCase() + m[1].slice(1));
+    }
+  }
+  if (linked.length < 10) throw new Error(`derived ${linked.length} client-linked models — the parse has broken`);
+  const WRITES = new RegExp(String.raw`\b(?:prisma|tx)\.(?:${linked.join("|")})\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(`);
+  const seen = new Set();
+  for (const f of walk(join(APP, "(admin)"), /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(code(raw))) {
+      if (!WRITES.test(fn.body) || /\brecordAudit\s*\(/.test(fn.body)) continue;
+      if (CLIENT_WRITE_EXEMPT.has(fn.name)) {
+        seen.add(fn.name);
+        continue;
+      }
+      fail("audit-trail", `${rel(f)} → ${fn.name}`, "writes client data and records no audit entry", "call recordAudit() with what changed (field names for clinical text, never its content), or add a CLIENT_WRITE_EXEMPT entry saying why not");
+    }
+  }
+  for (const name of CLIENT_WRITE_EXEMPT.keys()) {
+    if (!seen.has(name)) fail("audit-trail", "scripts/architecture-audit.mjs", `CLIENT_WRITE_EXEMPT names \`${name}\`, which no longer writes client data unaudited`, "remove the entry");
+  }
+});
+
 check("audit-trail: an audit-worthy action records one", () => {
   const seen = new Set();
   for (const file of allSource().filter((f) => f.endsWith("actions.ts"))) {

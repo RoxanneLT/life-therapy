@@ -60,7 +60,7 @@ async function autoActivatePayerIfNeeded(
 // ────────────────────────────────────────────────────────────
 
 export async function createIntakeAction(studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.clientIntake.create({
     data: {
@@ -68,6 +68,13 @@ export async function createIntakeAction(studentId: string) {
       lastEditedBy: "admin",
       lastEditedAt: new Date(),
     },
+  });
+
+  await recordAudit({
+    action: "intake_created",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -89,7 +96,7 @@ export async function updateIntakeAction(
     adminNotes?: string;
   },
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.clientIntake.upsert({
     where: { studentId },
@@ -118,6 +125,20 @@ export async function updateIntakeAction(
     },
   });
 
+  // Intake is clinical: field names only, never the chips or the free text.
+  await recordAudit({
+    action: "intake_updated",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    metadata: {
+      fields: [
+        "behaviours", "feelings", "symptoms",
+        "otherBehaviours", "otherFeelings", "otherSymptoms", "adminNotes",
+      ],
+    },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
@@ -126,7 +147,7 @@ export async function updateIntakeAction(
 // ────────────────────────────────────────────────────────────
 
 export async function markNoShowAction(bookingId: string, studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -156,6 +177,15 @@ export async function markNoShowAction(bookingId: string, studentId: string) {
     ]);
   }
 
+  await recordAudit({
+    action: "booking_no_show",
+    entityType: "booking",
+    entityId: bookingId,
+    actorEmail: adminUser.email,
+    after: { status: "no_show" },
+    metadata: { studentId, creditForfeited: !!(balance && balance.balance > 0) },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
@@ -168,7 +198,7 @@ export async function adminCancelBookingAction(
   studentId: string,
   refundCredit: boolean,
 ): Promise<{ calendarWarning?: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -221,6 +251,15 @@ export async function adminCancelBookingAction(
     }
   }
 
+  await recordAudit({
+    action: "booking_cancelled_by_admin",
+    entityType: "booking",
+    entityId: bookingId,
+    actorEmail: adminUser.email,
+    after: { status: "cancelled", isLateCancel: false, creditRefunded: refundCredit },
+    metadata: { studentId },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
   return removal.warning ? { calendarWarning: removal.warning } : {};
 }
@@ -229,7 +268,7 @@ export async function adminLateCancelWithFeeAction(
   bookingId: string,
   studentId: string,
 ): Promise<{ calendarWarning?: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
@@ -284,6 +323,15 @@ export async function adminLateCancelWithFeeAction(
     await sendInvoiceEmail(invoice.id).catch(console.error);
   }
 
+  await recordAudit({
+    action: "booking_late_cancelled_with_fee",
+    entityType: "booking",
+    entityId: bookingId,
+    actorEmail: adminUser.email,
+    after: { status: "cancelled", isLateCancel: true, creditRefunded: false },
+    metadata: { studentId, feeCents: booking.priceZarCents, currency: booking.priceCurrency || "ZAR" },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
   return removal.warning ? { calendarWarning: removal.warning } : {};
 }
@@ -297,7 +345,7 @@ export async function grantCreditsAction(
   amount: number,
   reason: string,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   if (amount < 1 || amount > 20) throw new Error("Amount must be 1-20");
 
   // Credits granted from this button had no expiry date, while the same credits
@@ -325,6 +373,16 @@ export async function grantCreditsAction(
     },
   });
 
+  await recordAudit({
+    action: "credits_granted",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: { balance: balance.balance - amount },
+    after: { balance: balance.balance },
+    metadata: { amount },
+  });
+
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
@@ -333,7 +391,7 @@ export async function grantCreditsAction(
 // ────────────────────────────────────────────────────────────
 
 export async function enrolInCourseAction(studentId: string, courseId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.enrollment.create({
     data: {
@@ -341,6 +399,14 @@ export async function enrolInCourseAction(studentId: string, courseId: string) {
       courseId,
       source: "admin_grant",
     },
+  });
+
+  await recordAudit({
+    action: "course_enrolled",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    metadata: { courseId, source: "admin_grant" },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -363,7 +429,7 @@ export async function updateCommPrefAction(
   field: string,
   value: boolean,
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   if (!ALLOWED_COMM_FIELDS.includes(field as (typeof ALLOWED_COMM_FIELDS)[number])) {
     throw new Error("Invalid field");
   }
@@ -371,6 +437,14 @@ export async function updateCommPrefAction(
   await prisma.student.update({
     where: { id: studentId },
     data: { [field]: value },
+  });
+
+  await recordAudit({
+    action: "comm_preference_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { [field]: value },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -381,28 +455,49 @@ export async function updateCommPrefAction(
 // ────────────────────────────────────────────────────────────
 
 export async function pauseDripAction(studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   await prisma.dripProgress.update({
     where: { studentId },
     data: { isPaused: true },
+  });
+  await recordAudit({
+    action: "drip_paused",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { isPaused: true },
   });
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
 export async function resumeDripAction(studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   await prisma.dripProgress.update({
     where: { studentId },
     data: { isPaused: false },
+  });
+  await recordAudit({
+    action: "drip_resumed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { isPaused: false },
   });
   revalidatePath(`/admin/clients/${studentId}`);
 }
 
 export async function resetDripAction(studentId: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   await prisma.dripProgress.update({
     where: { studentId },
     data: { currentStep: 0, completedAt: null },
+  });
+  await recordAudit({
+    action: "drip_reset",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { currentStep: 0 },
   });
   revalidatePath(`/admin/clients/${studentId}`);
 }
@@ -412,10 +507,17 @@ export async function resetDripAction(studentId: string) {
 // ────────────────────────────────────────────────────────────
 
 export async function updateTagsAction(studentId: string, tags: string[]) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
   await prisma.student.update({
     where: { id: studentId },
     data: { tags },
+  });
+  await recordAudit({
+    action: "client_tags_updated",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { tags },
   });
   revalidatePath(`/admin/clients/${studentId}`);
 }
@@ -440,10 +542,17 @@ export async function updateClientBranchAction(
   studentId: string,
   branch: string | null,
 ): Promise<{ success: boolean }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
   await prisma.student.update({
     where: { id: studentId },
     data: { branch: branch || null },
+  });
+  await recordAudit({
+    action: "client_branch_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { branch: branch || null },
   });
   revalidatePath(`/admin/clients/${studentId}`);
   return { success: true };
@@ -665,7 +774,7 @@ export async function updateBillFullMonthAction(studentId: string, billFullMonth
 export async function restoreZeroPriceSessionsAction(
   clientId: string,
 ): Promise<{ restored: number }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   const student = await prisma.student.findUnique({
     where: { id: clientId },
@@ -688,6 +797,7 @@ export async function restoreZeroPriceSessionsAction(
   });
 
   let restored = 0;
+  const restoredIds: string[] = [];
   for (const booking of zeroPriceSessions) {
     const currency = (booking.priceCurrency as string) || "ZAR";
     let rateCents = 0;
@@ -713,7 +823,18 @@ export async function restoreZeroPriceSessionsAction(
         },
       });
       restored++;
+      restoredIds.push(booking.id);
     }
+  }
+
+  if (restored > 0) {
+    await recordAudit({
+      action: "session_prices_restored",
+      entityType: "student",
+      entityId: clientId,
+      actorEmail: adminUser.email,
+      metadata: { count: restored, ids: restoredIds },
+    });
   }
 
   revalidatePath(`/admin/clients/${clientId}`);
@@ -726,11 +847,25 @@ export async function restoreZeroPriceSessionsAction(
 // ────────────────────────────────────────────────────────────
 
 export async function updateBillingEmailAction(studentId: string, email: string) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
+
+  const existing = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { billingEmail: true },
+  });
 
   await prisma.student.update({
     where: { id: studentId },
     data: { billingEmail: email.trim() || null },
+  });
+
+  await recordAudit({
+    action: "billing_email_changed",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    before: { billingEmail: existing?.billingEmail ?? null },
+    after: { billingEmail: email.trim() || null },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -809,7 +944,7 @@ export async function addRelationshipAction(data: {
   relationshipType: string;
   relationshipLabel?: string;
 }) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.clientRelationship.create({
     data: {
@@ -819,6 +954,20 @@ export async function addRelationshipAction(data: {
       relationshipType: data.relationshipType,
       relationshipLabel: data.relationshipLabel || null,
     },
+  });
+
+  // The label is free text, so it is recorded as a field name only.
+  await recordAudit({
+    action: "client_relationship_added",
+    entityType: "student",
+    entityId: data.studentId,
+    actorEmail: adminUser.email,
+    after: {
+      relationshipType: data.relationshipType,
+      relatedStudentId: data.relatedStudentId || null,
+      billingEntityId: data.billingEntityId || null,
+    },
+    metadata: { fields: data.relationshipLabel ? ["relationshipLabel"] : [] },
   });
 
   revalidatePath(`/admin/clients/${data.studentId}`);
@@ -857,7 +1006,7 @@ export async function createClientAndLinkRelationshipAction(data: {
   relationshipType: string;
   relationshipLabel?: string;
 }): Promise<CreateLinkedClientResult> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   // Determine email
   let email = data.email?.trim().toLowerCase();
@@ -931,6 +1080,20 @@ export async function createClientAndLinkRelationshipAction(data: {
       data: { individualBilledToId: forwardRel.id },
     });
   }
+
+  await recordAudit({
+    action: "client_created",
+    entityType: "student",
+    entityId: newClient.id,
+    actorEmail: adminUser.email,
+    after: { clientStatus: "active" },
+    metadata: {
+      source: "manual",
+      parentClientId: data.parentClientId,
+      relationshipType: data.relationshipType,
+      isMinor: data.isMinor,
+    },
+  });
 
   revalidatePath(`/admin/clients/${data.parentClientId}`);
   revalidatePath(`/admin/clients/${newClient.id}`);
@@ -1010,7 +1173,7 @@ export async function updateRelationshipAction(
     relationshipLabel?: string;
   },
 ) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   await prisma.clientRelationship.update({
     where: { id: relationshipId },
@@ -1018,6 +1181,15 @@ export async function updateRelationshipAction(
       relationshipType: data.relationshipType,
       relationshipLabel: data.relationshipLabel || null,
     },
+  });
+
+  await recordAudit({
+    action: "client_relationship_updated",
+    entityType: "student",
+    entityId: studentId,
+    actorEmail: adminUser.email,
+    after: { relationshipType: data.relationshipType },
+    metadata: { relationshipId, fields: ["relationshipType", "relationshipLabel"] },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -1300,7 +1472,7 @@ export async function regeneratePaymentLinkAction(
   paymentRequestId: string,
   studentId: string,
 ): Promise<{ success: true; paymentUrl: string } | { success: false; error: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const pr = await prisma.paymentRequest.findUnique({
     where: { id: paymentRequestId },
@@ -1351,6 +1523,14 @@ export async function regeneratePaymentLinkAction(
       paymentUrl: result.authorization_url,
       paystackReference: reference,
     },
+  });
+
+  await recordAudit({
+    action: "payment_link_regenerated",
+    entityType: "payment_request",
+    entityId: pr.id,
+    actorEmail: adminUser.email,
+    metadata: { studentId },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
@@ -1864,7 +2044,7 @@ export async function createManualPaymentRequestAction(data: {
   note?: string;
   sendImmediately: boolean;
 }): Promise<{ success: boolean; paymentRequestId?: string; error?: string }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   try {
     const settings = await getSiteSettings();
@@ -1971,6 +2151,15 @@ export async function createManualPaymentRequestAction(data: {
       await sendPaymentRequestEmail(pr.id);
     }
 
+    await recordAudit({
+      action: "payment_request_created",
+      entityType: "payment_request",
+      entityId: pr.id,
+      actorEmail: adminUser.email,
+      after: { totalCents: pr.totalCents, currency: pr.currency, status: pr.status },
+      metadata: { studentId: data.studentId, sentImmediately: data.sendImmediately },
+    });
+
     revalidatePath(`/admin/clients/${data.studentId}`);
     return { success: true, paymentRequestId: pr.id };
   } catch (err) {
@@ -2074,7 +2263,7 @@ export async function updatePaymentRequestAction(data: {
   dueDate: string;
   resend: boolean;
 }): Promise<{ success: boolean; error?: string }> {
-  await requireRole("super_admin", "editor");
+  const { adminUser } = await requireRole("super_admin", "editor");
 
   try {
     const pr = await prisma.paymentRequest.findUniqueOrThrow({
@@ -2182,6 +2371,16 @@ export async function updatePaymentRequestAction(data: {
       }
       await sendPaymentRequestEmail(data.paymentRequestId);
     }
+
+    await recordAudit({
+      action: "payment_request_updated",
+      entityType: "payment_request",
+      entityId: data.paymentRequestId,
+      actorEmail: adminUser.email,
+      before: { totalCents: pr.totalCents },
+      after: { totalCents: totals.totalCents },
+      metadata: { studentId: data.studentId, resent: data.resend },
+    });
 
     revalidatePath(`/admin/clients/${data.studentId}`);
     revalidatePath("/admin/invoices");
