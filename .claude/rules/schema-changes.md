@@ -34,10 +34,11 @@ channel for DDL.
      -d '{"query":"ALTER TABLE bookings ADD COLUMN example text;"}'
    ```
 
-   **The Supabase MCP tools do not work on this project** — every call, even a read-only
-   `list_tables`, fails with `MCP error -32600: You do not have permission to perform this action`.
-   The REST call above is the only channel that works, for reads as well as DDL. It is `ask`-gated:
-   this is **production**, and a statement deserves a glance before it runs.
+   The REST call above is `ask`-gated: this is **production**, and a statement deserves a glance
+   before it runs. **Since 2026-10-09 the project's Supabase MCP server works** (`.mcp.json`, scoped to
+   this project; the account-wide connector still returns `-32600`). Use it for READS (`list_tables`,
+   `execute_sql` with a `SELECT`). Its `execute_sql` and `apply_migration` ask in settings, but no hook
+   reads them, so DDL stays on the REST path above, where `bash-gate` and `ddl-gate` see it.
 
 3. **Re-sync Prisma from the database — but read the two paragraphs below before running it:**
 

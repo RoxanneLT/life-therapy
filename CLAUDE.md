@@ -178,7 +178,7 @@ Two domains, **one deployment**, region decided per-request from the hostname:
 
 | System | How |
 |---|---|
-| Production DB | **Management API over REST** (`SUPABASE_ACCESS_TOKEN` from `.env.local`). The Supabase **MCP tools do not work here** — every call, even a read-only `list_tables`, returns `MCP error -32600: You do not have permission`. Reads as much as DDL. |
+| Production DB | **The project's Supabase MCP server** (`.mcp.json`, scoped to `project_ref=ocqucplcdotvewddfmmw`; sign in with the account in the organisation that owns the project — the account-wide claude.ai connector sees only Pleks and still returns `-32600: You do not have permission` here). Read-only tools are allowed in `.claude/settings.json`; `execute_sql`, `apply_migration` and every edge-function and branch write **ask**, because no hook reads MCP calls and a settings rule cannot tell a `SELECT` from a `DELETE`. The Management API over REST (`SUPABASE_ACCESS_TOKEN` from `.env.local`) still works and stays the DDL path in `.claude/rules/schema-changes.md`. Working since 2026-10-09. |
 | One-off scripts | `npx tsx --env-file=.env.local <script>` — ESM hoists imports above `dotenv.config()`, and `.env` holds a `johndoe@localhost` placeholder `DATABASE_URL` |
 | Deploys, build logs, runtime errors | Vercel MCP (read-only calls pre-allowed) |
 | PRs | GitHub MCP (read-only calls pre-allowed) |
