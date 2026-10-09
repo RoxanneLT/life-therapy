@@ -28,6 +28,7 @@ import Image from "next/image";
 import { useState } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import { SETTINGS_CATALOG, SETTINGS_NAV_GROUPS } from "@/lib/settings-catalog";
+import { useNavBadges } from "./use-nav-badges";
 
 interface NavItem {
   href: string;
@@ -93,6 +94,9 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+/** A collapsed item's tooltip carries its badge count, since the dot alone does not say how many. */
+const withCount = (label: string, count = 0) => (count > 0 ? `${label} (${count})` : label);
+
 interface SidebarContentProps {
   readonly role: AdminRole;
   readonly onNavClick?: () => void;
@@ -102,6 +106,7 @@ interface SidebarContentProps {
 
 export function AdminSidebarContent({ role, onNavClick, collapsed = false, onToggleCollapse }: SidebarContentProps) {
   const pathname = usePathname();
+  const badges = useNavBadges();
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin";
@@ -261,7 +266,7 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
                     key={item.href}
                     href={item.href}
                     onClick={onNavClick}
-                    title={collapsed ? item.label : undefined}
+                    title={collapsed ? withCount(item.label, badges[item.href]) : undefined}
                     className={cn(
                       "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
                       collapsed ? "justify-center px-2" : "gap-3 px-3",
@@ -270,8 +275,18 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && item.label}
+                    <span className="relative shrink-0">
+                      <item.icon className="h-4 w-4" />
+                      {collapsed && badges[item.href] > 0 && (
+                        <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
+                      )}
+                    </span>
+                    {!collapsed && <span className="flex-1">{item.label}</span>}
+                    {!collapsed && badges[item.href] > 0 && (
+                      <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                        {badges[item.href] > 99 ? "99+" : badges[item.href]}
+                      </span>
+                    )}
                   </Link>
                 ))}
               </div>

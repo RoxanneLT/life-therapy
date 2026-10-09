@@ -53,6 +53,33 @@ const DRIFT_KINDS: [string, string][] = [
 
 const plural =(n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** Confirmed sessions on a day before today: the bookings list's "stale" filter and the bulk-complete action. */
+function countStaleSessions(): Promise<number> {
+  return prisma.booking.count({ where: { status: "confirmed", date: { lt: calendarDate(saToday()) } } });
+}
+
+/**
+ * Payment requests due before today began and not settled. The status alone is not trusted to have
+ * been moved to "overdue" by a cron, so a pending request past its date counts too.
+ */
+function countOverduePaymentRequests(): Promise<number> {
+  return prisma.paymentRequest.count({
+    where: { status: { in: ["pending", "overdue"] }, dueDate: { lt: saDayStart(saToday()) } },
+  });
+}
+
+/**
+ * Counts for the sidebar, keyed by nav href. The same definitions as the attention rows, so the
+ * badge on "Bookings" and the row on the dashboard can never disagree. Gated like those rows.
+ */
+export async function getNavBadges(role: AdminRole): Promise<Record<string, number>> {
+  const [stale, overdue] = await Promise.all([
+    BOOKINGS.includes(role) ? countStaleSessions() : 0,
+    SUPER.includes(role) ? countOverduePaymentRequests() : 0,
+  ]);
+  return { "/admin/bookings": stale, "/admin/invoices": overdue };
+}
+
 export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[]> {
   const today = saToday();
   const todayStart = saDayStart(today);
@@ -60,8 +87,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
   const none = Promise.resolve(null);
 
   const [stale, syncFailures, lastReconcile, overdue, failedEmails, expiring, conflicts] = await Promise.all([
-    // Same definition of "stale" as the bookings list and the bulk-complete action.
-    can(BOOKINGS) ? prisma.booking.count({ where: { status: "confirmed", date: { lt: calendarDate(today) } } }) : none,
+    can(BOOKINGS) ? countStaleSessions() : none,
     can(SUPER)
       ? prisma.calendarSyncLog.count({ where: { status: "failed", createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } })
       : none,
@@ -72,11 +98,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
           select: { status: true, metadata: true },
         })
       : none,
-    // Due before today began, and not settled. The status alone is not trusted to have been moved
-    // to "overdue" by a cron, so a pending request past its date counts too.
-    can(SUPER)
-      ? prisma.paymentRequest.count({ where: { status: { in: ["pending", "overdue"] }, dueDate: { lt: todayStart } } })
-      : none,
+    can(SUPER) ? countOverduePaymentRequests() : none,
     can(SUPER)
       ? prisma.emailLog.findMany({
           where: { status: "failed", sentAt: { gte: saDayStart(addSaDays(today, -7)) } },
