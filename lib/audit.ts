@@ -147,7 +147,30 @@ export async function recordAudit(input: AuditInput): Promise<void> {
       },
     });
   } catch (err) {
-    // Audit logging must never break the main operation
+    // Audit logging must never break the main operation. But a gap in the trail must not be
+    // silent either: until 2026-10-09 a failure reached a Vercel log line and nobody. It is now a
+    // failed cron_runs row, which the daily digest already reports (collectCronRunFailures). If
+    // the database itself is down, that write fails too and the log line is all there is.
     console.error("[audit] Failed to write audit log:", err);
+    await reportAuditGap(input, err);
+  }
+}
+
+async function reportAuditGap(input: AuditInput, err: unknown): Promise<void> {
+  const reason = err instanceof Error ? err.message.split("\n").find((l) => l.trim()) ?? err.name : String(err);
+  // An auth event's entityId can be the email address, so it is left out there.
+  const subject = input.entityType === "auth" ? "auth" : `${input.entityType} ${input.entityId}`;
+  try {
+    await prisma.cronRun.create({
+      data: {
+        jobName: "audit-write",
+        status: "failed",
+        finishedAt: new Date(),
+        // The action and the record it concerns, never the before/after values.
+        errorMessage: `${input.action} on ${subject} was not recorded: ${reason.slice(0, 200)}`,
+      },
+    });
+  } catch (gapErr) {
+    console.error("[audit] Could not report the gap either:", gapErr);
   }
 }

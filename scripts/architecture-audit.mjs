@@ -2789,6 +2789,8 @@ const RERUNNABLE = [
   /^CREATE (UNIQUE )?INDEX IF NOT EXISTS\b/i,
   /^ALTER TYPE "?\w+"? ADD VALUE IF NOT EXISTS\b/i,
   /^DROP (TABLE|TYPE|INDEX|VIEW|FUNCTION) IF EXISTS\b/i,
+  // A function or trigger replaced in place. Its dollar-quoted body is blanked before the split.
+  /^CREATE OR REPLACE (FUNCTION|TRIGGER)\b/i,
   // ALTER TABLE: every clause must be conditional or naturally idempotent. Checked per clause.
   /^ALTER TABLE\b/i,
 ];
@@ -2800,7 +2802,8 @@ check("schema: every prisma/sql group statement is re-runnable", () => {
     const lineOf = (needle) => src.slice(0, Math.max(0, src.indexOf(needle))).split("\n").length;
     const stripped = src
       .replace(/--[^\n]*/g, "")
-      .replace(/\bDO \$\$[\s\S]*?\$\$;/g, ";");
+      .replace(/\bDO \$\$[\s\S]*?\$\$;/g, ";")
+      .replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, "$$$$");
     for (const raw of stripped.split(";")) {
       const stmt = raw.trim().replace(/\s+/g, " ");
       if (!stmt) continue;
