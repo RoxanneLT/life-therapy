@@ -123,6 +123,10 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
   password_changed: {
     firstName: "Jane",
   },
+  security_alert: {
+    firstName: "Jane",
+    alertMessage: "Two-factor sign-in was removed from your admin account by another super admin.",
+  },
   booking_reschedule: {
     clientName: "Jane Doe",
     sessionType: "Individual Therapy",
@@ -271,6 +275,7 @@ const TEMPLATE_TITLES: Record<string, string> = {
   gift_delivered_buyer: "Gift Delivered!",
   password_reset: "Reset Your Password",
   password_changed: "Password Changed",
+  security_alert: "Security Notice",
   booking_reschedule: "Session Rescheduled",
   booking_recurring_series: "Your Upcoming Sessions",
   legal_document_updated: "Document Updated",
@@ -686,6 +691,18 @@ export function renderFallback(
             <a href="${variables.resetUrl || baseUrl}" style="display: inline-block; background: #8BA889; color: #fff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">Reset Password</a>
           </div>
           <p style="color: #6b7280; font-size: 13px;">This link expires in 1 hour. If you didn&rsquo;t request a password reset, you can safely ignore this email.</p>
+          <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+        ),
+      };
+    case "security_alert":
+      return {
+        subject: "Security notice for your Life-Therapy account",
+        html: bt(
+          "Security Notice",
+          `<p>Hi ${variables.firstName || "there"},</p>
+          <p>${variables.alertMessage || "A security setting on your account was changed."}</p>
+          <p>If this was you, or you asked for it, there is nothing to do.</p>
+          <p>If it wasn&rsquo;t, please contact us immediately at <a href="mailto:${contactEmail || "hello@life-therapy.co.za"}" style="color: #8BA889;">${contactEmail || "hello@life-therapy.co.za"}</a>.</p>
           <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
         ),
       };

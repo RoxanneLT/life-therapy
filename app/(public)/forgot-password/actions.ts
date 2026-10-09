@@ -10,6 +10,7 @@ import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/
 import { appBaseUrl } from "@/lib/region";
 import { stepUpWithTotp, verifiedTotpFactor } from "@/lib/mfa-step-up";
 import { passwordLengthRefusal } from "@/lib/password-policy";
+import { sendSecurityNotice } from "@/lib/security-notice";
 
 const RESET_WINDOW_MS = 15 * 60 * 1000;
 
@@ -216,6 +217,9 @@ export async function updatePasswordAction(
     ip,
     userId: user?.id ?? null,
   });
+  // A reset proves control of the inbox, so the inbox is told; if it was not them, it is the one
+  // place they will see it.
+  await sendSecurityNotice(user?.email, null, "The password for your Life-Therapy account was just reset using a link sent to this address. If this wasn't you, contact us straight away.");
   // They proved account control via the email link — clear any login lockout
   // (both the IP and this account's email bucket) so they can sign in immediately.
   if (ip) await clearRateLimitDb(limitKey("login", "ip", ip));

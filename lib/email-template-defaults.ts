@@ -248,6 +248,14 @@ const defaults: Record<string, TemplateDefault> = {
 <p>If you did not make this change, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
 <p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
   },
+  security_alert: {
+    subject: "Security notice for your Life-Therapy account",
+    bodyHtml: `<p>Hi {{firstName}},</p>
+<p>{{alertMessage}}</p>
+<p>If this was you, or you asked for it, there is nothing to do.</p>
+<p>If it wasn&rsquo;t, please contact us immediately at <a href="mailto:hello@life-therapy.co.za" style="color: #8BA889;">hello@life-therapy.co.za</a>.</p>
+<p style="margin-top: 24px;">Warm regards,<br><strong>Roxanne Bouwer</strong><br>Life-Therapy</p>`,
+  },
   booking_reschedule: {
     subject: "Session Rescheduled: {{sessionType}} — New Date {{newDate}}",
     bodyHtml: `<p>Hi {{clientName}},</p>

@@ -15,6 +15,7 @@ import crypto from "crypto";
 import { appBaseUrl } from "@/lib/region";
 import { confirmWithTotp, recoveryLinkMfaHint } from "@/lib/mfa-step-up";
 import { passwordLengthRefusal } from "@/lib/password-policy";
+import { sendSecurityNotice } from "@/lib/security-notice";
 
 const BASE_URL = appBaseUrl();
 
@@ -113,7 +114,7 @@ export async function updateUser(
     };
   }
 
-  const existing = await prisma.adminUser.findUnique({ where: { id }, select: { email: true, role: true } });
+  const existing = await prisma.adminUser.findUnique({ where: { id }, select: { email: true, name: true, role: true } });
   if (!existing) return { success: false, error: "That admin no longer exists." };
 
   // A role change grants or removes access, so it needs fresh 2FA. A name edit does not.
@@ -139,6 +140,11 @@ export async function updateUser(
       before: { email: existing.email, role: existing.role },
       after: { email: existing.email, role },
     });
+    await sendSecurityNotice(
+      existing.email,
+      existing.name,
+      `Your Life-Therapy admin role was changed from ${roleLabel(existing.role)} to ${roleLabel(role)} by ${currentAdmin.email}.`,
+    );
   }
 
   revalidatePath("/admin/settings/team");
@@ -174,6 +180,7 @@ export async function deleteUser(
     actorEmail: currentAdmin.email,
     before: { email: user.email, role: user.role },
   });
+  await sendSecurityNotice(user.email, user.name, `Your Life-Therapy admin account was removed by ${currentAdmin.email}. You can no longer sign in to the admin area.`);
 
   revalidatePath("/admin/settings/team");
   return { success: true };
@@ -192,7 +199,7 @@ export async function deleteUser(
 export async function changePassword(
   formData: FormData,
 ): Promise<{ success: boolean; error?: string }> {
-  const { user } = await requireRole("super_admin", "editor", "marketing");
+  const { user, adminUser } = await requireRole("super_admin", "editor", "marketing");
 
   const currentPassword = formData.get("currentPassword") as string;
   const newPassword = formData.get("newPassword") as string;
@@ -230,6 +237,7 @@ export async function changePassword(
     // rejected password says WHY it was rejected.
     return { success: false, error: error.message };
   }
+  await sendSecurityNotice(user.email, adminUser.name, "Your Life-Therapy admin password was changed.");
 
   revalidatePath("/admin/users");
   return { success: true };
@@ -248,7 +256,7 @@ export async function removeUserMfaAction(
 
   const target = await prisma.adminUser.findUnique({
     where: { id: adminUserId },
-    select: { supabaseUserId: true, email: true },
+    select: { supabaseUserId: true, email: true, name: true },
   });
   if (!target?.supabaseUserId) return { error: "User not found." };
 
@@ -276,6 +284,11 @@ export async function removeUserMfaAction(
     actorEmail: actor.email,
     metadata: { targetEmail: target.email, factorsRemoved: data?.factors?.length ?? 0 },
   });
+  await sendSecurityNotice(
+    target.email,
+    target.name,
+    `Two-factor sign-in was removed from your Life-Therapy admin account by ${actor.email}. Sign in and set it up again.`,
+  );
 
   revalidatePath(`/admin/users/${adminUserId}`);
   return { success: true };
@@ -336,4 +349,8 @@ export async function sendUserPasswordResetAction(
     console.error("[admin-password-reset] error:", err);
     return { error: "Something went wrong. Please try again." };
   }
+}
+
+function roleLabel(role: AdminRole): string {
+  return role.replace(/_/g, " ");
 }
