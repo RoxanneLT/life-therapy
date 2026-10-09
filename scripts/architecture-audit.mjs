@@ -1012,6 +1012,29 @@ check("admin-access: every admin page is guarded by its area", () => {
   }
 });
 
+check("step-up: an action that grants or removes admin access re-verifies 2FA", () => {
+  // Shape from Pleks's lib/auth/step-up.ts. Creating or deleting an admin, changing an admin's
+  // role, and deleting a 2FA factor are how a borrowed super_admin session makes itself permanent.
+  // Until 2026-10-09 all four needed only the session, and none wrote an audit row. Each now
+  // checks a freshly typed code (confirmWithTotp, lib/mfa-step-up.ts) and records who did it.
+  // Over code(): the markers are calls, and a comment naming one must not count.
+  const GRANTS = /prisma\.adminUser\.(?:create|delete)\b|prisma\.adminUser\.update\([^;]*\brole\b|auth\.admin\.mfa\.deleteFactor\b/;
+  for (const f of walk(APP, /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(code(raw))) {
+      if (!GRANTS.test(fn.body)) continue;
+      const missing = [
+        !/\bconfirmWithTotp\s*\(/.test(fn.body) && "a fresh 2FA check (confirmWithTotp)",
+        !/\brecordAudit\s*\(/.test(fn.body) && "an audit row (recordAudit)",
+      ].filter(Boolean);
+      if (missing.length) {
+        fail("step-up", `${rel(f)} → ${fn.name}`, `grants or removes admin access without ${missing.join(" or ")}`, "call confirmWithTotp(code) before the change and recordAudit(...) after it — see users/actions.ts");
+      }
+    }
+  }
+});
+
 check("auth: every place that sets a password is classified by what authorises it", () => {
   const seen = new Map();
   for (const f of allSource()) {
@@ -4238,14 +4261,6 @@ const KNOWN_DEFECTS = new Map([
     "form validation on an admin-only editor"],
 
 
-  ["server-action-ux|app/(admin)/admin/(dashboard)/users/actions.ts → deleteUser",
-    "'You cannot delete your own account' — UNREACHABLE BECAUSE users/[id]/page.tsx wraps " +
-    "the delete button in {!isSelf && ...}. Again a property of the UI: remove that guard " +
-    "(say, to let a super admin delete anyone) and this refusal is reachable and masked. " +
-    "Its siblings inviteUser/updateUser were converted on 2026-08-18; this one was not, " +
-    "because it is a bare <form action> inside an AlertDialog, so surfacing a message means " +
-    "rebuilding a DESTRUCTIVE path as a client component with useActionState — real risk on " +
-    "an admin-deletion flow, to display a sentence nobody can currently trigger."],
   // RETIRED 2026-08-18: users/actions.ts → changePassword now returns its refusals.
   // Kept as a comment, not an entry: the audit fails if a KNOWN_DEFECTS line stops
   // firing, so a fixed bug must leave the list rather than linger as a tombstone.

@@ -6,7 +6,7 @@ import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { UserForm } from "@/components/admin/user-form";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { updateUser, deleteUser } from "../actions";
+import { updateUser } from "../actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,20 +15,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import Link from "next/link";
-import { Trash2, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { ResetMfaButton } from "./reset-mfa-button";
 import { SendResetButton } from "./send-reset-button";
+import { DeleteUserButton } from "./delete-user-button";
 
 interface Props {
   readonly params: Promise<{ readonly id: string }>;
@@ -51,11 +42,6 @@ export default async function EditUserPage({ params }: Props) {
     // RETURN the refusal — swallowing it here would undo the whole point of the
     // action returning one.
     return updateUser(id, formData);
-  }
-
-  async function handleDelete() {
-    "use server";
-    await deleteUser(id);
   }
 
   const isSelf = currentAdmin.id === user.id;
@@ -86,35 +72,7 @@ export default async function EditUserPage({ params }: Props) {
         title="Edit User"
         description={`Update ${user.name || user.email}'s details and role.`}
         action={
-        !isSelf && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete User
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete User</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete {user.name || user.email}&apos;s account.
-                  This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                {/* Plain submit, not AlertDialogAction — it closes the dialog and
-                    unmounts this form before the action runs. See the bookings page. */}
-                <form action={handleDelete}>
-                  <Button type="submit" className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Delete
-                  </Button>
-                </form>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )
+        !isSelf && <DeleteUserButton adminUserId={user.id} label={user.name || user.email} />
         }
       />
 

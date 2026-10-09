@@ -9,11 +9,11 @@ import { emailPasswordLink } from "@/lib/account-link";
 import { isRateLimitedDb, recordHitDb, limitKey } from "@/lib/rate-limit-db";
 import { renderEmail } from "@/lib/email-render";
 import { sendEmail } from "@/lib/email";
-import { recordAuthEvent } from "@/lib/audit";
+import { recordAudit, recordAuthEvent } from "@/lib/audit";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import crypto from "crypto";
 import { appBaseUrl } from "@/lib/region";
-import { recoveryLinkMfaHint } from "@/lib/mfa-step-up";
+import { confirmWithTotp, recoveryLinkMfaHint } from "@/lib/mfa-step-up";
 import { passwordLengthRefusal } from "@/lib/password-policy";
 
 const BASE_URL = appBaseUrl();
@@ -28,7 +28,7 @@ const BASE_URL = appBaseUrl();
 export async function inviteUser(
   formData: FormData,
 ): Promise<{ success: false; error: string } | void> {
-  await requireRole("super_admin");
+  const { adminUser: actor } = await requireRole("super_admin");
 
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
@@ -37,6 +37,10 @@ export async function inviteUser(
   if (!email || !role) {
     return { success: false, error: "An email address and a role are both required." };
   }
+
+  // A new admin account is access granted: fresh 2FA, and a record of who granted it.
+  const stepUp = await confirmWithTotp(formData.get("stepUpCode"));
+  if (stepUp.error) return { success: false, error: stepUp.error };
 
   // Create user in Supabase Auth with a random temp password
   const tempPassword = crypto.randomBytes(16).toString("hex");
@@ -53,13 +57,20 @@ export async function inviteUser(
   }
 
   // Create admin_users record
-  await prisma.adminUser.create({
+  const created = await prisma.adminUser.create({
     data: {
       supabaseUserId: authData.user.id,
       email,
       name: name || null,
       role,
     },
+  });
+  await recordAudit({
+    action: "admin_user_invited",
+    entityType: "admin_user",
+    entityId: created.id,
+    actorEmail: actor.email,
+    after: { email, role },
   });
 
   // The invite IS a set-password link, emailed to the address. Until 2026-09-11 this called
@@ -102,6 +113,16 @@ export async function updateUser(
     };
   }
 
+  const existing = await prisma.adminUser.findUnique({ where: { id }, select: { email: true, role: true } });
+  if (!existing) return { success: false, error: "That admin no longer exists." };
+
+  // A role change grants or removes access, so it needs fresh 2FA. A name edit does not.
+  const roleChanged = existing.role !== role;
+  if (roleChanged) {
+    const stepUp = await confirmWithTotp(formData.get("stepUpCode"));
+    if (stepUp.error) return { success: false, error: stepUp.error };
+  }
+
   await prisma.adminUser.update({
     where: { id },
     data: {
@@ -109,29 +130,53 @@ export async function updateUser(
       role,
     },
   });
+  if (roleChanged) {
+    await recordAudit({
+      action: "admin_role_changed",
+      entityType: "admin_user",
+      entityId: id,
+      actorEmail: currentAdmin.email,
+      before: { email: existing.email, role: existing.role },
+      after: { email: existing.email, role },
+    });
+  }
 
   revalidatePath("/admin/settings/team");
   redirect("/admin/settings/team");
 }
 
-export async function deleteUser(id: string) {
+/** Refusals are RETURNED, and the caller (DeleteUserButton) shows them and navigates on success. */
+export async function deleteUser(
+  id: string,
+  stepUpCode: string,
+): Promise<{ success?: true; error?: string }> {
   const { adminUser: currentAdmin } = await requireRole("super_admin");
 
-  // Prevent deleting yourself
   if (currentAdmin.id === id) {
-    throw new Error("You cannot delete your own account");
+    return { error: "You can't delete your own account — ask another super admin." };
   }
 
   const user = await prisma.adminUser.findUnique({ where: { id } });
-  if (!user) return;
+  if (!user) return { error: "That admin no longer exists." };
+
+  const stepUp = await confirmWithTotp(stepUpCode);
+  if (stepUp.error) return { error: stepUp.error };
 
   // Delete from Supabase Auth
   await supabaseAdmin.auth.admin.deleteUser(user.supabaseUserId);
 
   // Delete from admin_users
   await prisma.adminUser.delete({ where: { id } });
+  await recordAudit({
+    action: "admin_user_deleted",
+    entityType: "admin_user",
+    entityId: id,
+    actorEmail: currentAdmin.email,
+    before: { email: user.email, role: user.role },
+  });
 
-  revalidatePath("/admin/users");
+  revalidatePath("/admin/settings/team");
+  return { success: true };
 }
 
 /**
@@ -197,14 +242,20 @@ export async function changePassword(
  */
 export async function removeUserMfaAction(
   adminUserId: string,
+  stepUpCode: string,
 ): Promise<{ success?: true; error?: string }> {
-  await requireRole("super_admin");
+  const { adminUser: actor } = await requireRole("super_admin");
 
   const target = await prisma.adminUser.findUnique({
     where: { id: adminUserId },
-    select: { supabaseUserId: true },
+    select: { supabaseUserId: true, email: true },
   });
   if (!target?.supabaseUserId) return { error: "User not found." };
+
+  // Removing someone else's 2FA leaves their account on a password alone, so the person doing it
+  // proves their own second factor first.
+  const stepUp = await confirmWithTotp(stepUpCode);
+  if (stepUp.error) return { error: stepUp.error };
 
   const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({
     userId: target.supabaseUserId,
@@ -217,6 +268,14 @@ export async function removeUserMfaAction(
       userId: target.supabaseUserId,
     });
   }
+
+  await recordAudit({
+    action: "admin_mfa_removed",
+    entityType: "admin_user",
+    entityId: adminUserId,
+    actorEmail: actor.email,
+    metadata: { targetEmail: target.email, factorsRemoved: data?.factors?.length ?? 0 },
+  });
 
   revalidatePath(`/admin/users/${adminUserId}`);
   return { success: true };

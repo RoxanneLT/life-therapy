@@ -104,6 +104,22 @@ export async function probeRead({ id }: { id: string }): Promise<{ n: number }> 
     expects: ["server-action-auth: every mutating action is guarded for its route group"],
   },
   {
+    // A role change behind only the session: guarded, revalidated, but no fresh 2FA, no audit row.
+    path: "app/(admin)/admin/(dashboard)/users/__probe-promote.ts",
+    content: `"use server";
+// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+export async function probePromote(id: string) {
+  await requireRole("super_admin");
+  await prisma.adminUser.update({ where: { id }, data: { role: "super_admin" } });
+  revalidatePath("/admin/settings/team");
+}
+`,
+    expects: ["step-up: an action that grants or removes admin access re-verifies 2FA"],
+  },
+  {
     // A read-only API route with no guard and no PUBLIC_ROUTES entry.
     path: "app/api/__probe-read/route.ts",
     content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.

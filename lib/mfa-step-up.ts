@@ -1,4 +1,5 @@
-import type { createSupabaseServerClient } from "@/lib/supabase-server";
+import { headers } from "next/headers";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
 import { recordAuthEvent } from "@/lib/audit";
@@ -98,4 +99,32 @@ export async function stepUpWithTotp(
   await clearRateLimitDb(ipKey);
   await recordAuthEvent({ action: "mfa_success", email, ip, userId: user.id });
   return {};
+}
+
+/**
+ * Fresh proof of the second factor, for one admin action that grants access, removes it, or
+ * removes another admin's 2FA. The caller passes the code the person just typed.
+ *
+ * Why a signed-in super_admin is not enough (shape from Pleks's lib/auth/step-up.ts): the session
+ * proved 2FA once, at sign-in, possibly days ago, on a desk others can reach, and the 2FA gate
+ * fails open when the assurance lookup errors (lib/auth.ts). These actions are how a borrowed
+ * session would make itself permanent: invite an account, promote it, delete the real owner, or
+ * strip a colleague's 2FA. A code typed now proves the authenticator is in hand now.
+ *
+ * Pleks issues a single-use token after the challenge, because its actions span several requests.
+ * Each action here is one request, so the code is checked inside it and there is nothing to store.
+ * Shares stepUpWithTotp's rate-limit buckets, so this is not a second allowance of guesses.
+ */
+export async function confirmWithTotp(code: FormDataEntryValue | string | null | undefined): Promise<{ error?: string }> {
+  if (typeof code !== "string" || !code.trim()) {
+    return { error: "Enter the 6-digit code from your authenticator app to confirm this." };
+  }
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session has ended. Sign in again." };
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+  return stepUpWithTotp(supabase, { id: user.id, email: user.email }, code, ip);
 }

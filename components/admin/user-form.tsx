@@ -14,6 +14,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { AdminRole } from "@/lib/generated/prisma/client";
+import { StepUpCodeField } from "./step-up-code-field";
 
 interface UserFormProps {
   readonly initialData?: {
@@ -35,7 +36,11 @@ export function UserForm({ initialData, onSubmit, lockRole }: UserFormProps) {
   const [email, setEmail] = useState(initialData?.email || "");
   const [role, setRole] = useState<AdminRole>(initialData?.role || "editor");
 
+  const [stepUpCode, setStepUpCode] = useState("");
+
   const isEditing = !!initialData;
+  // Inviting an admin or changing a role grants or removes access: the server asks for fresh 2FA.
+  const needsStepUp = !isEditing || role !== initialData?.role;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +50,7 @@ export function UserForm({ initialData, onSubmit, lockRole }: UserFormProps) {
       formData.set("name", name);
       formData.set("email", email);
       formData.set("role", role);
+      if (needsStepUp) formData.set("stepUpCode", stepUpCode);
       // A refusal comes BACK; success redirects and never returns. The catch
       // below still has to let NEXT_REDIRECT through — see its note.
       const result = await onSubmit(formData);
@@ -112,6 +118,8 @@ export function UserForm({ initialData, onSubmit, lockRole }: UserFormProps) {
           </p>
         )}
       </div>
+
+      {needsStepUp && <StepUpCodeField value={stepUpCode} onChange={setStepUpCode} />}
 
       <Button type="submit" disabled={saving}>
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

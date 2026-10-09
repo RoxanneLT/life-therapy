@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -16,16 +16,19 @@ import {
 import { ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { removeUserMfaAction } from "../actions";
+import { StepUpCodeField } from "@/components/admin/step-up-code-field";
 
 export function ResetMfaButton({ adminUserId }: { readonly adminUserId: string }) {
   const [isPending, startTransition] = useTransition();
+  const [code, setCode] = useState("");
 
   function handleReset() {
     startTransition(async () => {
-      const res = await removeUserMfaAction(adminUserId);
+      const res = await removeUserMfaAction(adminUserId, code);
       if (res?.error) {
         toast.error(res.error);
       } else {
+        setCode("");
         toast.success("2FA removed — they can sign in with their password and re-enrol.");
       }
     });
@@ -47,6 +50,7 @@ export function ResetMfaButton({ adminUserId }: { readonly adminUserId: string }
             and set 2FA up again. Use this only if they&apos;ve lost access to their authenticator app.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <StepUpCodeField id="resetMfaStepUp" value={code} onChange={setCode} />
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
