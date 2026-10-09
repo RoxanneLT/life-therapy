@@ -3,9 +3,10 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Video, ArrowLeft } from "lucide-react";
+import { Plus, Video } from "lucide-react";
 import { SortableLectureList } from "./sortable-lecture-list";
 
 export default async function LecturesPage({
@@ -33,30 +34,19 @@ export default async function LecturesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/admin/courses/${id}/modules`}
-            className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            {mod.course.title} — Modules
-          </Link>
-          <h1 className="font-heading text-2xl font-bold">
-            {mod.title} — Lectures
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {mod.lectures.length} lecture{mod.lectures.length !== 1 && "s"}
-            {totalMin > 0 && ` · ${totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m` : `${totalMin}m`} total`}
-          </p>
-        </div>
-        <Button asChild>
-          <Link href={`${base}/new`}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Lecture
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        back={{ href: `/admin/courses/${id}/modules`, to: `${mod.course.title} — Modules` }}
+        title={`${mod.title} — Lectures`}
+        description={`${mod.lectures.length} lecture${mod.lectures.length !== 1 ? "s" : ""}${totalMin > 0 ? ` · ${totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m` : `${totalMin}m`} total` : ""}`}
+        action={
+          <Button asChild>
+            <Link href={`${base}/new`}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Lecture
+            </Link>
+          </Button>
+        }
+      />
 
       {mod.lectures.length === 0 ? (
         <Card>

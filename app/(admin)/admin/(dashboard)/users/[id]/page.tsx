@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/admin/page-header";
 import { requireRole } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { UserForm } from "@/components/admin/user-form";
@@ -81,14 +82,11 @@ export default async function EditUserPage({ params }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Edit User</h1>
-          <p className="text-sm text-muted-foreground">
-            Update {user.name || user.email}&apos;s details and role.
-          </p>
-        </div>
-        {!isSelf && (
+      <PageHeader
+        title="Edit User"
+        description={`Update ${user.name || user.email}'s details and role.`}
+        action={
+        !isSelf && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm">
@@ -116,8 +114,9 @@ export default async function EditUserPage({ params }: Props) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        )}
-      </div>
+        )
+        }
+      />
 
       <UserForm
         initialData={{

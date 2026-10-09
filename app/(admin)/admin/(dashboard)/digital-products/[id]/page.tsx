@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { PageHeader } from "@/components/admin/page-header";
 import { notFound } from "next/navigation";
 import { DigitalProductForm } from "@/components/admin/digital-product-form";
 import { updateDigitalProduct, deleteDigitalProduct } from "../actions";
@@ -43,13 +44,18 @@ export default async function EditDigitalProductPage({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Edit Digital Product</h1>
-        <form action={handleDelete}>
-          <Button variant="destructive" size="sm" type="submit">
-            Delete Product
-          </Button>
-        </form>
+      <div className="mb-6">
+        <PageHeader
+          title="Edit Digital Product"
+          back={{ href: "/admin/digital-products", to: "Digital Products" }}
+          action={
+            <form action={handleDelete}>
+              <Button variant="destructive" size="sm" type="submit">
+                Delete Product
+              </Button>
+            </form>
+          }
+        />
       </div>
       <DigitalProductForm
         initialData={{

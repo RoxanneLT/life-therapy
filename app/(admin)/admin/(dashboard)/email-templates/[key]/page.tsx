@@ -4,9 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { previewEmail } from "@/lib/email-render";
 import { EmailTemplateEditor } from "@/components/admin/email-template-editor";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { BackLink } from "@/components/admin/back-link";
 
 export default async function EmailTemplateEditPage({
   params,
@@ -26,14 +24,7 @@ export default async function EmailTemplateEditPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/email-templates">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Templates
-          </Link>
-        </Button>
-      </div>
+      <BackLink href="/admin/email-templates" to="Templates" />
 
       <EmailTemplateEditor
         templateKey={template.key}

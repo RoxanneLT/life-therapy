@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getSiteSettings } from "@/lib/settings";
+import { PageHeader } from "@/components/admin/page-header";
 import { requireRole } from "@/lib/auth";
 import { BookingSettingsForm } from "@/components/admin/booking-settings-form";
 import { isConfigured } from "@/lib/env";
@@ -13,12 +14,10 @@ export default async function BookingSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Booking Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure scheduling rules and Microsoft 365 calendar integration.
-        </p>
-      </div>
+      <PageHeader
+        title="Booking Settings"
+        description="Configure scheduling rules and Microsoft 365 calendar integration."
+      />
       <BookingSettingsForm initialSettings={settings} msGraphConfigured={msGraphConfigured} />
     </div>
   );

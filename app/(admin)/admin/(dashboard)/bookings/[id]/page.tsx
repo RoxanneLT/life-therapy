@@ -38,7 +38,6 @@ import {
   Clock,
   UserX,
   Video,
-  ArrowLeft,
   Repeat,
   ShieldCheck,
   MapPin,
@@ -46,6 +45,7 @@ import {
 import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
+import { BackLink } from "@/components/admin/back-link";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { RescheduleSeriesDialog } from "./reschedule-series-dialog";
 import { RebuildSeriesCalendarButton } from "./rebuild-series-calendar-button";
@@ -136,22 +136,15 @@ export default async function BookingDetailPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <CalendarWarningToast />
+      <BackLink href="/admin/bookings" to="Bookings" />
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/bookings">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </Link>
-          <div>
-            <h1 className="font-heading text-2xl font-bold">
-              Booking Details
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {config.label} — {booking.clientName}
-            </p>
-          </div>
+        <div>
+          <h1 className="font-heading text-2xl font-bold">
+            Booking Details
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {config.label} — {booking.clientName}
+          </p>
         </div>
         <AlertDialog>
           <AlertDialogTrigger asChild>

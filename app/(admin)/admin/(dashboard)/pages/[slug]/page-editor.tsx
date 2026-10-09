@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { PageHeader } from "@/components/admin/page-header";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -169,14 +170,10 @@ export function PageEditor({ initialPage, seo, activeTab }: PageEditorProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">{page.title}</h1>
-          <p className="text-sm text-muted-foreground">
-            /{page.slug === "home" ? "" : page.slug} &middot;{" "}
-            {page.sections.length} sections
-          </p>
-        </div>
+      <PageHeader
+        title={page.title}
+        description={`/${page.slug === "home" ? "" : page.slug} · ${page.sections.length} sections`}
+        action={
         <div className="flex gap-2">
           <Button
             variant={page.isPublished ? "default" : "outline-solid"}
@@ -204,7 +201,8 @@ export function PageEditor({ initialPage, seo, activeTab }: PageEditorProps) {
             </Dialog>
           )}
         </div>
-      </div>
+        }
+      />
 
       {/* Tab switcher */}
       <div className="flex gap-1 border-b">

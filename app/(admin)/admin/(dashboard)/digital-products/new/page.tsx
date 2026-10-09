@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth";
+import { PageHeader } from "@/components/admin/page-header";
 import { prisma } from "@/lib/prisma";
 import { DigitalProductForm } from "@/components/admin/digital-product-form";
 import { createDigitalProduct } from "../actions";
@@ -20,7 +21,9 @@ export default async function NewDigitalProductPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Create Digital Product</h1>
+      <div className="mb-6">
+        <PageHeader title="Create Digital Product" back={{ href: "/admin/digital-products", to: "Digital Products" }} />
+      </div>
       <DigitalProductForm categories={categories} onSubmit={createDigitalProduct} />
     </div>
   );

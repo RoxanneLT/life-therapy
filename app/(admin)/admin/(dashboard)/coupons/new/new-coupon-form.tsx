@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
+import { Loader2 } from "lucide-react";
 import { createCouponAction } from "../actions";
 
 export function NewCouponForm() {
@@ -14,15 +14,7 @@ export function NewCouponForm() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/coupons">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-        <h1 className="font-heading text-2xl font-bold">New Coupon</h1>
-      </div>
+      <PageHeader back={{ href: "/admin/coupons", to: "Coupons" }} title="New Coupon" />
 
       <Card className="mx-auto max-w-lg">
         <CardHeader>

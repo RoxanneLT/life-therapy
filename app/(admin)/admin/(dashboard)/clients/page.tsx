@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/admin/page-header";
 import { requireRole } from "@/lib/auth";
 import Link from "next/link";
 import {
@@ -199,13 +200,10 @@ export default async function ClientsPage({
     <div className="flex h-full flex-col">
       {/* Fixed controls — stay put while the list scrolls beneath */}
       <div className="shrink-0 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Clients</h1>
-          <p className="text-sm text-muted-foreground">
-            {totalCount} total clients
-          </p>
-        </div>
+      <PageHeader
+        title="Clients"
+        description={`${totalCount} total clients`}
+        action={
         <div className="flex gap-2">
           <BulkAssignBranchDialog />
           <CreateClientDialog />
@@ -216,7 +214,8 @@ export default async function ClientsPage({
             </Button>
           </Link>
         </div>
-      </div>
+        }
+      />
 
       <ClientListFilters
         activeTab={activeTab}

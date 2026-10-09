@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getAuthenticatedAdmin } from "@/lib/auth";
+import { PageHeader } from "@/components/admin/page-header";
 import { MyProfile } from "@/components/admin/my-profile";
 
 const VALID_TABS = ["profile", "password", "2fa"] as const;
@@ -18,12 +19,10 @@ export default async function MyProfilePage({
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">My Profile</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your own account — your password and two-factor sign-in. Only you can see this.
-        </p>
-      </div>
+      <PageHeader
+        title="My Profile"
+        description="Manage your own account — your password and two-factor sign-in. Only you can see this."
+      />
 
       <MyProfile
         profile={{ name: adminUser.name, email: adminUser.email, role: adminUser.role }}

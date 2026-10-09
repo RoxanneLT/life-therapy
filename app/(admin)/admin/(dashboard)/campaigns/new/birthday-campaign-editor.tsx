@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Save, ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, Cake } from "lucide-react";
+import { Save, Plus, Trash2, ChevronDown, ChevronRight, Cake } from "lucide-react";
 import { RichTextEditor } from "./rich-text-editor";
-import Link from "next/link";
+import { BackLink } from "@/components/admin/back-link";
 import { useRouter } from "next/navigation";
 import { saveBirthdayCampaignAction } from "../actions";
 
@@ -215,13 +215,7 @@ export function BirthdayCampaignEditor({ campaign }: Readonly<BirthdayCampaignEd
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link
-          href="/admin/campaigns"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Campaigns
-        </Link>
+        <BackLink href="/admin/campaigns" to="Campaigns" />
         <Button onClick={handleSave} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
           {saving ? "Saving..." : "Save Birthday Campaign"}

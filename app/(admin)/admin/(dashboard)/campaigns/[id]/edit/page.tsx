@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
+import { PageHeader } from "@/components/admin/page-header";
 import { CampaignEditor } from "../../new/campaign-editor";
 import { BirthdayCampaignEditor } from "../../new/birthday-campaign-editor";
 
@@ -24,7 +25,7 @@ export default async function EditCampaignPage({
   if (campaign.campaignType === "birthday") {
     return (
       <div>
-        <h1 className="mb-6 font-heading text-2xl font-bold">Edit Birthday Campaign</h1>
+        <div className="mb-6"><PageHeader title="Edit Birthday Campaign" /></div>
         <BirthdayCampaignEditor campaign={campaign} />
       </div>
     );
@@ -37,7 +38,7 @@ export default async function EditCampaignPage({
 
   return (
     <div>
-      <h1 className="mb-6 font-heading text-2xl font-bold">Edit Campaign</h1>
+      <div className="mb-6"><PageHeader title="Edit Campaign" /></div>
       <CampaignEditor campaign={campaign} />
     </div>
   );

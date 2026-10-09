@@ -6,8 +6,7 @@ import { notFound } from "next/navigation";
 import { PackageForm } from "@/components/admin/package-form";
 import { updatePackage, deletePackage } from "../actions";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function EditPackagePage({
   params,
@@ -56,22 +55,18 @@ export default async function EditPackagePage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/admin/packages">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="flex-1">
-          <h1 className="font-heading text-2xl font-bold">Edit Package</h1>
-          <p className="text-sm text-muted-foreground">{pkg.title}</p>
-        </div>
-        <form action={handleDelete}>
-          <Button variant="destructive" size="sm" type="submit">
-            Delete
-          </Button>
-        </form>
-      </div>
+      <PageHeader
+        back={{ href: "/admin/packages", to: "Packages" }}
+        title="Edit Package"
+        description={pkg.title}
+        action={
+          <form action={handleDelete}>
+            <Button variant="destructive" size="sm" type="submit">
+              Delete
+            </Button>
+          </form>
+        }
+      />
       <PackageForm
         initialData={pkg}
         categories={categoryRows.map((c) => c.category!)}

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { requireRole } from "@/lib/auth";
+import { PageHeader } from "@/components/admin/page-header";
 import { CampaignEditor } from "./campaign-editor";
 
 export default async function NewCampaignPage() {
@@ -8,7 +9,7 @@ export default async function NewCampaignPage() {
 
   return (
     <div>
-      <h1 className="mb-6 font-heading text-2xl font-bold">New Campaign</h1>
+      <div className="mb-6"><PageHeader title="New Campaign" /></div>
       <CampaignEditor />
     </div>
   );

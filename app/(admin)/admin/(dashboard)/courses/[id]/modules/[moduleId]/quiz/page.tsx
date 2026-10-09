@@ -2,10 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { QuizEditor } from "@/components/admin/quiz-editor";
 import { createOrUpdateQuiz, deleteQuiz, saveQuestion, deleteQuestion } from "./actions";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function QuizPage({
   params,
@@ -53,18 +52,10 @@ export default async function QuizPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/admin/courses/${id}/modules`}
-          className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          {mod.course.title} — Modules
-        </Link>
-        <h1 className="font-heading text-2xl font-bold">
-          {mod.title} — Quiz
-        </h1>
-      </div>
+      <PageHeader
+        back={{ href: `/admin/courses/${id}/modules`, to: `${mod.course.title} — Modules` }}
+        title={`${mod.title} — Quiz`}
+      />
       <QuizEditor
         quiz={mod.quiz}
         onSaveQuiz={handleSaveQuiz}

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,12 +23,10 @@ export default async function AdminPagesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Pages</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your website page content and sections.
-        </p>
-      </div>
+      <PageHeader
+        title="Pages"
+        description="Manage your website page content and sections."
+      />
 
       <div className="rounded-lg border bg-card">
         <Table>

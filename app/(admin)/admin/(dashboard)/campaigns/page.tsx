@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { PageHeader } from "@/components/admin/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -45,19 +46,19 @@ export default async function CampaignsPage() {
     <div className="space-y-10">
       {/* ── Manual Campaigns ── */}
       <div>
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="font-heading text-2xl font-bold">Campaigns</h1>
-            <p className="text-sm text-muted-foreground">
-              {manualCampaigns.length} campaign{manualCampaigns.length === 1 ? "" : "s"}
-            </p>
-          </div>
-          <Link href="/admin/campaigns/new">
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              New Campaign
-            </Button>
-          </Link>
+        <div className="mb-6">
+          <PageHeader
+            title="Campaigns"
+            description={`${manualCampaigns.length} campaign${manualCampaigns.length === 1 ? "" : "s"}`}
+            action={
+              <Link href="/admin/campaigns/new">
+                <Button size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Campaign
+                </Button>
+              </Link>
+            }
+          />
         </div>
 
         {manualCampaigns.length === 0 ? (

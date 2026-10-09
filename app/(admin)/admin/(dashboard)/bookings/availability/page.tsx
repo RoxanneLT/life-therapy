@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function AvailabilityOverridesPage() {
   await requireRole("super_admin");
@@ -27,23 +27,11 @@ export default async function AvailabilityOverridesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/admin/bookings">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </Link>
-        <div>
-          <h1 className="font-heading text-2xl font-bold">
-            Availability Overrides
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Block off dates or set custom hours for specific days. These
-            override your regular business hours.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        back={{ href: "/admin/bookings", to: "Bookings" }}
+        title="Availability Overrides"
+        description="Block off dates or set custom hours for specific days. These override your regular business hours."
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Add Override Form */}

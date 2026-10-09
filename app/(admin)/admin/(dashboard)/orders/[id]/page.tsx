@@ -8,7 +8,6 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -17,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function OrderDetailPage({
   params,
@@ -53,34 +52,25 @@ export default async function OrderDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/orders">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-        <div>
-          <h1 className="font-heading text-2xl font-bold">
-            {order.orderNumber}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {format(new Date(order.createdAt), "d MMMM yyyy HH:mm")}
-          </p>
-        </div>
-        <Badge
-          variant="outline"
-          className={
-            order.status === "paid"
-              ? "bg-green-100 text-green-800"
-              : order.status === "refunded"
-                ? "bg-gray-100 text-gray-800"
-                : "bg-yellow-100 text-yellow-800"
-          }
-        >
-          {order.status}
-        </Badge>
-      </div>
+      <PageHeader
+        back={{ href: "/admin/orders", to: "Orders" }}
+        title={order.orderNumber}
+        description={format(new Date(order.createdAt), "d MMMM yyyy HH:mm")}
+        action={
+          <Badge
+            variant="outline"
+            className={
+              order.status === "paid"
+                ? "bg-green-100 text-green-800"
+                : order.status === "refunded"
+                  ? "bg-gray-100 text-gray-800"
+                  : "bg-yellow-100 text-yellow-800"
+            }
+          >
+            {order.status}
+          </Badge>
+        }
+      />
 
       {/* Customer info */}
       <Card>

@@ -5,9 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { baseTemplate } from "@/lib/email-templates";
 import { DripEmailEditor } from "./drip-email-editor";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { BackLink } from "@/components/admin/back-link";
 
 const DEFAULT_BASE_URL = "https://life-therapy.co.za";
 
@@ -44,14 +42,7 @@ export default async function DripEmailEditPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/drip-emails">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Drip Sequence
-          </Link>
-        </Button>
-      </div>
+      <BackLink href="/admin/drip-emails" to="Drip Sequence" />
 
       <DripEmailEditor
         id={dripEmail.id}

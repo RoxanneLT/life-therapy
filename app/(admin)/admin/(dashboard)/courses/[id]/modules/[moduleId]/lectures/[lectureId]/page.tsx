@@ -2,10 +2,9 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { LectureForm } from "@/components/admin/lecture-form";
 import { updateLecture } from "../actions";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function EditLecturePage({
   params,
@@ -41,17 +40,14 @@ export default async function EditLecturePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/admin/courses/${id}/modules/${moduleId}/lectures`}
-          className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          {mod.course.title} — {mod.title} — Lectures
-        </Link>
-        <h1 className="font-heading text-2xl font-bold">Edit Lecture</h1>
-        <p className="text-sm text-muted-foreground">{lecture.title}</p>
-      </div>
+      <PageHeader
+        back={{
+          href: `/admin/courses/${id}/modules/${moduleId}/lectures`,
+          to: `${mod.course.title} — ${mod.title} — Lectures`,
+        }}
+        title="Edit Lecture"
+        description={lecture.title}
+      />
       <LectureForm
         initialData={lecture}
         courseSlug={mod.course.slug}

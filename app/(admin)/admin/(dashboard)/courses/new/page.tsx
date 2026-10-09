@@ -1,17 +1,13 @@
 "use client";
 
 import { CourseForm } from "@/components/admin/course-form";
+import { PageHeader } from "@/components/admin/page-header";
 import { createCourse } from "../actions";
 
 export default function NewCoursePage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Add Course</h1>
-        <p className="text-sm text-muted-foreground">
-          Create a new course in the catalog.
-        </p>
-      </div>
+      <PageHeader title="Add Course" description="Create a new course in the catalog." />
       <CourseForm onSubmit={createCourse} />
     </div>
   );

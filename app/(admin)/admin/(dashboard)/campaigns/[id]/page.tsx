@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/admin/back-link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { deleteCampaignAction } from "../actions";
@@ -19,7 +20,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  ArrowLeft,
   Edit,
   Trash2,
   Users,
@@ -128,13 +128,9 @@ export default async function CampaignDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <Link
-        href="/admin/campaigns"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Campaigns
-      </Link>
+      <div className="mb-4">
+        <BackLink href="/admin/campaigns" to="Campaigns" />
+      </div>
 
       <div className="mb-6 flex items-center justify-between">
         <div>

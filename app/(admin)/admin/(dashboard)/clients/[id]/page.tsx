@@ -3,9 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { BackLink } from "@/components/admin/back-link";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
 import { ContactConflicts } from "./contact-conflicts";
@@ -45,14 +43,9 @@ export default async function ClientDetailPage({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/clients">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-        <div className="flex-1">
+      <div className="shrink-0 space-y-2">
+        <BackLink href="/admin/clients" to="Clients" />
+        <div>
           <ClientHeader
             client={{
               id: client.id,

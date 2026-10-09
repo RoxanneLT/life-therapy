@@ -3,9 +3,10 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, BookOpen, ArrowLeft } from "lucide-react";
+import { Plus, BookOpen } from "lucide-react";
 import { SortableModuleList } from "./sortable-module-list";
 
 export default async function ModulesPage({
@@ -38,27 +39,19 @@ export default async function ModulesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/admin/courses/${course.id}`}
-            className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            {course.title}
-          </Link>
-          <h1 className="font-heading text-2xl font-bold">Modules</h1>
-          <p className="text-sm text-muted-foreground">
-            {course.modules.length} module{course.modules.length !== 1 && "s"}
-          </p>
-        </div>
-        <Button asChild>
-          <Link href={`/admin/courses/${course.id}/modules/new`}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Module
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        back={{ href: `/admin/courses/${course.id}`, to: course.title }}
+        title="Modules"
+        description={`${course.modules.length} module${course.modules.length !== 1 ? "s" : ""}`}
+        action={
+          <Button asChild>
+            <Link href={`/admin/courses/${course.id}/modules/new`}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Module
+            </Link>
+          </Button>
+        }
+      />
 
       {course.modules.length === 0 ? (
         <Card>
