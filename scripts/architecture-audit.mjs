@@ -3555,10 +3555,6 @@ const LOCALE_FORMAT_ALLOWED = [
     why: "formats `booking.date`, a @db.Date stored at UTC midnight. Midnight UTC renders as the same calendar day in UTC and in SAST (UTC+2), so the runtime zone cannot shift it here. Would break in a negative-offset zone; Vercel is UTC.",
   },
   {
-    at: "app/(admin)/admin/(dashboard)/page.tsx",
-    why: "two sites: a `{month: 'short'}` label on `now`, and `nextSession.date` which is a @db.Date. The month label is wrong only in the last two hours of a month, on a dashboard heading — noted, not worth the churn.",
-  },
-  {
     at: "app/(admin)/admin/(dashboard)/invoices/page.tsx",
     why: "formats `new Date('YYYY-MM-01')` for a billing-month label. Month and year only, from a constructed first-of-month — no instant involved.",
   },

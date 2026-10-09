@@ -1,57 +1,20 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
+import { Suspense } from "react";
 import { getAuthenticatedAdmin } from "@/lib/auth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video, ArrowRight, AlertTriangle } from "lucide-react";
-import { MarkAllCompletedButton } from "./mark-all-completed-button";
-import { formatByCurrency, cn } from "@/lib/utils";
-import Link from "next/link";
-import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
-import { saToday, saDateStr, saDayStart, saMonthStart, saFormat, bookingStartsAt, calendarDate } from "@/lib/dates";
-import { BookingsChart } from "@/components/admin/bookings-chart";
-import { RevenueChart } from "@/components/admin/revenue-chart";
-import { YearSelector } from "@/components/admin/year-selector";
-import { Button } from "@/components/ui/button";
+import { saToday } from "@/lib/dates";
+import { AttentionQueue, AttentionQueueSkeleton } from "./attention-queue";
+import { DashboardOverview, DashboardOverviewSkeleton } from "./dashboard-overview";
+import { DashboardCharts, DashboardChartsSkeleton } from "./dashboard-charts";
 
-function getBirthdayThisYear(dob: Date, referenceYear: number): Date {
-  // dob is a `@db.Date`, so its UTC month/day are the real ones. Anchor the
-  // birthday to the start of that SAST day, not the server's local midnight.
-  const mm = String(dob.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(dob.getUTCDate()).padStart(2, "0");
-  return saDayStart(`${referenceYear}-${mm}-${dd}`);
-}
-
-function getUpcomingBirthdays(
-  students: { firstName: string; lastName: string; dateOfBirth: Date | null }[],
-  now: Date,
-  until: Date,
-) {
-  const thisYear = Number(saDateStr(now).slice(0, 4));
-  return students
-    .filter((s): s is typeof s & { dateOfBirth: Date } => s.dateOfBirth !== null)
-    .map((s) => {
-      let bday = getBirthdayThisYear(s.dateOfBirth, thisYear);
-      if (bday < now) bday = getBirthdayThisYear(s.dateOfBirth, thisYear + 1);
-      return {
-        name: `${s.firstName} ${s.lastName}`,
-        date: saFormat(bday, "d MMM"),
-        sortDate: bday,
-      };
-    })
-    .filter((b) => b.sortDate >= now && b.sortDate <= until)
-    .sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime());
-}
-
-function isWithinTwoHours(
-  session: { date: Date; startTime: string | null },
-  deadline: Date,
-): boolean {
-  // `setHours` would apply the *server's* timezone to a SAST wall-clock time,
-  // making a 09:00 SAST session look like it starts at 09:00 UTC — two hours late.
-  return bookingStartsAt({ date: session.date, startTime: session.startTime ?? "00:00" }) <= deadline;
-}
-
+/**
+ * The admin home. The greeting renders at once; each section below queries for itself and streams
+ * in behind a skeleton of its own shape. Until 2026-10-09 the page ran twelve queries in one
+ * Promise.all and showed nothing until the slowest (the year's charts) returned.
+ *
+ * Every section is gated by the role of the page it links to (see lib/dashboard-attention.ts): the
+ * dashboard is the one admin page every role reaches, so it must not offer links `requireRole` refuses.
+ */
 export default async function AdminDashboard({
   searchParams,
 }: {
@@ -59,167 +22,9 @@ export default async function AdminDashboard({
 }) {
   const { adminUser } = await getAuthenticatedAdmin();
   const params = await searchParams;
-  const today = saToday();
-  const [saYear, saMonth] = today.split("-").map(Number);
-  const currentYear = saYear;
+  const currentYear = Number(saToday().slice(0, 4));
   const year = params.year ? Number.parseInt(params.year, 10) : currentYear;
   const validYear = year >= currentYear - 2 && year <= currentYear + 2 ? year : currentYear;
-
-  const now = new Date();
-  const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-
-  const monthStart = saMonthStart(saYear, saMonth);
-  const monthEnd = saMonthStart(saYear, saMonth + 1);
-
-  const [
-    studentCount,
-    thisMonthRevenue,
-    pendingPayments,
-    sessionsThisMonth,
-    nextMonthSessions,
-    nextSessionCandidates,
-    allStudentsWithDob,
-    bookingsByMonth,
-    revenueByMonth,
-    staleSessionCount,
-    lastReconcile,
-    recentSyncFailures,
-  ] = await Promise.all([
-    prisma.student.count({ where: { clientStatus: "active" } }),
-    // Revenue = CASH RECEIVED THIS MONTH, so filter on `paidAt` — not on
-    // `billingMonth`, which was wrong twice over:
-    //   1. Only the payment-request path ever populates `billingMonth`, so every
-    //      course sale, product sale, late-cancel fee and manual invoice was
-    //      invisible to this tile.
-    //   2. It names the billing PERIOD, not the payment. A June request settled
-    //      in July landed in no month's tile at all.
-    // `paidAt` is a real instant, so the bounds are SAST month starts.
-    //
-    // Rows rather than a _sum: cents are per-currency and must never be added,
-    // and `paidAmountCents` is nullable (an invoice marked paid from the list
-    // view never sets it) — so coalesce to `totalCents` per row instead of
-    // silently dropping the amount.
-    prisma.invoice.findMany({
-      where: { status: "paid", paidAt: { gte: monthStart, lt: monthEnd } },
-      select: { currency: true, paidAmountCents: true, totalCents: true },
-    }),
-    prisma.paymentRequest.groupBy({
-      by: ["currency"],
-      where: { status: "pending" },
-      _count: true,
-      _sum: { totalCents: true },
-    }),
-    prisma.booking.count({
-      where: {
-        status: { in: ["completed", "confirmed", "pending"] },
-        date: { gte: monthStart, lt: monthEnd },
-      },
-    }),
-    prisma.booking.count({
-      where: {
-        status: { in: ["confirmed", "pending"] },
-        date: { gte: monthEnd, lt: saMonthStart(saYear, saMonth + 2) },
-      },
-    }),
-    // `date` is a `@db.Date` at UTC midnight, so `gte: now` excluded EVERY session
-    // today from 02:00 SAST — the card skipped to tomorrow while Roxanne still had
-    // three sessions to run, and the "starting soon" highlight below could never
-    // fire at all. The day is the only thing the column can filter on; which of
-    // today's sessions is still ahead is a question about start TIME, so that part
-    // is decided in code with bookingStartsAt(). 25 covers any real day's diary.
-    prisma.booking.findMany({
-      where: { status: "confirmed", date: { gte: calendarDate(today) } },
-      orderBy: [{ date: "asc" }, { startTime: "asc" }],
-      take: 25,
-      select: { id: true, clientName: true, date: true, startTime: true, endTime: true, teamsMeetingUrl: true, sessionType: true },
-    }),
-    prisma.student.findMany({
-      where: { dateOfBirth: { not: null }, clientStatus: { in: ["active", "potential"] } },
-      select: { firstName: true, lastName: true, dateOfBirth: true },
-    }),
-    getBookingsByMonth(validYear),
-    getRevenueByMonth(validYear),
-    // Same definition of "stale" as the bookings list and the bulk-complete action:
-    // confirmed, on a day before today. `date` is a `@db.Date` at UTC midnight, so
-    // `lt: now` counted today's still-upcoming sessions from 02:00 SAST onward — the
-    // banner overstated the backlog and the button beside it acted on that overstatement.
-    prisma.booking.count({
-      where: { status: "confirmed", date: { lt: calendarDate(today) } },
-    }),
-    prisma.calendarSyncLog.findFirst({
-      where: { operation: "reconcile" },
-      orderBy: { createdAt: "desc" },
-      select: { status: true, metadata: true, createdAt: true },
-    }),
-    prisma.calendarSyncLog.count({
-      where: {
-        status: "failed",
-        createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-      },
-    }),
-  ]);
-
-  // Show next 3 birthdays regardless of timeframe. Anchor the window to the
-  // start of today in SAST so a birthday *today* stays listed all day, rather
-  // than dropping off once the clock passes the server's midnight.
-  const todayStart = saDayStart(today);
-  const farFuture = saDayStart(`${saYear + 1}${today.slice(4)}`);
-  const upcomingBirthdays = getUpcomingBirthdays(allStudentsWithDob, todayStart, farFuture).slice(0, 3);
-  // The first session that has not started yet — today's included.
-  const nextSession =
-    nextSessionCandidates.find(
-      (b) => bookingStartsAt({ date: b.date, startTime: b.startTime ?? "00:00" }) >= now,
-    ) ?? null;
-  const isSessionSoon = nextSession ? isWithinTwoHours(nextSession, twoHoursFromNow) : false;
-
-  const pendingCount = pendingPayments.reduce((n, g) => n + (g._count ?? 0), 0);
-  // One figure per currency, joined — never one fused number. A client billed in
-  // USD and one in ZAR are two amounts, and adding their cents means nothing.
-  const pendingTotal = formatByCurrency(
-    pendingPayments.map((g) => ({ currency: g.currency, cents: g._sum.totalCents ?? 0 })),
-  );
-  // Fold the paid invoices into one figure per currency.
-  const revenueByCurrency = new Map<string, number>();
-  for (const inv of thisMonthRevenue) {
-    const cents = inv.paidAmountCents ?? inv.totalCents;
-    revenueByCurrency.set(inv.currency, (revenueByCurrency.get(inv.currency) ?? 0) + cents);
-  }
-  const revenueThisMonth = formatByCurrency(
-    [...revenueByCurrency].map(([currency, cents]) => ({ currency, cents })),
-  );
-
-  const stats = [
-    {
-      label: "Active Clients",
-      value: studentCount,
-      icon: UserCheck,
-      href: "/admin/clients?status=active",
-    },
-    {
-      label: "Revenue (This Month)",
-      value: revenueThisMonth,
-      icon: Banknote,
-      href: "/admin/invoices?status=paid",
-    },
-    {
-      label: `Sessions (${now.toLocaleDateString("en-ZA", { month: "short" })})`,
-      value: sessionsThisMonth,
-      icon: CreditCard,
-      href: "/admin/bookings",
-    },
-    {
-      label: `Sessions (${saFormat(saMonthStart(saYear, saMonth + 1), "MMM")})`,
-      value: nextMonthSessions,
-      icon: CalendarDays,
-      href: "/admin/bookings",
-    },
-  ];
-
-  const sessionTypeLabels: Record<string, string> = {
-    individual: "Individual",
-    couples: "Couples",
-    free_consultation: "Free Consultation",
-  };
 
   return (
     <div className="space-y-6">
@@ -232,224 +37,17 @@ export default async function AdminDashboard({
         </p>
       </div>
 
-      {/* Stale sessions warning */}
-      {staleSessionCount > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="flex-1 text-sm font-medium text-amber-800 dark:text-amber-300">
-            {staleSessionCount} past session{staleSessionCount !== 1 ? "s" : ""} still marked as{" "}
-            <em>confirmed</em> — review and update their status.
-          </p>
-          <div className="flex gap-2">
-            <Button asChild size="sm" variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:text-amber-300">
-              <Link href="/admin/bookings?status=stale">Review</Link>
-            </Button>
-            <MarkAllCompletedButton count={staleSessionCount} />
-          </div>
-        </div>
-      )}
+      <Suspense fallback={<AttentionQueueSkeleton />}>
+        <AttentionQueue role={adminUser.role} />
+      </Suspense>
 
-      {/* Calendar sync health */}
-      <div
-        className={cn(
-          "flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm",
-          recentSyncFailures > 0
-            ? "border-red-200 bg-red-50"
-            : lastReconcile?.status === "partial"
-              ? "border-amber-200 bg-amber-50"
-              : "border-green-200 bg-green-50",
-        )}
-      >
-        <div
-          className={cn(
-            "h-2 w-2 rounded-full",
-            recentSyncFailures > 0
-              ? "bg-red-500"
-              : lastReconcile?.status === "partial"
-                ? "bg-amber-500"
-                : "bg-green-500",
-          )}
-        />
-        <span className="text-muted-foreground">
-          Calendar sync:
-          {recentSyncFailures > 0 && (
-            <span className="ml-1 font-medium text-red-700">
-              {recentSyncFailures} failure{recentSyncFailures !== 1 ? "s" : ""} in last 24h
-            </span>
-          )}
-          {recentSyncFailures === 0 && lastReconcile?.status === "success" && (
-            <span className="ml-1 font-medium text-green-700">Healthy</span>
-          )}
-          {recentSyncFailures === 0 && lastReconcile?.status === "partial" && (
-            <span className="ml-1 font-medium text-amber-700">
-              {(lastReconcile.metadata as { mismatched?: number } | null)?.mismatched || 0} mismatch(es)
-            </span>
-          )}
-          {!lastReconcile && (
-            <span className="ml-1 text-muted-foreground">No data yet</span>
-          )}
-        </span>
-        <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" asChild>
-          <Link href="/admin/settings/calendar-sync">View</Link>
-        </Button>
-      </div>
+      <Suspense fallback={<DashboardOverviewSkeleton />}>
+        <DashboardOverview role={adminUser.role} />
+      </Suspense>
 
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Link key={stat.label} href={stat.href}>
-            <Card className="transition-shadow hover:shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.label}
-                </CardTitle>
-                <stat.icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold">{stat.value}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      {/* Action Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Next Session */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Next Session</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col justify-between gap-3">
-            {nextSession ? (
-              <>
-                <div>
-                  <p className="font-semibold">{nextSession.clientName}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(nextSession.date).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })}
-                    {" "}&middot;{" "}
-                    {nextSession.startTime}{nextSession.endTime ? `\u2013${nextSession.endTime}` : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {sessionTypeLabels[nextSession.sessionType] ?? nextSession.sessionType}
-                  </p>
-                </div>
-                {isSessionSoon && nextSession.teamsMeetingUrl ? (
-                  <Button asChild size="sm" className="w-full">
-                    <a href={nextSession.teamsMeetingUrl} target="_blank" rel="noopener noreferrer">
-                      <Video className="mr-2 h-4 w-4" />
-                      Join Now
-                    </a>
-                  </Button>
-                ) : (
-                  <Button asChild size="sm" variant="outline" className="w-full">
-                    <Link href={`/admin/bookings/${nextSession.id}`}>
-                      View Booking
-                    </Link>
-                  </Button>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">No upcoming sessions</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Pending Payments */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Payments</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col justify-between gap-3">
-            {pendingCount > 0 ? (
-              <>
-                <div>
-                  <p className="text-2xl font-bold">{pendingTotal}</p>
-                  <p className="text-sm text-muted-foreground">{pendingCount} payment{pendingCount === 1 ? "" : "s"} outstanding</p>
-                </div>
-                <Button asChild size="sm" variant="outline" className="w-full">
-                  <Link href="/admin/invoices?status=payment_requested">
-                    View Payments
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">All payments up to date</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Upcoming Birthdays */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Birthdays</CardTitle>
-            <Cake className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col justify-between gap-3">
-            {upcomingBirthdays.length > 0 ? (
-              <ul className="space-y-1">
-                {upcomingBirthdays.slice(0, 4).map((b) => (
-                  <li key={b.name} className="text-sm">
-                    <span className="font-medium">{b.name}</span>
-                    <span className="text-muted-foreground"> &mdash; {b.date}</span>
-                  </li>
-                ))}
-                {upcomingBirthdays.length > 4 && (
-                  <li className="text-xs text-muted-foreground">+{upcomingBirthdays.length - 4} more</li>
-                )}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No upcoming birthdays</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Capture Payment */}
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Capture Payment</CardTitle>
-            <Banknote className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Record direct payments (EFT/cash)</p>
-            <Button asChild size="sm" variant="outline" className="w-full">
-              <Link href="/admin/invoices?status=payment_requested">
-                Go to Payments
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Activity Overview</h2>
-        <YearSelector currentYear={validYear} />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Bookings per Month</CardTitle>
-            <CardDescription>Planned &amp; completed sessions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BookingsChart data={bookingsByMonth} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Revenue per Month</CardTitle>
-            <CardDescription>Paid, pending &amp; estimated revenue</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RevenueChart data={revenueByMonth} />
-          </CardContent>
-        </Card>
-      </div>
+      <Suspense key={validYear} fallback={<DashboardChartsSkeleton />}>
+        <DashboardCharts role={adminUser.role} year={validYear} />
+      </Suspense>
     </div>
   );
 }

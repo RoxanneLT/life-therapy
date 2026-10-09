@@ -296,7 +296,7 @@ export default async function InvoicesPage({
       <div className="shrink-0 space-y-6">
       {/* Header */}
       <PageHeader
-        title="Finance"
+        title="Billing"
         description={`${totalCount} total invoices`}
         action={
           <div className="flex items-center gap-2">

@@ -19,6 +19,7 @@ import {
   Send,
   Timer,
   Receipt,
+  BarChart3,
   Menu,
   ChevronLeft,
 } from "lucide-react";
@@ -59,7 +60,9 @@ const navGroups: NavGroup[] = [
   {
     label: "Finance",
     items: [
-      { href: "/admin/invoices", label: "Finance", icon: Receipt, roles: ["super_admin"] },
+      // "Billing", not "Finance": Settings has its own Finance page (rates, VAT, terms), and two
+      // menu entries with one name opened different pages.
+      { href: "/admin/invoices", label: "Billing", icon: Receipt, roles: ["super_admin"] },
     ],
   },
   {
@@ -82,7 +85,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Admin",
     items: [
-      { href: "/admin/reports", label: "Reports", icon: FileText, roles: ["super_admin"] },
+      { href: "/admin/reports", label: "Reports", icon: BarChart3, roles: ["super_admin"] },
       { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
     ],
   },
