@@ -1,8 +1,11 @@
 export const dynamic = "force-dynamic";
 
+import { cookies } from "next/headers";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/admin/sidebar-state";
 import { AdminHeader } from "@/components/admin/admin-header";
+import { AdminShortcuts } from "@/components/admin/admin-shortcuts";
 import { AdminProviders } from "@/components/providers/admin-providers";
 
 export default async function DashboardLayout({
@@ -11,10 +14,11 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { adminUser } = await getAuthenticatedAdmin();
+  const collapsed = (await cookies()).get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <AdminSidebar role={adminUser.role} />
+      <AdminSidebar role={adminUser.role} defaultCollapsed={collapsed} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <AdminHeader
           adminName={adminUser.name}
@@ -25,6 +29,7 @@ export default async function DashboardLayout({
           <AdminProviders>{children}</AdminProviders>
         </main>
       </div>
+      <AdminShortcuts role={adminUser.role} />
     </div>
   );
 }

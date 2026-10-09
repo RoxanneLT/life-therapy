@@ -29,6 +29,7 @@ import { useState } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import { SETTINGS_CATALOG, SETTINGS_NAV_GROUPS } from "@/lib/settings-catalog";
 import { useNavBadges } from "./use-nav-badges";
+import { SIDEBAR_COLLAPSED_COOKIE } from "./sidebar-state";
 
 interface NavItem {
   href: string;
@@ -93,6 +94,11 @@ const navGroups: NavGroup[] = [
     ],
   },
 ];
+
+/** Whether `role` sees the main-nav entry for `href`: the one table the keyboard shortcuts also read. */
+export function canSeeNav(href: string, role: AdminRole): boolean {
+  return navGroups.some((g) => g.items.some((i) => i.href === href && i.roles.includes(role)));
+}
 
 /** A collapsed item's tooltip carries its badge count, since the dot alone does not say how many. */
 const withCount = (label: string, count = 0) => (count > 0 ? `${label} (${count})` : label);
@@ -298,8 +304,14 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
   );
 }
 
-export function AdminSidebar({ role }: { readonly role: AdminRole }) {
-  const [collapsed, setCollapsed] = useState(false);
+export function AdminSidebar({ role, defaultCollapsed = false }: { readonly role: AdminRole; readonly defaultCollapsed?: boolean }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  function toggle() {
+    const next = !collapsed;
+    setCollapsed(next);
+    document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/admin; max-age=31536000; samesite=lax`;
+  }
 
   return (
     <aside className={cn(
@@ -309,7 +321,7 @@ export function AdminSidebar({ role }: { readonly role: AdminRole }) {
       <AdminSidebarContent
         role={role}
         collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
+        onToggleCollapse={toggle}
       />
     </aside>
   );
