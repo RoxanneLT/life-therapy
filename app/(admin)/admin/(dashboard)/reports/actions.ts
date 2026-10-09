@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv";
 import { requireRole } from "@/lib/auth";
+import { recordExport } from "@/lib/access-log";
 import { saFormat, saToday } from "@/lib/dates";
 
 /**
@@ -29,7 +30,7 @@ export async function exportInvoiceRegister(
   from: string,
   to: string
 ): Promise<{ csv: string; filename: string } | { error: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   if (!from || !to) return { error: "Please select a date range." };
 
@@ -89,6 +90,7 @@ export async function exportInvoiceRegister(
 
   const csv = [csvRow(header), ...rows].join("\r\n");
   const filename = `invoice-register_${from}_${to}.csv`;
+  await recordExport({ actorEmail: adminUser.email, report: "invoice-register", rows: rows.length, filters: { from, to } });
 
   return { csv, filename };
 }
@@ -97,7 +99,7 @@ export async function exportSessionRegister(
   from: string,
   to: string
 ): Promise<{ csv: string; filename: string } | { error: string }> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   if (!from || !to) return { error: "Please select a date range." };
 
@@ -154,6 +156,7 @@ export async function exportSessionRegister(
 
   const csv = [csvRow(header), ...rows].join("\r\n");
   const filename = `session-register_${from}_${to}.csv`;
+  await recordExport({ actorEmail: adminUser.email, report: "session-register", rows: rows.length, filters: { from, to } });
 
   return { csv, filename };
 }
@@ -161,7 +164,7 @@ export async function exportSessionRegister(
 export async function exportClientList(): Promise<
   { csv: string; filename: string } | { error: string }
 > {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const students = await prisma.student.findMany({
     orderBy: { lastName: "asc" },
@@ -215,6 +218,7 @@ export async function exportClientList(): Promise<
 
   const csv = [csvRow(header), ...rows].join("\r\n");
   const filename = `client-list_${saToday()}.csv`;
+  await recordExport({ actorEmail: adminUser.email, report: "client-list", rows: rows.length });
 
   return { csv, filename };
 }

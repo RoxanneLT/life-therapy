@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { requireAccess } from "@/lib/auth";
+import { recordView } from "@/lib/access-log";
 import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
@@ -65,11 +66,13 @@ interface Props {
 
 export default async function BookingDetailPage({ params }: Props) {
   const { id } = await params;
-  await requireAccess("/admin/bookings");
+  const { adminUser } = await requireAccess("/admin/bookings");
 
   const booking = await prisma.booking.findUnique({
     where: { id },
   });
+  // Session, client and admin notes are on this page (lib/access-log.ts).
+  if (booking) await recordView({ actorEmail: adminUser.email, entityType: "booking", entityId: id, area: "booking detail" });
 
   if (!booking) notFound();
 

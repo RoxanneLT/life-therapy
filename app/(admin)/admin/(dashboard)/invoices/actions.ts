@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { csvDocument } from "@/lib/csv";
 import { requireRole } from "@/lib/auth";
+import { recordExport } from "@/lib/access-log";
 import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
@@ -403,7 +404,7 @@ interface ExportFilters {
 export async function exportInvoicesCsvAction(
   filters: ExportFilters,
 ): Promise<string> {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const where: Record<string, unknown> = {};
 
@@ -488,6 +489,7 @@ export async function exportInvoicesCsvAction(
   // client's name, the billing name and email they typed, and an EFT reference they
   // chose — all of it lands in a spreadsheet on Roxanne's machine, where a cell
   // beginning `=` or `@` is executed rather than displayed. See lib/csv.ts.
+  await recordExport({ actorEmail: adminUser.email, report: "invoices", rows: rows.length, filters: { ...filters } });
   return csvDocument(headers, rows);
 }
 

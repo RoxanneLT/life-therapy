@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { requireAccess } from "@/lib/auth";
 import { saFormat } from "@/lib/dates";
+import { recordView } from "@/lib/access-log";
 import { notFound } from "next/navigation";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
@@ -32,6 +33,9 @@ export default async function ClientDetailPage({
   });
 
   if (!client) notFound();
+  // The whole record goes to the browser on every tab, assessment and notes included, so any view
+  // of this page is a view of them (lib/access-log.ts).
+  await recordView({ actorEmail: adminUser.email, entityType: "student", entityId: id, area: activeTab });
 
   const contactConflicts = await prisma.auditLog.findMany({
     where: { entityType: "student", entityId: id, action: "contact_field_conflict" },

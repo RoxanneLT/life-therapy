@@ -521,6 +521,13 @@ const MUTATIONS = [
     expects: ["popia: every client-linked column has a fate in the erasure plan"],
   },
   {
+    path: "app/(admin)/admin/(dashboard)/reports/actions.ts",
+    // The client-list export with its record removed: a copy of every client leaving unseen.
+    find: '  await recordExport({ actorEmail: adminUser.email, report: "client-list", rows: rows.length });\n',
+    replace: "",
+    expects: ["access-log: every export records who took it"],
+  },
+  {
     path: "lib/popia/plan.ts",
     // A fate dropped from the plan: gender would survive every erasure.
     find: '    gender: "erase",\n',

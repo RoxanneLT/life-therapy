@@ -1075,6 +1075,21 @@ check("popia: every client-linked column has a fate in the erasure plan", () => 
   }
 });
 
+check("access-log: every export records who took it", () => {
+  // An export is a copy of client data leaving the system. Until 2026-10-09 none was recorded, so
+  // nobody could say who had taken the whole client list (lib/access-log.ts). An action that builds
+  // a CSV must call recordExport (or recordAudit, as the single-client export does).
+  for (const f of walk(APP, /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(code(raw))) {
+      if (/\bcsv(?:Document|Row)\s*\(/.test(fn.body) && !/\brecord(?:Export|Audit)\s*\(/.test(fn.body)) {
+        fail("access-log", `${rel(f)} → ${fn.name}`, "builds an export without recording who took it", "call recordExport({ actorEmail, report, rows }) from lib/access-log.ts before returning");
+      }
+    }
+  }
+});
+
 check("admin-access: every admin page is guarded by its area", () => {
   // lib/admin-access.ts is the one map of which role opens which admin page; the sidebar, the
   // shortcuts, the attention rows and the search read it. Until 2026-10-09 every page carried its
