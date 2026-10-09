@@ -221,14 +221,22 @@ async function resolveGiftRecipient(
       select: { supabaseUserId: true },
     });
     if (student?.supabaseUserId) {
-      await supabaseAdmin.auth.admin.updateUserById(
+      const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(
         student.supabaseUserId,
         { password: recipientInfo.password },
       );
-      await prisma.student.update({
-        where: { id: result.id },
-        data: { mustChangePassword: false },
-      });
+      // Only a password that was actually set lifts the change-on-login flag. Supabase refuses a
+      // breached or weak one (leaked-password protection); the account then keeps the generated
+      // password findOrCreateStudent emailed, and the flag, so the recipient signs in with that and is
+      // asked to choose a new one. The redemption itself still completes.
+      if (pwError) {
+        console.error("[gift] recipient password refused:", pwError.message);
+      } else {
+        await prisma.student.update({
+          where: { id: result.id },
+          data: { mustChangePassword: false },
+        });
+      }
     }
   }
 

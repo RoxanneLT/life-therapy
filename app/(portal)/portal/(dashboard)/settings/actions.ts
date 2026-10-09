@@ -170,7 +170,10 @@ export async function changePasswordAction(
   });
 
   if (updateError) {
-    return { error: "Failed to update password. Please try again." };
+    // Supabase's message is the reason, and the only place it exists: a breached or weak password
+    // is refused here (leaked-password protection), and "please try again" would loop the client
+    // on the same password.
+    return { error: updateError.message };
   }
 
   // Send confirmation email (non-blocking)
