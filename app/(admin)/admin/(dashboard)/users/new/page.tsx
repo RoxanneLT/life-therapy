@@ -1,10 +1,10 @@
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/page-header";
 import { UserForm } from "@/components/admin/user-form";
 import { inviteUser } from "../actions";
 
 export default async function NewUserPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/users");
 
   return (
     <div className="space-y-6">

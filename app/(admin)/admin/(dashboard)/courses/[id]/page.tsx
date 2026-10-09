@@ -19,6 +19,7 @@ import {
 import { Trash2, Layers } from "lucide-react";
 
 import Link from "next/link";
+import { requireAccess } from "@/lib/auth";
 
 export default async function EditCoursePage({
   params,
@@ -27,6 +28,7 @@ export default async function EditCoursePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ deleteError?: string }>;
 }) {
+  await requireAccess("/admin/courses");
   const { id } = await params;
   const { deleteError } = await searchParams;
   const course = await prisma.course.findUnique({

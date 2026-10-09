@@ -17,12 +17,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from "lucide-react";
 import { shortClientName } from "@/lib/client-display";
+import { requireAccess } from "@/lib/auth";
 
 export default async function EditTestimonialPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("/admin/testimonials");
   const { id } = await params;
   const testimonial = await prisma.testimonial.findUnique({
     where: { id },

@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import {
   getActiveDocument,
   getDocumentHistory,
@@ -49,7 +49,7 @@ async function loadLegalDocuments() {
 }
 
 export default async function LegalSettingsPage() {
-  const { adminUser } = await requireRole("super_admin");
+  const { adminUser } = await requireAccess("/admin/settings");
   const documents = await loadLegalDocuments();
 
   return (

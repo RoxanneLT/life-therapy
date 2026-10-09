@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { baseTemplate } from "@/lib/email-templates";
 import { DripEmailEditor } from "./drip-email-editor";
@@ -14,7 +14,7 @@ export default async function DripEmailEditPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/drip-emails");
   const { id } = await params;
 
   const dripEmail = await prisma.dripEmail.findUnique({

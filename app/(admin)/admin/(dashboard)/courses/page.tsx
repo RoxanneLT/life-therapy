@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { SortableCourseList } from "./sortable-course-list";
 import { PageHeader } from "@/components/admin/page-header";
+import { requireAccess } from "@/lib/auth";
 
 export default async function AdminCoursesPage() {
+  await requireAccess("/admin/courses");
   const courses = await prisma.course.findMany({
     orderBy: { sortOrder: "asc" },
     select: {

@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { saFormat } from "@/lib/dates";
 import { formatPrice } from "@/lib/utils";
 import type { AdminRole } from "@/lib/generated/prisma/client";
+import { canAccess } from "@/lib/admin-access";
 
 export interface SearchHit {
   id: string;
@@ -28,9 +29,6 @@ export interface SearchGroup {
 }
 
 const PER_GROUP = 5;
-const CLIENTS: AdminRole[] = ["super_admin", "marketing"];
-const BOOKINGS: AdminRole[] = ["super_admin", "editor"];
-const SUPER: AdminRole[] = ["super_admin"];
 
 const words = (q: string) => q.trim().split(/\s+/).filter(Boolean).slice(0, 5);
 const ci = (value: string) => ({ contains: value, mode: "insensitive" as const });
@@ -41,11 +39,11 @@ const allWords = <F extends string>(q: string, fields: F[]) => ({
 
 export async function searchAdmin(q: string, role: AdminRole): Promise<SearchGroup[]> {
   if (q.trim().length < 2) return [];
-  const can = (roles: AdminRole[]) => roles.includes(role);
+  const can = (href: string) => canAccess(href, role);
   const none = Promise.resolve(null);
 
   const [clients, bookings, invoices, orders] = await Promise.all([
-    can(CLIENTS)
+    can("/admin/clients")
       ? prisma.student.findMany({
           where: allWords(q, ["firstName", "lastName", "email"]),
           select: { id: true, firstName: true, lastName: true, email: true, clientStatus: true },
@@ -53,7 +51,7 @@ export async function searchAdmin(q: string, role: AdminRole): Promise<SearchGro
           take: PER_GROUP,
         })
       : none,
-    can(BOOKINGS)
+    can("/admin/bookings")
       ? prisma.booking.findMany({
           where: allWords(q, ["clientName", "clientEmail", "couplesPartnerName"]),
           select: { id: true, clientName: true, sessionType: true, date: true, startTime: true, status: true },
@@ -61,7 +59,7 @@ export async function searchAdmin(q: string, role: AdminRole): Promise<SearchGro
           take: PER_GROUP,
         })
       : none,
-    can(SUPER)
+    can("/admin/invoices")
       ? prisma.invoice.findMany({
           where: allWords(q, ["invoiceNumber", "billingName", "billingEmail"]),
           select: { id: true, invoiceNumber: true, billingName: true, totalCents: true, currency: true, status: true },
@@ -69,7 +67,7 @@ export async function searchAdmin(q: string, role: AdminRole): Promise<SearchGro
           take: PER_GROUP,
         })
       : none,
-    can(SUPER)
+    can("/admin/orders")
       ? prisma.order.findMany({
           where: {
             OR: [

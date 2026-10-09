@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/admin/page-header";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { UserForm } from "@/components/admin/user-form";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -36,7 +36,7 @@ interface Props {
 
 export default async function EditUserPage({ params }: Props) {
   const { id } = await params;
-  const { adminUser: currentAdmin } = await requireRole("super_admin");
+  const { adminUser: currentAdmin } = await requireAccess("/admin/users");
 
   const user = await prisma.adminUser.findUnique({
     where: { id },

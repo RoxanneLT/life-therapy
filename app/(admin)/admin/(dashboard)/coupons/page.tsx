@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,7 @@ export default async function CouponsGiftsPage({
 }: {
   readonly searchParams: Promise<{ tab?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireAccess("/admin/coupons");
   const { tab } = await searchParams;
   const active: Tab = tab === "gifts" ? "gifts" : "coupons";
 

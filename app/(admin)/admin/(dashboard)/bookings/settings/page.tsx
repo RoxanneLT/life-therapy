@@ -2,12 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { getSiteSettings } from "@/lib/settings";
 import { PageHeader } from "@/components/admin/page-header";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { BookingSettingsForm } from "@/components/admin/booking-settings-form";
 import { isConfigured } from "@/lib/env";
 
 export default async function BookingSettingsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/bookings/settings");
   const settings = await getSiteSettings();
 
   const msGraphConfigured = isConfigured("MS_GRAPH_TENANT_ID", "MS_GRAPH_CLIENT_SECRET");

@@ -28,6 +28,7 @@ import Image from "next/image";
 import { useState } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import { SETTINGS_CATALOG, SETTINGS_NAV_GROUPS } from "@/lib/settings-catalog";
+import { canAccess } from "@/lib/admin-access";
 import { useNavBadges } from "./use-nav-badges";
 import { SIDEBAR_COLLAPSED_COOKIE } from "./sidebar-state";
 
@@ -35,7 +36,6 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  roles: AdminRole[];
 }
 
 interface NavGroup {
@@ -47,18 +47,18 @@ const navGroups: NavGroup[] = [
   {
     label: "",
     items: [
-      { href: "/admin", label: "Dashboard", icon: LayoutDashboard, roles: ["super_admin", "editor", "marketing"] },
-      { href: "/admin/clients", label: "Clients", icon: Users, roles: ["super_admin", "marketing"] },
-      { href: "/admin/bookings", label: "Bookings", icon: CalendarDays, roles: ["super_admin", "editor"] },
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/clients", label: "Clients", icon: Users },
+      { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
     ],
   },
   {
     label: "Content",
     items: [
-      { href: "/admin/pages", label: "Pages", icon: FileText, roles: ["super_admin", "editor"] },
-      { href: "/admin/seo", label: "SEO", icon: Search, roles: ["super_admin", "editor"] },
-      { href: "/admin/courses", label: "Courses", icon: GraduationCap, roles: ["super_admin", "editor"] },
-      { href: "/admin/testimonials", label: "Testimonials", icon: Quote, roles: ["super_admin", "editor", "marketing"] },
+      { href: "/admin/pages", label: "Pages", icon: FileText },
+      { href: "/admin/seo", label: "SEO", icon: Search },
+      { href: "/admin/courses", label: "Courses", icon: GraduationCap },
+      { href: "/admin/testimonials", label: "Testimonials", icon: Quote },
     ],
   },
   {
@@ -66,40 +66,36 @@ const navGroups: NavGroup[] = [
     items: [
       // "Billing", not "Finance": Settings has its own Finance page (rates, VAT, terms), and two
       // menu entries with one name opened different pages.
-      { href: "/admin/invoices", label: "Billing", icon: Receipt, roles: ["super_admin"] },
+      { href: "/admin/invoices", label: "Billing", icon: Receipt },
     ],
   },
   {
     label: "E-Commerce",
     items: [
-      { href: "/admin/orders", label: "Orders", icon: ShoppingCart, roles: ["super_admin"] },
-      { href: "/admin/coupons", label: "Coupons & Gifts", icon: Tag, roles: ["super_admin"] },
-      { href: "/admin/packages", label: "Packages", icon: Package, roles: ["super_admin"] },
-      { href: "/admin/digital-products", label: "Digital Products", icon: FileDown, roles: ["super_admin"] },
+      { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
+      { href: "/admin/coupons", label: "Coupons & Gifts", icon: Tag },
+      { href: "/admin/packages", label: "Packages", icon: Package },
+      { href: "/admin/digital-products", label: "Digital Products", icon: FileDown },
     ],
   },
   {
     label: "Communication",
     items: [
-      { href: "/admin/campaigns", label: "Campaigns", icon: Send, roles: ["super_admin", "marketing"] },
-      { href: "/admin/drip-emails", label: "Drip Sequence", icon: Timer, roles: ["super_admin", "marketing"] },
-      { href: "/admin/email-templates", label: "Email Templates", icon: Mail, roles: ["super_admin"] },
+      { href: "/admin/campaigns", label: "Campaigns", icon: Send },
+      { href: "/admin/drip-emails", label: "Drip Sequence", icon: Timer },
+      { href: "/admin/email-templates", label: "Email Templates", icon: Mail },
     ],
   },
   {
     label: "Admin",
     items: [
-      { href: "/admin/reports", label: "Reports", icon: BarChart3, roles: ["super_admin"] },
-      { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["super_admin"] },
+      { href: "/admin/reports", label: "Reports", icon: BarChart3 },
+      { href: "/admin/settings", label: "Settings", icon: Settings },
     ],
   },
 ];
 
 /** Whether `role` sees the main-nav entry for `href`: the one table the keyboard shortcuts also read. */
-export function canSeeNav(href: string, role: AdminRole): boolean {
-  return navGroups.some((g) => g.items.some((i) => i.href === href && i.roles.includes(role)));
-}
-
 /** A collapsed item's tooltip carries its badge count, since the dot alone does not say how many. */
 const withCount = (label: string, count = 0) => (count > 0 ? `${label} (${count})` : label);
 
@@ -121,7 +117,7 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
   }
 
   const visibleGroups = navGroups
-    .map((group) => ({ ...group, items: group.items.filter((item) => item.roles.includes(role)) }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => canAccess(item.href, role)) }))
     .filter((group) => group.items.length > 0);
 
   // Inside Settings, the sidebar becomes the settings nav (with a back-to-dashboard

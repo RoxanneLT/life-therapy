@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { PageEditor } from "./page-editor";
+import { requireAccess } from "@/lib/auth";
 
 interface Props {
   readonly params: Promise<{ readonly slug: string }>;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default async function PageEditorPage({ params, searchParams }: Props) {
+  await requireAccess("/admin/pages");
   const { slug } = await params;
   const { tab } = await searchParams;
 

@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { saFormat } from "@/lib/dates";
 import { BookingStatus } from "@/lib/generated/prisma/client";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import {
   Table,
   TableBody,
@@ -81,7 +81,7 @@ export default async function InvoicesPage({
     dir?: string;
   }>;
 }) {
-  await requireRole("super_admin");
+  await requireAccess("/admin/invoices");
 
   const params = await searchParams;
   const activeStatus = STATUS_TABS.includes(params.status as (typeof STATUS_TABS)[number])

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { Suspense } from "react";
 import { PageHeader } from "@/components/admin/page-header";
-import { getAuthenticatedAdmin } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { saToday } from "@/lib/dates";
 import { AttentionQueue, AttentionQueueSkeleton } from "./attention-queue";
 import { DashboardOverview, DashboardOverviewSkeleton } from "./dashboard-overview";
@@ -21,7 +21,7 @@ export default async function AdminDashboard({
 }: {
   readonly searchParams: Promise<{ year?: string }>;
 }) {
-  const { adminUser } = await getAuthenticatedAdmin();
+  const { adminUser } = await requireAccess("/admin");
   const params = await searchParams;
   const currentYear = Number(saToday().slice(0, 4));
   const year = params.year ? Number.parseInt(params.year, 10) : currentYear;

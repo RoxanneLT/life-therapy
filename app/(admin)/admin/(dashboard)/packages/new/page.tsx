@@ -2,12 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/admin/page-header";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PackageForm } from "@/components/admin/package-form";
 import { createPackage } from "../actions";
 
 export default async function NewPackagePage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/packages");
 
   const [categoryRows, courses, modules, digitalProducts] = await Promise.all([
     prisma.hybridPackage.findMany({

@@ -8,12 +8,14 @@ import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
 import { Plus, Video } from "lucide-react";
 import { SortableLectureList } from "./sortable-lecture-list";
+import { requireAccess } from "@/lib/auth";
 
 export default async function LecturesPage({
   params,
 }: {
   params: Promise<{ id: string; moduleId: string }>;
 }) {
+  await requireAccess("/admin/courses");
   const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
     where: { id: moduleId },

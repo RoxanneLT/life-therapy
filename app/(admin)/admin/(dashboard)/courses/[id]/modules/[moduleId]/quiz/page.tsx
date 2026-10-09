@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { QuizEditor } from "@/components/admin/quiz-editor";
 import { createOrUpdateQuiz, deleteQuiz, saveQuestion, deleteQuestion } from "./actions";
 import { PageHeader } from "@/components/admin/page-header";
+import { requireAccess } from "@/lib/auth";
 
 export default async function QuizPage({
   params,
 }: {
   params: Promise<{ id: string; moduleId: string }>;
 }) {
+  await requireAccess("/admin/courses");
   const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
     where: { id: moduleId },

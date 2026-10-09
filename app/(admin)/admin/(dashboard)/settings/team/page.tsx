@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { UsersPanel } from "../users-panel";
 
 export default async function TeamSettingsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/settings");
 
   const users = await prisma.adminUser.findMany({ orderBy: { createdAt: "asc" } });
   const serializedUsers = users.map((u) => ({

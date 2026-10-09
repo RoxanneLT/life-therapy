@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { formatPrice } from "@/lib/utils";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -24,7 +24,7 @@ export default async function OrdersPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireAccess("/admin/orders");
   const params = await searchParams;
 
   const where = params.status

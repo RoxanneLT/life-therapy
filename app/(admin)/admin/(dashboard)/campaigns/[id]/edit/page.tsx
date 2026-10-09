@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/page-header";
 import { CampaignEditor } from "../../new/campaign-editor";
 import { BirthdayCampaignEditor } from "../../new/birthday-campaign-editor";
@@ -12,7 +12,7 @@ export default async function EditCampaignPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/campaigns");
   const { id } = await params;
 
   const campaign = await prisma.campaign.findUnique({

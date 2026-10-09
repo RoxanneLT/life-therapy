@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { EmptyState } from "@/components/admin/empty-state";
 import { PageHeader } from "@/components/admin/page-header";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import Link from "next/link";
 import {
   Table,
@@ -66,7 +66,7 @@ export default async function ClientsPage({
 }: {
   readonly searchParams: Promise<{ status?: string; q?: string; sort?: string; dir?: string; page?: string }>;
 }) {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/clients");
 
   const { status, q, sort, dir, page: pageParam } = await searchParams;
   const activeTab = STATUS_TABS.includes(status as (typeof STATUS_TABS)[number])

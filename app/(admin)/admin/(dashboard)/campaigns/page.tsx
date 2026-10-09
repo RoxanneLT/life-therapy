@@ -4,7 +4,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/admin/empty-state";
 import { PageHeader } from "@/components/admin/page-header";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +21,7 @@ import { format } from "date-fns";
 import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_VARIANT } from "@/lib/status-styles";
 
 export default async function CampaignsPage() {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/campaigns");
 
   const campaigns = await prisma.campaign.findMany({
     orderBy: { createdAt: "desc" },

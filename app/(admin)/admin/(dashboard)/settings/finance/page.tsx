@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/settings";
 import { FinanceSettingsForm } from "@/components/admin/finance-settings-form";
 import {
@@ -12,7 +12,7 @@ import { format } from "date-fns";
 export const dynamic = "force-dynamic";
 
 export default async function FinanceSettingsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/settings");
   const settings = await getSiteSettings();
 
   // Compute next month's effective dates for the preview

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus, Package } from "lucide-react";
@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 
 export default async function AdminPackagesPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/packages");
 
   const packages = await prisma.hybridPackage.findMany({
     orderBy: { sortOrder: "asc" },

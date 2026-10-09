@@ -932,6 +932,55 @@ const SETS_PASSWORD = [
   /auth\.admin\.createUser\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\bpassword\b/g,
 ];
 
+check("admin-access: every admin page is guarded by its area", () => {
+  // lib/admin-access.ts is the one map of which role opens which admin page; the sidebar, the
+  // shortcuts, the attention rows and the search read it. Until 2026-10-09 every page carried its
+  // own requireRole literal, and courses, pages and email-templates carried none — any signed-in
+  // admin could open them by URL while the sidebar hid them. So every page.tsx must call
+  // requireAccess() with the key that governs its route, and no page guards with a literal.
+  //
+  // Scans with codeKeepingLiterals(), not code(): the area key is a string literal, and code()
+  // blanks those. Inline "use server" actions inside a page keep requireRole — an action's guard
+  // follows its own rule — so only the text before the first "use server" is the page's.
+  const MAP = "lib/admin-access.ts";
+  const keys = [...read(join(ROOT, MAP)).matchAll(/^\s+"(\/admin[^"]*)":/gm)].map((m) => m[1]);
+  if (keys.length < 10) throw new Error(`read ${keys.length} keys from ${MAP} — the parse has broken`);
+  const governing = (route) =>
+    keys
+      .filter((k) => (k === "/admin" ? route === k : route === k || route.startsWith(k + "/")))
+      .sort((a, b) => b.length - a.length)[0];
+
+  const base = join(ROOT, "app", "(admin)", "admin", "(dashboard)");
+  for (const file of walk(base).filter((f) => /[\\/]page\.tsx$/.test(f))) {
+    const route = "/admin" + rel(file).slice(rel(base).length).replace(/\/page\.tsx$/, "");
+    const src = codeKeepingLiterals(read(file));
+    const action = src.indexOf('"use server"');
+    const page = action === -1 ? src : src.slice(0, action);
+    const key = governing(route);
+    if (!key) {
+      fail("admin-access", rel(file), `no ${MAP} key governs ${route}`, `add the area to ADMIN_ACCESS — until then it is super_admin only`);
+      continue;
+    }
+    if (/\brequireRole\(/.test(page)) {
+      fail("admin-access", rel(file), "guards the page with a requireRole literal", `use requireAccess("${key}") — the roles live in ${MAP}`);
+    }
+    const called = [...page.matchAll(/\brequireAccess\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]);
+    if (called.length === 0) {
+      fail("admin-access", rel(file), "the page has no role guard", `await requireAccess("${key}") first in the page`);
+    } else if (called.some((c) => c !== key)) {
+      fail("admin-access", rel(file), `requireAccess("${called.join('", "')}") is not the key governing ${route}`, `use requireAccess("${key}")`);
+    }
+  }
+
+  // And nobody keeps a second role list beside it.
+  for (const file of [...walk(join(ROOT, "lib")), ...walk(join(ROOT, "components")), ...walk(join(ROOT, "app"))]) {
+    if (rel(file) === MAP) continue;
+    if (/AdminRole\[\]\s*=\s*\[|\broles:\s*\[\s*"/.test(codeKeepingLiterals(read(file)))) {
+      fail("admin-access", rel(file), "declares a list of admin roles", `read ${MAP} (canAccess) instead`);
+    }
+  }
+});
+
 check("auth: every place that sets a password is classified by what authorises it", () => {
   const seen = new Map();
   for (const f of allSource()) {

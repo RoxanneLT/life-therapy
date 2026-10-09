@@ -14,8 +14,10 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
+import { requireAccess } from "@/lib/auth";
 
 export default async function AdminPagesPage() {
+  await requireAccess("/admin/pages");
   const pages = await prisma.page.findMany({
     orderBy: { sortOrder: "asc" },
     include: { _count: { select: { sections: true } } },

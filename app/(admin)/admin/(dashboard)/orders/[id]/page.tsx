@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { formatPrice } from "@/lib/utils";
 import { format } from "date-fns";
@@ -24,7 +24,7 @@ export default async function OrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireRole("super_admin");
+  await requireAccess("/admin/orders");
 
   const order = await prisma.order.findUnique({
     where: { id },

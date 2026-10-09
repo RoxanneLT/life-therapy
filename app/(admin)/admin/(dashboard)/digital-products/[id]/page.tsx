@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/page-header";
 import { notFound } from "next/navigation";
 import { DigitalProductForm } from "@/components/admin/digital-product-form";
@@ -13,7 +13,7 @@ export default async function EditDigitalProductPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireAccess("/admin/digital-products");
   const { id } = await params;
 
   const [product, allProducts] = await Promise.all([

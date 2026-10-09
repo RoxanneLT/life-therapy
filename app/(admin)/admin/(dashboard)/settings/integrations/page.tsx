@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/settings";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { isConfigured } from "@/lib/env";
 
 export default async function IntegrationsSettingsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/settings");
   const settings = await getSiteSettings();
 
   const secretStatus = {

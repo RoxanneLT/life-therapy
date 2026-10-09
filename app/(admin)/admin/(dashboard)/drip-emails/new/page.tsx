@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { NewDripEmailForm } from "./new-drip-email-form";
 import { PageHeader } from "@/components/admin/page-header";
 
@@ -10,7 +10,7 @@ export default async function NewDripEmailPage({
 }: {
   searchParams: Promise<{ type?: string }>;
 }) {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/drip-emails");
   const { type: typeParam } = await searchParams;
   const phase = typeParam === "newsletter" ? "newsletter" : "onboarding";
 

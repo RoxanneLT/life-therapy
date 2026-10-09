@@ -3,7 +3,7 @@
  * waiting on a person is found in one place rather than in a banner, a strip and four cards.
  * (Shape borrowed from pleks's lib/dashboard/attentionItems.ts; the sources are this practice's.)
  *
- * Each item is gated by the roles of the page it links to. A row the reader cannot open is not
+ * Each item is gated by the page it links to, through lib/admin-access.ts. A row the reader cannot open is not
  * shown, so an editor never meets a link that `requireRole` bounces back to /admin.
  *
  * Failed email has its own row because nothing else surfaces it: the admin UI has a delivery log
@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/prisma";
 import { addSaDays, calendarDate, saDayStart, saFormat, saToday } from "@/lib/dates";
 import type { AdminRole } from "@/lib/generated/prisma/client";
+import { canAccess } from "@/lib/admin-access";
 
 export interface AttentionEntry {
   label: string;
@@ -34,9 +35,6 @@ export interface AttentionItem {
 }
 
 const ENTRY_LIMIT = 3;
-const BOOKINGS: AdminRole[] = ["super_admin", "editor"];
-const CLIENTS: AdminRole[] = ["super_admin", "marketing"];
-const SUPER: AdminRole[] = ["super_admin"];
 
 /**
  * The drift counts both reconcile routes write into a "partial" log's metadata. `protectedWrongDay`
@@ -74,8 +72,8 @@ function countOverduePaymentRequests(): Promise<number> {
  */
 export async function getNavBadges(role: AdminRole): Promise<Record<string, number>> {
   const [stale, overdue] = await Promise.all([
-    BOOKINGS.includes(role) ? countStaleSessions() : 0,
-    SUPER.includes(role) ? countOverduePaymentRequests() : 0,
+    canAccess("/admin/bookings", role) ? countStaleSessions() : 0,
+    canAccess("/admin/invoices", role) ? countOverduePaymentRequests() : 0,
   ]);
   return { "/admin/bookings": stale, "/admin/invoices": overdue };
 }
@@ -83,23 +81,24 @@ export async function getNavBadges(role: AdminRole): Promise<Record<string, numb
 export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[]> {
   const today = saToday();
   const todayStart = saDayStart(today);
-  const can = (roles: AdminRole[]) => roles.includes(role);
+  const can = (href: string) => canAccess(href, role);
   const none = Promise.resolve(null);
 
   const [stale, syncFailures, lastReconcile, overdue, failedEmails, expiring, conflicts] = await Promise.all([
-    can(BOOKINGS) ? countStaleSessions() : none,
-    can(SUPER)
+    can("/admin/bookings") ? countStaleSessions() : none,
+    can("/admin/settings/calendar-sync")
       ? prisma.calendarSyncLog.count({ where: { status: "failed", createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } })
       : none,
-    can(SUPER)
+    can("/admin/settings/calendar-sync")
       ? prisma.calendarSyncLog.findFirst({
           where: { operation: "reconcile" },
           orderBy: { createdAt: "desc" },
           select: { status: true, metadata: true },
         })
       : none,
-    can(SUPER) ? countOverduePaymentRequests() : none,
-    can(SUPER)
+    can("/admin/invoices") ? countOverduePaymentRequests() : none,
+    // Links to client records, but failed mail is administered under Email Templates.
+    can("/admin/email-templates")
       ? prisma.emailLog.findMany({
           where: { status: "failed", sentAt: { gte: saDayStart(addSaDays(today, -7)) } },
           orderBy: { sentAt: "desc" },
@@ -107,7 +106,8 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
           take: 50,
         })
       : none,
-    can(SUPER)
+    // Links to client records, but credit balances are billing data.
+    can("/admin/invoices")
       ? prisma.sessionCreditBalance.findMany({
           where: { balance: { gt: 0 }, expiresAt: { gte: todayStart, lt: saDayStart(addSaDays(today, 15)) } },
           orderBy: { expiresAt: "asc" },
@@ -115,7 +115,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
           take: 20,
         })
       : none,
-    can(CLIENTS)
+    can("/admin/clients")
       ? prisma.auditLog.findMany({
           where: { action: "contact_field_conflict", entityType: "student", createdAt: { gte: saDayStart(addSaDays(today, -30)) } },
           orderBy: { createdAt: "desc" },

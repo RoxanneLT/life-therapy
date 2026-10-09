@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { PackageForm } from "@/components/admin/package-form";
 import { updatePackage, deletePackage } from "../actions";
@@ -13,7 +13,7 @@ export default async function EditPackagePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireAccess("/admin/packages");
   const { id } = await params;
 
   const [pkg, categoryRows, courses, modules, digitalProducts] = await Promise.all([

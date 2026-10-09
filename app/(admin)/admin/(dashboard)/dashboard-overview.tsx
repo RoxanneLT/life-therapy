@@ -6,10 +6,8 @@ import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video, Arro
 import { formatByCurrency } from "@/lib/utils";
 import { saToday, saDateStr, saDayStart, saMonthStart, saFormat, bookingStartsAt, calendarDate } from "@/lib/dates";
 import type { AdminRole } from "@/lib/generated/prisma/client";
+import { canAccess } from "@/lib/admin-access";
 
-const BOOKINGS: AdminRole[] = ["super_admin", "editor"];
-const CLIENTS: AdminRole[] = ["super_admin", "marketing"];
-const SUPER: AdminRole[] = ["super_admin"];
 
 const sessionTypeLabels: Record<string, string> = {
   individual: "Individual",
@@ -57,7 +55,7 @@ function isWithinTwoHours(
 
 /** Headline numbers and the three at-a-glance cards. Each is shown only to roles that can open its link. */
 export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>) {
-  const can = (roles: AdminRole[]) => roles.includes(role);
+  const can = (href: string) => canAccess(href, role);
   const none = Promise.resolve(null);
 
   const today = saToday();
@@ -77,7 +75,7 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
     nextSessionCandidates,
     studentsWithDob,
   ] = await Promise.all([
-    can(CLIENTS) ? prisma.student.count({ where: { clientStatus: "active" } }) : none,
+    can("/admin/clients") ? prisma.student.count({ where: { clientStatus: "active" } }) : none,
     // Revenue = CASH RECEIVED THIS MONTH, so filter on `paidAt` — not on
     // `billingMonth`, which was wrong twice over:
     //   1. Only the payment-request path ever populates `billingMonth`, so every
@@ -91,13 +89,13 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
     // and `paidAmountCents` is nullable (an invoice marked paid from the list
     // view never sets it) — so coalesce to `totalCents` per row instead of
     // silently dropping the amount.
-    can(SUPER)
+    can("/admin/invoices")
       ? prisma.invoice.findMany({
           where: { status: "paid", paidAt: { gte: monthStart, lt: monthEnd } },
           select: { currency: true, paidAmountCents: true, totalCents: true },
         })
       : none,
-    can(SUPER)
+    can("/admin/invoices")
       ? prisma.paymentRequest.groupBy({
           by: ["currency"],
           where: { status: "pending" },
@@ -105,12 +103,12 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
           _sum: { totalCents: true },
         })
       : none,
-    can(BOOKINGS)
+    can("/admin/bookings")
       ? prisma.booking.count({
           where: { status: { in: ["completed", "confirmed", "pending"] }, date: { gte: monthStart, lt: monthEnd } },
         })
       : none,
-    can(BOOKINGS)
+    can("/admin/bookings")
       ? prisma.booking.count({
           where: { status: { in: ["confirmed", "pending"] }, date: { gte: monthEnd, lt: nextMonthEnd } },
         })
@@ -121,7 +119,7 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
     // fire at all. The day is the only thing the column can filter on; which of
     // today's sessions is still ahead is a question about start TIME, so that part
     // is decided in code with bookingStartsAt(). 25 covers any real day's diary.
-    can(BOOKINGS)
+    can("/admin/bookings")
       ? prisma.booking.findMany({
           where: { status: "confirmed", date: { gte: calendarDate(today) } },
           orderBy: [{ date: "asc" }, { startTime: "asc" }],
@@ -131,7 +129,7 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
       : none,
     // Every active or potential client with a birthday on file: under two hundred rows, so the
     // day-of-year arithmetic stays in code rather than in SQL over a `@db.Date`.
-    can(CLIENTS)
+    can("/admin/clients")
       ? prisma.student.findMany({
           where: { dateOfBirth: { not: null }, clientStatus: { in: ["active", "potential"] } },
           select: { firstName: true, lastName: true, dateOfBirth: true },
@@ -165,10 +163,10 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
   // The bookings month view takes any day of the month it should show.
   const monthHref = (d: Date) => `/admin/bookings?view=month&date=${saDateStr(d)}`;
   const stats = [
-    can(CLIENTS) && { label: "Active Clients", value: studentCount, icon: UserCheck, href: "/admin/clients?status=active" },
-    can(SUPER) && { label: "Revenue (This Month)", value: revenueThisMonth, icon: Banknote, href: "/admin/invoices?status=paid" },
-    can(BOOKINGS) && { label: `Sessions (${saFormat(monthStart, "MMM")})`, value: sessionsThisMonth, icon: CreditCard, href: monthHref(monthStart) },
-    can(BOOKINGS) && { label: `Sessions (${saFormat(monthEnd, "MMM")})`, value: nextMonthSessions, icon: CalendarDays, href: monthHref(monthEnd) },
+    can("/admin/clients") && { label: "Active Clients", value: studentCount, icon: UserCheck, href: "/admin/clients?status=active" },
+    can("/admin/invoices") && { label: "Revenue (This Month)", value: revenueThisMonth, icon: Banknote, href: "/admin/invoices?status=paid" },
+    can("/admin/bookings") && { label: `Sessions (${saFormat(monthStart, "MMM")})`, value: sessionsThisMonth, icon: CreditCard, href: monthHref(monthStart) },
+    can("/admin/bookings") && { label: `Sessions (${saFormat(monthEnd, "MMM")})`, value: nextMonthSessions, icon: CalendarDays, href: monthHref(monthEnd) },
   ].filter((s) => s !== false);
 
   return (
@@ -192,7 +190,7 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
       )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {can(BOOKINGS) && (
+        {can("/admin/bookings") && (
           <Card className="flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Next Session</CardTitle>
@@ -233,7 +231,7 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
         )}
 
         {/* One payments card. A second, "Capture Payment", linked to the same list and was folded in. */}
-        {can(SUPER) && (
+        {can("/admin/invoices") && (
           <Card className="flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Pending Payments</CardTitle>
@@ -260,7 +258,7 @@ export async function DashboardOverview({ role }: Readonly<{ role: AdminRole }>)
           </Card>
         )}
 
-        {can(CLIENTS) && (
+        {can("/admin/clients") && (
           <Card className="flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Birthdays</CardTitle>

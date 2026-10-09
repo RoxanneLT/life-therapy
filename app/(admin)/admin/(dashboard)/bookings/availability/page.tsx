@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { format } from "date-fns";
 import { AvailabilityOverrideForm } from "@/components/admin/availability-override-form";
 import { deleteAvailabilityOverride } from "./actions";
@@ -19,7 +19,7 @@ import { Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 
 export default async function AvailabilityOverridesPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/bookings/availability");
 
   const overrides = await prisma.availabilityOverride.findMany({
     orderBy: { date: "asc" },

@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { ModuleForm } from "@/components/admin/module-form";
 import { createModule } from "../actions";
 import { PageHeader } from "@/components/admin/page-header";
+import { requireAccess } from "@/lib/auth";
 
 export default async function NewModulePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAccess("/admin/courses");
   const { id } = await params;
   const course = await prisma.course.findUnique({
     where: { id },

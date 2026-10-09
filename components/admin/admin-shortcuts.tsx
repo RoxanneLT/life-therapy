@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { AdminRole } from "@/lib/generated/prisma/client";
-import { canSeeNav } from "./admin-sidebar";
+import { canAccess } from "@/lib/admin-access";
 
-/** G, then a letter, goes to a page. Only pages the role can open are bound (canSeeNav). */
+/** G, then a letter, goes to a page. Only pages the role can open are bound (canAccess). */
 const GO_TO: { key: string; href: string; label: string }[] = [
   { key: "d", href: "/admin", label: "Dashboard" },
   { key: "c", href: "/admin/clients", label: "Clients" },
@@ -33,7 +33,7 @@ export function AdminShortcuts({ role }: { readonly role: AdminRole }) {
   const router = useRouter();
   const [helpOpen, setHelpOpen] = useState(false);
   const pendingG = useRef(0);
-  const bindings = useMemo(() => GO_TO.filter((b) => canSeeNav(b.href, role)), [role]);
+  const bindings = useMemo(() => GO_TO.filter((b) => canAccess(b.href, role)), [role]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

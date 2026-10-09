@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/settings";
 import { WhatsAppPanel } from "../whatsapp-panel";
 import { isConfigured } from "@/lib/env";
 
 export default async function WhatsAppSettingsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/settings");
   const settings = await getSiteSettings();
 
   return (

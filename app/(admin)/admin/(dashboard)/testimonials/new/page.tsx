@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { TestimonialForm } from "@/components/admin/testimonial-form";
 import { createTestimonial } from "../actions";
 import { shortClientName } from "@/lib/client-display";
+import { requireAccess } from "@/lib/auth";
 
 export default async function NewTestimonialPage() {
+  await requireAccess("/admin/testimonials");
   const clients = await prisma.student.findMany({
     where: { clientStatus: { not: "potential" } },
     select: { firstName: true, lastName: true },

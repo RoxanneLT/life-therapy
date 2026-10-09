@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { getSettingsPageVisits } from "@/lib/settings-ui-state";
 import {
   SETTINGS_CATALOG,
@@ -32,7 +32,7 @@ function SettingCard({ page }: Readonly<{ page: SettingsPage }>) {
 }
 
 export default async function SettingsOverviewPage() {
-  const { adminUser } = await requireRole("super_admin");
+  const { adminUser } = await requireAccess("/admin/settings");
   const visits = await getSettingsPageVisits(adminUser.id);
   const frequent = topVisitedHrefs(visits, 4)
     .map((h) => SETTINGS_CATALOG.find((p) => p.href === h))

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { getSessionTypeConfig } from "@/lib/booking-config";
 import { formatPrice } from "@/lib/utils";
@@ -65,7 +65,7 @@ interface Props {
 
 export default async function BookingDetailPage({ params }: Props) {
   const { id } = await params;
-  await requireRole("super_admin", "editor");
+  await requireAccess("/admin/bookings");
 
   const booking = await prisma.booking.findUnique({
     where: { id },

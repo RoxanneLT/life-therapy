@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { LectureForm } from "@/components/admin/lecture-form";
 import { createLecture } from "../actions";
 import { PageHeader } from "@/components/admin/page-header";
+import { requireAccess } from "@/lib/auth";
 
 export default async function NewLecturePage({
   params,
 }: {
   params: Promise<{ id: string; moduleId: string }>;
 }) {
+  await requireAccess("/admin/courses");
   const { id, moduleId } = await params;
   const mod = await prisma.module.findUnique({
     where: { id: moduleId },

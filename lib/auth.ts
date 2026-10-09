@@ -3,6 +3,7 @@ import { prisma } from "./prisma";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
+import { ADMIN_ACCESS, type AdminArea } from "./admin-access";
 
 /**
  * The PURE half of the admin auth check — verify the user, load the adminUser row,
@@ -86,4 +87,12 @@ export async function requireRole(...roles: AdminRole[]) {
   }
 
   return { user, adminUser };
+}
+
+/**
+ * An admin page's guard: the roles come from lib/admin-access.ts, never a literal at the page.
+ * Pass the page's own area key; the audit checks it is the one that governs the page's route.
+ */
+export async function requireAccess(area: AdminArea) {
+  return requireRole(...ADMIN_ACCESS[area]);
 }

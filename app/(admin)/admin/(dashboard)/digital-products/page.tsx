@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/admin/page-header";
 export const dynamic = "force-dynamic";
 
 export default async function AdminDigitalProductsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/digital-products");
 
   const products = await prisma.digitalProduct.findMany({
     orderBy: { sortOrder: "asc" },

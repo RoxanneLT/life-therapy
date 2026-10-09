@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { EditCouponForm } from "./edit-coupon-form";
@@ -12,7 +12,7 @@ export default async function EditCouponPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireRole("super_admin");
+  await requireAccess("/admin/coupons");
 
   const coupon = await prisma.coupon.findUnique({ where: { id } });
   if (!coupon) notFound();

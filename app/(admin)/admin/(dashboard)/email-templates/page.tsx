@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Mail, Pencil, CalendarDays, ShoppingCart, UserPlus, GraduationCap, Gift, Receipt } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import Link from "next/link";
+import { requireAccess } from "@/lib/auth";
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   billing: { label: "Billing & Invoice Emails", icon: Receipt },
@@ -21,6 +22,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ComponentType<{
 const CATEGORY_ORDER = ["billing", "booking", "order", "onboarding", "course", "gift"];
 
 export default async function EmailTemplatesPage() {
+  await requireAccess("/admin/email-templates");
   const templates = await prisma.emailTemplate.findMany({
     orderBy: [{ category: "asc" }, { key: "asc" }],
   });

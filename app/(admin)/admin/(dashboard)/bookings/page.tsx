@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/admin/page-header";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getSiteSettings, getBusinessHours } from "@/lib/settings";
 import { format } from "date-fns";
@@ -98,7 +98,7 @@ interface Props {
 }
 
 export default async function BookingsPage({ searchParams }: Props) {
-  await requireRole("super_admin", "editor");
+  await requireAccess("/admin/bookings");
 
   const sp = await searchParams;
   const statusFilter = sp.status || undefined;

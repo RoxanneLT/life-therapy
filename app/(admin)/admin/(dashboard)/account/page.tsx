@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getAuthenticatedAdmin } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/page-header";
 import { MyProfile } from "@/components/admin/my-profile";
 
@@ -11,7 +11,7 @@ export default async function MyProfilePage({
 }: {
   readonly searchParams: Promise<{ readonly tab?: string }>;
 }) {
-  const { adminUser } = await getAuthenticatedAdmin();
+  const { adminUser } = await requireAccess("/admin/account");
   const { tab } = await searchParams;
   const defaultTab = VALID_TABS.includes(tab as (typeof VALID_TABS)[number])
     ? (tab as (typeof VALID_TABS)[number])

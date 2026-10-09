@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/page-header";
 import {
   getFinancialSummary,
@@ -58,7 +58,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ tab?: string; fy?: string }>;
 }) {
-  await requireRole("super_admin");
+  await requireAccess("/admin/reports");
 
   const params = await searchParams;
   const activeTab: TabKey = TABS.some((t) => t.key === params.tab)

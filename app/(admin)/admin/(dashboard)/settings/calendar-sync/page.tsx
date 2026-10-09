@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CalendarSyncSection } from "../calendar-sync-section";
 import { PageHeader } from "@/components/admin/page-header";
 
 export default async function CalendarSyncSettingsPage() {
-  await requireRole("super_admin");
+  await requireAccess("/admin/settings");
 
   const [logs, lastReconcile] = await Promise.all([
     prisma.calendarSyncLog.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),

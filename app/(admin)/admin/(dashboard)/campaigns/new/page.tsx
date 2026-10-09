@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { PageHeader } from "@/components/admin/page-header";
 import { CampaignEditor } from "./campaign-editor";
 
 export default async function NewCampaignPage() {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/campaigns");
 
   return (
     <div>

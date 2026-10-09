@@ -16,8 +16,10 @@ import { Plus, Star } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { TestimonialRowActions } from "./testimonial-row-actions";
+import { requireAccess } from "@/lib/auth";
 
 export default async function AdminTestimonialsPage() {
+  await requireAccess("/admin/testimonials");
   const testimonials = await prisma.testimonial.findMany({
     orderBy: { sortOrder: "asc" },
   });

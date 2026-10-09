@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/admin/page-header";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { deleteCampaignAction } from "../actions";
 import { CampaignActions } from "./campaign-actions";
 import { DeliveryLog } from "./delivery-log";
@@ -41,7 +41,7 @@ export default async function CampaignDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/campaigns");
   const { id } = await params;
 
   const campaign = await prisma.campaign.findUnique({

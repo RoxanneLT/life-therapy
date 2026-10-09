@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { ClientImporter } from "./client-importer";
 import { PageHeader } from "@/components/admin/page-header";
 
 export default async function ImportClientsPage() {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/clients");
 
   return (
     <div className="mx-auto max-w-3xl">

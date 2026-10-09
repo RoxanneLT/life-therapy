@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
@@ -16,7 +16,7 @@ export default async function ClientDetailPage({
 }) {
   const { id } = await params;
   const { tab } = await searchParams;
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/clients");
 
   const activeTab = tab || "overview";
 

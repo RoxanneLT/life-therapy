@@ -66,6 +66,39 @@ export const fmt = (cents: number) => \`R \${(cents / 100).toLocaleString("en-ZA
     expects: ["money: no local currency formatter"],
   },
   {
+    // A page with no guard: the courses/pages/email-templates shape before 2026-10-09. The key
+    // the check derives for it is "/admin/clients", which is literal-only — code() would blank it.
+    path: "app/(admin)/admin/(dashboard)/clients/__probe-unguarded/page.tsx",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+export default async function ProbePage() {
+  return null;
+}
+`,
+    expects: ["admin-access: every admin page is guarded by its area"],
+  },
+  {
+    // The right roles, but as a literal, and the wrong key: both must fire.
+    path: "app/(admin)/admin/(dashboard)/bookings/settings/__probe-literal/page.tsx",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import { requireAccess, requireRole } from "@/lib/auth";
+export default async function ProbePage() {
+  await requireRole("super_admin");
+  await requireAccess("/admin/bookings");
+  return null;
+}
+`,
+    expects: ["admin-access: every admin page is guarded by its area"],
+  },
+  {
+    // A second role list beside lib/admin-access.ts — the BOOKINGS/CLIENTS/SUPER shape.
+    path: "lib/__probe-roles.ts",
+    content: `// Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+import type { AdminRole } from "@/lib/generated/prisma/client";
+export const EDITORS: AdminRole[] = ["super_admin", "editor"];
+`,
+    expects: ["admin-access: every admin page is guarded by its area"],
+  },
+  {
     path: "lib/__probe-queries.ts",
     // Violations whose marker is a literal inside a Prisma call — `status: "paid"`,
     // `status: "cancelled"`, a marketing template key. Separate file so a syntax-shaped

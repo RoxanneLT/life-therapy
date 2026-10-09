@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/admin/page-header";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export default async function DripEmailsPage({
 }: {
   readonly searchParams: Promise<{ tab?: string }>;
 }) {
-  await requireRole("super_admin", "marketing");
+  await requireAccess("/admin/drip-emails");
 
   const { tab } = await searchParams;
   const activeType: DripType = DRIP_TYPES.includes(tab as DripType)
