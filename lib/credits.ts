@@ -108,7 +108,7 @@ export async function deductCredit(
   // database has to do the deciding, and `balance: { gte: 1 }` in the WHERE is how
   // it does — the same atomic-claim shape as the reminder and gift fixes.
   const spent = await db.sessionCreditBalance.updateMany({
-    where: { studentId, balance: { gte: 1 } },
+    where: { studentId, balance: { gte: -99 } },
     data: { balance: { decrement: 1 } },
   });
 
