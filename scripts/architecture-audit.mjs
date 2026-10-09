@@ -995,9 +995,21 @@ check("pii: a personal-data column is encrypted or says why not", () => {
     "whatsAppLog.waMessageId": "a provider message id",
   };
 
+  // A field counts as encrypted only when its model is ALSO wired into the client: the lists are
+  // config, and the result/query extensions in createExtendedClient are what apply it. On
+  // 2026-10-09 invoice and billingEntity were added to the lists and to nothing else, so their
+  // columns stayed plaintext while this check, reading the lists alone, called them encrypted.
+  const prismaSrc = read(join(ROOT, "lib/prisma.ts"));
+  const wired = (builder) => new Set([...prismaSrc.matchAll(new RegExp(String.raw`(\w+):\s*${builder}\("(\w+)"\)`, "g"))].filter((m) => m[1] === m[2]).map((m) => m[1]));
+  const readWired = wired("buildResultExtension");
+  const writeWired = wired("buildQueryExtension");
   const encrypted = new Set();
-  for (const block of read(join(ROOT, "lib/prisma.ts")).matchAll(/ENCRYPTED_(?:STRING|ARRAY)_FIELDS[^=]*=\s*\{([\s\S]*?)\n\};/g)) {
+  for (const block of prismaSrc.matchAll(/ENCRYPTED_(?:STRING|ARRAY)_FIELDS[^=]*=\s*\{([\s\S]*?)\n\};/g)) {
     for (const m of block[1].matchAll(/(\w+):\s*\[([^\]]*)\]/g)) {
+      if (!readWired.has(m[1]) || !writeWired.has(m[1])) {
+        fail("pii", `lib/prisma.ts → ${m[1]}`, `lists encrypted fields but is not wired into ${!readWired.has(m[1]) && !writeWired.has(m[1]) ? "the client at all, so they are stored plaintext" : readWired.has(m[1]) ? "the query extension, so writes stay plaintext" : "the result extension, so reads come back as ciphertext"}`, `add ${m[1]}: buildResultExtension("${m[1]}") and ${m[1]}: buildQueryExtension("${m[1]}") in createExtendedClient`);
+        continue;
+      }
       for (const f of m[2].matchAll(/"(\w+)"/g)) encrypted.add(`${m[1]}.${f[1]}`);
     }
   }

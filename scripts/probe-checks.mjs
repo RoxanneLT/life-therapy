@@ -514,6 +514,13 @@ const MUTATIONS = [
     expects: ["pii: a personal-data column is encrypted or says why not"],
   },
   {
+    path: "lib/prisma.ts",
+    // Listed as encrypted, wired to nothing: invoice's shape from 608598e until the fix.
+    find: '      invoice: buildQueryExtension("invoice"),\n',
+    replace: "",
+    expects: ["pii: a personal-data column is encrypted or says why not"],
+  },
+  {
     path: "app/(portal)/portal/(dashboard)/bookings/actions.ts",
     // The notes guard removed: the shape of every portal by-id action before someone remembered.
     find: "  if (booking.studentId !== student.id) {\n    return { success: false, error: \"That session doesn't belong to your account.\" };\n  }\n  if (booking.status === \"cancelled\")",
