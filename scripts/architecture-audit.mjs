@@ -963,6 +963,64 @@ const SETS_PASSWORD = [
   /auth\.admin\.createUser\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\bpassword\b/g,
 ];
 
+check("pii: a personal-data column is encrypted or says why not", () => {
+  // Shape from Pleks's scripts/security/check-pii-classification.mts. Field encryption is a hand
+  // list (ENCRYPTED_*_FIELDS in lib/prisma.ts), so until 2026-10-09 a new notes or phone column
+  // shipped in plaintext with nothing failing: booking.sessionNotes, the couples partner's phone
+  // and four billing addresses/phones had. Every text column whose NAME looks personal must now be
+  // on that list or below, with the reason it stays readable. The name pattern is deliberately
+  // wide; a false match costs one line here, a miss costs a plaintext column of client data.
+  const PERSONAL = /notes?$|phone|address|emergency|symptom|feeling|behaviou?r|medic|diagnos|health|condition|allerg|idNumber|passport|userAgent|concern|history|reason|message|body|comment|answer|response|feedback|goal|trauma|relationship|partner/i;
+  const PLAINTEXT = {
+    "availabilityOverride.reason": "the practice's own calendar note (a holiday, a training day), not about a client",
+    "booking.couplesPartnerEmail": "an address mail is sent to; plaintext like clientEmail and student.email",
+    "booking.couplesPartnerName": "searched by the header search (lib/admin-search.ts); a contains filter cannot match ciphertext. Plaintext like clientName",
+    "calendarSyncLog.errorMessage": "system error text",
+    "cronRun.errorMessage": "system error text",
+    "campaign.bodyHtml": "content the practice writes for many recipients",
+    "campaignEmail.bodyHtml": "content the practice writes for many recipients",
+    "dripEmail.bodyHtml": "content the practice writes for many recipients",
+    "emailTemplate.bodyHtml": "content the practice writes for many recipients",
+    "whatsAppTemplate.bodyText": "content the practice writes for many recipients",
+    "cartItem.giftMessage": "a buyer's note to be emailed to a gift's recipient, not a record about a client",
+    "gift.message": "a buyer's note to be emailed to a gift's recipient, not a record about a client",
+    "clientRelationship.relationshipLabel": "a label such as 'partner' or 'parent'",
+    "clientRelationship.relationshipType": "an enum-like type",
+    "relationshipInvite.relationshipType": "an enum-like type",
+    "siteSetting.businessAddress": "the practice's own published address",
+    "siteSetting.phone": "the practice's own published number",
+    "siteSetting.whatsappPhoneNumberId": "a WhatsApp Business API id, not a number",
+    "student.emailPauseReason": "a reason code the system writes",
+    "student.relationshipStatus": "filtered by campaign audiences (lib/contacts.ts, `in:`); an equality filter cannot match ciphertext. A choice from a fixed list",
+    "whatsAppLog.waMessageId": "a provider message id",
+  };
+
+  const encrypted = new Set();
+  for (const block of read(join(ROOT, "lib/prisma.ts")).matchAll(/ENCRYPTED_(?:STRING|ARRAY)_FIELDS[^=]*=\s*\{([\s\S]*?)\n\};/g)) {
+    for (const m of block[1].matchAll(/(\w+):\s*\[([^\]]*)\]/g)) {
+      for (const f of m[2].matchAll(/"(\w+)"/g)) encrypted.add(`${m[1]}.${f[1]}`);
+    }
+  }
+  if (encrypted.size < 10) throw new Error(`read ${encrypted.size} encrypted fields from lib/prisma.ts — the parse has broken`);
+
+  const seen = new Set();
+  for (const m of read(join(ROOT, "prisma/schema.prisma")).matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    const model = m[1][0].toLowerCase() + m[1].slice(1);
+    for (const line of m[2].split("\n")) {
+      const f = /^\s*(\w+)\s+String(?:\[\])?\??(?:\s|$)/.exec(line);
+      if (!f || !PERSONAL.test(f[1])) continue;
+      const key = `${model}.${f[1]}`;
+      seen.add(key);
+      if (encrypted.has(key) || PLAINTEXT[key]) continue;
+      fail("pii", `prisma/schema.prisma → ${key}`, "a column whose name looks personal is neither encrypted nor classified", "add it to ENCRYPTED_STRING_FIELDS in lib/prisma.ts, or to PLAINTEXT here with the reason it must stay readable (a filter or search on it, say)");
+    }
+  }
+  for (const key of Object.keys(PLAINTEXT)) {
+    if (!seen.has(key)) fail("pii", key, "PLAINTEXT names a column the schema no longer has (or no longer looks personal)", "remove the entry");
+    else if (encrypted.has(key)) fail("pii", key, "PLAINTEXT excuses a column that is now encrypted", "remove the entry");
+  }
+});
+
 check("admin-access: every admin page is guarded by its area", () => {
   // lib/admin-access.ts is the one map of which role opens which admin page; the sidebar, the
   // shortcuts, the attention rows and the search read it. Until 2026-10-09 every page carried its

@@ -8,8 +8,8 @@ import { normalizePhoneForStorage } from "@/lib/phone";
  * so this normally finds nothing — it catches legacy rows and anything that slipped in
  * another way. Idempotent: only rows whose normalised value differs are written.
  *
- * Reads come back decrypted via the Prisma extension (student.phone, booking.clientPhone);
- * writes are re-encrypted automatically. billingEntity.phone is plaintext. Unparseable
+ * Reads come back decrypted via the Prisma extension (student.phone, booking.clientPhone, and
+ * billingEntity.phone since 2026-10-09); writes are re-encrypted automatically. Unparseable
  * values are left untouched (normalize returns them unchanged).
  */
 export async function processPhoneNormalization(): Promise<{

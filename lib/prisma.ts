@@ -11,7 +11,7 @@ import {
 // Each model lists which string fields and array fields are encrypted.
 
 const ENCRYPTED_STRING_FIELDS: Record<string, string[]> = {
-  student: ["phone", "address", "emergencyContact", "adminNotes"],
+  student: ["phone", "address", "emergencyContact", "adminNotes", "billingAddress"],
   clientIntake: [
     "otherBehaviours",
     "otherFeelings",
@@ -19,7 +19,19 @@ const ENCRYPTED_STRING_FIELDS: Record<string, string[]> = {
     "additionalNotes",
     "adminNotes",
   ],
-  booking: ["clientPhone", "clientNotes", "adminNotes"],
+  booking: [
+    "clientPhone",
+    "clientNotes",
+    "adminNotes",
+    // Added 2026-10-09 by the pii check (scripts/architecture-audit.mjs). Old rows stay readable:
+    // decrypt() hands back anything that is not ciphertext unchanged, so these encrypt on next write.
+    "sessionNotes",
+    "cancellationReason",
+    "couplesPartnerPhone",
+    "billingNote",
+  ],
+  billingEntity: ["address", "phone"],
+  invoice: ["billingAddress"],
   commitmentAcknowledgement: ["ipAddress", "userAgent"],
   documentAcceptance: ["ipAddress", "userAgent"],
 };

@@ -490,6 +490,14 @@ export async function probeVerifyInMemory(ip: string, factorId: string, code: st
  */
 const MUTATIONS = [
   {
+    path: "prisma/schema.prisma",
+    // A new clinical-notes column, neither encrypted nor classified: the booking.sessionNotes
+    // shape before 2026-10-09. The probe edits the schema text only; nothing is generated.
+    find: "model Booking {\n  id                 String        @id @default(cuid())\n",
+    replace: "model Booking {\n  id                 String        @id @default(cuid())\n  probeTherapyNotes  String?\n",
+    expects: ["pii: a personal-data column is encrypted or says why not"],
+  },
+  {
     path: "CLAUDE.md",
     // A rule bullet with no marker: the section claims enforcement it does not name.
     find: "### Enforced\n",
