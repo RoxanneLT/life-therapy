@@ -13,11 +13,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, ExternalLink, UserCog } from "lucide-react";
+import { Menu, LogOut, ExternalLink, UserCog, Search, X } from "lucide-react";
 import Link from "next/link";
 import { AdminSidebarContent } from "./admin-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ClientSearch } from "./client-search";
+import { GlobalSearch } from "./global-search";
 import { BunnyBalance } from "./bunny-balance";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 
@@ -29,6 +29,7 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {  const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Close mobile sheet on navigation
   useEffect(() => {
@@ -47,7 +48,7 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
     : "A";
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
+    <header className="relative flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
       {/* Mobile menu */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetTrigger asChild>
@@ -62,11 +63,24 @@ export function AdminHeader({ adminName, adminEmail, role }: AdminHeaderProps) {
 
       {/* Centre: search */}
       <div className="hidden flex-1 justify-center sm:flex">
-        <ClientSearch />
+        <GlobalSearch className="w-64 lg:w-96" />
       </div>
+
+      {/* Phone: the search opens over the header rather than being absent below `sm`. */}
+      {searchOpen && (
+        <div className="absolute inset-x-0 top-0 z-50 flex h-16 items-center gap-2 border-b bg-card px-4 sm:hidden">
+          <GlobalSearch className="flex-1" autoFocus onNavigate={() => setSearchOpen(false)} />
+          <Button variant="ghost" size="icon" onClick={() => setSearchOpen(false)} aria-label="Close search">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
 
       {/* Right side */}
       <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSearchOpen(true)} aria-label="Search">
+          <Search className="h-5 w-5" />
+        </Button>
         <BunnyBalance />
         <ThemeToggle />
         <Button size="sm" className="bg-terracotta-500 text-white hover:bg-terracotta-600" asChild>
