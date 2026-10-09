@@ -87,7 +87,7 @@ export default async function ClientDetailPage({
       </div>
 
       <div className="mt-4 min-h-0 flex-1">
-        <ClientProfileTabs client={coreClient} activeTab={activeTab} />
+        <ClientProfileTabs client={coreClient} activeTab={activeTab} canSeeActivity={adminUser.role === "super_admin"} />
       </div>
     </div>
   );

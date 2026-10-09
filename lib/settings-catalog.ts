@@ -15,6 +15,7 @@ import {
   MessageCircle,
   CalendarCheck,
   UserCog,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ export const SETTINGS_CATALOG: SettingsPage[] = [
   { href: `${BASE}/marketing`, title: "Marketing", desc: "Social links, SEO & newsletter", icon: Megaphone, group: "Website" },
   { href: `${BASE}/finance`, title: "Finance", desc: "Billing rates, VAT & payment terms", icon: Banknote, group: "Business" },
   { href: `${BASE}/team`, title: "Team", desc: "Admin users & roles", icon: Users, group: "Business", prefixes: ["/admin/users"] },
+  { href: `${BASE}/audit-log`, title: "Audit Log", desc: "Who changed, viewed or exported data", icon: ScrollText, group: "Business" },
   { href: `${BASE}/legal`, title: "Legal Documents", desc: "Terms, privacy & commitment", icon: FileText, group: "Business" },
   { href: `${BASE}/integrations`, title: "Integrations", desc: "Email, payments & calendar connections", icon: Plug, group: "System" },
   { href: `${BASE}/whatsapp`, title: "WhatsApp", desc: "WhatsApp Business messaging", icon: MessageCircle, group: "System" },

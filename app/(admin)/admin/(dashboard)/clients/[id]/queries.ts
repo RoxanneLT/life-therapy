@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { getClientInsights } from "@/lib/admin/client-insights";
+import { toFeedRow, type AuditFeedRow } from "@/lib/admin/audit-feed";
 
 export async function fetchClientBookings(clientId: string) {
   await requireRole("super_admin", "marketing");
@@ -179,4 +180,37 @@ export async function fetchClientInsights(clientId: string) {
   await requireRole("super_admin", "marketing");
   const insights = await getClientInsights(clientId);
   return JSON.parse(JSON.stringify(insights)) as Awaited<ReturnType<typeof getClientInsights>>;
+}
+
+/**
+ * Everything the audit trail holds about one client: rows on the client itself, on their
+ * bookings, payment requests and invoices, and bulk rows whose metadata.ids names them.
+ * super_admin only — the feed includes who viewed the clinical record.
+ */
+export async function fetchClientActivity(clientId: string): Promise<AuditFeedRow[]> {
+  await requireRole("super_admin");
+  const [bookings, paymentRequests, invoices] = await Promise.all([
+    prisma.booking.findMany({ where: { studentId: clientId }, select: { id: true, recurringSeriesId: true } }),
+    prisma.paymentRequest.findMany({ where: { studentId: clientId }, select: { id: true } }),
+    prisma.invoice.findMany({ where: { studentId: clientId }, select: { id: true } }),
+  ]);
+  const bookingIds = bookings.map((b) => b.id);
+  // A series row is keyed by its recurringSeriesId, not by any one booking's id.
+  const seriesIds = [...new Set(bookings.map((b) => b.recurringSeriesId).filter((s): s is string => !!s))];
+  const rows = await prisma.auditLog.findMany({
+    where: {
+      OR: [
+        { entityType: "student", entityId: clientId },
+        { entityType: "booking", entityId: { in: [...bookingIds, ...seriesIds] } },
+        { entityType: "payment_request", entityId: { in: paymentRequests.map((p) => p.id) } },
+        { entityType: "invoice", entityId: { in: invoices.map((i) => i.id) } },
+        { entityType: "bulk", entityId: `student:${clientId}` },
+        // Bulk rows list what they touched in metadata.ids: client ids, or booking ids.
+        ...[clientId, ...bookingIds].map((id) => ({ metadata: { path: ["ids"], array_contains: [id] } })),
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+  return rows.map(toFeedRow);
 }

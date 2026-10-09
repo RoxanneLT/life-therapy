@@ -8,7 +8,16 @@ import {
   fetchClientRelationships,
   fetchClientCommunications,
   fetchClientInsights,
+  fetchClientActivity,
 } from "./queries";
+
+export function useClientActivity(clientId: string) {
+  return useQuery({
+    queryKey: CLIENT_QUERY_KEYS.activity(clientId),
+    queryFn: () => fetchClientActivity(clientId),
+    staleTime: STALE_TIMES.activity,
+  });
+}
 
 export function useClientBookings(clientId: string) {
   return useQuery({

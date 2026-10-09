@@ -12,12 +12,14 @@ import { PurchasesTab } from "./tabs/purchases-tab";
 import { FinancesTab } from "./tabs/finances-tab";
 import { CommunicationsTab } from "./tabs/communications-tab";
 import { RelationshipsTab } from "./tabs/relationships-tab";
+import { ActivityTab } from "./tabs/activity-tab";
 const TABS = [
   { key: "overview", label: "Overview" },
   { key: "personal", label: "Personal" },
   { key: "sessions", label: "Sessions" },
   { key: "finances", label: "Finances" },
   { key: "communications", label: "Communications" },
+  { key: "activity", label: "Activity" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -41,9 +43,11 @@ const FINANCE_SECTIONS = [
 interface ClientProfileTabsProps {
   client: Record<string, unknown>;
   activeTab: string;
+  /** super_admin only: the Activity tab shows who viewed the clinical record. */
+  canSeeActivity?: boolean;
 }
 
-export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileTabsProps>) {
+export function ClientProfileTabs({ client, activeTab, canSeeActivity = false }: Readonly<ClientProfileTabsProps>) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -58,9 +62,12 @@ export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileT
     purchases: { tab: "finances", section: "purchases" },
     finances: { tab: "finances", section: "billing" },
     communications: { tab: "communications" },
+    activity: { tab: "activity" },
   };
 
-  const mapped = tabMapping[activeTab] || { tab: "overview" };
+  const requested = tabMapping[activeTab] || { tab: "overview" };
+  const mapped = requested.tab === "activity" && !canSeeActivity ? { tab: "overview" as const } : requested;
+  const visibleTabs = TABS.filter((t) => t.key !== "activity" || canSeeActivity);
   const currentTab = mapped.tab;
 
   const [personalSection, setPersonalSection] = useState(mapped.tab === "personal" ? (mapped.section || "details") : "details");
@@ -76,7 +83,7 @@ export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileT
       {/* Tab navigation — pinned */}
       <div className="shrink-0 border-b">
         <div className="-mb-px flex gap-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => handleTabChange(tab.key)}
@@ -154,6 +161,8 @@ export function ClientProfileTabs({ client, activeTab }: Readonly<ClientProfileT
         )}
 
         {currentTab === "communications" && <CommunicationsTab client={client} />}
+
+        {currentTab === "activity" && canSeeActivity && <ActivityTab clientId={client.id as string} />}
       </div>
     </div>
   );
