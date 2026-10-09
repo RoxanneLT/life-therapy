@@ -178,7 +178,7 @@ Two domains, **one deployment**, region decided per-request from the hostname:
 
 | System | How |
 |---|---|
-| Production DB | **The project's Supabase MCP server** (`.mcp.json`, scoped to `project_ref=ocqucplcdotvewddfmmw`; sign in with the account in the organisation that owns the project — the account-wide claude.ai connector sees only Pleks and still returns `-32600: You do not have permission` here). Read-only tools are allowed in `.claude/settings.json`; `execute_sql`, `apply_migration` and every edge-function and branch write **ask**, because no hook reads MCP calls and a settings rule cannot tell a `SELECT` from a `DELETE`. The Management API over REST (`SUPABASE_ACCESS_TOKEN` from `.env.local`) still works and stays the DDL path in `.claude/rules/schema-changes.md`. Working since 2026-10-09. |
+| Production DB | **The project's Supabase MCP server** (`.mcp.json`, scoped to `project_ref=ocqucplcdotvewddfmmw`; sign in with the account in the organisation that owns the project — the account-wide claude.ai connector sees only Pleks and still returns `-32600: You do not have permission` here). Read-only tools are allowed in `.claude/settings.json`; `execute_sql`, `apply_migration` and every edge-function and branch write **ask**, because no hook reads MCP calls and a settings rule cannot tell a `SELECT` from a `DELETE`. The Management API over REST (`SUPABASE_ACCESS_TOKEN` from `.env.local`) still works. DDL goes through `prisma/sql/` and `npm run db:apply` (`.claude/rules/schema-changes.md`). Working since 2026-10-09. |
 | One-off scripts | `npx tsx --env-file=.env.local <script>` — ESM hoists imports above `dotenv.config()`, and `.env` holds a `johndoe@localhost` placeholder `DATABASE_URL` |
 | Deploys, build logs, runtime errors | Vercel MCP (read-only calls pre-allowed) |
 | PRs | GitHub MCP (read-only calls pre-allowed) |
@@ -240,11 +240,11 @@ Pieces: `npm run typecheck` · `npm run lint` · `npm run audit` · `npm run tes
 each logical change, not after ten.
 
 **Hook-denied** (precise patterns — the smart layer, `.claude/hooks/bash-gate.js`):
-`git push --force` · `git reset --hard` · `rm -rf` on `/` or `~` · `prisma migrate` /
-`prisma db push` (they do not work here — see `.claude/rules/schema-changes.md`).
+`git push --force` · `git reset --hard` · `rm -rf` on `/` or `~` · `prisma migrate` (all but
+the read-only `diff`) / `prisma db push` (not this project's channel — `.claude/rules/schema-changes.md`).
 Reading `.env*` is denied at the settings layer.
 
-**Hook-asks:** `git push` · any SQL through the Management API · `vercel`.
+**Hook-asks:** `git push` · `npm run db:apply` · any SQL through the Management API · `vercel`.
 
 **Settings-ask twins** (coarse patterns that stand in when the hook is dead, and are **live beside
 it**. Measured 2026-09-11 on Claude Code 2.1.235: a settings ask prompts even when the hook
@@ -303,7 +303,7 @@ attached to no rule fails.
 | Token economy | `.claude/settings.json` (`autoCompactWindow`) · `.claude/hooks/context-budget.js` · `.claude/statusline.js` |
 | Tests | `lib/*.test.ts`, `.claude/hooks/bash-gate.test.mjs` (this project's scar cases) + `bash-gate.probe.mjs` (canon's decision table, the verdicts this project holds tighter in its `verdicts` region, and `--against` to run a replaced gate beside its successor), `scripts/check-{statusline,context-budget}.mjs` |
 | Commands | `/walk` (adversarial review of the diff vs `origin`) · `/wrap` (session close; **does not push**) |
-| Rule files | `.claude/rules/schema-changes.md` — why `prisma migrate` fails here (the pgbouncer pooler) and the Management API path that works |
+| Rule files | `.claude/rules/schema-changes.md` — the re-runnable group files in `prisma/sql/` and `db:verify` → `db:apply` → `db:drift` |
 | **The brief** | `brief/` — the project's document tree, **tracked in git, never synced**. Spine: `EVIDENCE.md` (every fact with its source — nothing anywhere may state a fact it does not carry) · `DECISIONS.md` · `GATES.md` (**what is waiting on a person**) · `CURRENT.md` (≤ 8 KB, written every step) · `STATUS.md` (generated, `npm run brief:status`). Seven role folders sorted by what you *do* with a document. Checked by `scripts/check-brief.mjs`. `docs/` is not a second brief — `brief/README.md` says which files there are addressed by name and cannot move — a count stated here went stale twice. One of them, `docs/CANON-FINDINGS.md`, is the **outbox**: what this project owes canon, lifted from HEAD by the estate session, because `dev-standards` is read-only from here |
 | **This file itself** | `scripts/check-claude-md.mjs` (kit, canon's) + `scripts/check-claude-md.ceiling.json`. It resolves the `@enforced` markers below through the thing that *invokes* each control — a `check()` call in the audit, a hook registered in settings, a pattern in `permissions.ask` — never through a file existing. Two namespaces are this project's own, in its `KIT:CONFIG resolvers` region, and one of them **overrides** canon: `audit:` ids here are slugged check names, and canon's literal substring test resolved 1 of 21, the 1 a false positive |
 
@@ -392,7 +392,7 @@ measurement, not open**: a refusal that carries its numbers is a finish.
 
 - **Read the actual source files before writing code.** Don't assume structure — this codebase has specific patterns. Read the component, its imports, and the actions file first. **UNENFORCEABLE** — nothing in the tree records what was read, and this is the rule most of the others depend on. Reading is also what summons the scoped rule files (E1b). → M-03
 - **Never create parallel systems when you can extend existing ones.** Manual invoices reuse the pro-forma → Paystack → tax-invoice pipeline; they don't build a second invoicing flow. **UNENFORCEABLE** — a duplicate *flow* is a judgement about intent. The duplicate *implementation* half is now enforced in §4; this is the residue. Ask `grounder` before building. → M-04
-- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes through the Supabase Management API. **UNENFORCEABLE** — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.) → M-01
+- **Never modify the Prisma schema without being explicitly told to.** If you think a change is needed, describe it and wait. An approved one goes into `prisma/sql/` and through `npm run db:apply`. **UNENFORCEABLE** — nothing can tell an approved change from an invented one. (The `migrate` path itself *is* blocked, at the hook and in the audit; that half is in §4.) → M-01
 - **Never auto-fill or guess client data.** If a field needs a value you don't have, leave it empty or show a placeholder. **UNENFORCEABLE** — a fabricated value is indistinguishable from a real one at the point it is written. → M-02
 - **Use `toast` from `sonner` for success and error feedback** on client-side actions. Silence reads as success — a cancelled session sat live in Outlook for five days behind a dialog that closed without a word (§6). **UNENFORCEABLE** — and closed by measurement rather than by assumption — the census, and the share of matching components that are right to match, are recorded at M-05. → M-05, closed
 - **Use confirmation dialogs for destructive actions** — cancel, void, delete, send. **UNENFORCEABLE** — and the census shows why: the count moves 12 → 18 on whether a `<Dialog>` counts, which measures the detector rather than the codebase. → M-06, closed

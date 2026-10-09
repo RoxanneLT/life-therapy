@@ -250,6 +250,19 @@ export async function probeVerify(factorId: string, code: string) {
 `,
     expects: ["abuse: an MFA/OTP verify is rate-limited"],
   },
+  // A stray top-level SQL file, written the way Prisma emits it: run-once statements and a row.
+  // Each line is a different way a second run fails, so a check blind to any one still trips on
+  // the others — which is why the ALTER clause and the INSERT each get a line of their own.
+  {
+    path: "prisma/sql/__probe.sql",
+    named: true,
+    content: `-- Planted by scripts/probe-checks.mjs. Deleted before this script exits.
+CREATE TABLE "probe_rows" ("id" TEXT NOT NULL);
+ALTER TABLE "probe_rows" ADD CONSTRAINT "probe_rows_pkey" PRIMARY KEY ("id");
+INSERT INTO "probe_rows" ("id") VALUES ('x');
+`,
+    expects: ["schema: prisma/sql holds exactly the fixed groups", "schema: every prisma/sql group statement is re-runnable"],
+  },
   // The ISO-slice check had no plant until 2026-09-10, when its patterns moved into a constant
   // that DATE_ALLOWLIST's liveness arm shares. Dropping any one pattern survived every probe
   // (L-54), so there is one plant per pattern. The fourth file is a real slice that an entry

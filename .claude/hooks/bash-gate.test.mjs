@@ -51,6 +51,19 @@ const CASES = [
   // The gates themselves, still firing.
   [`${P} migrate, plainly`, `npx ${P} migrate dev`, "deny"],
   [`${P} db push after a separator`, `echo hi && npx ${P} db push`, "deny"],
+  // Narrowed 2026-10-09: `migrate diff` only reads, and it is the drift check and the baseline
+  // generator for prisma/sql/. Every other migrate subcommand stays denied.
+  [`${P} migrate diff, read-only`, `npx ${P} migrate diff --from-empty --to-schema prisma/schema.prisma --script`, "allow"],
+  [`${P} migrate deploy`, `npx ${P} migrate deploy`, "deny"],
+  [`${P} migrate reset`, `npx ${P} migrate reset --force`, "deny"],
+  [`${P} migrate diff chained to deploy`, `npx ${P} migrate diff --from-empty --to-empty && npx ${P} migrate deploy`, "deny"],
+  [`${P} migrate with no subcommand`, `npx ${P} migrate --help`, "deny"],
+  // db:apply reaches production through a file, so it is gated by name (2026-08-18 scar shape).
+  ["db:apply, dry", "npm run db:apply", "ask"],
+  ["db:apply, write", "npm run db:apply -- --write", "ask"],
+  ["db:apply via the script itself", "node scripts/db-apply.mjs --target=prod --write", "ask"],
+  ["db:verify stays quiet (Docker only)", "npm run db:verify", "allow"],
+  ["db:drift stays quiet (read-only)", "npm run db:drift", "allow"],
   ["force push", "git push --force origin master", "deny"],
   ["force push, short flag", "git push -f", "deny"],
   ["hard reset", "git reset --hard HEAD~1", "deny"],

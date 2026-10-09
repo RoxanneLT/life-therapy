@@ -55,6 +55,7 @@
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~*)",
       "Bash(curl*)",
+      "Bash(npm run db:apply*)",
       "Bash(git merge*)",
       "Bash(git clean*)",
       "Bash(gh pr merge*)",

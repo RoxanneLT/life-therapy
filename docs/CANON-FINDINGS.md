@@ -87,6 +87,30 @@ CF-9 is filed too: canon took it at `baba8d8`.
                `check-scope.mjs --commit`. It must not weaken the real-commit and real-push probes for a
                project that does adopt canon's hooks.
 
+### CF-12 · The db-tests handover's §1 assumes `prisma migrate`; this owner chose re-runnable grouped SQL, and Prisma 7 moved the flags
+
+    OBSERVED   The handover recommends `prisma migrate` with a baseline. On 2026-10-09 the owner ruled
+               against it, in favour of fixed-name group files (00_types … 99_security) that are
+               idempotent and re-run in full every time. Two of the handover's mechanics also don't hold
+               on Prisma 7.10.
+    COMMAND    npx prisma migrate diff --from-url postgresql://x@localhost/x --to-empty --script
+                 Error:
+                 `--from-url` was removed. Please use `--[from/to]-config-datasource` in combination
+                 with a Prisma config file that contains the appropriate datasource instead.
+               (The config's `schema` path resolves relative to the config file, not the cwd.)
+               The prod→schema diff it generates writes the text→enum change on module_access.source
+               and digital_product_access.source as DROP COLUMN + ADD COLUMN. Applied, that would
+               erase 8 grant-source values. Read in the generated script; not executed.
+    WHY IT IS  Every Prisma-7 project with a pre-existing production database meets both: the flag
+    CANON'S    rename, and the destructive diff on a type change. "Migrate plus baseline" also isn't the
+               only legitimate answer to drift. An owner who wants to edit and re-run DDL is answered by
+               idempotent files plus a drift check, and the handover should offer both.
+    SMALLEST   In §1, make the channel the owner's choice, between migrate+baseline and idempotent groups
+    FIX        plus `migrate diff --exit-code` as the drift gate. Use the Prisma 7 flags. Warn that the
+               generated diff must be read for DROP COLUMN before it's used. Over Supabase, introspection
+               and diff run on the session pooler (port 5432, no pgbouncer), not the transaction one.
+               It must not break the advice for projects that keep migrate.
+
 ---
 
 ## 2 · Lesson answers

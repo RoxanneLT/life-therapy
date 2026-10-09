@@ -15,6 +15,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { GROUPS as SQL_GROUPS } from "./db-apply.mjs";
 // One caller: the `handoff:` check asks git whether `.handoff/` is ignored. Reading .gitignore
 // as text would answer a different question — see the comment there.
 import { spawnSync } from "node:child_process";
@@ -2486,8 +2487,9 @@ check("secrets: no hardcoded fallback for a secret", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 6. SCHEMA / MIGRATIONS
 //
-// `prisma migrate` does not work here (the pgbouncer pooler). DDL goes through
-// the Supabase Management API. A stray migration folder means someone tried.
+// Since 2026-10-09 the schema channel is prisma/sql/NN_<group>.sql: a FIXED set of files named by
+// function, every statement re-runnable, applied whole by `npm run db:apply` (owner's ruling on
+// canon's db-tests handover §1). `prisma migrate` and `db push` are not the channel.
 // ═══════════════════════════════════════════════════════════════════════════
 
 check("schema: no prisma migrate invocations in scripts", () => {
@@ -2497,9 +2499,69 @@ check("schema: no prisma migrate invocations in scripts", () => {
       fail(
         "schema",
         `package.json → scripts.${name}`,
-        "invokes prisma migrate/db push, which does not work on this project",
-        "apply DDL via the Supabase Management API — see .claude/rules/schema-changes.md",
+        "invokes prisma migrate/db push, which is not this project's schema channel",
+        "schema changes are the grouped files in prisma/sql/, applied with `npm run db:apply` — see .claude/rules/schema-changes.md",
       );
+    }
+  }
+});
+
+// The owner asked for names that stay put, so a new top-level file is a decision, not a glob
+// match. db-apply refuses an unknown name at run time; this says so at commit time, before
+// anyone is pointing it at production.
+const SQL_GROUP_DIR = join(ROOT, "prisma", "sql");
+const sqlGroupFiles = () => (existsSync(SQL_GROUP_DIR) ? readdirSync(SQL_GROUP_DIR).filter((f) => f.endsWith(".sql")) : []);
+
+check("schema: prisma/sql holds exactly the fixed groups", () => {
+  const GROUPS = SQL_GROUPS;
+  const onDisk = sqlGroupFiles().map((f) => f.slice(0, -4));
+  for (const f of onDisk.filter((x) => !GROUPS.includes(x))) {
+    fail("schema", `prisma/sql/${f}.sql`, "is not one of the fixed group files", "put the statement in the group it belongs to, or add a group to GROUPS in scripts/db-apply.mjs with the owner's say-so");
+  }
+  for (const g of GROUPS.filter((x) => !onDisk.includes(x))) {
+    fail("schema", `prisma/sql/${g}.sql`, "is in GROUPS but missing on disk", "restore the file — db:apply runs every group in order");
+  }
+});
+
+// Re-runnable is the property the owner asked for. `npm run db:verify` measures it in Docker (two
+// runs, identical schema dumps), but that is not on the gate. This holds the SHAPE at commit time:
+// outside a DO block (which must check the catalogue itself), every statement is one Postgres
+// already makes conditional. Data does not belong here at all — rows go in prisma/sql/seeds/.
+const RERUNNABLE = [
+  /^CREATE SCHEMA IF NOT EXISTS\b/i,
+  /^CREATE TABLE IF NOT EXISTS\b/i,
+  /^CREATE (UNIQUE )?INDEX IF NOT EXISTS\b/i,
+  /^ALTER TYPE "?\w+"? ADD VALUE IF NOT EXISTS\b/i,
+  /^DROP (TABLE|TYPE|INDEX|VIEW|FUNCTION) IF EXISTS\b/i,
+  // ALTER TABLE: every clause must be conditional or naturally idempotent. Checked per clause.
+  /^ALTER TABLE\b/i,
+];
+const ALTER_CLAUSE_OK = /^(ADD COLUMN IF NOT EXISTS|DROP COLUMN IF EXISTS|DROP CONSTRAINT IF EXISTS|ALTER COLUMN "?\w+"? (DROP DEFAULT|SET DEFAULT|SET DATA TYPE|TYPE|DROP NOT NULL|SET NOT NULL)|ENABLE ROW LEVEL SECURITY)\b/i;
+
+check("schema: every prisma/sql group statement is re-runnable", () => {
+  for (const f of sqlGroupFiles()) {
+    const src = read(join(SQL_GROUP_DIR, f));
+    const lineOf = (needle) => src.slice(0, Math.max(0, src.indexOf(needle))).split("\n").length;
+    const stripped = src
+      .replace(/--[^\n]*/g, "")
+      .replace(/\bDO \$\$[\s\S]*?\$\$;/g, ";");
+    for (const raw of stripped.split(";")) {
+      const stmt = raw.trim().replace(/\s+/g, " ");
+      if (!stmt) continue;
+      const head = stmt.slice(0, 60);
+      const where = `prisma/sql/${f}:${lineOf(raw.trim().split("\n")[0])}`;
+      if (!RERUNNABLE.some((re) => re.test(stmt))) {
+        fail("schema", where, `\`${head}…\` fails or duplicates on a second run`, "make it conditional (IF NOT EXISTS / IF EXISTS), or wrap it in a DO block that checks the catalogue; row data goes in prisma/sql/seeds/");
+        continue;
+      }
+      if (/^ALTER TABLE\b/i.test(stmt)) {
+        const body = stmt.replace(/^ALTER TABLE (ONLY )?("[^"]+"|[\w.]+) /i, "");
+        for (const clause of body.split(/,(?![^(]*\))/).map((c) => c.trim())) {
+          if (!ALTER_CLAUSE_OK.test(clause)) {
+            fail("schema", where, `\`${clause.slice(0, 60)}\` in an ALTER TABLE fails on a second run`, "use ADD COLUMN IF NOT EXISTS / DROP … IF EXISTS, or a DO block (a constraint has no IF NOT EXISTS form)");
+          }
+        }
+      }
     }
   }
 });

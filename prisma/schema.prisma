@@ -313,8 +313,8 @@ model Booking {
   policyOverride     Boolean   @default(false)
 
   // WhatsApp reminders
-  whatsappReminder24hSentAt     DateTime?   @map("whatsappReminder48hSentAt")
-  whatsappReminderMorningSentAt DateTime?
+  whatsappReminder24hSentAt     DateTime?   @map("whatsappReminder48hSentAt") @db.Timestamptz(6)
+  whatsappReminderMorningSentAt DateTime? @db.Timestamptz(6)
 
   /// What each reminder told the client — the fingerprint from lib/reminder-fingerprint.ts
   /// ("date|start|link" for the email, "date|start" for WhatsApp). A reminder is due again
@@ -600,6 +600,7 @@ model Student {
 
   @@index([clientStatus])
   @@index([source])
+  @@index([emailPaused]) // live in production before it was here; kept, folded in 2026-10-09
   @@map("students")
 }
 
@@ -760,7 +761,7 @@ model ModuleAccess {
   orderId   String?
   pricePaid Int              @default(0) // ZAR cents — for upgrade credit calculation
   source    EnrollmentSource @default(purchase)
-  grantedAt DateTime         @default(now())
+  grantedAt DateTime         @default(now()) @db.Timestamptz(6)
 
   @@unique([studentId, moduleId])
   @@index([studentId])
@@ -853,9 +854,9 @@ model OrderItem {
   hybridPackageId   String?
   hybridPackage     HybridPackage?  @relation(fields: [hybridPackageId], references: [id])
   moduleId          String?
-  module            Module?         @relation(fields: [moduleId], references: [id])
+  module            Module?         @relation(fields: [moduleId], references: [id], onDelete: NoAction)
   digitalProductId  String?
-  digitalProduct    DigitalProduct? @relation(fields: [digitalProductId], references: [id])
+  digitalProduct    DigitalProduct? @relation(fields: [digitalProductId], references: [id], onDelete: NoAction)
   packageSelections Json?           // { courseIds: string[], digitalProductIds: string[] }
   description       String
   unitPriceCents    Int
@@ -890,9 +891,9 @@ model Gift {
   hybridPackageId   String?
   hybridPackage     HybridPackage?  @relation(fields: [hybridPackageId], references: [id])
   moduleId          String?
-  module            Module?         @relation(fields: [moduleId], references: [id])
+  module            Module?         @relation(fields: [moduleId], references: [id], onDelete: NoAction)
   digitalProductId  String?
-  digitalProduct    DigitalProduct? @relation(fields: [digitalProductId], references: [id])
+  digitalProduct    DigitalProduct? @relation(fields: [digitalProductId], references: [id], onDelete: NoAction)
   packageSelections Json?           // { courseIds: string[], digitalProductIds: string[] }
   creditAmount      Int?
   emailSentAt       DateTime?
@@ -916,7 +917,7 @@ model SessionCreditBalance {
   studentId       String    @unique
   student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   balance         Int       @default(0)
-  expiresAt       DateTime?
+  expiresAt       DateTime? @db.Timestamptz(6)
   expiryWarning14 Boolean   @default(false)
   expiryWarning3  Boolean   @default(false)
 
@@ -1150,7 +1151,7 @@ model PaymentRequest {
   /// Added 2026-08-18 via the Management API and mirrored here BY HAND — this
   /// project's pooler hangs `prisma db pull`, so the DATABASE is the source of
   /// truth and this is the copy.
-  chasePausedUntil   DateTime?
+  chasePausedUntil   DateTime? @db.Timestamptz(6)
 
   // Due date
   dueDate            DateTime
@@ -1158,13 +1159,13 @@ model PaymentRequest {
   // Tracking
   sentAt             DateTime?       // When payment request email was sent
   reminderSentAt     DateTime?       // When reminder email was sent
-  dueTodaySentAt     DateTime?       // When "due today" email was sent
+  dueTodaySentAt     DateTime? @db.Timestamptz(6) // When "due today" email was sent
   overdueSentAt      DateTime?       // When overdue notice was sent
   // WhatsApp reminders
-  whatsappSentAt             DateTime?
-  whatsappReminderSentAt     DateTime?
-  whatsappDueTodaySentAt     DateTime?
-  whatsappOverdueSentAt      DateTime?
+  whatsappSentAt             DateTime? @db.Timestamptz(6)
+  whatsappReminderSentAt     DateTime? @db.Timestamptz(6)
+  whatsappDueTodaySentAt     DateTime? @db.Timestamptz(6)
+  whatsappOverdueSentAt      DateTime? @db.Timestamptz(6)
 
   // Link to invoice (created only after payment)
   invoiceId          String?
@@ -1195,8 +1196,8 @@ model BillingPreset {
   category     String   @default("session") // "session" | "other"
   isActive     Boolean  @default(true)
   sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@map("billing_presets")
 }
@@ -1252,7 +1253,7 @@ model CartItem {
   hybridPackageId    String?
   moduleId           String?
   digitalProductId   String?
-  digitalProduct     DigitalProduct? @relation(fields: [digitalProductId], references: [id])
+  digitalProduct     DigitalProduct? @relation(fields: [digitalProductId], references: [id], onDelete: NoAction)
   packageSelections  Json?           // { courseIds: string[], digitalProductIds: string[] }
   quantity           Int             @default(1)
   isGift             Boolean         @default(false)
@@ -1321,8 +1322,8 @@ model DigitalProduct {
   sortOrder      Int      @default(0)
   metaTitle      String?
   metaDescription String?  @db.Text
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   access     DigitalProductAccess[]
   orderItems OrderItem[]
@@ -1343,7 +1344,7 @@ model DigitalProductAccess {
   digitalProduct   DigitalProduct   @relation(fields: [digitalProductId], references: [id], onDelete: Cascade)
   orderId          String?
   source           EnrollmentSource @default(purchase)
-  grantedAt        DateTime         @default(now())
+  grantedAt        DateTime         @default(now()) @db.Timestamptz(6)
 
   @@unique([studentId, digitalProductId])
   @@index([studentId])
@@ -1361,10 +1362,10 @@ model EmailTemplate {
   category  String           // "booking" | "order" | "onboarding" | "course" | "gift"
   subject   String           // Subject line with {{variable}} placeholders
   bodyHtml  String   @db.Text // Inner HTML body with {{variable}} placeholders
-  variables Json             // Array of available variable names
+  variables Json @default("[]") // Array of available variable names
   isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@map("email_templates")
 }
@@ -1420,7 +1421,7 @@ model Campaign {
   activatedAt     DateTime?          // When cron flipped to active
   completedAt     DateTime?          // When all steps finished
   createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  updatedAt       DateTime           @default(now()) @updatedAt
   emails          CampaignEmail[]
   progress        CampaignProgress[]
 
@@ -1443,7 +1444,7 @@ model CampaignEmail {
   genderTarget String?               // "female" | "male" | "unknown" — birthday campaigns only
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @default(now()) @updatedAt
 
   @@unique([campaignId, step])
   @@index([campaignId])
@@ -1470,9 +1471,9 @@ model CampaignProgress {
   /// an existing column to claim; this one had to be added.
   ///
   /// Added 2026-08-18 via the Management API and mirrored here by hand.
-  claimedAt   DateTime?
+  claimedAt   DateTime? @db.Timestamptz(6)
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
 
   @@unique([campaignId, studentId])
   @@index([campaignId, completedAt])
@@ -1495,7 +1496,7 @@ model DripEmail {
   ctaUrl      String?
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  updatedAt   DateTime      @default(now()) @updatedAt
 
   @@unique([type, step])
   @@index([type])
@@ -1513,9 +1514,9 @@ model DripProgress {
   isPaused     Boolean       @default(false)
   /// Atomic claim for one step send — see CampaignProgress.claimedAt for why.
   /// Added 2026-08-18 via the Management API, mirrored here by hand.
-  claimedAt    DateTime?
+  claimedAt    DateTime? @db.Timestamptz(6)
   createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  updatedAt    DateTime      @default(now()) @updatedAt
 
   @@index([currentPhase, currentStep])
   @@index([isPaused])
@@ -1563,7 +1564,7 @@ model ClientIntake {
   lastEditedAt    DateTime  @default(now())
   completedAt     DateTime?
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  updatedAt       DateTime  @default(now()) @updatedAt
 
   @@map("client_intakes")
 }
@@ -1639,7 +1640,7 @@ model WhatsAppLog {
   status       String   @default("sent")
   error        String?
   metadata     Json?
-  sentAt       DateTime @default(now())
+  sentAt       DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([studentId])
   @@index([templateName])
@@ -1656,8 +1657,8 @@ model WhatsAppTemplate {
   bodyText    String
   description String?
   sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@map("whatsapp_templates")
 }
@@ -1670,8 +1671,8 @@ model WhatsAppTemplate {
 model RateLimit {
   key       String   @id
   count     Int      @default(1)
-  windowEnd DateTime
-  updatedAt DateTime @updatedAt
+  windowEnd DateTime @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([windowEnd])
   @@map("rate_limits")

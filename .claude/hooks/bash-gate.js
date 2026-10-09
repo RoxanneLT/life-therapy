@@ -428,16 +428,29 @@ const PROJECT_DENY = [
   // prose case cannot return.
   // `db pull` and `generate` are the DOCUMENTED RECOVERY and must stay allowed — the reason
   // below tells the reader to run them, so denying them would make the refusal unfollowable.
+  //
+  // NARROWED 2026-10-09 (owner's ruling on canon's db-tests handover §1): `migrate diff` is
+  // allowed. It only reads — it renders a diff and writes nothing to any database — and it is
+  // both the drift check (`npm run db:drift`) and the generator for prisma/sql/'s grouped files.
+  // Schema changes are now those files, applied by `npm run db:apply`; the migration engine
+  // itself (`dev`, `deploy`, `reset`, `resolve`) stays denied, because the owner chose
+  // re-runnable grouped files over Prisma's run-once history.
+  // The twin's pattern did not change with the predicate and still prompts on `migrate diff`
+  // (wider than the rule: it costs a prompt, never a hole). Not re-probed by the operator since
+  // the 2026-10-09 edit — the sha was moved from 9e9a83 to 44baff on the strength of the twin being
+  // unchanged, which is a reading, not an interception probe.
   // @twin Bash(npx prisma migrate*)
   // @probed 2026-08-19 hook-disabled: intercepts — prompted · `npx prisma migrate --help`
-  // @probed-sha 9e9a83
+  // @probed-sha 44baff
   [
     (t) => {
       if (!runnerCmd(t, "prisma")) return false;
       const a = afterRunner(t).slice(1);
-      return a.includes("migrate") || (a.includes("db") && a.includes("push"));
+      const m = a.indexOf("migrate");
+      if (m !== -1) return a[m + 1] !== "diff";
+      return a.includes("db") && a.includes("push");
     },
-    "prisma migrate/db push does NOT work on this project — apply DDL via the Supabase Management API, then `npx prisma db pull && npx prisma generate` (see .claude/rules/schema-changes.md)",
+    "prisma migrate (other than the read-only `migrate diff`) and db push are not this project's channel — schema changes are the grouped, re-runnable files in prisma/sql/, applied with `npm run db:apply` (see .claude/rules/schema-changes.md)",
     { twins: ["Bash(npx prisma migrate*)", "Bash(npx prisma db push*)"] },
   ],
 
@@ -476,6 +489,21 @@ const PROJECT_ASK = [
   // @probed 2026-08-19 hook-disabled: intercepts — prompted · `curl https://example.com`
   // @probed-sha 5723c1
   [/api\.supabase\.com\/[^\s]{1,200}\/database\/query/, "this runs SQL against production — approve the statement", { twins: ["Bash(curl*)"] }],
+
+  // `db:apply` runs prisma/sql/ against PRODUCTION through a file: the credential is built inside
+  // the script, so the command line carries no URL for the rule above to see. That is the exact
+  // shape of the 2026-08-18 scar (five schema changes reached production ungated, CLAUDE.md §6),
+  // so this matches the act by NAME. It asks on a dry run too — a dry run still connects to
+  // production, and the prompt is where a human reads which files are about to run.
+  // Matched as `npm run db:apply` and as the script itself, so `node scripts/db-apply.mjs` is not
+  // a side door. `db:verify` and `db:drift` stay quiet: Docker, and read-only, respectively.
+  // @twin Bash(npm run db:apply*)
+  // @probed never — added 2026-10-09; it takes the operator with this hook disabled to see the prompt
+  [
+    (t) => runnerCmd(t, "db:apply") || (atCommand(t, "node") && argsOf(t).some((a) => /(^|\/)db-apply\.mjs$/.test(a))),
+    "this applies prisma/sql/ to PRODUCTION (dry unless --write) — approve the run",
+    { twins: ["Bash(npm run db:apply*)"] },
+  ],
 
   // `atCommand`, not `/\bvercel\b/`. The substring form asked on any command whose text merely
   // CONTAINED the word — a grep for it, a commit message about it, a path with `vercel` in it —

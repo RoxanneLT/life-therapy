@@ -7,8 +7,9 @@ dotenv.config({ path: ".env" });
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
+  // No migrations path: the schema channel is prisma/sql/ (scripts/db-apply.mjs), not Prisma's
+  // run-once history, which was archived to prisma/sql/archive/prisma-migrations on 2026-10-09.
   migrations: {
-    path: "prisma/migrations",
     seed: "npx tsx prisma/seed.ts",
   },
   datasource: {

@@ -7,7 +7,7 @@
  * That rejection was reasoned and then stopped, which left the tree with NO circular
  * import detection at all for a class the spec calls "cheap, fast, zero false
  * positives". Sixty lines of owned code has no peer dependency to fight, matches the
- * house style (`architecture-audit.mjs`, `check-schema-drift.mjs`), and can be probed
+ * house style (`architecture-audit.mjs`, `db-verify.mjs`), and can be probed
  * in both directions like every other control here — which madge could not be.
  *
  * WHAT IT FOUND ON ITS FIRST RUN. Two cycles, both the same shape: the booking widget
