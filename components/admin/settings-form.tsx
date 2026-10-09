@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 import { updateSettings } from "@/app/(admin)/admin/(dashboard)/settings/actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 import type { BusinessHours, BranchAddress } from "@/lib/settings";
@@ -88,7 +88,6 @@ const SECTIONS: SettingsSection[] = [
   { id: "calendar", label: "Calendar", group: "Integrations", icon: Calendar },
 ];
 
-const GROUPS = ["Brand", "Contact", "Marketing", "Integrations"];
 
 interface SecretStatus {
   msGraphConfigured: boolean;
@@ -100,9 +99,9 @@ interface SecretStatus {
 interface SettingsFormProps {
   initialSettings: SiteSetting;
   secretStatus: SecretStatus;
-  /** When set, render only this group's sections inside the shared sticky
-   *  settings header (no internal sidebar/heading) — used by the settings shell. */
-  embeddedGroup?: string;
+  /** The group whose sections this page renders, under the sticky settings header. Every caller is a
+   *  settings group page; the standalone layout (own sidebar and heading) was unreachable and is gone. */
+  embeddedGroup: string;
   headerTitle?: string;
   headerDescription?: string;
 }
@@ -114,10 +113,7 @@ export function SettingsForm({
   headerTitle,
   headerDescription,
 }: SettingsFormProps) {
-  const embedded = !!embeddedGroup;
-  const visibleSections = embeddedGroup
-    ? SECTIONS.filter((s) => s.group === embeddedGroup)
-    : SECTIONS;
+  const visibleSections = SECTIONS.filter((s) => s.group === embeddedGroup);
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState(visibleSections[0]?.id ?? "branding");
 
@@ -224,14 +220,14 @@ export function SettingsForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className={embedded ? "flex flex-col" : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}
+      className="flex flex-col"
     >
-      {embedded && (
-        <SettingsPageHeader
-          backHref="/admin/settings"
+        <PageHeader
+          sticky
+          back={{ href: "/admin/settings", to: "Settings" }}
           title={headerTitle ?? "Settings"}
           description={headerDescription}
-          actions={
+          action={
             <Button type="submit" size="sm" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
@@ -261,96 +257,9 @@ export function SettingsForm({
             </div>
           }
         />
-      )}
-      {!embedded && (
-        <>
-      {/* Mobile nav — horizontal scrollable strip */}
-      <div className="md:hidden space-y-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your site branding, contact details, SEO, and integrations.
-          </p>
-        </div>
-        <div className="flex gap-1 overflow-x-auto border-b pb-px scrollbar-none">
-          {SECTIONS.map((section) => {
-            const Icon = section.icon;
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setActiveSection(section.id)}
-                className={cn(
-                  "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
-                  activeSection === section.id
-                    ? "border-brand-600 text-brand-700"
-                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {section.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* Desktop sidebar — fixed in place, never scrolls */}
-      <div className="hidden md:flex w-52 shrink-0 flex-col">
-        <div className="mb-5">
-          <h1 className="font-heading text-2xl font-bold">Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your site branding, contact details, SEO, and integrations.
-          </p>
-        </div>
-
-        <nav className="flex-1 space-y-4">
-          {GROUPS.map((group) => {
-            const groupSections = SECTIONS.filter((s) => s.group === group);
-            return (
-              <div key={group}>
-                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  {group}
-                </p>
-                <div className="space-y-0.5">
-                  {groupSections.map((section) => {
-                    const Icon = section.icon;
-                    return (
-                      <button
-                        key={section.id}
-                        type="button"
-                        onClick={() => setActiveSection(section.id)}
-                        className={cn(
-                          "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
-                          activeSection === section.id
-                            ? "bg-brand-50 text-brand-700"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        )}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {section.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-
-        <div className="border-t pt-4">
-          <Button type="submit" disabled={saving} className="w-full">
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Settings
-          </Button>
-        </div>
-      </div>
-        </>
-      )}
-
-      {/* Content area. Embedded: flows normally so the PAGE scrolls under the
-          sticky header. Standalone: its own scroll column beside the sidebar. */}
-      <div className={embedded ? "min-w-0" : "min-w-0 flex-1 overflow-y-auto pr-1"}>
+      {/* Content area: flows normally so the PAGE scrolls under the sticky header. */}
+      <div className="min-w-0">
           {/* Identity */}
           {activeSection === "identity" && (
             <div className="space-y-6">

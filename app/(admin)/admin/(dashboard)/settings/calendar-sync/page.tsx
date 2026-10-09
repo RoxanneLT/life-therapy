@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CalendarSyncSection } from "../calendar-sync-section";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 
 export default async function CalendarSyncSettingsPage() {
   await requireRole("super_admin");
@@ -28,8 +28,9 @@ export default async function CalendarSyncSettingsPage() {
 
   return (
     <>
-      <SettingsPageHeader
-        backHref="/admin/settings"
+      <PageHeader
+        sticky
+        back={{ href: "/admin/settings", to: "Settings" }}
         title="Calendar Sync"
         description="Keep Outlook / Teams in sync with the Portal — connection check, reconcile and activity."
       />

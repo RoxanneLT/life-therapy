@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 import {
   Card,
   CardContent,
@@ -106,8 +106,9 @@ export function LegalDocumentsClient({
     <>
       <div className={embedded ? undefined : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}>
         {embedded && (
-          <SettingsPageHeader
-            backHref="/admin/settings"
+          <PageHeader
+            sticky
+            back={{ href: "/admin/settings", to: "Settings" }}
             title={headerTitle ?? "Legal Documents"}
             description={headerDescription}
             tabs={

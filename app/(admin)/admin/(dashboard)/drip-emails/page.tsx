@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/admin/page-header";
 import { requireRole } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,20 +91,18 @@ export default async function DripEmailsPage({
     <div className="flex h-full flex-col">
       {/* Fixed header — title, smart-behaviours reference, stats and tabs all stay put */}
       <div className="shrink-0 -mx-6 -mt-6 bg-background px-6 pt-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-heading text-2xl font-bold leading-tight">Drip Email Sequence</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.
-            </p>
-          </div>
-          <Button size="sm" asChild>
-            <Link href={`/admin/drip-emails/new?type=${activeType}`}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add Email
-            </Link>
-          </Button>
-        </div>
+        <PageHeader
+          title="Drip Email Sequence"
+          description={`${totalEmails}-email automated nurture sequence. Contacts receive one email per scheduled day.`}
+          action={
+            <Button size="sm" asChild>
+              <Link href={`/admin/drip-emails/new?type=${activeType}`}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add Email
+              </Link>
+            </Button>
+          }
+        />
 
         {/* Smart behaviours — collapsible reference (above the tabs, shown once) */}
         <div className="mt-3">

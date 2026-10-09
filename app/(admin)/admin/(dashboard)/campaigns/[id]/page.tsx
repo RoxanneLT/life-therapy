@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { BackLink } from "@/components/admin/back-link";
+import { PageHeader } from "@/components/admin/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { deleteCampaignAction } from "../actions";
@@ -128,14 +128,13 @@ export default async function CampaignDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-4">
-        <BackLink href="/admin/campaigns" to="Campaigns" />
-      </div>
-
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-heading text-2xl font-bold">{campaign.name}</h1>
+      <div className="mb-6">
+        <PageHeader
+          back={{ href: "/admin/campaigns", to: "Campaigns" }}
+          title={campaign.name}
+          description={!campaign.isMultiStep && campaign.subject ? campaign.subject : undefined}
+          badges={
+            <>
             <Badge
               variant={STATUS_VARIANTS[campaign.status] || "outline-solid"}
               className={statusColor || ""}
@@ -160,19 +159,19 @@ export default async function CampaignDetailPage({
                 </>
               )}
             </Badge>
-          </div>
-          {!campaign.isMultiStep && campaign.subject && (
-            <p className="mt-1 text-sm text-muted-foreground">{campaign.subject}</p>
-          )}
-        </div>
-        {canEdit && (
-          <Link href={`/admin/campaigns/${id}/edit`}>
-            <Button variant="outline" size="sm">
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-          </Link>
-        )}
+            </>
+          }
+          action={
+            canEdit && (
+              <Link href={`/admin/campaigns/${id}/edit`}>
+                <Button variant="outline" size="sm">
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              </Link>
+            )
+          }
+        />
       </div>
 
       <div className="grid gap-6">

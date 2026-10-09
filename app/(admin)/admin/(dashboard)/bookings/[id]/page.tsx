@@ -45,7 +45,7 @@ import {
 import Link from "next/link";
 import type { BookingStatus } from "@/lib/generated/prisma/client";
 import { BOOKING_STATUS_BADGE } from "@/lib/status-styles";
-import { BackLink } from "@/components/admin/back-link";
+import { PageHeader } from "@/components/admin/page-header";
 import { RescheduleDialog } from "./reschedule-dialog";
 import { RescheduleSeriesDialog } from "./reschedule-series-dialog";
 import { RebuildSeriesCalendarButton } from "./rebuild-series-calendar-button";
@@ -136,16 +136,11 @@ export default async function BookingDetailPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <CalendarWarningToast />
-      <BackLink href="/admin/bookings" to="Bookings" />
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">
-            Booking Details
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {config.label} — {booking.clientName}
-          </p>
-        </div>
+      <PageHeader
+        back={{ href: "/admin/bookings", to: "Bookings" }}
+        title="Booking Details"
+        description={`${config.label} — ${booking.clientName}`}
+        action={
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="destructive" size="sm">
@@ -189,7 +184,8 @@ export default async function BookingDetailPage({ params }: Props) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Session Info */}

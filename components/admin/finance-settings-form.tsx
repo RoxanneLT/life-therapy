@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 import {
   updateFinanceSettings,
   getBillingPresetsAction,
@@ -77,8 +77,6 @@ interface NextDates {
 interface Props {
   initialSettings: SiteSetting;
   nextDates?: NextDates;
-  /** Render inside the shared sticky settings header (no internal sidebar/heading). */
-  embedded?: boolean;
   headerTitle?: string;
   headerDescription?: string;
 }
@@ -86,7 +84,6 @@ interface Props {
 export function FinanceSettingsForm({
   initialSettings,
   nextDates,
-  embedded,
   headerTitle,
   headerDescription,
 }: Readonly<Props>) {
@@ -245,14 +242,14 @@ export function FinanceSettingsForm({
     <form
       onSubmit={handleSubmit}
       onChange={markDirty}
-      className={embedded ? "flex h-full flex-col" : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}
+      className="flex h-full flex-col"
     >
-      {embedded && (
-        <SettingsPageHeader
-          backHref="/admin/settings"
+        <PageHeader
+          sticky
+          back={{ href: "/admin/settings", to: "Settings" }}
           title={headerTitle ?? "Finance"}
           description={headerDescription}
-          actions={
+          action={
             <>
               {isDirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
               <Button type="submit" size="sm" disabled={saving}>
@@ -285,88 +282,9 @@ export function FinanceSettingsForm({
             </div>
           }
         />
-      )}
-      {!embedded && (
-        <>
-      {/* Mobile nav — horizontal scrollable strip */}
-      <div className="md:hidden space-y-4">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Finance</h1>
-          <p className="text-sm text-muted-foreground">
-            Business details, VAT, pricing, billing, and banking.
-          </p>
-        </div>
-        <div className="flex gap-1 overflow-x-auto border-b pb-px scrollbar-none">
-          {SECTIONS.map((section) => {
-            const Icon = section.icon;
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setActiveSection(section.id)}
-                className={cn(
-                  "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px",
-                  activeSection === section.id
-                    ? "border-brand-600 text-brand-700"
-                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {section.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex w-52 shrink-0 flex-col">
-        <div className="mb-5">
-          <h1 className="font-heading text-2xl font-bold">Finance</h1>
-          <p className="text-sm text-muted-foreground">
-            Business details, VAT, pricing, billing, and banking.
-          </p>
-        </div>
-
-        <nav className="flex-1 space-y-0.5">
-          {SECTIONS.map((section) => {
-            const Icon = section.icon;
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setActiveSection(section.id)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
-                  activeSection === section.id
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {section.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="border-t pt-4">
-          <Button type="submit" disabled={saving} className="w-full">
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Settings
-          </Button>
-          {isDirty && (
-            <p className="mt-2 text-center text-xs text-amber-600">
-              You have unsaved changes
-            </p>
-          )}
-        </div>
-      </div>
-        </>
-      )}
 
       {/* Content area (flex column so the Banking & VAT tab can order Banking first) */}
-      <div className={embedded ? "flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1" : "flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1"}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto pr-1">
         {/* ── Business Details ── */}
         {activeSection === "business" && (
           <Card>

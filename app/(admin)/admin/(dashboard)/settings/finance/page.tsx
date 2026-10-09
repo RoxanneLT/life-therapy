@@ -41,7 +41,6 @@ export default async function FinanceSettingsPage() {
     <FinanceSettingsForm
       initialSettings={settings}
       nextDates={nextDates}
-      embedded
       headerTitle="Finance"
       headerDescription="Business details, VAT, session rates, billing schedule and banking."
     />

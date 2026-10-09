@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Star } from "lucide-react";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { TestimonialRowActions } from "./testimonial-row-actions";
 
@@ -24,10 +24,11 @@ export default async function AdminTestimonialsPage() {
 
   return (
     <div>
-      <SettingsPageHeader
+      <PageHeader
+        sticky
         title="Testimonials"
         description={`${testimonials.length} testimonial${testimonials.length === 1 ? "" : "s"} — client reviews shown on the site`}
-        actions={
+        action={
           <Button asChild>
             <Link href="/admin/testimonials/new">
               <Plus className="mr-2 h-4 w-4" />

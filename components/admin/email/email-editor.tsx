@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useCallback, type ReactNode } from "react";
+import { PageHeader } from "@/components/admin/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -137,12 +138,11 @@ export function EmailEditor({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">{title}</h1>
-          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title={title}
+        description={subtitle}
+        action={
+        <>
           {showPreviewPane && (
             <Button
               variant="outline"
@@ -170,8 +170,9 @@ export function EmailEditor({
             <Save className="h-4 w-4" />
             {isPending ? "Saving..." : saveLabel}
           </Button>
-        </div>
-      </div>
+        </>
+        }
+      />
 
       {/* Status messages */}
       {saveMessage && (

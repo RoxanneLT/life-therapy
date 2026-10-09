@@ -22,7 +22,7 @@ import {
 import { Pencil, Plus, Users, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
@@ -69,11 +69,12 @@ export function UsersPanel({ users, embedded, headerTitle, headerDescription }: 
   return (
     <div className={embedded ? undefined : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}>
       {embedded && (
-        <SettingsPageHeader
-          backHref="/admin/settings"
+        <PageHeader
+          sticky
+          back={{ href: "/admin/settings", to: "Settings" }}
           title={headerTitle ?? "Team"}
           description={headerDescription ?? `${users.length} admin user${users.length === 1 ? "" : "s"}`}
-          actions={
+          action={
             <Button size="sm" asChild>
               <Link href="/admin/users/new">
                 <Plus className="mr-1.5 h-3.5 w-3.5" />

@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { notFound } from "next/navigation";
-import { BackLink } from "@/components/admin/back-link";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
 import { ContactConflicts } from "./contact-conflicts";
@@ -43,8 +42,7 @@ export default async function ClientDetailPage({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 space-y-2">
-        <BackLink href="/admin/clients" to="Clients" />
+      <div className="shrink-0">
         <div>
           <ClientHeader
             client={{

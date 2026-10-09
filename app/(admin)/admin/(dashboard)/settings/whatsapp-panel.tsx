@@ -39,7 +39,7 @@ import {
 } from "./whatsapp-actions";
 import type { SiteSetting } from "@/lib/generated/prisma/client";
 import { cn } from "@/lib/utils";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -211,11 +211,12 @@ export function WhatsAppPanel({
   return (
     <div className={embedded ? undefined : "flex flex-col md:flex-row md:h-[calc(100vh-10rem)] gap-6"}>
       {embedded && (
-        <SettingsPageHeader
-          backHref="/admin/settings"
+        <PageHeader
+          sticky
+          back={{ href: "/admin/settings", to: "Settings" }}
           title={headerTitle ?? "WhatsApp"}
           description={headerDescription}
-          actions={
+          action={
             showSaveButton ? (
               <Button type="button" size="sm" onClick={handleSaveSettings} disabled={isPending}>
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

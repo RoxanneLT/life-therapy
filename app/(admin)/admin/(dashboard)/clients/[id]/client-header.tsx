@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PageHeader } from "@/components/admin/page-header";
 import { StatusSelect } from "./status-select";
 import { ConvertDialog } from "./convert-dialog";
 
@@ -31,8 +32,11 @@ export function ClientHeader({
   const clientName = `${client.firstName} ${client.lastName}`;
 
   return (
-    <div className="flex items-center gap-3">
-      <h1 className="font-heading text-2xl font-bold">{clientName}</h1>
+    <PageHeader
+      back={{ href: "/admin/clients", to: "Clients" }}
+      title={clientName}
+      badges={
+        <>
       <StatusSelect
         clientId={client.id}
         currentStatus={currentStatus}
@@ -49,6 +53,8 @@ export function ClientHeader({
           onExternalOpenChange={setConvertOpen}
         />
       )}
-    </div>
+        </>
+      }
+    />
   );
 }

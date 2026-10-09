@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { Suspense } from "react";
+import { PageHeader } from "@/components/admin/page-header";
 import { getAuthenticatedAdmin } from "@/lib/auth";
 import { saToday } from "@/lib/dates";
 import { AttentionQueue, AttentionQueueSkeleton } from "./attention-queue";
@@ -28,14 +29,10 @@ export default async function AdminDashboard({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">
-          Welcome back{adminUser.name ? `, ${adminUser.name}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Here&apos;s what&apos;s happening on your platform today.
-        </p>
-      </div>
+      <PageHeader
+        title={`Welcome back${adminUser.name ? `, ${adminUser.name}` : ""}`}
+        description="Here's what's happening on your platform today."
+      />
 
       <Suspense fallback={<AttentionQueueSkeleton />}>
         <AttentionQueue role={adminUser.role} />

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/admin/image-upload";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 import {
   ClientNameCombobox,
   type ClientOption,
@@ -88,12 +88,12 @@ export function TestimonialForm({
 
   return (
     <form onSubmit={handleSubmit}>
-      <SettingsPageHeader
+      <PageHeader
+        sticky
         title={headerTitle}
         description={headerDescription}
-        backHref={backHref}
-        backLabel={backLabel}
-        actions={
+        back={backHref ? { href: backHref, to: backLabel ?? "Testimonials" } : undefined}
+        action={
           <>
             {headerActions}
             <Button type="submit" disabled={submitting}>

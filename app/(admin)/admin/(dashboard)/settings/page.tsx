@@ -9,7 +9,7 @@ import {
   topVisitedHrefs,
   type SettingsPage,
 } from "@/lib/settings-catalog";
-import { SettingsPageHeader } from "@/components/admin/settings/settings-page-header";
+import { PageHeader } from "@/components/admin/page-header";
 import { Card } from "@/components/ui/card";
 
 function SettingCard({ page }: Readonly<{ page: SettingsPage }>) {
@@ -40,7 +40,8 @@ export default async function SettingsOverviewPage() {
 
   return (
     <>
-      <SettingsPageHeader
+      <PageHeader
+        sticky
         title="Settings"
         description="Manage your website, business and integrations — everything that shapes how Life-Therapy runs."
       />
