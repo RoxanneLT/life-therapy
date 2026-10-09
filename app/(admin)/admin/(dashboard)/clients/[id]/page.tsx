@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
+import { ContactConflicts } from "./contact-conflicts";
 
 export default async function ClientDetailPage({
   params,
@@ -32,6 +33,13 @@ export default async function ClientDetailPage({
   });
 
   if (!client) notFound();
+
+  const contactConflicts = await prisma.auditLog.findMany({
+    where: { entityType: "student", entityId: id, action: "contact_field_conflict" },
+    select: { id: true, createdAt: true, metadata: true },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
 
   const coreClient = JSON.parse(JSON.stringify(client)) as Record<string, unknown>;
 
@@ -65,6 +73,7 @@ export default async function ClientDetailPage({
             }
           />
           <p className="text-sm text-muted-foreground">{client.email}</p>
+          <ContactConflicts entries={contactConflicts} />
         </div>
       </div>
 
