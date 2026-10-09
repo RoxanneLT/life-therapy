@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { changePassword } from "@/app/(admin)/admin/(dashboard)/users/actions";
+import { MIN_PASSWORD_LENGTH, passwordLengthRefusal } from "@/lib/password-policy";
 
 export function ChangePasswordForm() {
   const [saving, setSaving] = useState(false);
@@ -16,8 +17,9 @@ export function ChangePasswordForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    const tooShort = passwordLengthRefusal(newPassword);
+    if (tooShort) {
+      toast.error(tooShort);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -85,7 +87,7 @@ export function ChangePasswordForm() {
           required
         />
       </div>
-      <p className="text-xs text-muted-foreground">Use at least 8 characters.</p>
+      <p className="text-xs text-muted-foreground">Use at least {MIN_PASSWORD_LENGTH} characters.</p>
       <Button type="submit" disabled={saving}>
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Update password

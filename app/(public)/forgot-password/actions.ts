@@ -9,6 +9,7 @@ import { recordAuthEvent } from "@/lib/audit";
 import { isRateLimitedDb, recordHitDb, clearRateLimitDb, limitKey } from "@/lib/rate-limit-db";
 import { appBaseUrl } from "@/lib/region";
 import { stepUpWithTotp, verifiedTotpFactor } from "@/lib/mfa-step-up";
+import { passwordLengthRefusal } from "@/lib/password-policy";
 
 const RESET_WINDOW_MS = 15 * 60 * 1000;
 
@@ -118,8 +119,9 @@ export async function updatePasswordAction(
     return { error: "Please enter a new password." };
   }
 
-  if (newPassword.length < 8) {
-    return { error: "Password must be at least 8 characters." };
+  const tooShort = passwordLengthRefusal(newPassword);
+  if (tooShort) {
+    return { error: tooShort };
   }
 
   const supabase = await createSupabaseServerClient();

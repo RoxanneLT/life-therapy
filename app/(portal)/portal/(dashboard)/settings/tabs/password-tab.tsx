@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { changePasswordAction } from "../actions";
+import { MIN_PASSWORD_LENGTH, passwordLengthRefusal } from "@/lib/password-policy";
 
 interface PasswordTabProps {
   readonly email: string;
@@ -21,8 +22,9 @@ export function PasswordTab({ email }: PasswordTabProps) {
   const [error, setError] = useState<string | null>(null);
 
   async function handleChangePassword() {
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters");
+    const tooShort = passwordLengthRefusal(newPassword);
+    if (tooShort) {
+      setError(tooShort);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -81,7 +83,7 @@ export function PasswordTab({ email }: PasswordTabProps) {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             className="mt-1"
-            minLength={6}
+            minLength={MIN_PASSWORD_LENGTH}
           />
         </div>
         <div>

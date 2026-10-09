@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { changeStudentPassword } from "./actions";
+import { MIN_PASSWORD_LENGTH, passwordLengthRefusal } from "@/lib/password-policy";
 
 export default function PortalChangePasswordPage() {
   const [newPassword, setNewPassword] = useState("");
@@ -26,8 +27,9 @@ export default function PortalChangePasswordPage() {
     e.preventDefault();
     setError("");
 
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
+    const tooShort = passwordLengthRefusal(newPassword);
+    if (tooShort) {
+      setError(tooShort);
       return;
     }
 
@@ -80,10 +82,10 @@ export default function PortalChangePasswordPage() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
             />
             <p className="text-xs text-muted-foreground">
-              At least 8 characters
+              At least {MIN_PASSWORD_LENGTH} characters
             </p>
           </div>
           <div className="space-y-2">

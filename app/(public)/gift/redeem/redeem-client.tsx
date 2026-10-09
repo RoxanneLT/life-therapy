@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Gift, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { redeemGiftAction } from "./actions";
+import { MIN_PASSWORD_LENGTH, passwordLengthRefusal } from "@/lib/password-policy";
 
 interface RedeemClientProps {
   token: string;
@@ -53,8 +54,9 @@ export function RedeemClient({
           setLoading(false);
           return;
         }
-        if (password.length < 6) {
-          setError("Password must be at least 6 characters");
+        const tooShort = passwordLengthRefusal(password);
+        if (tooShort) {
+          setError(tooShort);
           setLoading(false);
           return;
         }
@@ -180,7 +182,7 @@ export function RedeemClient({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1"
-                minLength={6}
+                minLength={MIN_PASSWORD_LENGTH}
               />
             </div>
             {error && (

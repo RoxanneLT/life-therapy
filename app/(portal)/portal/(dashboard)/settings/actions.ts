@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getBaseUrl } from "@/lib/get-region";
 import { phoneError, normalizePhoneForStorage } from "@/lib/phone";
+import { passwordLengthRefusal } from "@/lib/password-policy";
 import { revalidatePath } from "next/cache";
 import { isRateLimitedDb, recordHitDb, limitKey } from "@/lib/rate-limit-db";
 
@@ -134,8 +135,9 @@ export async function changePasswordAction(
   currentPassword: string,
   newPassword: string,
 ) {
-  if (newPassword.length < 6) {
-    return { error: "Password must be at least 6 characters" };
+  const tooShort = passwordLengthRefusal(newPassword);
+  if (tooShort) {
+    return { error: tooShort };
   }
 
   const { student } = await getAuthenticatedStudent();

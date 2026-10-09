@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { updatePasswordAction } from "../forgot-password/actions";
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-policy";
 
 const initialState = {
   error: undefined as string | undefined,
@@ -104,11 +105,11 @@ export default function ResetPasswordPage() {
                       id="new_password"
                       name="new_password"
                       type={showPassword ? "text" : "password"}
-                      placeholder="At least 8 characters"
+                      placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                       required
                       autoComplete="new-password"
                       disabled={isPending}
-                      minLength={8}
+                      minLength={MIN_PASSWORD_LENGTH}
                     />
                     <button
                       type="button"
@@ -131,7 +132,7 @@ export default function ResetPasswordPage() {
                       required
                       autoComplete="new-password"
                       disabled={isPending}
-                      minLength={8}
+                      minLength={MIN_PASSWORD_LENGTH}
                     />
                     <button
                       type="button"

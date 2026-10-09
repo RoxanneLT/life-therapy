@@ -14,6 +14,7 @@ import type { AdminRole } from "@/lib/generated/prisma/client";
 import crypto from "crypto";
 import { appBaseUrl } from "@/lib/region";
 import { recoveryLinkMfaHint } from "@/lib/mfa-step-up";
+import { passwordLengthRefusal } from "@/lib/password-policy";
 
 const BASE_URL = appBaseUrl();
 
@@ -152,8 +153,9 @@ export async function changePassword(
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
-  if (!newPassword || newPassword.length < 8) {
-    return { success: false, error: "Password must be at least 8 characters." };
+  const tooShort = passwordLengthRefusal(newPassword);
+  if (tooShort) {
+    return { success: false, error: tooShort };
   }
 
   if (newPassword !== confirmPassword) {

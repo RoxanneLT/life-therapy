@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedStudent } from "@/lib/student-auth";
 import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
+import { passwordLengthRefusal } from "@/lib/password-policy";
 
 export async function changeStudentPassword(formData: FormData) {
   const { user, student } = await getAuthenticatedStudent();
@@ -22,8 +23,9 @@ export async function changeStudentPassword(formData: FormData) {
   const newPassword = formData.get("newPassword") as string;
   const confirmPassword = formData.get("confirmPassword") as string;
 
-  if (!newPassword || newPassword.length < 8) {
-    return { error: "Password must be at least 8 characters" };
+  const tooShort = passwordLengthRefusal(newPassword);
+  if (tooShort) {
+    return { error: tooShort };
   }
 
   if (newPassword !== confirmPassword) {
