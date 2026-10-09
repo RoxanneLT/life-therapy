@@ -17,53 +17,20 @@
 //               pg_dump through the container's environment, never a command line.
 //               Skip with --fresh-only (e.g. no .env.local, as in CI).
 //
-// The roles `anon` and `authenticated` are Supabase's; a plain Postgres lacks them, so they are
-// created here for 99_security.sql to name.
-//
 // Usage:  npm run db:verify             # both scenarios
 //         npm run db:verify -- --fresh-only
 // Exit:   0 all green · 1 a scenario failed (the container is removed either way)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { spawnSync } from "node:child_process";
-import pg from "pg";
 import { applyAll, prodSessionUrl } from "./db-apply.mjs";
+import { sh, startPostgres, stopPostgres, waitReady, exec as execUrl, ensureSupabaseRoles } from "./db-docker.mjs";
 
 const NAME = "lt-db-verify";
 const PORT = 54329;
 const PW = "verify-only";
-const urlFor = (db) => `postgresql://postgres:${PW}@localhost:${PORT}/${db}`;
 const freshOnly = process.argv.includes("--fresh-only");
-
-const sh = (cmd, args, opts = {}) => {
-  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...opts });
-  if (r.status !== 0 && !opts.allowFail) throw new Error(`${cmd} ${args.slice(0, 3).join(" ")} … failed:\n${(r.stderr || r.stdout || "").trim().slice(0, 2000)}`);
-  return r;
-};
-
-async function waitReady() {
-  for (let i = 0; i < 60; i++) {
-    const c = new pg.Client({ connectionString: urlFor("postgres") });
-    try {
-      await c.connect();
-      await c.end();
-      return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-  throw new Error("postgres container never became ready");
-}
-
-async function exec(db, sql) {
-  const c = new pg.Client({ connectionString: urlFor(db) });
-  await c.connect();
-  try {
-    return await c.query(sql);
-  } finally {
-    await c.end();
-  }
-}
+let urlFor;
+const exec = (db, sql) => execUrl(urlFor(db), sql);
 
 // pg_dump ≥17.6 brackets every dump with a random `\restrict <key>` pair (CVE-2025-8714); two
 // dumps of one schema differ only there, so those lines are dropped before comparing.
@@ -104,14 +71,10 @@ async function scenario(db, prepare) {
 }
 
 async function main() {
-  sh("docker", ["rm", "-f", NAME], { allowFail: true });
-  sh("docker", ["run", "-d", "--rm", "--name", NAME, "-e", `POSTGRES_PASSWORD=${PW}`, "-p", `${PORT}:5432`, "postgres:17"]);
+  urlFor = startPostgres(NAME, PORT, PW);
   try {
-    await waitReady();
-    await exec("postgres", `DO $$ BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
-    END $$`);
+    await waitReady(urlFor("postgres"));
+    await ensureSupabaseRoles(urlFor("postgres"));
 
     await scenario("fresh");
 
@@ -130,7 +93,7 @@ async function main() {
     }
     console.log("\ndb:verify ✓");
   } finally {
-    sh("docker", ["rm", "-f", NAME], { allowFail: true });
+    stopPostgres(NAME);
   }
 }
 

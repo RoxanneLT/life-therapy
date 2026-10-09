@@ -296,8 +296,10 @@ const COMPONENTS = join(ROOT, "components");
  * deliberately contains `vatApplies("USD", true)` and bare formatPrice() calls as
  * FIXTURES — flagging them would mean the only way to pass the audit is to stop
  * testing the rule. (dates.test.ts hardcodes "+02:00" for exactly the same reason.)
+ * The database tier's `*.dbtest.ts` too: with-cron-run.dbtest.ts sets CRON_SECRET to drive the
+ * guard it tests, as with-cron-run.test.ts does.
  */
-const isTest = (p) => /\.test\.tsx?$/.test(p);
+const isTest = (p) => /\.(db)?test\.tsx?$/.test(p);
 const allSource = () =>
   [...walk(APP), ...walk(LIB), ...walk(COMPONENTS)].filter((f) => !isTest(f));
 

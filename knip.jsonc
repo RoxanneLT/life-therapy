@@ -26,7 +26,9 @@
     // have broken the script silently, because scripts are not part of the build.
     // A crawler's blind spot does not show up as a gap, it shows up as a finding.
     "scripts/**/*.ts",
-    "lib/**/*.test.ts"
+    "lib/**/*.test.ts",
+    // The database tier, run by scripts/db-test.mjs, which discovers its files by suffix.
+    "lib/**/*.dbtest.ts"
 
     // REMOVED 2026-08-19, all reported by knip's own configuration hints as
     // matching nothing. An entry pattern with no matches is the same disease as a

@@ -237,7 +237,9 @@ tsc --noEmit
 
 Pieces: `npm run typecheck` · `npm run lint` · `npm run audit` · `npm run test:dates` ·
 `npm run test:gate` · `npm run test:budget` · `npm run test:removal`. Run the whole thing after
-each logical change, not after ten.
+each logical change, not after ten. **Not in `check`:** `npm run test:db` — every `*.dbtest.ts`
+against a throwaway Postgres built from `prisma/sql/`. It needs Docker locally and runs as its own
+CI job.
 
 **Hook-denied** (precise patterns — the smart layer, `.claude/hooks/bash-gate.js`):
 `git push --force` · `git reset --hard` · `rm -rf` on `/` or `~` · `prisma migrate` (all but

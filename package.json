@@ -12,6 +12,7 @@
     "db:apply": "node scripts/db-apply.mjs --target=prod",
     "db:drift": "node scripts/db-drift.mjs",
     "db:verify": "node scripts/db-verify.mjs",
+    "test:db": "node scripts/db-test.mjs",
     "check:commit": "node scripts/check-scope.mjs --commit",
     "check:scope": "node scripts/check-scope.mjs",
     "check": "node scripts/check-install-platform.mjs --selftest && node scripts/check-install-platform.mjs . && tsc --noEmit && node scripts/lint.mjs && npm run audit:selftest && node scripts/architecture-audit.mjs && npm run check:claude-md && npm run check:brief && npm run crawl:tier0 && npm run check:cycles && npm run test:gate && npm run test:budget && npm run test:probes && npm run test",

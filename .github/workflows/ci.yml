@@ -13,8 +13,8 @@
 #   - no `next build`. Vercel builds every push to master and every PR preview, and that is the
 #     authoritative build signal. Duplicating it here would need real Supabase credentials, because
 #     several pages prerender against live data.
-#   - no database tier. There isn't one: LT's DDL goes through the Supabase Management API against
-#     production, so there is no ephemeral stack to boot and nothing here talks to the real one.
+#   - no database. That is the separate `db-tests` job below (since 2026-10-09), against a
+#     throwaway Postgres built from prisma/sql/. Nothing in either job talks to production.
 #
 # NOTES ON THINGS THAT WOULD OTHERWISE BITE, each verified before this job was widened:
 #   - `npm ci` runs `prepare`, which sets `core.hooksPath` — so `check-git-hooks.mjs` finds the
@@ -69,3 +69,45 @@ jobs:
 
       - name: Run the gate
         run: npm run check
+
+  db-tests:
+    name: DB tier (test:db)
+    # No `needs:` — it shares nothing with `check`, so it runs beside it and adds nothing to the
+    # wait. A red `check` still blocks the merge on its own.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Plain Postgres, not a Supabase stack: Supabase here is auth only, and every query goes through
+    # Prisma. 17 because production is 17.x. The password is this container's and nothing else's.
+    # There is NO production credential in this job, and scripts/db-test.mjs refuses any non-local
+    # host even if one were added.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Builds a fresh database from prisma/sql/ (the files production runs), then runs every
+      # *.dbtest.ts against it.
+      - name: Run the DB tier
+        run: npm run test:db
+        env:
+          LT_TEST_DATABASE_URL: postgresql://postgres:ci-only@localhost:5432/postgres
