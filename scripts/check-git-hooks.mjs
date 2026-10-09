@@ -227,7 +227,14 @@ clearMarker()
 {
   const HOOK = resolve(".githooks/prepare-commit-msg")
   const repo = mkdtempSync(join(tmpdir(), "lt-rebaselab-"))
-  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8" })
+  // ⚠ NO GIT_* FROM THE CALLER. This file runs inside the commit gate, and git hands its hooks
+  // GIT_INDEX_FILE — under `git commit -a` as an ABSOLUTE path to the commit's temporary index. A
+  // `git add` here inherited it, wrote this lab's f.txt into the real commit's index with an object
+  // only the lab holds, and the commit died: "invalid object … for 'f.txt' / Error building trees"
+  // (2026-10-09). A plain `git commit` passes a relative path that resolves inside the lab, so it
+  // went unseen until the first `commit -a`. cwd alone does not isolate a git command.
+  const labEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")))
+  const git = (...args) => spawnSync("git", args, { cwd: repo, encoding: "utf8", env: labEnv })
   try {
     git("init", "-q", ".")
     git("config", "user.email", "probe@local")
@@ -240,7 +247,7 @@ clearMarker()
       spawnSync("sh", [HOOK], {
         cwd: repo,
         encoding: "utf8",
-        env: { ...process.env, LT_HOOK_PROBE: "1", LT_PRECOMMIT_CMD: "false" },
+        env: { ...labEnv, LT_HOOK_PROBE: "1", LT_PRECOMMIT_CMD: "false" },
       })
 
     // No rebase in progress and no marker: the gate must RUN, and here it fails.

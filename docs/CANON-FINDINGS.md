@@ -111,6 +111,26 @@ CF-9 is filed too: canon took it at `baba8d8`.
                and diff run on the session pooler (port 5432, no pgbouncer), not the transaction one.
                It must not break the advice for projects that keep migrate.
 
+### CF-13 · A probe that builds a scratch git repo inherits the hook's GIT_INDEX_FILE, and corrupts the commit it gates
+
+    OBSERVED   `git commit -a` died inside the pre-commit gate. check-git-hooks.mjs's rebase lab ran
+               `git add .` in a temp repo with cwd set but the caller's env inherited, so the lab's
+               file went into the real commit's index with an object only the lab held.
+    COMMAND    git commit -qam "…"
+                 error: invalid object 100644 587be6b4c3f93f93c489c0111bba5596147a26cb for 'f.txt'
+                 error: Error building trees
+               Reproduced: GIT_INDEX_FILE=<abs copy of .git/index> node scripts/check-git-hooks.mjs
+                 old file → f.txt in the copy: 1 · with GIT_* stripped → 0
+    WHY IT IS  git gives hooks GIT_INDEX_FILE, and under `commit -a` (or `commit <paths>`) it is an
+    CANON'S    absolute path to a temporary index. Any gate step that spawns git in a throwaway repo
+               without clearing GIT_* writes there, whatever the stack. A plain `git commit` passes a
+               relative path that resolves inside the lab, so a repo that never uses `-a` never sees it.
+               Canon's check-scope selftest builds scratch repos as well; it is unchecked here.
+    SMALLEST   Every kit probe that spawns git outside the project's own tree passes an env with GIT_*
+    FIX        removed. A kit probe can test this: run under an absolute GIT_INDEX_FILE that points at a
+               copy, then assert the copy is unchanged. It must not strip GIT_* from spawns that are
+               meant to act on the project's own repo.
+
 ---
 
 ## 2 · Lesson answers
