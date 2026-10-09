@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { calendarDate, saDayStart, saDateStr, saToday } from "@/lib/dates";
+import { getSessionRate } from "@/lib/billing";
 
 // Financial year runs March → February.
 // "year N" means Mar N – Feb N+1.
@@ -12,11 +13,6 @@ function fyIdx(utcMonth: number): number {
   return (utcMonth - 2 + 12) % 12;
 }
 
-const SESSION_PRICE_CENTS: Record<string, number> = {
-  individual: 85000,
-  couples: 120000,
-  free_consultation: 0,
-};
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -186,10 +182,18 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     months[idx].estimated += b.priceZarCents ?? 0;
   }
 
-  // Upcoming bookings → estimated
+  // Upcoming bookings → estimated. The booking's stored price first (CLAUDE.md §9, gotcha 2); a
+  // booking without one is priced at today's configured ZAR rate from getSessionRate, the rates SSOT.
+  // Until 2026-10-09 that fallback was a table of prices written into this file, so a rate change in
+  // Settings never reached the projection.
+  const [individualRate, couplesRate] = await Promise.all([
+    getSessionRate("individual", "ZAR"),
+    getSessionRate("couples", "ZAR"),
+  ]);
+  const configuredRate: Record<string, number> = { individual: individualRate, couples: couplesRate };
   for (const b of upcomingBookings) {
     const idx = fyIdx(b.date.getUTCMonth());
-    months[idx].estimated += b.priceZarCents ?? SESSION_PRICE_CENTS[b.sessionType] ?? 0;
+    months[idx].estimated += b.priceZarCents ?? configuredRate[b.sessionType] ?? 0;
   }
 
   return months;

@@ -154,7 +154,7 @@ export function CommitmentTab({ client }: CommitmentTabProps) {
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-lg font-semibold">Agreements</h2>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/admin/legal-documents">
+          <Link href="/admin/settings/legal">
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
             Manage Documents
           </Link>

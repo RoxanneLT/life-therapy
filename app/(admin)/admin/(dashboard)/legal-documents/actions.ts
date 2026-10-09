@@ -38,7 +38,7 @@ export async function publishDocumentVersionAction(
     adminUserId
   );
 
-  revalidatePath("/admin/legal-documents");
+  revalidatePath("/admin/settings/legal");
   revalidatePath("/terms");
   revalidatePath("/privacy");
   revalidatePath("/portal/settings");
