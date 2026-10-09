@@ -20,6 +20,9 @@ import { saToday, calendarDate, addSaDays } from "@/lib/dates";
 import { initializeTransaction } from "@/lib/paystack";
 import type { Booking, Student } from "@/lib/generated/prisma/client";
 import { appBaseUrl } from "@/lib/region";
+import { confirmWithTotp } from "@/lib/mfa-step-up";
+import { eraseClient } from "@/lib/popia/erase-client";
+import { exportClientData } from "@/lib/popia/export-client";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
 async function autoActivatePayerIfNeeded(
@@ -2227,4 +2230,49 @@ export async function resendPaymentRequestAction(
     console.error("resendPaymentRequestAction error:", err);
     return { success: false, error: err instanceof Error ? err.message : "Failed to send payment request" };
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// POPIA: export and erasure (lib/popia/). Super admin only, each behind a fresh 2FA code: one
+// hands over everything held about a person, the other cannot be undone.
+// ────────────────────────────────────────────────────────────
+
+export async function exportClientDataAction(
+  clientId: string,
+  includeTherapistNotes: boolean,
+  stepUpCode: string,
+): Promise<{ json?: string; filename?: string; error?: string }> {
+  const { adminUser } = await requireRole("super_admin");
+  const stepUp = await confirmWithTotp(stepUpCode);
+  if (stepUp.error) return { error: stepUp.error };
+
+  const data = await exportClientData(clientId, includeTherapistNotes);
+  if (!data) return { error: "That client no longer exists." };
+
+  await recordAudit({
+    action: "client_data_exported",
+    entityType: "student",
+    entityId: clientId,
+    actorEmail: adminUser.email,
+    metadata: { includeTherapistNotes, bookings: data.bookings.length, invoices: data.invoices.length },
+  });
+  return { json: JSON.stringify(data, null, 2), filename: `client-export-${clientId}-${saToday()}.json` };
+}
+
+export async function eraseClientAction(
+  clientId: string,
+  typedConfirmation: string,
+  stepUpCode: string,
+): Promise<{ success?: true; retainUntil?: string | null; error?: string }> {
+  const { adminUser } = await requireRole("super_admin");
+  if (typedConfirmation.trim().toUpperCase() !== "ERASE") return { error: "Type ERASE to confirm." };
+  const stepUp = await confirmWithTotp(stepUpCode);
+  if (stepUp.error) return { error: stepUp.error };
+
+  const result = await eraseClient(clientId, adminUser.email);
+  if (!result.success) return { error: result.error };
+
+  revalidatePath(`/admin/clients/${clientId}`);
+  revalidatePath("/admin/clients");
+  return { success: true, retainUntil: result.retainUntil };
 }

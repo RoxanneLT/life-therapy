@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS "students" (
     "clientStatus" TEXT NOT NULL DEFAULT 'potential',
     "convertedAt" TIMESTAMP(3),
     "convertedBy" TEXT,
+    "erasedAt" TIMESTAMP(3),
+    "erasedBy" TEXT,
+    "retainUntil" DATE,
     "source" TEXT NOT NULL DEFAULT 'booking',
     "tags" JSONB,
     "emailPaused" BOOLEAN NOT NULL DEFAULT false,
@@ -73,6 +76,14 @@ CREATE INDEX IF NOT EXISTS "students_clientStatus_idx" ON "students"("clientStat
 CREATE INDEX IF NOT EXISTS "students_source_idx" ON "students"("source");
 
 CREATE INDEX IF NOT EXISTS "students_emailPaused_idx" ON "students"("emailPaused");
+
+-- POPIA erasure (owner's ruling, 2026-10-09). A client is anonymised in place, never deleted:
+-- erasedAt/erasedBy record when and by which admin; retainUntil is the day the clinical records
+-- kept under the privacy policy's 5-year rule may be purged (lib/popia/). Added to an existing
+-- table, so the CREATE above cannot carry them to production.
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "erasedAt" TIMESTAMP(3);
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "erasedBy" TEXT;
+ALTER TABLE "students" ADD COLUMN IF NOT EXISTS "retainUntil" DATE;
 
 -- ── student_notes ─────────────────────────────────────────────────────────
 

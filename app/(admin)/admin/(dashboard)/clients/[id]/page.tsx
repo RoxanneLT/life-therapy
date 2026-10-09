@@ -2,9 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { requireAccess } from "@/lib/auth";
+import { saFormat } from "@/lib/dates";
 import { notFound } from "next/navigation";
 import { ClientProfileTabs } from "./client-profile-tabs";
 import { ClientHeader } from "./client-header";
+import { PrivacyActions } from "./privacy-actions";
 import { ContactConflicts } from "./contact-conflicts";
 
 export default async function ClientDetailPage({
@@ -16,7 +18,7 @@ export default async function ClientDetailPage({
 }) {
   const { id } = await params;
   const { tab } = await searchParams;
-  await requireAccess("/admin/clients");
+  const { adminUser } = await requireAccess("/admin/clients");
 
   const activeTab = tab || "overview";
 
@@ -53,6 +55,11 @@ export default async function ClientDetailPage({
               phone: client.phone,
             }}
             currentStatus={client.clientStatus}
+            action={
+              adminUser.role === "super_admin" && !client.erasedAt ? (
+                <PrivacyActions clientId={client.id} clientName={`${client.firstName} ${client.lastName}`} />
+              ) : undefined
+            }
             existingIntake={
               client.intake
                 ? {
@@ -63,7 +70,14 @@ export default async function ClientDetailPage({
                 : null
             }
           />
-          <p className="text-sm text-muted-foreground">{client.email}</p>
+          {client.erasedAt ? (
+            <p className="text-sm text-muted-foreground">
+              Erased under POPIA on {saFormat(client.erasedAt, "d MMM yyyy")}
+              {client.retainUntil ? `; clinical records are removed on ${saFormat(client.retainUntil, "d MMM yyyy")}` : ""}.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">{client.email}</p>
+          )}
           <ContactConflicts entries={contactConflicts} />
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusSelect } from "./status-select";
 import { ConvertDialog } from "./convert-dialog";
@@ -23,10 +23,12 @@ export function ClientHeader({
   client,
   currentStatus,
   existingIntake,
+  action,
 }: {
   client: ClientData;
   currentStatus: string;
   existingIntake: IntakeData | null;
+  action?: ReactNode;
 }) {
   const [convertOpen, setConvertOpen] = useState(false);
   const clientName = `${client.firstName} ${client.lastName}`;
@@ -35,6 +37,7 @@ export function ClientHeader({
     <PageHeader
       back={{ href: "/admin/clients", to: "Clients" }}
       title={clientName}
+      action={action}
       badges={
         <>
       <StatusSelect

@@ -1033,6 +1033,48 @@ check("pii: a personal-data column is encrypted or says why not", () => {
   }
 });
 
+check("popia: every client-linked column has a fate in the erasure plan", () => {
+  // lib/popia/plan.ts says what an erasure does to each client-linked column; erase-client.ts and
+  // purge-retained.ts build their writes from it. A column the plan does not name survives every
+  // erasure silently, which is the failure Pleks's plan header calls "complete by construction is
+  // the whole point". Client-linked = Student, or any model carrying a link to one (derived).
+  // Ids and foreign keys (`id`, `…Id`) identify a row, not a person, and are skipped.
+  const plan = read(join(ROOT, "lib/popia/plan.ts"));
+  const block = (name) => {
+    const m = new RegExp(String.raw`export const ${name}[^=]*=\s*\{([\s\S]*?)\n\};`).exec(plan);
+    if (!m) throw new Error(`lib/popia/plan.ts has no ${name} — the parse has broken`);
+    return m[1];
+  };
+  const columnFates = new Map();
+  for (const m of block("COLUMN_FATES").matchAll(/^ {2}(\w+): \{([\s\S]*?)^ {2}\},/gm)) {
+    columnFates.set(m[1], new Set([...m[2].matchAll(/^ {4}(\w+):/gm)].map((c) => c[1])));
+  }
+  const modelFates = new Set([...block("MODEL_FATES").matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]));
+  if (columnFates.size < 4 || modelFates.size < 4) throw new Error("read too little from lib/popia/plan.ts — the parse has broken");
+
+  const LINK = /^\s+(?:studentId|fromStudentId|toStudentId|buyerId|recipientId)\s/m;
+  const linked = new Set();
+  for (const m of read(join(ROOT, "prisma/schema.prisma")).matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    const model = m[1][0].toLowerCase() + m[1].slice(1);
+    if (model !== "student" && !LINK.test(m[2])) continue;
+    linked.add(model);
+    const cols = m[2].split("\n")
+      .map((l) => /^\s*(\w+)\s+(?:String|Json|DateTime\??\s+@db\.Date)/.exec(l)?.[1])
+      .filter((c) => c && c !== "id" && !c.endsWith("Id"));
+    if (!cols.length || modelFates.has(model)) continue;
+    const named = columnFates.get(model);
+    for (const c of cols) {
+      if (!named?.has(c)) fail("popia", `prisma/schema.prisma → ${model}.${c}`, "a client-linked column the erasure plan does not name, so an erasure leaves it as it is", "give it a fate in COLUMN_FATES in lib/popia/plan.ts (erase, clinical, partner or keep: why), or the whole model one in MODEL_FATES");
+    }
+    for (const c of named ?? []) {
+      if (!cols.includes(c)) fail("popia", `lib/popia/plan.ts → ${model}.${c}`, "the plan names a column the model no longer has", "remove the entry");
+    }
+  }
+  for (const model of [...columnFates.keys(), ...modelFates]) {
+    if (!linked.has(model)) fail("popia", `lib/popia/plan.ts → ${model}`, "the plan names a model that is no longer linked to a client", "remove the entry");
+  }
+});
+
 check("admin-access: every admin page is guarded by its area", () => {
   // lib/admin-access.ts is the one map of which role opens which admin page; the sidebar, the
   // shortcuts, the attention rows and the search read it. Until 2026-10-09 every page carried its

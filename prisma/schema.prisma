@@ -532,6 +532,12 @@ model Student {
   convertedAt        DateTime?
   convertedBy        String?
 
+  // POPIA erasure (lib/popia/): anonymised in place, never deleted. retainUntil is the calendar
+  // day the clinical records kept under the 5-year rule may be purged.
+  erasedAt           DateTime?
+  erasedBy           String?
+  retainUntil        DateTime?  @db.Date
+
   // Source & tags (merged from Contact)
   source             String     @default("booking") // "newsletter" | "booking" | "import" | "manual" | "website"
   tags               Json?

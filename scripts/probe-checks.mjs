@@ -514,6 +514,20 @@ const MUTATIONS = [
     expects: ["pii: a personal-data column is encrypted or says why not"],
   },
   {
+    path: "prisma/schema.prisma",
+    // A new client column nobody told the eraser about. Named so the pii check stays quiet.
+    find: "  convertedBy        String?\n",
+    replace: "  convertedBy        String?\n  probeNickname      String?\n",
+    expects: ["popia: every client-linked column has a fate in the erasure plan"],
+  },
+  {
+    path: "lib/popia/plan.ts",
+    // A fate dropped from the plan: gender would survive every erasure.
+    find: '    gender: "erase",\n',
+    replace: "",
+    expects: ["popia: every client-linked column has a fate in the erasure plan"],
+  },
+  {
     path: "lib/prisma.ts",
     // Listed as encrypted, wired to nothing: invoice's shape from 608598e until the fix.
     find: '      invoice: buildQueryExtension("invoice"),\n',

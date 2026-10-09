@@ -132,6 +132,16 @@ export async function GET(request: NextRequest) {
     detail,
   );
 
+  // POPIA: clinical records of erased clients whose five-year window has closed (lib/popia/).
+  await runTask(
+    "popiaRetentionPurge",
+    async () => {
+      const { purgeRetainedClinicalRecords } = await import("@/lib/popia/purge-retained");
+      return purgeRetainedClinicalRecords();
+    },
+    detail,
+  );
+
   // Dormant follow-up (dynamic import)
   await runTask(
     "dormantFollowUp",
