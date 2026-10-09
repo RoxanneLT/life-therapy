@@ -2,7 +2,7 @@
 /**
  * scripts/check-scope.mjs — the commit gate runs what the STAGED diff can affect; push runs everything.
  *
- * @kit check-scope v1 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything
+ * @kit check-scope v2 — tracked OUTSIDE its `KIT:CONFIG` region. The region is yours; everything
  * else is canon's, and `check-kit-drift.mjs` says so if it changes here.
  *
  *   node scripts/check-scope.mjs              print the plan for the current index
@@ -29,6 +29,9 @@
  *      commands ALL match a rule selects the union of their globs; ONE unmatched command makes the
  *      whole step "universal". An unrecognised step always runs: never skipped by default.
  *   "universal" runs on every scoped plan. "full" never runs scoped (it still runs at push).
+ *   { universal: [globs] } runs on every scoped plan AND counts those paths as read (v2, yoros CF-15):
+ *   a path only it reads is no longer "selected by no step". Plain "universal" claims nothing, so a
+ *   path only it reads still sends the commit to the whole chain.
  *
  * FALLS THROUGH TO THE WHOLE CHAIN — fail toward more checking:
  *   · the diff cannot be bounded (no HEAD yet, a shallow clone, a detached HEAD, git failing)
@@ -71,8 +74,11 @@ const EXTRA_FULL = []
  * globs are the files that command reads; when in doubt a rule says "universal", never narrower.
  */
 export const RULES = [
-  // Reads brief/ (often an untracked symlink no diff can show) or the whole always-loaded file set.
-  [/check-brief|delivery-report|check-claude-md|check-install-platform|check-deps-installed|check-mojibake/, "universal"],
+  // Universal: brief/ is often an untracked symlink no diff can show, and the rest read the whole tree.
+  // Each claims only what it certainly reads (yoros CF-15); a path beyond that still forces the chain.
+  [/check-brief|delivery-report/, { universal: ["brief/**"] }],
+  [/check-claude-md/, { universal: ["CLAUDE.md", ".claude/rules/**"] }],
+  [/check-install-platform|check-deps-installed|check-mojibake/, "universal"],
   [/\btsc\b|check-baseline\.mjs tsc/, [TS, "**/*.d.ts"]],
   [/\beslint\b|scripts\/lint\.mjs|check-baseline\.mjs eslint/, [SRC, "eslint-rules/**"]],
   [/\bknip\b|\bmadge\b|check-baseline\.mjs (knip|madge)|check-import-cycles/, [SRC]],
@@ -93,6 +99,9 @@ export const CONFIG = [
 const INERT = ["**/*.md", "docs/**"]
 
 const matches = (file, globs) => globs.some((g) => posix.matchesGlob(file, g))
+/** A selection that runs on every scoped plan, and the paths a selection counts as read. */
+const always = (v) => v === "universal" || Array.isArray(v?.universal)
+const claims = (v) => (Array.isArray(v) ? v : v?.universal ?? [])
 
 /** A script's ` && `-joined commands, trimmed. A plain split: a regex here backtracks on long chains. */
 const andList = (s) => s.split("&&").map((c) => c.trim())
@@ -110,16 +119,20 @@ export function expand(scripts, cmd, seen = new Set()) {
 /**
  * A step's selection: MAP first, else RULES over every command it expands to. Any universal command
  * makes the step universal; a "full" command adds nothing, so `selftest && tsc` stays selected by
- * tsc's globs; a step is "full" only when every command it runs is.
+ * tsc's globs; a step is "full" only when every command it runs is. A step holding a claiming
+ * universal command is { universal } over every glob its commands claim.
  */
 export function select(scripts, step, map = MAP, rules = RULES) {
   if (step in map) return map[step]
   const globs = new Set()
+  let runsAlways = false
   for (const cmd of expand(scripts, step)) {
     const rule = rules.find(([re]) => re.test(cmd))
     if (!rule || rule[1] === "universal") return "universal"
-    if (rule[1] !== "full") for (const g of rule[1]) globs.add(g)
+    if (always(rule[1])) runsAlways = true
+    for (const g of claims(rule[1])) globs.add(g)
   }
+  if (runsAlways) return { universal: [...globs] }
   return globs.size ? [...globs] : "full"
 }
 
@@ -137,10 +150,10 @@ export function plan(scripts, files, { map = MAP, scopedAs = SCOPED_AS, chain = 
   const cfg = files.find((f) => matches(f, CONFIG))
   if (cfg) return full(`${cfg} is configuration`)
   const sel = steps.map((s) => [s, select(scripts, s, map)])
-  const loose = files.find((f) => !matches(f, INERT) && !sel.some(([, v]) => Array.isArray(v) && matches(f, v)))
+  const loose = files.find((f) => !matches(f, INERT) && !sel.some(([, v]) => matches(f, claims(v))))
   if (loose) return full(`${loose} is selected by no step and is not inert`)
   const commands = sel
-    .filter(([, v]) => v === "universal" || (Array.isArray(v) && files.some((f) => matches(f, v))))
+    .filter(([, v]) => always(v) || (Array.isArray(v) && files.some((f) => matches(f, v))))
     .map(([s]) => scopedAs[s] ?? s)
   return { full: false, reason: `${files.length} staged path(s)`, commands }
 }
@@ -180,15 +193,27 @@ export function execute(p, run) {
 
 const sh = (cmd) => spawnSync(cmd, { stdio: "inherit", shell: true }).status ?? 1
 const HOOK_CALLS = { "pre-commit": "scripts/check-scope.mjs --commit", "pre-push": "scripts/check-scope.mjs --push" }
+/** The commands of canon's githook rows; canon's selftest proves its shipped files run exactly these. */
+const CANON_HOOKS = {
+  "pre-commit": `#!/bin/sh\nexec node ${HOOK_CALLS["pre-commit"]}\n`,
+  "pre-push": `#!/bin/sh\ncat > /dev/null\nexec node ${HOOK_CALLS["pre-push"]}\n`,
+}
 
-/** The hooks are wired when git reads .githooks and each hook calls this file. Returns findings. */
-export function wiring(hooksPath, read) {
+/**
+ * The hooks are wired when git reads .githooks and each hook calls this file. Returns findings.
+ * v2 (life-therapy CF-11): a project's own hook counts when it reaches the call through an
+ * `npm run X` that expands to it, and its pre-push when it runs PUSH itself. A `#` comment line
+ * naming the call never counts.
+ */
+export function wiring(hooksPath, read, scripts = {}, push = PUSH) {
   const out = []
   if (hooksPath !== ".githooks") out.push(`core.hooksPath is ${hooksPath ? `"${hooksPath}"` : "unset"}, not ".githooks" — add "prepare": "git config core.hooksPath .githooks || true" to package.json and run it once`)
   for (const [hook, call] of Object.entries(HOOK_CALLS)) {
     const text = read(`.githooks/${hook}`)
-    if (text === null) out.push(`.githooks/${hook} is missing`)
-    else if (!text.includes(call)) out.push(`.githooks/${hook} does not call ${call}`)
+    if (text === null) { out.push(`.githooks/${hook} is missing`); continue }
+    const body = text.split("\n").filter((l) => !l.trimStart().startsWith("#")).join("\n")
+    const viaNpm = [...body.matchAll(/npm run ([\w:.-]+)/g)].some((m) => expand(scripts, `npm run ${m[1]}`).some((c) => c.includes(call)))
+    if (!body.includes(call) && !viaNpm && !(hook === "pre-push" && body.includes(push))) out.push(`.githooks/${hook} does not call ${call}`)
   }
   return out
 }
@@ -204,7 +229,7 @@ function main() {
   if (flag("--wired")) {
     let hp = null
     try { hp = git(["config", "core.hooksPath"]) } catch { /* unset */ }
-    const found = wiring(hp, (p) => (existsSync(p) ? readFileSync(p, "utf8") : null))
+    const found = wiring(hp, (p) => (existsSync(p) ? readFileSync(p, "utf8") : null), scripts)
     for (const f of found) console.log(`  ✗ ${f}`)
     console.log(found.length ? "check-scope --wired → the commit and push gates are NOT wired" : "check-scope --wired → .githooks/pre-commit and pre-push are wired")
     process.exit(found.length ? 1 : 0)
@@ -272,7 +297,18 @@ function selftest() {
   const bt = select({ t: "node scripts/check-baseline.mjs --selftest && node scripts/check-baseline.mjs tsc" }, "npm run t")
   ok(Array.isArray(bt) && bt.includes(TS), "a selftest beside a tool does not hide the tool: `selftest && tsc` is selected by tsc's globs", JSON.stringify(bt))
   ok(select({ s: "node scripts/check-x.mjs --selftest" }, "npm run s") === "full", "a step that is only a kit selftest never runs scoped — its source is under scripts/**")
-  ok(select({ s: "node scripts/check-brief.mjs --selftest" }, "npm run s") === "universal", "KNOWN-GOOD: a universal checker's selftest stays universal (first rule wins)")
+  ok(always(select({ s: "node scripts/check-brief.mjs --selftest" }, "npm run s")), "KNOWN-GOOD: a universal checker's selftest stays universal (first rule wins)")
+  const mixed = select({ m: "node scripts/check-brief.mjs . && tsc --noEmit" }, "npm run m")
+  ok(always(mixed) && claims(mixed).includes("brief/**") && claims(mixed).includes(TS), "a claiming universal command beside tsc: runs always, and claims both", JSON.stringify(mixed))
+
+  // yoros CF-15: a path read only by a universal step was "selected by no step", so it forced the chain.
+  const probe = { check: "node scripts/probe.mjs && tsc --noEmit" }
+  const probeMap = { "node scripts/probe.mjs": { universal: [".claude/**"] } }
+  const spine = plan(probe, [".claude/agents/x.md"], { map: probeMap })
+  ok(!spine.full && JSON.stringify(spine.commands) === JSON.stringify(["node scripts/probe.mjs"]), "a path a { universal } step claims is read: scoped, that step only", JSON.stringify(spine))
+  ok(plan(probe, [".handoff/x.json"], { map: probeMap }).full, "PLANTED: a path beyond a { universal } step's claims still forces the whole chain")
+  ok(plan(probe, [".claude/agents/x.md"], { map: { "node scripts/probe.mjs": "universal" } }).full, "PLANTED: plain \"universal\" claims nothing — the same path forces the whole chain")
+  ok(!plan(scripts, ["brief/EVIDENCE.json"]).full, "canon's check-brief rule claims brief/**: a brief-only diff is scoped")
 
   const docs = plan(scripts, ["docs/notes/x.md"])
   ok(!docs.full && JSON.stringify(docs.commands) === JSON.stringify(universal), "a docs-only diff runs exactly the universal steps", JSON.stringify(docs))
@@ -309,6 +345,12 @@ function selftest() {
   ok(wiring(null, (p) => hooks[p] ?? null).length === 1, "an unset core.hooksPath is not wired — git would run nothing")
   ok(wiring(".githooks", (p) => (p.endsWith("pre-push") ? null : hooks[p])).length === 1, "a missing pre-push is not wired")
   ok(wiring(".githooks", (p) => (p.endsWith("pre-commit") ? "#!/bin/sh\nnpm run check\n" : hooks[p])).length === 1, "a pre-commit that does not call this file is not wired")
+  // life-therapy CF-11: a project's own hooks, reaching this file through npm scripts.
+  const own = { ".githooks/pre-commit": '#!/bin/sh\nCMD="npm run check:commit"\n$CMD\n', ".githooks/pre-push": '#!/bin/sh\nCMD="npm run check:push"\n$CMD\n' }
+  const ownScripts = { "check:commit": "node scripts/check-scope.mjs --commit", "check:push": "npm run check && npm run build" }
+  ok(wiring(".githooks", (p) => own[p] ?? null, ownScripts, "npm run check:push").length === 0, "KNOWN-GOOD: a hook reaching this file through `npm run`, and a pre-push running PUSH, are wired", JSON.stringify(wiring(".githooks", (p) => own[p] ?? null, ownScripts, "npm run check:push")))
+  ok(wiring(".githooks", (p) => own[p] ?? null, { ...ownScripts, "check:commit": "npm run check" }, "npm run check:push").length === 1, "PLANTED: an `npm run` that does not reach this file is not wired")
+  ok(wiring(".githooks", (p) => (p.endsWith("pre-commit") ? `#!/bin/sh\n# runs ${HOOK_CALLS["pre-commit"]}\nnpm run check\n` : hooks[p])).length === 1, "PLANTED: a comment naming the call is not a call")
 
   // The real diff reader, in a scratch repository: staged paths only, renames carry both sides.
   const dir = mkdtempSync(join(tmpdir(), "check scope "))
@@ -332,11 +374,23 @@ function selftest() {
   }
 
   // THE HOOKS THEMSELVES, driven by real commits and pushes. Canon passes its kit copies with
-  // `--hook`; a project's own .githooks/ is used when none is passed.
+  // `--hook`. A project's .githooks/<hook> is used only when it is canon's row (its @kit marker);
+  // otherwise canon's own commands are (v2, life-therapy CF-11): a project that keeps its own hooks
+  // is held by --wired, and this proves the file its hooks reach.
   const given = process.argv.flatMap((a, i) => (process.argv[i - 1] === "--hook" ? [a] : []))
-  const hookFiles = Object.fromEntries(Object.keys(HOOK_CALLS).map((h) => [h, given.find((p) => p.endsWith(h)) ?? `.githooks/${h}`]))
-  if (Object.values(hookFiles).some((p) => !existsSync(p))) {
-    console.log(`  ⊘ the hooks were NOT exercised: ${Object.values(hookFiles).filter((p) => !existsSync(p)).join(", ")} not found`)
+  const hookBytes = Object.fromEntries(Object.keys(HOOK_CALLS).map((h) => {
+    const p = given.find((g) => g.endsWith(h)) ?? `.githooks/${h}`
+    const text = existsSync(p) ? readFileSync(p, "utf8") : ""
+    return [h, given.includes(p) || text.includes(`@kit githook-${h} `) ? text : CANON_HOOKS[h]]
+  }))
+  for (const p of given) {
+    const h = Object.keys(HOOK_CALLS).find((k) => p.endsWith(k))
+    const cmds = (t) => t.split("\n").filter((l) => l.trim() && !l.startsWith("#")).join("\n")
+    ok(h && cmds(readFileSync(p, "utf8")) === cmds(CANON_HOOKS[h]), `${p} runs exactly the commands this selftest drives when a project keeps its own hooks`)
+  }
+  const pushScripts = andList(PUSH).map((c) => /^npm run ([\w:.-]+)$/.exec(c)?.[1])
+  if (pushScripts.includes(undefined)) {
+    console.log(`  ⊘ the hooks were NOT exercised: PUSH ("${PUSH}") is not a chain of \`npm run\` scripts, so a scratch repository cannot stand in for it`)
   } else {
     const repo = mkdtempSync(join(tmpdir(), "check scope hooks "))
     const remote = mkdtempSync(join(tmpdir(), "check scope remote "))
@@ -344,12 +398,15 @@ function selftest() {
     const commits = () => Number(r(["rev-list", "--count", "HEAD"]).stdout.trim() || 0)
     const gate = (code) => writeFileSync(join(repo, "gate.txt"), String(code))
     try {
-      r(["init", "-q", "-b", "main"]); r(["config", "user.email", "s@t"]); r(["config", "user.name", "s"]); r(["config", "commit.gpgsign", "false"])
+      // Not the default branch's name, so a project's BRANCH_GUARD = true does not refuse the probe.
+      r(["init", "-q", "-b", "scope-probe"]); r(["config", "user.email", "s@t"]); r(["config", "user.name", "s"]); r(["config", "commit.gpgsign", "false"])
       r(["init", "-q", "--bare", "-b", "main"], remote)
       mkdirSync(join(repo, "scripts")); mkdirSync(join(repo, ".githooks"))
       writeFileSync(join(repo, "scripts", "check-scope.mjs"), readFileSync(resolve(process.argv[1]), "utf8"))
-      for (const [h, p] of Object.entries(hookFiles)) { writeFileSync(join(repo, ".githooks", h), readFileSync(p, "utf8")); chmodSync(join(repo, ".githooks", h), 0o755) }
-      writeFileSync(join(repo, "package.json"), JSON.stringify({ scripts: { check: "node chain.mjs" } }))
+      for (const [h, text] of Object.entries(hookBytes)) { writeFileSync(join(repo, ".githooks", h), text); chmodSync(join(repo, ".githooks", h), 0o755) }
+      // The copy carries this project's KIT:CONFIG, so CHAIN and every script PUSH names must exist.
+      const chainScripts = Object.fromEntries([CHAIN, ...pushScripts].map((s) => [s, "node chain.mjs"]))
+      writeFileSync(join(repo, "package.json"), JSON.stringify({ scripts: chainScripts }))
       writeFileSync(join(repo, "chain.mjs"), 'import { readFileSync } from "node:fs"\nprocess.exit(Number(readFileSync("gate.txt", "utf8")))\n')
       r(["config", "core.hooksPath", ".githooks"])
       const wired = spawnSync(process.execPath, ["scripts/check-scope.mjs", "--wired"], { cwd: repo, encoding: "utf8", env })
@@ -362,11 +419,11 @@ function selftest() {
       gate(0); r(["add", "gate.txt"]); r(["commit", "-q", "-m", "second"])
       r(["remote", "add", "origin", remote])
       gate(1)
-      const blocked = r(["push", "-q", "origin", "main"])
-      ok(blocked.status !== 0 && r(["rev-parse", "--verify", "-q", "main"], remote).status !== 0, "PLANTED: pre-push REFUSES a push when the whole chain fails — nothing reaches the remote", blocked.stderr)
+      const blocked = r(["push", "-q", "origin", "scope-probe"])
+      ok(blocked.status !== 0 && r(["rev-parse", "--verify", "-q", "scope-probe"], remote).status !== 0, "PLANTED: pre-push REFUSES a push when the whole chain fails — nothing reaches the remote", blocked.stderr)
       gate(0)
-      const pushed = r(["push", "-q", "origin", "main"])
-      ok(pushed.status === 0 && r(["rev-parse", "--verify", "-q", "main"], remote).status === 0, "KNOWN-GOOD: pre-push lets a green chain through", pushed.stderr)
+      const pushed = r(["push", "-q", "origin", "scope-probe"])
+      ok(pushed.status === 0 && r(["rev-parse", "--verify", "-q", "scope-probe"], remote).status === 0, "KNOWN-GOOD: pre-push lets a green chain through", pushed.stderr)
     } finally {
       rmSync(repo, { recursive: true, force: true })
       rmSync(remote, { recursive: true, force: true })

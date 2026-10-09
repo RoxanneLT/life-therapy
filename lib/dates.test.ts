@@ -1,7 +1,7 @@
 /**
  * Boundary tests for lib/dates.ts.
  *
- * @kit dates-test v3 — tracked. Edit it in dev-standards and re-adopt.
+ * @kit dates-test v4 — tracked. Edit it in dev-standards and re-adopt.
  *
  * Every fixture probes a specific edge and says which side of it it sits on.
  * The point is not coverage — it's that a future green run proves the *spec*
@@ -74,6 +74,14 @@ test(`[${TZ}] strings that DO carry a zone are accepted`, () => {
   assert.equal(saDateStr("2026-07-08T22:00:00Z"), "2026-07-09");
   assert.equal(saDateStr("2026-07-09T00:00:00+02:00"), "2026-07-09");
   assert.equal(saDateStr("2026-07-08"), "2026-07-08"); // date-only = a day, unambiguous
+});
+
+test(`[${TZ}] a zoned string naming a day that does not exist throws, as a date-only one does`, () => {
+  // life-therapy CF-10 (L-108): the zoned fast path checked only for NaN, and V8 rolls these forward.
+  assert.throws(() => saDateStr("2026-02-30T10:00Z"), /not a real date/); // was 2026-03-02
+  assert.throws(() => saDateStr("2026-11-31T10:00:00.000Z"), /not a real date/); // was 2026-12-01
+  assert.throws(() => diffSaDays("2026-02-30T10:00+02:00", "2026-03-01"), /not a real date/);
+  assert.equal(saDateStr("2028-02-29T10:00:00+02:00"), "2028-02-29"); // a real leap day still passes
 });
 
 // ── Fail closed: never hand back an Invalid Date ─────────────────────────────

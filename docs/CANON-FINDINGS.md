@@ -39,53 +39,7 @@ CF-7 and CF-8 are filed (below): canon took them at `647fd38` and `c4bc731`.
 
 CF-9 is filed too: canon took it at `baba8d8`.
 
-### CF-10 · `dates` v2 carries L-108: its zoned-string fast path rolls a day that does not exist
-
-    OBSERVED   toInstant() in kit lib/dates.ts sends an ISO string that already carries an offset down
-               a branch that checks only for NaN (line 129: `if (ZONED_ISO.test(value)) return
-               assertRealDate(new Date(value), fn, value)`). The date-only branch beside it runs
-               assertSaDateStr, which round-trips the day. So L-108's own inputs roll silently in every
-               public helper that takes a string (saDateStr, and diffSaDays and the others through toInstant).
-    COMMAND    a scratch tsx script importing saDateStr from ./lib/dates (dates v2, canon's bytes):
-               "2026-02-30T10:00Z" -> 2026-03-02
-               "2026-11-31T10:00:00.000Z" -> 2026-12-01
-               "2026-02-30" -> throws: calendarDate: "2026-02-30" is not a real date.
-    WHY IT IS  The file is a tracked kit row with no config region over toInstant, so every adopter runs
-    CANON'S    these bytes and has the same defect, whatever its stack. It is the incident L-108 records
-               for pleks's saWallClockToInstant, in canon's own helper. The suite misses it the way L-108
-               predicts: dates.test.ts holds must-throw cases for the date-only branch, and none for the
-               zoned branch.
-    SMALLEST   In toInstant's ZONED_ISO branch, run assertSaDateStr(value.slice(0, 10), fn) before parsing
-    FIX        (the slice is of a string, not a Date). Add one must-throw case per branch to the kit's
-               dates.test.ts, using the two inputs above. It must not break the fast path's acceptance
-               of a real zoned instant, or the Date and date-only branches. This project answers L-108
-               with a date once the carry lands, and not before.
-
-### CF-11 · `check-scope` v1's selftest cannot pass in a project that keeps its own git hooks
-
-    OBSERVED   With canon's bytes and no config change, `node scripts/check-scope.mjs --selftest` fails 3
-               probes here. Its hook section drives the PROJECT's .githooks/ (or --hook paths), and it
-               expects canon's one-line hooks. The handover for this adoption
-               (docs/handovers/2026-10-09-life-therapy-commit-and-merge.md §1) says to keep our own
-               pre-commit, because prepare-commit-msg reads its marker.
-    COMMAND    node scripts/check-scope.mjs --selftest   (canon HEAD bytes, unconfigured)
-                 ✗ KNOWN-GOOD: a repository with the hooks installed and core.hooksPath set reports wired
-                     ✗ .githooks/pre-commit does not call scripts/check-scope.mjs --commit
-                 ✗ PLANTED: pre-commit REFUSES a commit when a step its scope selects fails
-                     pre-commit → npm run check
-                 ✗ KNOWN-GOOD: pre-push lets a green chain through
-                     npm error Missing script: "check:push"
-                 ❌ 3 probe(s) wrong
-    WHY IT IS  Any project that keeps its own hooks fails, whatever its stack, and so does any project
-    CANON'S    whose push command is not `npm run check`, because the scratch repo defines only `check`.
-               Canon's own handover tells this project to set PUSH = "npm run check:push". `--wired` also
-               greps for the literal `scripts/check-scope.mjs --commit`, so a hook that reaches it
-               through an npm script reads as unwired. The selftest can therefore not join this gate.
-    SMALLEST   Separate the selftest from the project's hooks unless asked: exercise the kit's own hook
-    FIX        bytes, embedded as the wiring fixture already does, and give the scratch repo a script for
-               whatever PUSH names. Let --wired accept a hook that runs an npm script whose body is
-               `check-scope.mjs --commit`. It must not weaken the real-commit and real-push probes for a
-               project that does adopt canon's hooks.
+CF-10 and CF-11 are filed (below): canon took both at `972decc`.
 
 ### CF-12 · The db-tests handover's §1 assumes `prisma migrate`; this owner chose re-runnable grouped SQL, and Prisma 7 moved the flags
 
@@ -182,6 +136,7 @@ off this table and it stays open.
 | L-104 | 2026-09-14 | the commit that adds this row takes bash-gate v8 (canon `dc7b225`). Canon's table for this lesson, run through this project's gate with each payload on stdin: the committed v7 → deny, allow, allow, allow, allow; the v8 in this commit → deny, deny, deny, deny, allow, which is canon's column. Its probe passes 195 cases with this project's 29 tightened verdicts. The other shell-reading hooks: `ddl-gate` masks no text, and `agent-write-scope` has no message masker (v6 is in the same commit). The audit's `code()` skips string literals as prose, but it reads source, which no shell runs |
 | L-106 | 2026-10-03 | found here the day canon filed it, and fixed before push. Guest buy-now refused a staff address "as registration refuses it", copying registration's refusal by its shape. Registration's refusal is invisible: it runs in `after()`, once the same answer has gone out. Buy-now's path promises the same answer for every address, so the copy became a visible 500 that says which address is a staff login (`.handoff/guest-buy-now/04-walker.md` W1, cleared since; the quote is in CF-7). The kept refusal now argues its own case at the site (`lib/guest-purchase.ts`, "THE ONE EXCEPTION…", `afd4253`). The money allowlist entry added the same day states what it shares with its precedent rather than pointing at it ("the same Order pipeline as checkout… resolves in ZAR, charges Paystack in ZAR", `scripts/architecture-audit.mjs`). The standing carry is CLAUDE.md §4: every allowlist entry carries its own reason, and `allowlists: every exemption is still load-bearing` fails one that stops suppressing |
 | L-107 | 2026-09-30 | `walk` v1 (`37104c4`, canon's bytes from `de8af9d`): "A census brief names the synonym spellings and one known positive: a zero counts only when the search demonstrably finds that positive". CLAUDE.md §8 (`691778f`, the L-43 row): "An absence claim is the dangerous shape, so state the search space and ask what could reach it from outside". Both hold for a grep run by an agent or by the main session. Neither is mechanical, as the entry says |
+| L-108 | 2026-10-09 | `dates` v3 and `dates-test` v4 carried from canon `972decc` (CF-10, this project's finding). The ZONED_ISO branch of `toInstant` now round-trips the date part before parsing, so `"2026-02-30T10:00Z"` throws instead of becoming 2026-03-02. The must-throw case is in `lib/dates.test.ts`, green here under the gate. Carried as canon's bytes, proved outside the KIT:CONFIG regions against `git show HEAD:` in canon |
 
 ---
 
@@ -242,3 +197,5 @@ A pointer, not a restatement — the canon entry is the record.
 | §3 | `check-brief` v7 (`beabdc0`); canon's v6 pin was finished work | pin removed | `a152e89` |
 | §3 | Thirteen rows moved to canon `2e79fdb` (`8d29b98`); their thirteen pins were finished work | all pins removed | `c06491c` |
 | §3 | Three rows moved to canon `98f9636` (`f04797b`) | read at this project's HEAD: `check-hook-registration`'s pin removed; `bash-gate` and its probe re-pinned at v7, behind v8 | `dc7b225` |
+| CF-10 | `dates` v2 carried L-108: its zoned-string fast path rolled a day that does not exist | `dates` v3 round-trips the date part first; `dates-test` v4 adds the must-throw case. Carried here, and L-108 answered in §2 | `972decc` |
+| CF-11 | `check-scope` v1's selftest could not pass in a project that keeps its own git hooks | `check-scope` v2 drives a project's hooks only when they carry canon's `@kit` marker; its scratch repo defines CHAIN and every PUSH script. Carried here: the selftest is green | `972decc` |

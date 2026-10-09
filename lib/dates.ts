@@ -1,7 +1,7 @@
 /**
  * lib/dates.ts — the single place that knows about the business timezone.
  *
- * @kit dates v2 — tracked. Edit it in dev-standards and re-adopt; a local change
+ * @kit dates v3 — tracked. Edit it in dev-standards and re-adopt; a local change
  * here is a fork, and `check-kit-drift.mjs` will say so.
  *
  * Two rules, and every bug in this area comes from confusing them:
@@ -126,7 +126,12 @@ function assertSaDateStr(dateStr: string, fn: string): string {
 function toInstant(value: Date | string, fn: string): Date {
   if (value instanceof Date) return assertRealDate(value, fn, value.toString());
   if (DATE_ONLY.test(value)) return calendarDate(value);
-  if (ZONED_ISO.test(value)) return assertRealDate(new Date(value), fn, value);
+  // v3 (life-therapy CF-10, L-108): the NaN check alone rolls "2026-02-30T10:00Z" to 2 March, in
+  // silence. The date part is round-tripped first, as the date-only branch above does.
+  if (ZONED_ISO.test(value)) {
+    assertSaDateStr(value.slice(0, 10), fn);
+    return assertRealDate(new Date(value), fn, value);
+  }
   throw new TypeError(
     `${fn}: ${JSON.stringify(value)} has no timezone. Pass a Date, "YYYY-MM-DD", ` +
       `or an ISO string ending in Z or ±HH:MM — a zone-less datetime resolves ` +
