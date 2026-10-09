@@ -10,6 +10,16 @@
 # Ported from pleks/.githooks/pre-commit (M-007 there), with the rebase carve-out in
 # prepare-commit-msg added here — see that file's header for what was measured.
 #
+# SCOPED since 2026-10-09 (canon's 6-COMMIT-AND-MERGE §1). `check:commit` is
+# `scripts/check-scope.mjs --commit`: it runs only the steps of `check` that the staged diff can
+# affect, and the whole chain when the diff touches the gate itself, config, or a path no step
+# claims. pre-push still runs everything (`check:push`), so a scoped commit skips a step for one
+# local commit and never for what reaches origin. Canon's own `githook-pre-commit` row is NOT
+# adopted: it is one `exec` line, with no seam and no marker, and prepare-commit-msg reads the
+# marker this file writes. That keeps cherry-pick and revert gated (docs/CANON-FINDINGS.md §3).
+# pre-merge-commit and prepare-commit-msg still run the whole chain: those paths are rare, and
+# both fail toward checking more.
+#
 # LT_PRECOMMIT_CMD is a probe seam so `check-git-hooks.mjs` can drive both directions without a
 # multi-minute run. It is INERT unless LT_HOOK_PROBE=1 is set alongside it: with one variable it
 # would be `--no-verify` with extra steps, which is a bypass this repo does not want to own. Two
@@ -18,7 +28,7 @@ set -e
 if [ -n "$LT_PRECOMMIT_CMD" ] && [ "$LT_HOOK_PROBE" = "1" ]; then
   CMD="$LT_PRECOMMIT_CMD"
 else
-  CMD="npm run check"
+  CMD="npm run check:commit"
 fi
 echo "pre-commit → $CMD"
 $CMD

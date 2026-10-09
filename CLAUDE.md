@@ -189,7 +189,7 @@ Two domains, **one deployment**, region decided per-request from the hostname:
 
 | Gate | Command | Held by |
 |---|---|---|
-| Before every commit | `npm run check` | `.githooks/pre-commit` — and `prepare-commit-msg` for the paths git skips it on |
+| Before every commit | `npm run check:commit` — the steps of `check` the staged diff can affect (`scripts/check-scope.mjs`; `npm run check:scope` prints the plan). The whole chain when the diff touches the gate, config, or a path no step claims | `.githooks/pre-commit` — and `prepare-commit-msg`, unscoped, for the paths git skips it on |
 | Before every push | `npm run check:push` (`check`, then the production build Vercel runs), then wait to be asked | `.githooks/pre-push` |
 | Before every deploy | Vercel builds from `master`; there is no separate deploy step | — |
 

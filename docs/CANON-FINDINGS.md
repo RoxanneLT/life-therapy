@@ -61,6 +61,32 @@ CF-9 is filed too: canon took it at `baba8d8`.
                of a real zoned instant, or the Date and date-only branches. This project answers L-108
                with a date once the carry lands, and not before.
 
+### CF-11 · `check-scope` v1's selftest cannot pass in a project that keeps its own git hooks
+
+    OBSERVED   With canon's bytes and no config change, `node scripts/check-scope.mjs --selftest` fails 3
+               probes here. Its hook section drives the PROJECT's .githooks/ (or --hook paths), and it
+               expects canon's one-line hooks. The handover for this adoption
+               (docs/handovers/2026-10-09-life-therapy-commit-and-merge.md §1) says to keep our own
+               pre-commit, because prepare-commit-msg reads its marker.
+    COMMAND    node scripts/check-scope.mjs --selftest   (canon HEAD bytes, unconfigured)
+                 ✗ KNOWN-GOOD: a repository with the hooks installed and core.hooksPath set reports wired
+                     ✗ .githooks/pre-commit does not call scripts/check-scope.mjs --commit
+                 ✗ PLANTED: pre-commit REFUSES a commit when a step its scope selects fails
+                     pre-commit → npm run check
+                 ✗ KNOWN-GOOD: pre-push lets a green chain through
+                     npm error Missing script: "check:push"
+                 ❌ 3 probe(s) wrong
+    WHY IT IS  Any project that keeps its own hooks fails, whatever its stack, and so does any project
+    CANON'S    whose push command is not `npm run check`, because the scratch repo defines only `check`.
+               Canon's own handover tells this project to set PUSH = "npm run check:push". `--wired` also
+               greps for the literal `scripts/check-scope.mjs --commit`, so a hook that reaches it
+               through an npm script reads as unwired. The selftest can therefore not join this gate.
+    SMALLEST   Separate the selftest from the project's hooks unless asked: exercise the kit's own hook
+    FIX        bytes, embedded as the wiring fixture already does, and give the scratch repo a script for
+               whatever PUSH names. Let --wired accept a hook that runs an npm script whose body is
+               `check-scope.mjs --commit`. It must not weaken the real-commit and real-push probes for a
+               project that does adopt canon's hooks.
+
 ---
 
 ## 2 · Lesson answers
@@ -143,6 +169,7 @@ never *exempt*, so the reason has to argue it.
 | two rows | `bash-gate` v17 · `bash-gate-probe` v17 | carried 2026-10-08 by `apply-kit life-therapy --carry-only --write` from canon `2c2bbb9`. That covers v16 (`2263b93`) and v17 (`b9f9979`, pleks CF-21). Canon's `status --short` was empty before and after. Outside the `KIT:CONFIG` regions, each file equals `git show HEAD:` in canon. Every region is unchanged from this project's HEAD. Two new cases reach `reset --hard`, which this project denies (§3), so `verdicts` now holds 38. No bash-gate rule changed (isForcePush and LETHAL_TARGET are untouched by the diff), so the two `@probed-kit` twin records move to v17 with their dates kept. **Clears the v17 floor; record both at v17.** | the commit that adds this row · `bash-gate.probe` → `385 probes pass, both directions, 38 verdict(s) tightened by this project` · `--against` v15 → `385 cases through both gates — 0 looser (0 declared), 33 stricter` · `check-hook-registration` → green · `npm run check` → exit 0 |
 | two rows | `context-budget` v1 · `check-context-budget` v1 | adopted 2026-10-08 from canon `2c2bbb9` (`git show HEAD:`), at the inbox's request: both files were at a kit path and were not canon's copy. They were this project's earlier port of pleks's bytes. Canon's changes over that port are `liveMode` / `snapshotNow`, the `\uFEFF` escape, and the probe's `--hook` / `--settings` flags with `process.execPath`. The `thresholds` region is new here and holds this project's values, unchanged (WARN 180,000, STOP 450,000, either side of `autoCompactWindow` 300,000). Canon's `status --short` was empty before and after. Outside the region, each file equals canon HEAD. Taken with CF-9 open, unedited. **Record both as adopted at v1.** | the commit that adds this row · `check-context-budget` → `probes green` · `check-hook-registration` → green · `npm run check` → exit 0 |
 | six rows | `bash-gate` v18 · `bash-gate-probe` v18 · `canon-inbox` v5 · `canon-inbox-probe` v6 · `context-budget` v2 · `check-context-budget` v2 | carried 2026-10-08 by `apply-kit life-therapy --carry-only --write` from canon `37a030c`. Canon's `status --short` was empty before and after. Outside the `KIT:CONFIG` regions, each file equals `git show HEAD:` in canon. Every region is unchanged from this project's HEAD. context-budget v2 answers CF-9 (now filed). No bash-gate rule changed, so the `@probed-kit` twin records move to v18 with their dates kept. No new case reaches `reset --hard`, so `verdicts` stays at 38. **Clears the v18 floor; record all six at these versions.** | the commit that adds this row · `bash-gate.probe` → `409 probes pass, both directions, 38 verdict(s) tightened by this project` · `--against` v17 → `409 cases through both gates — 0 looser (0 declared), 16 stricter` · `canon-inbox.probe` → `29 held, 1 advisory` · `check-context-budget` → green · `npm run check` → exit 0 |
+| check-scope | `check-scope` v1 adopted · `githook-pre-commit` and `githook-pre-push` deliberately NOT adopted | 2026-10-09, from canon `06571fb` (`git show HEAD:`), per the commit-and-merge handover. The `scope` region sets only `PUSH = "npm run check:push"` (CHAIN `check`, BRANCH_GUARD false, MAP empty). Outside it, the file equals canon HEAD. `.githooks/pre-commit` now runs `npm run check:commit` (= `check-scope.mjs --commit`) and keeps its probe seam and its `lt-gate-ok` marker, which `prepare-commit-msg` reads to gate cherry-pick and revert. That is why canon's one-line hooks are not taken: the handover's own condition. pre-push already ran the whole chain plus the build, and is unchanged. Not in this gate: `check-scope --selftest` (CF-11). Dry plans: docs-only 6 of 14 steps, one `lib/` file 11, one `.claude/agents` file 8. | the commit that adds this row · `check-git-hooks` → green · `npm run check` → exit 0 |
 
 No pins.
 

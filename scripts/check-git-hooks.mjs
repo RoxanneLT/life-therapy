@@ -25,7 +25,8 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 const HOOKS = [
-  { file: ".githooks/pre-commit", env: "LT_PRECOMMIT_CMD", cmd: "npm run check" },
+  // Scoped since 2026-10-09: `check:commit` runs the steps the staged diff can affect.
+  { file: ".githooks/pre-commit", env: "LT_PRECOMMIT_CMD", cmd: "npm run check:commit" },
   // A push also runs the production build: a push is when Vercel builds, and nothing else here walks
   // the client bundle graph. From 2026-08-19 to 2026-09-11 every deploy failed on an error only
   // `next build` could see, while every gate here passed.
