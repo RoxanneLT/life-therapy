@@ -5,12 +5,15 @@ import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
 import { BookingsChart } from "@/components/admin/bookings-chart";
 import { RevenueChart } from "@/components/admin/revenue-chart";
 import { YearSelector } from "@/components/admin/year-selector";
+import { canAccess } from "@/lib/admin-access";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 
 /** The year's activity charts: the heaviest queries on the page, so they stream in last. */
 export async function DashboardCharts({ role, year }: Readonly<{ role: AdminRole; year: number }>) {
-  const showBookings = role === "super_admin" || role === "editor";
-  const showRevenue = role === "super_admin";
+  // Each chart shows to the roles that can open the page its numbers come from, read
+  // from the one access map rather than a role list of its own that can drift from it.
+  const showBookings = canAccess("/admin/bookings", role);
+  const showRevenue = canAccess("/admin/invoices", role);
   if (!showBookings && !showRevenue) return null;
 
   const [bookingsByMonth, revenueByMonth] = await Promise.all([
