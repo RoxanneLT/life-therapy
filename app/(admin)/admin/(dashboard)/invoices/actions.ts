@@ -230,12 +230,14 @@ export async function markPaymentRequestPaidFromListAction(
   const isPartial = newPaidAmount < pr.totalCents;
 
   // Partial payment: the request stays unpaid, invoice shows what has been received so far. Its
-  // status is left as it was: writing "pending" turned an overdue request back into a current one
-  // (walk-oct-fixes 01, F7).
+  // status is written back as it was read: createInvoiceFromPaymentRequest has just set it to
+  // "paid", so this write is what keeps the balance chased. Writing "pending" here turned an
+  // overdue request back into a current one (walk-oct-fixes 01, F7); writing nothing left a
+  // part-paid request "paid" (walk-oct-final 01, F1).
   if (isPartial) {
     await prisma.paymentRequest.update({
       where: { id: paymentRequestId },
-      data: { paidAmountCents: newPaidAmount },
+      data: { status: pr.status, paidAmountCents: newPaidAmount },
     });
     await prisma.invoice.update({
       where: { id: invoice.id },
