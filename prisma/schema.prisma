@@ -1062,7 +1062,7 @@ model Invoice {
   // Payment tracking
   status             String          @default("draft") // "draft" | "payment_requested" | "paid" | "overdue" | "cancelled" | "credited"
   paymentMethod      String?         // "paystack" | "eft" | "cash" | "card"
-  paystackReference  String?
+  paystackReference  String?         @unique  // One invoice per charge (prisma/sql/40_billing.sql)
   paymentUrl         String?
   paidAt             DateTime?
   paidAmountCents    Int?

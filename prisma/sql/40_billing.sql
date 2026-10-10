@@ -64,6 +64,11 @@ CREATE TABLE IF NOT EXISTS "invoices" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "invoices_invoiceNumber_key" ON "invoices"("invoiceNumber");
 
+-- One invoice per Paystack charge (owner's approval, 2026-10-10). Two deliveries of one charge racing past
+-- the webhook's reference checks each made a tax invoice; the second now fails and its retry finds the
+-- first (walk-oct-payments-2, W3). NULLs are distinct, so invoices with no charge are unaffected.
+CREATE UNIQUE INDEX IF NOT EXISTS "invoices_paystackReference_key" ON "invoices"("paystackReference");
+
 CREATE INDEX IF NOT EXISTS "invoices_studentId_idx" ON "invoices"("studentId");
 
 CREATE INDEX IF NOT EXISTS "invoices_billingEntityId_idx" ON "invoices"("billingEntityId");
