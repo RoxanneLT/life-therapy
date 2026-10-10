@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { addSaDays } from "@/lib/dates";
 import { Download, FileText, Loader2 } from "lucide-react";
 import {
   exportInvoiceRegister,
@@ -125,7 +126,7 @@ export function ExportTab({ currentFY, fyOptions }: ExportTabProps) {
             loading={loading === "fy-invoices"}
             onClick={() => {
               const fyFrom = `${fy - 1}-03-01`;
-              const fyTo = `${fy}-02-28`;
+              const fyTo = addSaDays(`${fy}-03-01`, -1); // 28 or 29 Feb: a leap FY ends on the 29th
               handleExport("fy-invoices", () =>
                 exportInvoiceRegister(fyFrom, fyTo)
               );
@@ -137,7 +138,7 @@ export function ExportTab({ currentFY, fyOptions }: ExportTabProps) {
             loading={loading === "fy-sessions"}
             onClick={() => {
               const fyFrom = `${fy - 1}-03-01`;
-              const fyTo = `${fy}-02-28`;
+              const fyTo = addSaDays(`${fy}-03-01`, -1); // 28 or 29 Feb: a leap FY ends on the 29th
               handleExport("fy-sessions", () =>
                 exportSessionRegister(fyFrom, fyTo)
               );
