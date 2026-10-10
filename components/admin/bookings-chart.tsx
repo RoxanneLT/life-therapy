@@ -10,6 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { MonthlyBookingData } from "@/lib/dashboard-queries";
+import { cn } from "@/lib/utils";
 
 const chartConfig = {
   individual: {
@@ -28,11 +29,13 @@ const chartConfig = {
 
 interface BookingsChartProps {
   readonly data: MonthlyBookingData[];
+  /** Sizing from the caller; 300px tall when none is given. */
+  readonly className?: string;
 }
 
-export function BookingsChart({ data }: BookingsChartProps) {
+export function BookingsChart({ data, className = "h-[300px]" }: BookingsChartProps) {
   return (
-    <ChartContainer config={chartConfig} className="h-[300px] w-full">
+    <ChartContainer config={chartConfig} className={cn("aspect-auto w-full", className)}>
       <BarChart data={data} accessibilityLayer>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={0} />

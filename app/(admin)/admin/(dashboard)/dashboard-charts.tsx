@@ -16,32 +16,40 @@ export async function DashboardCharts({ role, year }: Readonly<{ role: AdminRole
     showRevenue ? getRevenueByMonth(year) : null,
   ]);
 
+  // On a desktop the charts take whatever height the cards above leave, so the dashboard fits one
+  // screen (page.tsx makes the page fill the viewport). Below 200px they stop shrinking and the
+  // page scrolls instead; on a phone the page scrolls as usual and the charts keep a fixed 300px.
+  // The drawing is absolutely placed: ChartContainer draws at the pixel size it last measured, and
+  // in flow that drawing would hold the card open, so the charts could grow with the window but
+  // never shrink back.
+  const chartSize =
+    "relative h-[300px] lg:h-auto lg:min-h-[200px] lg:flex-1 [&>.recharts-wrapper]:absolute [&>.recharts-wrapper]:inset-0";
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3 lg:flex-1">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Activity Overview</h2>
         <YearSelector currentYear={year} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:flex-1 lg:grid-cols-2">
         {bookingsByMonth && (
-          <Card>
+          <Card className="flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-medium">Bookings per Month</CardTitle>
               <CardDescription>Planned &amp; completed sessions</CardDescription>
             </CardHeader>
-            <CardContent>
-              <BookingsChart data={bookingsByMonth} />
+            <CardContent className="flex flex-1 flex-col">
+              <BookingsChart data={bookingsByMonth} className={chartSize} />
             </CardContent>
           </Card>
         )}
         {revenueByMonth && (
-          <Card>
+          <Card className="flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-medium">Revenue per Month</CardTitle>
               <CardDescription>Paid, pending &amp; estimated revenue</CardDescription>
             </CardHeader>
-            <CardContent>
-              <RevenueChart data={revenueByMonth} />
+            <CardContent className="flex flex-1 flex-col">
+              <RevenueChart data={revenueByMonth} className={chartSize} />
             </CardContent>
           </Card>
         )}

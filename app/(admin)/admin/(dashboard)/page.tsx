@@ -27,8 +27,10 @@ export default async function AdminDashboard({
   const year = params.year ? Number.parseInt(params.year, 10) : currentYear;
   const validYear = year >= currentYear - 2 && year <= currentYear + 2 ? year : currentYear;
 
+  // At least the viewport's height on a desktop, so the charts at the bottom can grow into what is
+  // left and the dashboard fits one screen (dashboard-charts.tsx). Taller content still scrolls.
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 lg:min-h-full">
       <PageHeader
         title={`Welcome back${adminUser.name ? `, ${adminUser.name}` : ""}`}
         description="Here's what's happening on your platform today."

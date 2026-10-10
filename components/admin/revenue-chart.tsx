@@ -10,7 +10,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { MonthlyRevenueData } from "@/lib/dashboard-queries";
-import { formatPrice, formatPriceAxis } from "@/lib/utils";
+import { cn, formatPrice, formatPriceAxis } from "@/lib/utils";
 
 const chartConfig = {
   actual: {
@@ -32,11 +32,13 @@ const formatYAxis = (cents: number) => formatPriceAxis(cents, "ZAR");
 
 interface RevenueChartProps {
   readonly data: MonthlyRevenueData[];
+  /** Sizing from the caller; 300px tall when none is given. */
+  readonly className?: string;
 }
 
-export function RevenueChart({ data }: RevenueChartProps) {
+export function RevenueChart({ data, className = "h-[300px]" }: RevenueChartProps) {
   return (
-    <ChartContainer config={chartConfig} className="h-[300px] w-full">
+    <ChartContainer config={chartConfig} className={cn("aspect-auto w-full", className)}>
       <BarChart data={data} accessibilityLayer>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={0} />
