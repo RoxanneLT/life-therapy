@@ -168,8 +168,13 @@ export async function deleteUser(
   const stepUp = await confirmWithTotp(stepUpCode);
   if (stepUp.error) return { error: stepUp.error };
 
-  // Delete from Supabase Auth
-  await supabaseAdmin.auth.admin.deleteUser(user.supabaseUserId);
+  // Delete from Supabase Auth, and stop if that fails. Carrying on removed the admin_users row
+  // over a live login: the audit row and the notice said the account was gone, and re-inviting
+  // the address later failed with "user already exists". A 404 means it is already gone.
+  const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(user.supabaseUserId);
+  if (authError && authError.status !== 404) {
+    return { error: `Could not remove the sign-in for ${user.email}: ${authError.message}` };
+  }
 
   // Delete from admin_users
   await prisma.adminUser.delete({ where: { id } });
