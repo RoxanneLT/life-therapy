@@ -695,11 +695,13 @@ function BillingConfigCard({
                 value={localIndivBilled || "self"}
                 onValueChange={(v) => {
                   const val = v === "self" ? null : v;
+                  const previous = localIndivBilled;
                   setLocalIndivBilled(val);
                   startTransition(async () => {
                     const result = await updateBillingAssignmentAction(clientId, "individual", val);
                     if (result?.error) {
                       toast.error(result.error);
+                      setLocalIndivBilled(previous);
                       return;
                     }
                     toast.success("Individual billing assignment updated");
@@ -726,11 +728,13 @@ function BillingConfigCard({
                 value={localCouplesBilled || "self"}
                 onValueChange={(v) => {
                   const val = v === "self" ? null : v;
+                  const previous = localCouplesBilled;
                   setLocalCouplesBilled(val);
                   startTransition(async () => {
                     const result = await updateBillingAssignmentAction(clientId, "couples", val);
                     if (result?.error) {
                       toast.error(result.error);
+                      setLocalCouplesBilled(previous);
                       return;
                     }
                     toast.success("Couples billing assignment updated");

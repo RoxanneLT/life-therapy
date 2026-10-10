@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -86,7 +87,7 @@ export function StatusSelect({
       try {
         const result = await updateClientStatusAction(clientId, value);
         if (result?.error) {
-          alert(result.error);
+          toast.error(result.error);
           return;
         }
         // The select renders `currentStatus`, a server prop. revalidatePath marks
