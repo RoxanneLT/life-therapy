@@ -43,6 +43,21 @@ CF-10 and CF-11 are filed (below): canon took both at `972decc`.
 
 CF-12 and CF-13 are filed (below): canon took both at `64bb5f9`.
 
+### CF-14 · A fix that widens a value's meaning needs a census of every reader of it, not a walk of the diff
+OBSERVED   "Unpaid" was widened from `pending` to `pending|overdue` at the invoice page and dashboard
+           (life-therapy `38c54ee`); a re-walk then found three readers the diff never touched still
+           asking for `pending` alone — a WhatsApp chaser in another channel, a portal card mirroring
+           the admin figure, and a report computing the same amount gross.
+COMMAND    walker re-walk, `.handoff/walk-oct-batch/05-walker.md` (F1, F2, F6): "fixes hold; siblings missed"
+WHY IT IS  A diff walk inspects what changed; the defect class is what did not. Any stack with a status
+CANON'S    enum read in several places has it, and so does any erasure: the same walk (03, F1+F2) found
+           an erased client still mailed by a cron selecting on a column the erasure plan kept, and
+           still named in append-only logs the plan never listed.
+SMALLEST   In `/walk` (and the walker spine), when the diff changes what a value MEANS — a status set,
+FIX        a "deleted/erased" flag, a currency — require one `census` of every reader of that value,
+           other channels and client-side mirrors included. Must not turn every walk into a census:
+           only a change of meaning triggers it.
+
 ---
 
 ## 2 · Lesson answers
