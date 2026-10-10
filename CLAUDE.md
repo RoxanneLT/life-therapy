@@ -53,7 +53,7 @@ not a preference: §6, 2026-08-17.
 | Machine | Path |
 |---|---|
 | Laptop | `C:\dev\life-therapy` (alongside `C:\dev\pleks`) |
-| Desktop | **not yet decided** — C/D/E/F; the working volume is a Windows Storage Space (RAID-10), one of the others is OneDrive. Deliberately blank rather than guessed. **Write the chosen path here at setup** so the next session doesn't ask again. |
+| Desktop | `E:devlife-therapy` — the Storage Space volume (recorded 2026-10-10, the path every session there has run from) |
 
 **First moves, before touching code:**
 
