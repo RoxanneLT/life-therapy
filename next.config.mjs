@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next 16 prints every Server Function call in dev WITH its arguments, so signing in wrote the
+  // password to the terminal in clear (loginAction(email, password)), and every client-data action
+  // its record. Off: an argument list is the one place no scrubbing reaches.
+  logging: {
+    serverFunctions: false,
+  },
   turbopack: {
     root: process.cwd(),
   },
