@@ -95,6 +95,8 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
     status: "failed",
     sentAt: { gte: saDayStart(addSaDays(today, -7)) },
     OR: [{ studentId: null }, { student: { erasedAt: null } }],
+    // A log matched by address alone keeps a null studentId through erasure; its `to` is what changes.
+    NOT: { to: { endsWith: "@noemail.internal" } },
   };
   const expiringWhere = {
     balance: { gt: 0 },
