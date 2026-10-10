@@ -94,6 +94,30 @@ const navGroups: NavGroup[] = [
 ];
 
 /** Whether `role` sees the main-nav entry for `href`: the one table the keyboard shortcuts also read. */
+/** The count pill beside an expanded item's label. Counts come from lib/dashboard-attention.ts. */
+function NavCount({ count = 0 }: Readonly<{ count?: number }>) {
+  if (count <= 0) return null;
+  return (
+    <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+/** An item's icon, with a dot on it when the sidebar is collapsed and the item has a count. */
+function NavIconWithCount({
+  icon: Icon,
+  count = 0,
+  collapsed,
+}: Readonly<{ icon: React.ComponentType<{ className?: string }>; count?: number; collapsed: boolean }>) {
+  return (
+    <span className="relative shrink-0">
+      <Icon className="h-4 w-4" />
+      {collapsed && count > 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />}
+    </span>
+  );
+}
+
 /** A collapsed item's tooltip carries its badge count, since the dot alone does not say how many. */
 const withCount = (label: string, count = 0) => (count > 0 ? `${label} (${count})` : label);
 
@@ -232,7 +256,7 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
                           key={item.href}
                           href={item.href}
                           onClick={onNavClick}
-                          title={collapsed ? item.title : undefined}
+                          title={collapsed ? withCount(item.title, badges[item.href]) : undefined}
                           className={cn(
                             "flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
                             collapsed ? "justify-center px-2" : "gap-3 px-3",
@@ -241,8 +265,9 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
                               : "text-muted-foreground hover:bg-muted hover:text-foreground",
                           )}
                         >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          {!collapsed && item.title}
+                          <NavIconWithCount icon={Icon} count={badges[item.href]} collapsed={collapsed} />
+                          {!collapsed && <span className="flex-1">{item.title}</span>}
+                          {!collapsed && <NavCount count={badges[item.href]} />}
                         </Link>
                       );
                     })}
@@ -275,18 +300,9 @@ export function AdminSidebarContent({ role, onNavClick, collapsed = false, onTog
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
-                    <span className="relative shrink-0">
-                      <item.icon className="h-4 w-4" />
-                      {collapsed && badges[item.href] > 0 && (
-                        <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
-                      )}
-                    </span>
+                    <NavIconWithCount icon={item.icon} count={badges[item.href]} collapsed={collapsed} />
                     {!collapsed && <span className="flex-1">{item.label}</span>}
-                    {!collapsed && badges[item.href] > 0 && (
-                      <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
-                        {badges[item.href] > 99 ? "99+" : badges[item.href]}
-                      </span>
-                    )}
+                    {!collapsed && <NavCount count={badges[item.href]} />}
                   </Link>
                 ))}
               </div>

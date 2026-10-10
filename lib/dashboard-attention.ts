@@ -32,6 +32,8 @@ export interface AttentionItem {
   entries?: AttentionEntry[];
   /** A one-click fix rendered beside the row. */
   action?: "mark-stale-completed";
+  /** Sidebar entries whose count badge this row adds to (getNavBadges). */
+  nav: string[];
 }
 
 const ENTRY_LIMIT = 3;
@@ -67,15 +69,16 @@ function countOverduePaymentRequests(): Promise<number> {
 }
 
 /**
- * Counts for the sidebar, keyed by nav href. The same definitions as the attention rows, so the
- * badge on "Bookings" and the row on the dashboard can never disagree. Gated like those rows.
+ * Counts for the sidebar, keyed by nav href: the attention rows themselves, summed by the entries
+ * each names in `nav`. Built from the rows rather than beside them, so a badge and the dashboard
+ * row can never disagree, and a new row gets its badge by naming where it belongs. Gated like them.
  */
 export async function getNavBadges(role: AdminRole): Promise<Record<string, number>> {
-  const [stale, overdue] = await Promise.all([
-    canAccess("/admin/bookings", role) ? countStaleSessions() : 0,
-    canAccess("/admin/invoices", role) ? countOverduePaymentRequests() : 0,
-  ]);
-  return { "/admin/bookings": stale, "/admin/invoices": overdue };
+  const badges: Record<string, number> = {};
+  for (const item of await getAttentionItems(role)) {
+    for (const href of item.nav) badges[href] = (badges[href] ?? 0) + item.count;
+  }
+  return badges;
 }
 
 export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[]> {
@@ -136,6 +139,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       href: "/admin/bookings?status=stale",
       count: stale,
       action: "mark-stale-completed",
+      nav: ["/admin/bookings"],
     });
   }
 
@@ -147,6 +151,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       detail: "A booking may be missing from Outlook or Teams, or a cancelled one may still be there.",
       href: "/admin/settings/calendar-sync",
       count: syncFailures,
+      nav: ["/admin/settings", "/admin/settings/calendar-sync"],
     });
   } else if (lastReconcile?.status === "partial") {
     // "partial" means ANY drift (both reconcile routes), not only mismatches: the dashboard used to
@@ -164,6 +169,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       detail: parts.length > 0 ? parts.map((p) => p.text).join(" · ") : "The last reconcile reported drift.",
       href: "/admin/settings/calendar-sync",
       count: total,
+      nav: ["/admin/settings", "/admin/settings/calendar-sync"],
     });
   }
 
@@ -174,6 +180,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       title: `${plural(overdue, "payment request")} past due`,
       href: "/admin/invoices?status=overdue",
       count: overdue,
+      nav: ["/admin/invoices"],
     });
   }
 
@@ -184,6 +191,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       title: `${plural(failedEmails.length, "email")} failed to send this week`,
       detail: "The provider refused these. Usually a mistyped address: correct it, then resend from the record.",
       count: failedEmails.length,
+      nav: ["/admin/email-templates"],
       entries: failedEmails.slice(0, ENTRY_LIMIT).map((e) => ({
         label: e.to,
         detail: `${e.templateKey ?? e.subject} · ${saFormat(e.sentAt, "d MMM, HH:mm")}`,
@@ -198,6 +206,8 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       priority: 2,
       title: `${plural(expiring.length, "client")} with session credits expiring within 14 days`,
       count: expiring.length,
+      // Billing, not Clients: the row is gated by billing access, and Clients is a marketing page.
+      nav: ["/admin/invoices"],
       entries: expiring.slice(0, ENTRY_LIMIT).map((c) => ({
         label: `${c.student.firstName} ${c.student.lastName}`,
         detail: `${plural(c.balance, "credit")} · expires ${saFormat(c.expiresAt!, "d MMM")}`,
@@ -219,6 +229,7 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       title: `${plural(ids.length, "client")} sent contact details that differ from their record`,
       detail: "Kept as stored. Check whether the new details are a real change.",
       count: ids.length,
+      nav: ["/admin/clients"],
       entries: ids.slice(0, ENTRY_LIMIT).flatMap((id) => {
         const s = byId.get(id);
         return s ? [{ label: `${s.firstName} ${s.lastName}`, href: `/admin/clients/${id}` }] : [];
