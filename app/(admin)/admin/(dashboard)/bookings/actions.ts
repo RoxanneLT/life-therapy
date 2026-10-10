@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
+import { loadRequestAmounts } from "@/lib/billing";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cancelCalendarEvent, createCalendarEvent, createRecurringCalendarEvent, deleteRecurringEventOccurrences } from "@/lib/graph";
@@ -1966,10 +1967,15 @@ export async function checkBillingCycleStatusAction(
       billingMonth: { startsWith: billingMonthKey },
       status: { in: ["pending", "overdue"] },
     },
-    select: { id: true },
+    select: { id: true, totalCents: true, paidAmountCents: true, invoiceId: true },
     orderBy: { createdAt: "desc" },
   });
 
+  // A request with money on it is closed to amendment, as on the client's Finances tab: its part
+  // payment may already have made the tax invoice the settlement keeps (walk-oct-payments-2, W2).
+  if (pendingRequest && (await loadRequestAmounts(pendingRequest)).received > 0) {
+    return { status: "closed", billingMonth: billingMonthLabel };
+  }
   if (pendingRequest) {
     return { status: "pending", billingMonth: billingMonthLabel, existingRequestId: pendingRequest.id };
   }
@@ -2044,6 +2050,21 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
     select: { id: true, firstName: true, lastName: true, email: true, phone: true, billingType: true },
   });
   if (!student) throw new Error("Client not found");
+
+  // Checked before the booking exists, so a refusal leaves nothing behind. The dialog no longer
+  // offers this (getBillingCycleInfo), but a dialog left open can still send it.
+  if (data.billingResolution === "amend_request" && data.existingRequestId) {
+    const target = await prisma.paymentRequest.findUnique({
+      where: { id: data.existingRequestId },
+      select: { id: true, totalCents: true, paidAmountCents: true, invoiceId: true },
+    });
+    if (target && (await loadRequestAmounts(target)).received > 0) {
+      return {
+        success: false as const,
+        error: "Money has already been received on that payment request, so this session can't be added to it. Choose another billing option.",
+      };
+    }
+  }
 
   const config = getSessionTypeConfig(data.sessionType);
   const settings = await getSiteSettings();
@@ -2163,7 +2184,9 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
           lineDiscountPercent: li.discountPercent || undefined,
           lineDiscountCents: li.discountCents || undefined,
         }));
-        const totals = calculateInvoiceTotals(lineCalcs, undefined, undefined, isVat, vatPercent);
+        // The request's own discount is kept: it is where the billing run puts the credit for a
+        // session cancelled in time, and dropping it here removed that credit (W2).
+        const totals = calculateInvoiceTotals(lineCalcs, undefined, existingPR.discountCents || undefined, isVat, vatPercent);
 
         await prisma.paymentRequest.update({
           where: { id: existingPR.id },
@@ -2180,6 +2203,10 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
           where: { id: booking.id },
           data: { paymentRequestId: existingPR.id },
         });
+
+        // The stored link charged the old total (lib/payment-request-link.ts).
+        const { refreshPaymentLink } = await import("@/lib/payment-request-link");
+        await refreshPaymentLink(existingPR.id);
 
         // Regenerate PDF and resend for any invoice linked to this payment request
         const linkedInvoice = await prisma.invoice.findFirst({
@@ -2215,5 +2242,5 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
 
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${booking.id}`);
-  return { success: true, bookingId: booking.id };
+  return { success: true as const, bookingId: booking.id };
 }

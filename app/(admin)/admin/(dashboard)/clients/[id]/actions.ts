@@ -1860,9 +1860,11 @@ export async function voidPaymentRequestAction(paymentRequestId: string, student
     select: { status: true, paidAmountCents: true, invoiceId: true },
   });
 
+  // The link goes with it: the pro-forma and reminders still carried it, and a charge on a voided
+  // request was settled as if it were owed (walk-oct-payments-2, W5).
   await prisma.paymentRequest.update({
     where: { id: paymentRequestId },
-    data: { status: "cancelled" },
+    data: { status: "cancelled", paymentUrl: null },
   });
 
   // Unlink the bookings ONLY when nothing has been received against the request.

@@ -57,12 +57,14 @@ export async function POST(request: Request) {
           select: { status: true, totalCents: true, paidAmountCents: true, invoiceId: true, currency: true, studentId: true },
         });
 
-        if (pr?.status === "paid") {
+        if (pr?.status === "paid" || pr?.status === "cancelled") {
           // A retry of the charge that settled it is skipped. Any other charge is real money on a
-          // settled request (a second tab, an old link, a request also marked paid by hand), and
-          // this return used to drop it without a trace (walk-oct-payments 01, F2).
+          // closed request (a second tab, an old link, a request marked paid by hand or voided).
+          // The paid return dropped it without a trace (walk-oct-payments 01, F2), and a voided
+          // request was settled as if it were owed (walk-oct-payments-2, W5).
           if (!(await counted("payment_request", paymentRequestId, data.reference))) {
-            await recordOverpayment("payment_request", paymentRequestId, pr, (await loadRequestAmounts(pr)).received + data.amount, data.reference);
+            const { received } = await loadRequestAmounts(pr);
+            await recordOverpayment("payment_request", paymentRequestId, closedRow(pr, received, data.amount), data.reference);
           }
           return new Response("OK", { status: 200 });
         }
@@ -128,7 +130,9 @@ export async function POST(request: Request) {
           return new Response("OK", { status: 200 });
         }
 
-        if (pr && shortfallCents < 0) await recordOverpayment("payment_request", paymentRequestId, pr, paidToDate, data.reference);
+        if (pr && shortfallCents < 0) {
+          await recordOverpayment("payment_request", paymentRequestId, { owedCents: pr.totalCents, paidToDateCents: paidToDate, currency: pr.currency, note: OVERPAID }, data.reference);
+        }
 
         const invoice = await createInvoiceFromPaymentRequest(
           paymentRequestId,
@@ -162,13 +166,14 @@ export async function POST(request: Request) {
           select: { status: true, totalCents: true, currency: true, paidAmountCents: true, paymentRequestId: true },
         });
 
-        if (existing?.status === "paid") {
-          // As for a request above: a retry is skipped, other money on a paid invoice is recorded.
+        if (existing && ["paid", "cancelled", "credited"].includes(existing.status)) {
+          // As for a request above: a retry is skipped, other money on a closed invoice is recorded.
           if (!(await counted("invoice", invoiceId, data.reference))) {
             const settled = existing.paymentRequestId
               ? await prisma.paymentRequest.findUnique({ where: { id: existing.paymentRequestId }, select: { paidAmountCents: true } })
               : null;
-            await recordOverpayment("invoice", invoiceId, existing, receivedCents(settled ?? { paidAmountCents: null }, existing) + data.amount, data.reference);
+            const received = receivedCents(settled ?? { paidAmountCents: null }, existing);
+            await recordOverpayment("invoice", invoiceId, closedRow(existing, received, data.amount), data.reference);
           }
           return new Response("OK", { status: 200 });
         }
@@ -224,25 +229,28 @@ export async function POST(request: Request) {
           return new Response("OK", { status: 200 });
         }
 
-        if (existing && invShortfall < 0) await recordOverpayment("invoice", invoiceId, existing, invPaidToDate, data.reference);
-
-        await prisma.invoice.update({
-          where: { id: invoiceId },
-          data: {
-            status: "paid",
-            paidAt: new Date(),
-            paystackReference: data.reference,
-            paymentMethod: "paystack",
-            paidAmountCents: invPaidToDate,
-            paymentUrl: null,
-          },
-        });
-        if (request) {
-          await prisma.paymentRequest.update({
-            where: { id: request.id },
-            data: { status: "paid", paidAmountCents: invPaidToDate, invoiceId },
-          });
+        if (existing && invShortfall < 0) {
+          await recordOverpayment("invoice", invoiceId, { owedCents: existing.totalCents, paidToDateCents: invPaidToDate, currency: existing.currency, note: OVERPAID }, data.reference);
         }
+
+        // Both rows or neither: written apart, a failure between them left a paid invoice beside a
+        // request still chased, and the retry saw the invoice paid and stopped (walk-oct-payments-2, W3).
+        await prisma.$transaction([
+          prisma.invoice.update({
+            where: { id: invoiceId },
+            data: {
+              status: "paid",
+              paidAt: new Date(),
+              paystackReference: data.reference,
+              paymentMethod: "paystack",
+              paidAmountCents: invPaidToDate,
+              paymentUrl: null,
+            },
+          }),
+          ...(request
+            ? [prisma.paymentRequest.update({ where: { id: request.id }, data: { status: "paid", paidAmountCents: invPaidToDate, invoiceId } })]
+            : []),
+        ]);
 
         await generateAndStoreInvoicePDF(invoiceId).catch((err) =>
           console.error("Failed to generate invoice PDF:", err),
@@ -274,11 +282,19 @@ async function partRecorded(entityType: Entity, entityId: string, reference: str
 }
 
 /**
- * This charge is already on the books: it settled an invoice (which keeps its reference), or an
- * earlier delivery recorded it as a part payment or an overpayment.
+ * This charge is already on the books: it settled an invoice, or an earlier delivery recorded it as
+ * a part payment or an overpayment.
+ *
+ * "Settled" is a paid invoice whose METHOD is Paystack with this reference. The reference alone is
+ * not proof: a link stores it on the invoice when it is made, before any money moves, so an invoice
+ * then marked paid by EFT still carried it, and the late charge read as already counted
+ * (walk-oct-payments-2, W1).
  */
 async function counted(entityType: Entity, entityId: string, reference: string): Promise<boolean> {
-  const settledBy = await prisma.invoice.findFirst({ where: { paystackReference: reference }, select: { id: true } });
+  const settledBy = await prisma.invoice.findFirst({
+    where: { paystackReference: reference, status: "paid", paymentMethod: "paystack" },
+    select: { id: true },
+  });
   return !!settledBy || !!(await markerFor(["payment_shortfall", "payment_overpaid"], entityType, entityId, reference));
 }
 
@@ -300,32 +316,49 @@ function shortfallMarker(entityType: Entity, entityId: string, metadata: Prisma.
   });
 }
 
+const OVERPAID = "More was received than owed. Refund or credit the difference by hand.";
+
+type Overpayment = { owedCents: number; paidToDateCents: number; currency: string | null; note: string };
+
 /**
- * More arrived than was owed: a link made before a part payment, or two links paid. The money is
- * the client's; it is recorded for a human to refund or credit, and settlement goes ahead.
+ * A charge on a row that is closed. A paid row is owed nothing more, and counts as paid in full even
+ * where an admin's mark-paid wrote no amount (W1); a voided one was never owed.
  */
-async function recordOverpayment(
-  entityType: Entity,
-  entityId: string,
-  row: { totalCents: number; currency: string | null },
-  paidToDateCents: number,
-  reference: string,
-) {
+function closedRow(
+  row: { status: string; totalCents: number; currency: string | null },
+  receivedCents: number,
+  amountCents: number,
+): Overpayment {
+  return row.status === "paid"
+    ? { owedCents: row.totalCents, paidToDateCents: Math.max(receivedCents, row.totalCents) + amountCents, currency: row.currency, note: OVERPAID }
+    : {
+        owedCents: 0,
+        paidToDateCents: amountCents,
+        currency: row.currency,
+        note: `Paid on a ${row.status} record, which is owed nothing. Refund it, or apply it to what replaced it.`,
+      };
+}
+
+/**
+ * More arrived than was owed: a link made before a part payment, two links paid, or money on a
+ * closed row. The money is the client's; it is recorded for a human to refund or credit.
+ */
+async function recordOverpayment(entityType: Entity, entityId: string, o: Overpayment, reference: string) {
   // A retried delivery (now that a throw returns 500) must not record the same money twice.
   if (await markerFor(["payment_overpaid"], entityType, entityId, reference)) return;
-  console.error(`[paystack] OVERPAYMENT on ${entityType} ${entityId}: owed ${row.totalCents}, received ${paidToDateCents} to date.`);
+  console.error(`[paystack] OVERPAYMENT on ${entityType} ${entityId}: owed ${o.owedCents}, received ${o.paidToDateCents} to date.`);
   await recordAudit({
     action: "payment_overpaid",
     entityType,
     entityId,
     actorEmail: "paystack-webhook",
     metadata: {
-      expectedCents: row.totalCents,
-      paidToDateCents,
-      overpaidCents: paidToDateCents - row.totalCents,
-      currency: row.currency,
+      expectedCents: o.owedCents,
+      paidToDateCents: o.paidToDateCents,
+      overpaidCents: o.paidToDateCents - o.owedCents,
+      currency: o.currency,
       reference,
-      note: "More was received than owed. Refund or credit the difference by hand.",
+      note: o.note,
     },
   });
 }

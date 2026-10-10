@@ -145,6 +145,12 @@ export async function markPaymentRequestPaidFromListAction(
   const pr = await prisma.paymentRequest.findUniqueOrThrow({
     where: { id: paymentRequestId },
   });
+  // The list shows open requests only, so a page left open is how a settled or voided one gets
+  // here: recording money on it again re-sent the tax invoice and audited a second payment
+  // (walk-oct-payments-2, W4).
+  if (pr.status === "paid" || pr.status === "cancelled") {
+    return { error: `This payment request is already ${pr.status === "paid" ? "paid" : "voided"}. Refresh the page.` };
+  }
 
   // Check if an invoice already exists for this PR (from a prior partial payment)
   const existingInvoice = await prisma.invoice.findFirst({
@@ -215,7 +221,7 @@ export async function markPaymentRequestPaidFromListAction(
 
     await auditPayment(isFullyPaid);
     revalidatePath("/admin/invoices");
-    return;
+    return {};
   }
 
   // No existing invoice — create one
@@ -273,6 +279,7 @@ export async function markPaymentRequestPaidFromListAction(
 
   await auditPayment(!isPartial);
   revalidatePath("/admin/invoices");
+  return {};
 }
 
 // ────────────────────────────────────────────────────────────

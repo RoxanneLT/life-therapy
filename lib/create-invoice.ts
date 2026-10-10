@@ -234,9 +234,17 @@ export async function createInvoiceFromPaymentRequest(
   // Idempotency: don't create duplicate for same payment reference
   if (payment.reference) {
     const existing = await prisma.invoice.findFirst({
-      where: { paystackReference: payment.reference },
+      where: { paystackReference: payment.reference, paymentRequestId, status: "paid" },
     });
-    if (existing) return existing;
+    if (existing) {
+      // A retry after the invoice was written but the request was not: finish it, or the request
+      // stays chased beside a paid tax invoice (walk-oct-payments-2, W3).
+      await prisma.paymentRequest.updateMany({
+        where: { id: paymentRequestId, status: { not: "paid" } },
+        data: { status: "paid", invoiceId: existing.id, paidAmountCents: existing.paidAmountCents },
+      });
+      return existing;
+    }
   }
 
   const pr = await prisma.paymentRequest.findUniqueOrThrow({
@@ -266,23 +274,26 @@ export async function createInvoiceFromPaymentRequest(
   const paidToDate = payment.amountCents > 0 ? prior + payment.amountCents : Math.max(prior, pr.totalCents);
 
   if (openInvoice) {
-    const invoice = await prisma.invoice.update({
-      where: { id: openInvoice.id },
-      data: {
-        status: "paid",
-        paidAt: new Date(),
-        paidAmountCents: paidToDate,
-        paymentMethod: payment.method,
-        ...(payment.method === "paystack" ? { paystackReference: payment.reference, paymentUrl: null } : {}),
-        ...(payment.method === "eft" && payment.reference
-          ? { eftReference: [openInvoice.eftReference, payment.reference].filter(Boolean).join(", ") }
-          : {}),
-      },
-    });
-    await prisma.paymentRequest.update({
-      where: { id: paymentRequestId },
-      data: { invoiceId: invoice.id, status: "paid", paidAmountCents: paidToDate },
-    });
+    // Both rows in one transaction, so a failure cannot leave one paid and the other open (W3).
+    const [invoice] = await prisma.$transaction([
+      prisma.invoice.update({
+        where: { id: openInvoice.id },
+        data: {
+          status: "paid",
+          paidAt: new Date(),
+          paidAmountCents: paidToDate,
+          paymentMethod: payment.method,
+          ...(payment.method === "paystack" ? { paystackReference: payment.reference, paymentUrl: null } : {}),
+          ...(payment.method === "eft" && payment.reference
+            ? { eftReference: [openInvoice.eftReference, payment.reference].filter(Boolean).join(", ") }
+            : {}),
+        },
+      }),
+      prisma.paymentRequest.update({
+        where: { id: paymentRequestId },
+        data: { invoiceId: openInvoice.id, status: "paid", paidAmountCents: paidToDate },
+      }),
+    ]);
     try {
       await generateAndStoreInvoicePDF(invoice.id);
     } catch (err) {

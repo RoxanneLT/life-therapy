@@ -75,7 +75,11 @@ export function PaymentRequestActions({
     }
     startTransition(async () => {
       try {
-        await markPaymentRequestPaidFromListAction(requestId, method, amountCents, reference || undefined);
+        const result = await markPaymentRequestPaidFromListAction(requestId, method, amountCents, reference || undefined);
+        if (result.error) {
+          toast.error(result.error);
+          return;
+        }
         // Settled or not is judged on everything received, matching the action.
         const isPartial = paidCents + amountCents < totalCents;
         toast.success(

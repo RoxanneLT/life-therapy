@@ -404,6 +404,10 @@ export function CreateBookingDialog({
         billingResolution: resolution,
         existingRequestId,
       });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       setShowBillingPrompt(false);
       handleSetOpen(false);
       resetForm();
