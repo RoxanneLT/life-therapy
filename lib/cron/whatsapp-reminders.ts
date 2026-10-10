@@ -213,9 +213,13 @@ async function processBillingReminders(
 
   // 4. Overdue notice — 1 business day after due
   let sentOverdue = 0;
+  // Pending OR overdue. The email chaser runs first in the daily cron and marks the request
+  // "overdue" when it sends its own notice, on this same day — so reading "pending" alone hid
+  // nearly every request from this step, whose window is that one day. The email step fixed
+  // the same trap for itself (monthly-billing.ts); this is its WhatsApp twin.
   const stillUnpaid = await prisma.paymentRequest.findMany({
     where: {
-      status: "pending",
+      status: { in: ["pending", "overdue"] },
       whatsappOverdueSentAt: null,
       studentId: { not: null },
     },

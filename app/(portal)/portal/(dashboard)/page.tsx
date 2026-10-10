@@ -83,9 +83,11 @@ export default async function PortalDashboardPage() {
     // wrong currency, on their own portal.
     prisma.paymentRequest.groupBy({
       by: ["currency"],
-      where: { studentId: student.id, status: "pending" },
+      // Pending OR overdue, net of part payments — the same set /portal/invoices lists. Pending
+      // alone made the card vanish the day a request went overdue, when it mattered most.
+      where: { studentId: student.id, status: { in: ["pending", "overdue"] } },
       _count: true,
-      _sum: { totalCents: true },
+      _sum: { totalCents: true, paidAmountCents: true },
     }),
   ]);
 
@@ -98,7 +100,7 @@ export default async function PortalDashboardPage() {
 
   const outstandingCount = pendingPayments.reduce((n, g) => n + (g._count ?? 0), 0);
   const outstandingTotal = formatByCurrency(
-    pendingPayments.map((g) => ({ currency: g.currency, cents: g._sum.totalCents ?? 0 })),
+    pendingPayments.map((g) => ({ currency: g.currency, cents: (g._sum.totalCents ?? 0) - (g._sum.paidAmountCents ?? 0) })),
   );
 
   return (

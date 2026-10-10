@@ -131,7 +131,7 @@ export async function getPaymentStatusByMonth(fyYear: number) {
         status: { in: ["pending", "overdue"] },
         currency: "ZAR",
       },
-      select: { totalCents: true, billingMonth: true, status: true },
+      select: { totalCents: true, paidAmountCents: true, billingMonth: true, status: true },
     }),
   ]);
 
@@ -147,13 +147,13 @@ export async function getPaymentStatusByMonth(fyYear: number) {
       .filter((i) => i.paidAt && i.paidAt >= start && i.paidAt < end)
       .reduce((s, i) => s + i.totalCents, 0);
 
-    const pending = requests
-      .filter((r) => inMonth(r.billingMonth) && r.status === "pending")
-      .reduce((s, r) => s + r.totalCents, 0);
-
-    const overdue = requests
-      .filter((r) => inMonth(r.billingMonth) && r.status === "overdue")
-      .reduce((s, r) => s + r.totalCents, 0);
+    // Still owed, net of part payments — the same figure Outstanding and the aging chart state.
+    const owed = (status: string) =>
+      requests
+        .filter((r) => inMonth(r.billingMonth) && r.status === status)
+        .reduce((s, r) => s + r.totalCents - (r.paidAmountCents ?? 0), 0);
+    const pending = owed("pending");
+    const overdue = owed("overdue");
 
     return { month: label, paid, pending, overdue };
   });

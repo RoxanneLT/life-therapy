@@ -1933,6 +1933,9 @@ export async function markPaymentRequestPaidAction(
 ) {
   const { adminUser } = await requireRole("super_admin");
 
+  // Read before paying it, so the audit row states what it really was: pending or overdue.
+  const prior = await prisma.paymentRequest.findUnique({ where: { id: paymentRequestId }, select: { status: true } });
+
   const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
 
   await createInvoiceFromPaymentRequest(paymentRequestId, {
@@ -1946,7 +1949,7 @@ export async function markPaymentRequestPaidAction(
     entityType: "payment_request",
     entityId: paymentRequestId,
     actorEmail: adminUser.email,
-    before: { status: "pending" },
+    before: { status: prior?.status ?? null },
     after: { status: "paid", paymentMethod: method, reference: reference ?? null },
     metadata: { studentId },
   });
