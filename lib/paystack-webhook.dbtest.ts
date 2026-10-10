@@ -124,7 +124,8 @@ test("a request marked paid by hand, then paid by link, records the link's money
 
   assert.equal(await deliver({ paymentRequestId: pr.id }, 50_000, ref("late")), 200);
 
-  assert.equal((await audits(pr.id, "payment_overpaid")).length, 1);
+  const [overpaid] = await audits(pr.id, "payment_overpaid");
+  assert.equal((overpaid?.metadata as Record<string, unknown> | undefined)?.overpaidCents, 50_000);
   assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 1);
 });
 
@@ -206,4 +207,38 @@ test("a retry after the invoice was written but the request was not finishes the
   const row = await request(pr.id);
   assert.deepEqual({ status: row.status, invoiceId: row.invoiceId, paid: row.paidAmountCents }, { status: "paid", invoiceId: inv.id, paid: 40_000 });
   assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 1);
+});
+
+test("a charge on the invoice of a voided request settles neither, and is recorded as unowed", async () => {
+  const pr = await makeRequest(60_000);
+  const inv = await makeInvoice(60_000);
+  // A part payment made the request's invoice early; the request was then voided.
+  await prisma.invoice.update({ where: { id: inv.id }, data: { paymentRequestId: pr.id, paidAmountCents: 20_000 } });
+  await prisma.paymentRequest.update({ where: { id: pr.id }, data: { status: "cancelled", paidAmountCents: 20_000, invoiceId: inv.id } });
+
+  assert.equal(await deliver({ invoiceId: inv.id }, 40_000, ref("void-inv")), 200);
+
+  assert.equal((await request(pr.id)).status, "cancelled");
+  assert.equal((await prisma.invoice.findUniqueOrThrow({ where: { id: inv.id } })).status, "payment_requested");
+  assert.deepEqual(await overpaidCents(inv.id), [40_000]);
+});
+
+test("a charge on a cancelled invoice is recorded as unowed and leaves it cancelled", async () => {
+  const inv = await makeInvoice(30_000);
+  await prisma.invoice.update({ where: { id: inv.id }, data: { status: "cancelled" } });
+
+  assert.equal(await deliver({ invoiceId: inv.id }, 30_000, ref("cancelled-inv")), 200);
+
+  assert.equal((await prisma.invoice.findUniqueOrThrow({ where: { id: inv.id } })).status, "cancelled");
+  assert.deepEqual(await overpaidCents(inv.id), [30_000]);
+});
+
+test("the settlement engine refuses a voided request and writes nothing", async () => {
+  const pr = await makeRequest(25_000);
+  await prisma.paymentRequest.update({ where: { id: pr.id }, data: { status: "cancelled" } });
+
+  await assert.rejects(settle(pr.id, { reference: "eft-void", method: "eft", amountCents: 0 }), /voided/);
+
+  assert.equal((await request(pr.id)).status, "cancelled");
+  assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 0);
 });

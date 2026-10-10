@@ -257,6 +257,12 @@ export async function createInvoiceFromPaymentRequest(
   if (pr.status === "paid" && pr.invoiceId) {
     return prisma.invoice.findUniqueOrThrow({ where: { id: pr.invoiceId } });
   }
+  // A voided request is owed nothing. Settling it issued a numbered tax invoice and marked it paid
+  // while its released sessions waited to be billed again (walk-oct-payments-2 02, N3). Every
+  // caller refuses this first; reaching here is a bug, so it throws.
+  if (pr.status === "cancelled") {
+    throw new Error(`Payment request ${paymentRequestId} was voided and cannot be settled`);
+  }
 
   // What this settlement brings the request to. `payment.amountCents` is THIS payment, added to
   // what came before; 0 means the admin is recording it as paid in full. Never below what the rows

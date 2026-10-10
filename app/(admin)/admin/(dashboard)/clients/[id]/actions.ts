@@ -1382,6 +1382,10 @@ export async function markInvoicePaidAction(
       status: "paid",
       paymentMethod: method,
       eftReference: method === "eft" ? reference : undefined,
+      // The reference a Paystack link stored when it was opened. Left in place, it made this
+      // invoice look settled by that link's charge, and the charge, arriving later, went
+      // unrecorded (walk-oct-payments-2 02, N1). Only the webhook writes a settling reference.
+      paystackReference: null,
       paidAt: new Date(),
     },
   });
@@ -1928,6 +1932,7 @@ export async function markPaymentRequestPaidAction(
   const prior = await prisma.paymentRequest.findUnique({ where: { id: paymentRequestId }, select: { status: true } });
   if (!prior) return { error: "That payment request no longer exists." };
   if (prior.status === "paid") return { error: "This payment request is already paid." };
+  if (prior.status === "cancelled") return { error: "This payment request was voided. Refresh the page." };
 
   const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
 

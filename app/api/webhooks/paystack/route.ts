@@ -166,14 +166,18 @@ export async function POST(request: Request) {
           select: { status: true, totalCents: true, currency: true, paidAmountCents: true, paymentRequestId: true },
         });
 
-        if (existing && ["paid", "cancelled", "credited"].includes(existing.status)) {
+        // The request this invoice belongs to, if any: settling the invoice settles it too, so a
+        // voided request closes the invoice as well. Reading the invoice's status alone let a
+        // charge mark a cancelled request paid (walk-oct-payments-2 02, N2).
+        const parent = existing?.paymentRequestId
+          ? await prisma.paymentRequest.findUnique({ where: { id: existing.paymentRequestId }, select: { status: true, paidAmountCents: true } })
+          : null;
+        const closedAs = parent?.status === "cancelled" ? "cancelled" : existing?.status;
+        if (existing && closedAs && ["paid", "cancelled", "credited"].includes(closedAs)) {
           // As for a request above: a retry is skipped, other money on a closed invoice is recorded.
           if (!(await counted("invoice", invoiceId, data.reference))) {
-            const settled = existing.paymentRequestId
-              ? await prisma.paymentRequest.findUnique({ where: { id: existing.paymentRequestId }, select: { paidAmountCents: true } })
-              : null;
-            const received = receivedCents(settled ?? { paidAmountCents: null }, existing);
-            await recordOverpayment("invoice", invoiceId, closedRow(existing, received, data.amount), data.reference);
+            const received = receivedCents(parent ?? { paidAmountCents: null }, existing);
+            await recordOverpayment("invoice", invoiceId, closedRow({ ...existing, status: closedAs }, received, data.amount), data.reference);
           }
           return new Response("OK", { status: 200 });
         }

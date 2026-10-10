@@ -405,7 +405,10 @@ export function CreateBookingDialog({
         existingRequestId,
       });
       if (!result.success) {
-        setError(result.error);
+        // A toast, and the prompt closed: an error line inside the dialog sat under the still-open
+        // prompt, so the click appeared to do nothing (walk-oct-payments-2 02, N5).
+        setShowBillingPrompt(false);
+        toast.error(result.error);
         return;
       }
       setShowBillingPrompt(false);

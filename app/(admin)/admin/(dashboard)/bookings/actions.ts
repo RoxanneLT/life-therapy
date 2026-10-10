@@ -2056,9 +2056,13 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
   if (data.billingResolution === "amend_request" && data.existingRequestId) {
     const target = await prisma.paymentRequest.findUnique({
       where: { id: data.existingRequestId },
-      select: { id: true, totalCents: true, paidAmountCents: true, invoiceId: true },
+      select: { id: true, status: true, totalCents: true, paidAmountCents: true, invoiceId: true },
     });
-    if (target && (await loadRequestAmounts(target)).received > 0) {
+    // Voided or settled while the dialog was open: the line would join a request nobody bills (N4).
+    if (!target || !["pending", "overdue"].includes(target.status)) {
+      return { success: false as const, error: "That payment request is no longer open, so this session can't be added to it. Choose another billing option." };
+    }
+    if ((await loadRequestAmounts(target)).received > 0) {
       return {
         success: false as const,
         error: "Money has already been received on that payment request, so this session can't be added to it. Choose another billing option.",

@@ -31,6 +31,10 @@ export async function markInvoicePaidFromListAction(
       status: "paid",
       paymentMethod: method,
       eftReference: method === "eft" ? reference : undefined,
+      // The reference a Paystack link stored when it was opened. Left in place, it made this
+      // invoice look settled by that link's charge, and the charge, arriving later, went
+      // unrecorded (walk-oct-payments-2 02, N1). Only the webhook writes a settling reference.
+      paystackReference: null,
       paidAt: new Date(),
     },
     select: { paymentRequestId: true, studentId: true },
