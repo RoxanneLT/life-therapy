@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { CronJobDetail } from "./cron-digest";
+import { AUDIT_GAP_JOB } from "@/lib/audit";
 
 type CronHandler = (req: NextRequest) => Promise<Response>;
 
@@ -161,6 +162,18 @@ export async function collectStuckCronRuns(
   }));
 }
 
+const AUDIT_GAPS_LISTED = 20;
+
+/**
+ * Every lost audit write by name, not the last one. Each row is a different record whose trail now
+ * has a hole, so "3 failed — <the third>" told the reader about one hole and hid two.
+ */
+function auditGapList(errors: string[], sinceHours: number): string {
+  const shown = errors.slice(0, AUDIT_GAPS_LISTED).join("; ");
+  const more = errors.length > AUDIT_GAPS_LISTED ? `; and ${errors.length - AUDIT_GAPS_LISTED} more` : "";
+  return `${errors.length} audit entr${errors.length === 1 ? "y" : "ies"} not recorded in ${sinceHours}h: ${shown}${more}`;
+}
+
 /**
  * Roll up the last N hours of cron_runs into per-job digest entries.
  * Only returns jobs that FAILED. Used by the daily orchestrator to
@@ -185,14 +198,14 @@ export async function collectCronRunFailures(
 
   const byJob: Record<
     string,
-    { total: number; failed: number; lastError?: string }
+    { total: number; failed: number; errors: string[] }
   > = {};
   for (const run of runs) {
-    const agg = (byJob[run.jobName] ??= { total: 0, failed: 0 });
+    const agg = (byJob[run.jobName] ??= { total: 0, failed: 0, errors: [] });
     agg.total++;
     if (run.status === "failed") {
       agg.failed++;
-      if (run.errorMessage) agg.lastError = run.errorMessage;
+      if (run.errorMessage) agg.errors.push(run.errorMessage);
     }
   }
 
@@ -202,7 +215,9 @@ export async function collectCronRunFailures(
     detail[job] = {
       status: "failed",
       failed: agg.failed,
-      error: `${agg.failed}/${agg.total} runs failed in ${sinceHours}h${agg.lastError ? ` — ${agg.lastError}` : ""}`,
+      error: job === AUDIT_GAP_JOB
+        ? auditGapList(agg.errors, sinceHours)
+        : `${agg.failed}/${agg.total} runs failed in ${sinceHours}h${agg.errors.length ? ` — ${agg.errors.at(-1)}` : ""}`,
     };
   }
   return detail;
