@@ -53,7 +53,7 @@ not a preference: §6, 2026-08-17.
 | Machine | Path |
 |---|---|
 | Laptop | `C:\dev\life-therapy` (alongside `C:\dev\pleks`) |
-| Desktop | `E:devlife-therapy` — the Storage Space volume (recorded 2026-10-10, the path every session there has run from) |
+| Desktop | `E:\dev\life-therapy` — the Storage Space volume (recorded 2026-10-10, the path every session there has run from) |
 
 **First moves, before touching code:**
 
