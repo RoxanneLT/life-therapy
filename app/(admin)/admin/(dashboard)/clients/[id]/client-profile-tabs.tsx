@@ -47,9 +47,11 @@ interface ClientProfileTabsProps {
   canSeeActivity?: boolean;
   /** The Assessment section is clinical; the server withholds the intake from other roles too. */
   canSeeClinical?: boolean;
+  /** Finances is billing data, for the roles that may open Billing; its query refuses the others. */
+  canSeeBilling?: boolean;
 }
 
-export function ClientProfileTabs({ client, activeTab, canSeeActivity = false, canSeeClinical = false }: Readonly<ClientProfileTabsProps>) {
+export function ClientProfileTabs({ client, activeTab, canSeeActivity = false, canSeeClinical = false, canSeeBilling = false }: Readonly<ClientProfileTabsProps>) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -68,8 +70,9 @@ export function ClientProfileTabs({ client, activeTab, canSeeActivity = false, c
   };
 
   const requested = tabMapping[activeTab] || { tab: "overview" };
-  const mapped = requested.tab === "activity" && !canSeeActivity ? { tab: "overview" as const } : requested;
-  const visibleTabs = TABS.filter((t) => t.key !== "activity" || canSeeActivity);
+  const hidden = (tab: TabKey) => (tab === "activity" && !canSeeActivity) || (tab === "finances" && !canSeeBilling);
+  const mapped = hidden(requested.tab) ? { tab: "overview" as const } : requested;
+  const visibleTabs = TABS.filter((t) => !hidden(t.key));
   const currentTab = mapped.tab;
 
   const requestedSection = mapped.tab === "personal" ? (mapped.section || "details") : "details";

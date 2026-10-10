@@ -5,6 +5,7 @@ import { requireAccess } from "@/lib/auth";
 import { saFormat } from "@/lib/dates";
 import { recordView } from "@/lib/access-log";
 import { canSeeClinical } from "@/lib/clinical-access";
+import { canAccess } from "@/lib/admin-access";
 import { externalHolders } from "@/lib/popia/external-holders";
 import { notFound } from "next/navigation";
 import { ClientProfileTabs } from "./client-profile-tabs";
@@ -103,7 +104,7 @@ export default async function ClientDetailPage({
       </div>
 
       <div className="mt-4 min-h-0 flex-1">
-        <ClientProfileTabs client={coreClient} activeTab={activeTab} canSeeActivity={adminUser.role === "super_admin"} canSeeClinical={clinical} />
+        <ClientProfileTabs client={coreClient} activeTab={activeTab} canSeeActivity={adminUser.role === "super_admin"} canSeeClinical={clinical} canSeeBilling={canAccess("/admin/invoices", adminUser.role)} />
       </div>
     </div>
   );

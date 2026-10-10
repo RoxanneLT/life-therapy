@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth";
+import { requireAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateProformaInvoicePDF } from "@/lib/generate-invoice-pdf";
@@ -8,8 +8,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // The roles that may open Billing, from the one access map. This admitted editor, who cannot
+  // open the only page linking here, and refused marketing, who was shown the link.
   try {
-    await requireRole("super_admin", "editor");
+    await requireAccess("/admin/invoices");
   } catch {
     return new NextResponse("Unauthorized", { status: 401 });
   }

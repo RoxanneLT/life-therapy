@@ -870,7 +870,7 @@ check("server-action-auth: mutating API routes and inline actions are guarded", 
   // the limiter's import path (THROTTLES, above). `unsubscribeToken:` is the one guard still
   // keyed on text. The token IS the credential, and the key is where the lookup reads it.
   const ANY_GUARD =
-    /requireRole\s*\(|getAuthenticatedAdmin\s*\(|getAuthenticatedStudent\s*\(|getOptionalStudent\s*\(|requirePasswordChanged\s*\(|verifyWebhookSignature\s*\(|isCronAuthorised\s*\(|withCronRun\s*\(|auth\.getUser\s*\(|\bunsubscribeToken\s*:/;
+    /requireRole\s*\(|requireAccess\s*\(|getAuthenticatedAdmin\s*\(|getAuthenticatedStudent\s*\(|getOptionalStudent\s*\(|requirePasswordChanged\s*\(|verifyWebhookSignature\s*\(|isCronAuthorised\s*\(|withCronRun\s*\(|auth\.getUser\s*\(|\bunsubscribeToken\s*:/;
   const guarded = (raw) => ANY_GUARD.test(code(raw)) || Boolean(throttleCall(raw)?.test(code(raw)));
 
   // 1. Every API route handler, reads included. A GET that returns client data is as exposed
@@ -1146,7 +1146,7 @@ check("clinical: clinical text reaches only roles that may read it, and never an
       if (MUTATION.test(body)) {
         // Shorthand counts: `data: { sessionNotes }` writes the column with no colon after it.
         if (/\b(?:sessionNotes|adminNotes|cancellationReason|clientNotes)\b/.test(body) && !DECIDES.test(body)) {
-          fail("clinical", `${rel(f)} → ${fn.name}`, `${guard[1].trim()} can call it, and it writes booking notes`, `requireRole("super_admin") — a role that cannot read the notes would overwrite them blind`);
+          fail("clinical", `${rel(f)} → ${fn.name}`, `${guard[1].trim()} can call it, and it writes clinical text (notes or a cancellation reason)`, `requireRole("super_admin"), or leave the field alone — a role that cannot read it would overwrite or erase it blind`);
         }
         continue;
       }

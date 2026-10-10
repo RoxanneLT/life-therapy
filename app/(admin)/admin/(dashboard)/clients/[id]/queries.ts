@@ -19,7 +19,10 @@ export async function fetchClientBookings(clientId: string) {
 }
 
 export async function fetchClientFinances(clientId: string) {
-  const { adminUser } = await requireRole("super_admin", "marketing");
+  // Billing data goes to the roles that may open Billing ("/admin/invoices" in lib/admin-access.ts),
+  // not to every role on the client page: marketing was loading a client's invoices and payment
+  // requests here while every action on them, and the pro-forma download, refused that role.
+  const { adminUser } = await requireRole("super_admin");
   const result = await prisma.student.findUnique({
     where: { id: clientId },
     select: {
