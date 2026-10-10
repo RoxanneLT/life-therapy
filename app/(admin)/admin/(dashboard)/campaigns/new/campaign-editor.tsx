@@ -42,6 +42,8 @@ interface CampaignEditorProps {
       ctaUrl: string | null;
     }>;
   };
+  /** Whether the viewer may target by assessment answers (clinical roles only). */
+  canTargetAssessment: boolean;
 }
 
 function createDefaultStep(dayOffset = 0): StepData {
@@ -55,7 +57,7 @@ function createDefaultStep(dayOffset = 0): StepData {
   };
 }
 
-export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
+export function CampaignEditor({ campaign, canTargetAssessment }: Readonly<CampaignEditorProps>) {
   const router = useRouter();
   const [campaignId, setCampaignId] = useState(campaign?.id || null);
   const [activeTab, setActiveTab] = useState<"details" | "emails">("details");
@@ -350,6 +352,7 @@ export function CampaignEditor({ campaign }: Readonly<CampaignEditorProps>) {
               recipientCount={recipientCount}
               onCount={fetchRecipientCount}
               counting={counting}
+              showAssessment={canTargetAssessment}
             />
           </div>
         </div>

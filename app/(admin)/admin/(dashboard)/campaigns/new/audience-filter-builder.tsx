@@ -34,6 +34,11 @@ interface AudienceFilterBuilderProps {
   recipientCount: number | null;
   onCount: () => void;
   counting?: boolean;
+  /**
+   * The assessment sections, for clinical roles only. Hiding them is courtesy: the server strips
+   * these filters for any other role whatever the browser sends (campaigns/actions.ts).
+   */
+  showAssessment: boolean;
 }
 
 // ── Collapsible Section ──
@@ -165,6 +170,7 @@ export function AudienceFilterBuilder({
   recipientCount,
   onCount,
   counting = false,
+  showAssessment,
 }: AudienceFilterBuilderProps) {
   // Helpers to update specific filter keys
   const set = useCallback(
@@ -405,6 +411,8 @@ export function AudienceFilterBuilder({
             </div>
           </FilterSection>
 
+          {showAssessment && (
+          <>
           {/* ── Assessment: Behaviours ── */}
           <FilterSection
             title="Assessment — Behaviours"
@@ -465,6 +473,8 @@ export function AudienceFilterBuilder({
               columns={2}
             />
           </FilterSection>
+          </>
+          )}
 
           {/* ── Enrollment Status ── */}
           <FilterSection

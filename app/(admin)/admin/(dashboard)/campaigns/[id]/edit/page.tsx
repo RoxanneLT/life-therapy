@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAccess } from "@/lib/auth";
+import { canSeeClinical } from "@/lib/clinical-access";
 import { PageHeader } from "@/components/admin/page-header";
 import { CampaignEditor } from "../../new/campaign-editor";
 import { BirthdayCampaignEditor } from "../../new/birthday-campaign-editor";
@@ -12,7 +13,7 @@ export default async function EditCampaignPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAccess("/admin/campaigns");
+  const { adminUser } = await requireAccess("/admin/campaigns");
   const { id } = await params;
 
   const campaign = await prisma.campaign.findUnique({
@@ -39,7 +40,7 @@ export default async function EditCampaignPage({
   return (
     <div>
       <div className="mb-6"><PageHeader title="Edit Campaign" /></div>
-      <CampaignEditor campaign={campaign} />
+      <CampaignEditor campaign={campaign} canTargetAssessment={canSeeClinical(adminUser.role)} />
     </div>
   );
 }

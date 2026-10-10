@@ -79,6 +79,10 @@ export function CampaignActions({
     setSendingCampaign(true);
     try {
       const result = await sendCampaignAction(campaignId);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(`Campaign sent! ${result.sentCount} emails delivered.`);
       router.refresh();
     } catch (err) {
@@ -98,7 +102,11 @@ export function CampaignActions({
     }
     setScheduling(true);
     try {
-      await scheduleCampaignAction(campaignId, scheduleDate);
+      const refused = await scheduleCampaignAction(campaignId, scheduleDate);
+      if (refused) {
+        toast.error(refused.error);
+        return;
+      }
       toast.success("Campaign scheduled successfully.");
       router.refresh();
     } catch (err) {

@@ -39,6 +39,25 @@ export interface AudienceFilters {
   tags?: string[];
 }
 
+/**
+ * The filters that read a client's assessment answers. Those answers are health information
+ * (special personal information under POPIA), so they are clinical: only a role that may read
+ * clinical data (lib/clinical-access.ts canSeeClinical) may target by them. A count is not safe
+ * to show instead — narrow the filter until it reads 1 and it names a person's mental health.
+ * Owner's ruling, 2026-10-10.
+ */
+const ASSESSMENT_FILTER_KEYS = ["behaviours", "feelings", "symptoms"] as const;
+
+export function usesAssessmentFilters(filters: AudienceFilters | null | undefined): boolean {
+  return !!filters && ASSESSMENT_FILTER_KEYS.some((k) => (filters[k]?.length ?? 0) > 0);
+}
+
+export function withoutAssessmentFilters(filters: AudienceFilters | undefined): AudienceFilters | undefined {
+  if (!filters) return filters;
+  const { behaviours: _b, feelings: _f, symptoms: _s, assessmentMatchMode: _m, ...rest } = filters;
+  return rest;
+}
+
 // Options for select-style filters
 export const CLIENT_STATUS_OPTIONS = [
   { value: "active", label: "Active" },

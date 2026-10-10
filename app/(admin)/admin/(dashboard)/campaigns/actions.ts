@@ -8,7 +8,23 @@ import { sendCampaign } from "@/lib/campaign-send";
 import { sendEmail } from "@/lib/email";
 import { baseTemplate } from "@/lib/email-templates";
 import { getCampaignRecipients } from "@/lib/contacts";
-import type { AudienceFilters } from "@/lib/audience-filters";
+import { usesAssessmentFilters, withoutAssessmentFilters, type AudienceFilters } from "@/lib/audience-filters";
+import { canSeeClinical } from "@/lib/clinical-access";
+import type { AdminRole } from "@/lib/generated/prisma/client";
+
+/** A role that may not read assessment answers may not target by them either (lib/audience-filters.ts). */
+function audienceFor(role: AdminRole, filters: AudienceFilters | undefined) {
+  return canSeeClinical(role) ? filters : withoutAssessmentFilters(filters);
+}
+
+/** The refusal when a non-clinical role tries to send a campaign someone else targeted by assessment. */
+async function assessmentRefusal(role: AdminRole, campaignId: string): Promise<string | null> {
+  if (canSeeClinical(role)) return null;
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { audienceFilters: true } });
+  return usesAssessmentFilters(campaign?.audienceFilters as AudienceFilters | null)
+    ? "This campaign targets clients by their assessment answers, so only a super admin can send it."
+    : null;
+}
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 // ────────────────────────────────────────────────────────────
@@ -111,7 +127,7 @@ async function saveSingleEmailCampaign(id: string | null, filters: CampaignFilte
 export async function saveCampaignAction(
   formData: FormData,
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
-  await requireRole("super_admin", "marketing");
+  const { adminUser } = await requireRole("super_admin", "marketing");
 
   const id = formData.get("id") as string | null;
   const name = (formData.get("name") as string)?.trim();
@@ -122,7 +138,10 @@ export async function saveCampaignAction(
   const filterTagsStr = (formData.get("filterTags") as string)?.trim();
   const filterTags = filterTagsStr ? filterTagsStr.split(",").map((t) => t.trim()).filter(Boolean) : undefined;
   const audienceFiltersStr = (formData.get("audienceFilters") as string)?.trim();
-  const audienceFilters = audienceFiltersStr ? JSON.parse(audienceFiltersStr) as AudienceFilters : undefined;
+  const audienceFilters = audienceFor(
+    adminUser.role,
+    audienceFiltersStr ? (JSON.parse(audienceFiltersStr) as AudienceFilters) : undefined,
+  );
   const filters: CampaignFilters = { name, filterSource, filterClientStatus, filterTags, audienceFilters };
 
   // The two savers and their helpers still throw their refusals — they are
@@ -150,6 +169,9 @@ export async function saveCampaignAction(
 export async function sendCampaignAction(campaignId: string) {
   const { adminUser } = await requireRole("super_admin", "marketing");
 
+  const refusal = await assessmentRefusal(adminUser.role, campaignId);
+  if (refusal) return { error: refusal };
+
   await prisma.campaign.update({
     where: { id: campaignId },
     data: { sentById: adminUser.id },
@@ -167,8 +189,14 @@ export async function sendCampaignAction(campaignId: string) {
 // Multi-step: schedule for a future date
 // ────────────────────────────────────────────────────────────
 
-export async function scheduleCampaignAction(campaignId: string, startDate: string) {
-  await requireRole("super_admin", "marketing");
+export async function scheduleCampaignAction(
+  campaignId: string,
+  startDate: string,
+): Promise<{ error: string } | undefined> {
+  const { adminUser } = await requireRole("super_admin", "marketing");
+
+  const refusal = await assessmentRefusal(adminUser.role, campaignId);
+  if (refusal) return { error: refusal };
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -399,8 +427,8 @@ export async function getRecipientCountAction(
   },
   audienceFilters?: AudienceFilters
 ) {
-  await requireRole("super_admin", "marketing");
+  const { adminUser } = await requireRole("super_admin", "marketing");
 
-  const recipients = await getCampaignRecipients(filters, audienceFilters);
+  const recipients = await getCampaignRecipients(filters, audienceFor(adminUser.role, audienceFilters));
   return recipients.length;
 }
