@@ -698,14 +698,19 @@ function BillingConfigCard({
                   const previous = localIndivBilled;
                   setLocalIndivBilled(val);
                   startTransition(async () => {
-                    const result = await updateBillingAssignmentAction(clientId, "individual", val);
-                    if (result?.error) {
-                      toast.error(result.error);
+                    try {
+                      const result = await updateBillingAssignmentAction(clientId, "individual", val);
+                      if (result?.error) {
+                        toast.error(result.error);
+                        setLocalIndivBilled(previous);
+                        return;
+                      }
+                      toast.success("Individual billing assignment updated");
+                      onSuccess?.();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Could not update the billing assignment.");
                       setLocalIndivBilled(previous);
-                      return;
                     }
-                    toast.success("Individual billing assignment updated");
-                    onSuccess?.();
                   });
                 }}
                 disabled={isPending}
@@ -731,14 +736,19 @@ function BillingConfigCard({
                   const previous = localCouplesBilled;
                   setLocalCouplesBilled(val);
                   startTransition(async () => {
-                    const result = await updateBillingAssignmentAction(clientId, "couples", val);
-                    if (result?.error) {
-                      toast.error(result.error);
+                    try {
+                      const result = await updateBillingAssignmentAction(clientId, "couples", val);
+                      if (result?.error) {
+                        toast.error(result.error);
+                        setLocalCouplesBilled(previous);
+                        return;
+                      }
+                      toast.success("Couples billing assignment updated");
+                      onSuccess?.();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Could not update the billing assignment.");
                       setLocalCouplesBilled(previous);
-                      return;
                     }
-                    toast.success("Couples billing assignment updated");
-                    onSuccess?.();
                   });
                 }}
                 disabled={isPending}

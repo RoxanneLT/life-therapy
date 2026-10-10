@@ -95,7 +95,7 @@ export function StatusSelect({
         // dropdown snapped back to the old status on a save that had succeeded.
         router.refresh();
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Failed to update status");
+        toast.error(err instanceof Error ? err.message : "Failed to update status");
       }
     });
   }
