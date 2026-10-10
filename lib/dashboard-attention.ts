@@ -89,8 +89,18 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
   // Each list row is a COUNT plus the first few rows to name. Until 2026-10-10 the count was the
   // length of a capped list (take 50 / 20), so a bad week read as "50 emails failed" however many
   // had, and the sidebar badge summed the same capped figure.
-  const failedWhere = { status: "failed", sentAt: { gte: saDayStart(addSaDays(today, -7)) } };
-  const expiringWhere = { balance: { gt: 0 }, expiresAt: { gte: todayStart, lt: saDayStart(addSaDays(today, 15)) } };
+  // An erased client keeps their rows (lib/popia/erase-client.ts), and nothing on them is
+  // actionable: no mail is retried to a placeholder address, and no expiry warning is sent.
+  const failedWhere = {
+    status: "failed",
+    sentAt: { gte: saDayStart(addSaDays(today, -7)) },
+    OR: [{ studentId: null }, { student: { erasedAt: null } }],
+  };
+  const expiringWhere = {
+    balance: { gt: 0 },
+    expiresAt: { gte: todayStart, lt: saDayStart(addSaDays(today, 15)) },
+    student: { erasedAt: null },
+  };
 
   const [stale, syncFailures, lastReconcile, overdue, failedEmails, expiring, conflicts] = await Promise.all([
     can("/admin/bookings") ? countStaleSessions() : none,
