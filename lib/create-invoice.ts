@@ -257,6 +257,18 @@ export async function createInvoiceFromPaymentRequest(
   if (pr.status === "paid" && pr.invoiceId) {
     return prisma.invoice.findUniqueOrThrow({ where: { id: pr.invoiceId } });
   }
+  // Its invoice is paid but the request is not: a settlement written halfway (the invoice and the
+  // request are two writes on the new-invoice path). Finish it rather than issue a second tax
+  // invoice, which an admin's re-click did (walk-oct-payments-2 03, F4).
+  const paidInvoice = await prisma.invoice.findFirst({ where: { paymentRequestId, status: "paid" }, orderBy: { createdAt: "desc" } });
+  if (paidInvoice && pr.status !== "cancelled") {
+    await prisma.paymentRequest.update({
+      where: { id: paymentRequestId },
+      data: { status: "paid", invoiceId: paidInvoice.id, paidAmountCents: paidInvoice.paidAmountCents ?? pr.totalCents },
+    });
+    return paidInvoice;
+  }
+
   // A voided request is owed nothing. Settling it issued a numbered tax invoice and marked it paid
   // while its released sessions waited to be billed again (walk-oct-payments-2 02, N3). Every
   // caller refuses this first; reaching here is a bug, so it throws.

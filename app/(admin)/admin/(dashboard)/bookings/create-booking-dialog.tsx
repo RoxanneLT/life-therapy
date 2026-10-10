@@ -416,7 +416,9 @@ export function CreateBookingDialog({
       resetForm();
       if (result?.bookingId) router.push(`/admin/bookings/${result.bookingId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create booking");
+      // Not setError: that line renders under the open billing prompt (walk-oct-payments-2 03, F5).
+      setShowBillingPrompt(false);
+      toast.error(err instanceof Error ? err.message : "Failed to create booking");
     }
   }
 

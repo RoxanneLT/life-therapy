@@ -112,7 +112,7 @@ export async function POST(request: Request) {
             ...(pr.invoiceId
               ? [prisma.invoice.update({ where: { id: pr.invoiceId }, data: { paidAmountCents: paidToDate } })]
               : []),
-            shortfallMarker("payment_request", paymentRequestId, {
+            marker("payment_shortfall", "payment_request", paymentRequestId, {
               expectedCents: pr.totalCents,
               receivedCents: data.amount,
               paidToDateCents: paidToDate,
@@ -219,7 +219,7 @@ export async function POST(request: Request) {
             ...(request
               ? [prisma.paymentRequest.update({ where: { id: request.id }, data: { paidAmountCents: invPaidToDate } })]
               : []),
-            shortfallMarker("invoice", invoiceId, {
+            marker("payment_shortfall", "invoice", invoiceId, {
               expectedCents: existing.totalCents,
               receivedCents: data.amount,
               paidToDateCents: invPaidToDate,
@@ -254,6 +254,7 @@ export async function POST(request: Request) {
           ...(request
             ? [prisma.paymentRequest.update({ where: { id: request.id }, data: { status: "paid", paidAmountCents: invPaidToDate, invoiceId } })]
             : []),
+          marker("payment_settled", "invoice", invoiceId, { reference: data.reference, paidToDateCents: invPaidToDate, currency: existing?.currency ?? null }),
         ]);
 
         await generateAndStoreInvoicePDF(invoiceId).catch((err) =>
@@ -286,20 +287,23 @@ async function partRecorded(entityType: Entity, entityId: string, reference: str
 }
 
 /**
- * This charge is already on the books: it settled an invoice, or an earlier delivery recorded it as
- * a part payment or an overpayment.
+ * This charge is already on the books: an earlier delivery settled with it, or recorded it as a part
+ * payment or an overpayment. Only rows this handler writes are proof.
  *
- * "Settled" is a paid invoice whose METHOD is Paystack with this reference. The reference alone is
- * not proof: a link stores it on the invoice when it is made, before any money moves, so an invoice
- * then marked paid by EFT still carried it, and the late charge read as already counted
- * (walk-oct-payments-2, W1).
+ * The invoice's own columns are not. A link stores its reference on the invoice when it is opened,
+ * before any money moves, and an admin's mark-paid can say "Paystack" (walk-oct-payments-2 01 W1,
+ * 02 N1). Clearing that reference instead lost what the POPIA erasure checklist reads (03 F2). So a
+ * direct-invoice settlement writes its own marker, in the transaction that settles it. A request's
+ * settlement is the engine's invoice for this request and this reference, which no admin path writes.
  */
 async function counted(entityType: Entity, entityId: string, reference: string): Promise<boolean> {
+  if (await markerFor(["payment_shortfall", "payment_overpaid", "payment_settled"], entityType, entityId, reference)) return true;
+  if (entityType !== "payment_request") return false;
   const settledBy = await prisma.invoice.findFirst({
-    where: { paystackReference: reference, status: "paid", paymentMethod: "paystack" },
+    where: { paystackReference: reference, paymentRequestId: entityId, status: "paid", paymentMethod: "paystack" },
     select: { id: true },
   });
-  return !!settledBy || !!(await markerFor(["payment_shortfall", "payment_overpaid"], entityType, entityId, reference));
+  return !!settledBy;
 }
 
 function markerFor(actions: string[], entityType: Entity, entityId: string, reference: string) {
@@ -310,13 +314,13 @@ function markerFor(actions: string[], entityType: Entity, entityId: string, refe
 }
 
 /**
- * The part payment's audit row, built to run inside the transaction that writes the money, since it
- * is also the retry marker. Written directly, not through recordAudit, which swallows its own
- * failure; the metadata is amounts and ids, nothing recordAudit would mask.
+ * An audit row built to run inside the transaction that writes the money, since it is also the retry
+ * marker. Written directly, not through recordAudit, which swallows its own failure; the metadata is
+ * amounts and ids, nothing recordAudit would mask.
  */
-function shortfallMarker(entityType: Entity, entityId: string, metadata: Prisma.InputJsonObject) {
+function marker(action: "payment_shortfall" | "payment_settled", entityType: Entity, entityId: string, metadata: Prisma.InputJsonObject) {
   return prisma.auditLog.create({
-    data: { action: "payment_shortfall", entityType, entityId, actorEmail: "paystack-webhook", metadata },
+    data: { action, entityType, entityId, actorEmail: "paystack-webhook", metadata },
   });
 }
 

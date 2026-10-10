@@ -257,6 +257,31 @@ export function calculateInvoiceTotals(
   return { subtotalCents, discountCents, vatAmountCents, totalCents };
 }
 
+// ─── Can an admin mark this invoice paid? ─────────────────────
+
+/**
+ * Why an invoice cannot be marked paid by hand, or null. Its own status must still be open, and so
+ * must its request's: marking it paid marks the request paid too, and a voided request was flipped to
+ * paid that way from the live UI (walk-oct-payments-2 03, F1). Shared by the client tab and the list.
+ */
+export async function invoicePaidRefusal(invoiceId: string): Promise<string | null> {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    select: { status: true, paymentRequestId: true },
+  });
+  if (!invoice) return "That invoice no longer exists.";
+  if (!["draft", "payment_requested", "overdue"].includes(invoice.status)) {
+    return `This invoice is already ${invoice.status === "paid" ? "paid" : invoice.status}. Refresh the page.`;
+  }
+  if (invoice.paymentRequestId) {
+    const request = await prisma.paymentRequest.findUnique({ where: { id: invoice.paymentRequestId }, select: { status: true } });
+    if (request?.status === "cancelled") {
+      return "This invoice's payment request was voided, so it can't be marked paid. Raise a new request for what is owed.";
+    }
+  }
+  return null;
+}
+
 // ─── Money received against a payment request ────────────────
 
 /**

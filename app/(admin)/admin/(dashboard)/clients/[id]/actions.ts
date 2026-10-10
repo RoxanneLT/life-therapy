@@ -12,7 +12,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
-import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, loadRequestAmounts, type BillingContact } from "@/lib/billing";
+import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, loadRequestAmounts, invoicePaidRefusal, type BillingContact } from "@/lib/billing";
 import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { format } from "date-fns";
@@ -1374,6 +1374,9 @@ export async function markInvoicePaidAction(
 ) {
   const { adminUser } = await requireRole("super_admin");
 
+  const refusal = await invoicePaidRefusal(invoiceId);
+  if (refusal) return { error: refusal };
+
   // Read before writing, so the audit row records the status the invoice really had.
   const prior = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
   await prisma.invoice.update({
@@ -1382,10 +1385,6 @@ export async function markInvoicePaidAction(
       status: "paid",
       paymentMethod: method,
       eftReference: method === "eft" ? reference : undefined,
-      // The reference a Paystack link stored when it was opened. Left in place, it made this
-      // invoice look settled by that link's charge, and the charge, arriving later, went
-      // unrecorded (walk-oct-payments-2 02, N1). Only the webhook writes a settling reference.
-      paystackReference: null,
       paidAt: new Date(),
     },
   });
@@ -1413,6 +1412,7 @@ export async function markInvoicePaidAction(
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
+  return {};
 }
 
 // ────────────────────────────────────────────────────────────

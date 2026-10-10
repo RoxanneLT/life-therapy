@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -41,7 +42,11 @@ export function InvoiceRowActions({ invoiceId, status, pdfUrl }: InvoiceRowActio
   async function handleMarkPaid() {
     setLoading(true);
     try {
-      await markInvoicePaidFromListAction(invoiceId, method, reference || undefined);
+      const result = await markInvoicePaidFromListAction(invoiceId, method, reference || undefined);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
       setMarkPaidOpen(false);
     } finally {
       setLoading(false);

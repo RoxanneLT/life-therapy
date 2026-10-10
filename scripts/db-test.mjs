@@ -68,7 +68,9 @@ async function main() {
     await applyAll(url, { write: true, log: () => {} });
     console.log(`test:db → ${host} · ${DB} built from prisma/sql/ · ${files.length} file(s)\n`);
 
-    const r = spawnSync("npx", ["tsx", "--test", ...files], {
+    // Module mocks let a test drive a server action with requireRole and next/cache stood in, so
+    // what an admin's click writes is tested against a real database (lib/payment-admin.dbtest.ts).
+    const r = spawnSync("npx", ["tsx", "--experimental-test-module-mocks", "--test", ...files], {
       stdio: "inherit",
       shell: process.platform === "win32",
       env: { ...process.env, DATABASE_URL: url, LT_DB_TEST: "1", TZ: "UTC", ENCRYPTION_KEY: TEST_ENCRYPTION_KEY },

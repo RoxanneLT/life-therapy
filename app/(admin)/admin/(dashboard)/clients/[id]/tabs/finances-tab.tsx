@@ -786,7 +786,11 @@ function InvoiceHistorySection({
 
   function handleMarkPaid(invoiceId: string) {
     startTransition(async () => {
-      await markInvoicePaidAction(invoiceId, "manual", undefined, clientId);
+      const result = await markInvoicePaidAction(invoiceId, "manual", undefined, clientId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success("Invoice marked as paid");
       onSuccess?.();
     });

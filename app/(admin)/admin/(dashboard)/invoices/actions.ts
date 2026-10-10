@@ -10,7 +10,7 @@ import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
 import { refreshPaymentLink } from "@/lib/payment-request-link";
 import { saDateStr, saDayStart, addSaDays } from "@/lib/dates";
-import { resolveClientCurrencies, receivedCents } from "@/lib/billing";
+import { resolveClientCurrencies, receivedCents, invoicePaidRefusal } from "@/lib/billing";
 
 // ────────────────────────────────────────────────────────────
 // Mark invoice as paid (from invoice list page)
@@ -23,6 +23,9 @@ export async function markInvoicePaidFromListAction(
 ) {
   const { adminUser } = await requireRole("super_admin");
 
+  const refusal = await invoicePaidRefusal(invoiceId);
+  if (refusal) return { error: refusal };
+
   // Read before writing, so the audit row records the status the invoice really had.
   const prior = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
   const invoice = await prisma.invoice.update({
@@ -31,10 +34,6 @@ export async function markInvoicePaidFromListAction(
       status: "paid",
       paymentMethod: method,
       eftReference: method === "eft" ? reference : undefined,
-      // The reference a Paystack link stored when it was opened. Left in place, it made this
-      // invoice look settled by that link's charge, and the charge, arriving later, went
-      // unrecorded (walk-oct-payments-2 02, N1). Only the webhook writes a settling reference.
-      paystackReference: null,
       paidAt: new Date(),
     },
     select: { paymentRequestId: true, studentId: true },
@@ -61,6 +60,7 @@ export async function markInvoicePaidFromListAction(
   if (invoice.studentId) {
     revalidatePath(`/admin/clients/${invoice.studentId}`);
   }
+  return {};
 }
 
 // ────────────────────────────────────────────────────────────
