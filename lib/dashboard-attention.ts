@@ -86,6 +86,11 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
   const todayStart = saDayStart(today);
   const can = (href: string) => canAccess(href, role);
   const none = Promise.resolve(null);
+  // Each list row is a COUNT plus the first few rows to name. Until 2026-10-10 the count was the
+  // length of a capped list (take 50 / 20), so a bad week read as "50 emails failed" however many
+  // had, and the sidebar badge summed the same capped figure.
+  const failedWhere = { status: "failed", sentAt: { gte: saDayStart(addSaDays(today, -7)) } };
+  const expiringWhere = { balance: { gt: 0 }, expiresAt: { gte: todayStart, lt: saDayStart(addSaDays(today, 15)) } };
 
   const [stale, syncFailures, lastReconcile, overdue, failedEmails, expiring, conflicts] = await Promise.all([
     can("/admin/bookings") ? countStaleSessions() : none,
@@ -102,28 +107,35 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
     can("/admin/invoices") ? countOverduePaymentRequests() : none,
     // Links to client records, but failed mail is administered under Email Templates.
     can("/admin/email-templates")
-      ? prisma.emailLog.findMany({
-          where: { status: "failed", sentAt: { gte: saDayStart(addSaDays(today, -7)) } },
-          orderBy: { sentAt: "desc" },
-          select: { to: true, templateKey: true, subject: true, studentId: true, sentAt: true },
-          take: 50,
-        })
+      ? Promise.all([
+          prisma.emailLog.count({ where: failedWhere }),
+          prisma.emailLog.findMany({
+            where: failedWhere,
+            orderBy: { sentAt: "desc" },
+            select: { to: true, templateKey: true, subject: true, studentId: true, sentAt: true },
+            take: ENTRY_LIMIT,
+          }),
+        ])
       : none,
     // Links to client records, but credit balances are billing data.
     can("/admin/invoices")
-      ? prisma.sessionCreditBalance.findMany({
-          where: { balance: { gt: 0 }, expiresAt: { gte: todayStart, lt: saDayStart(addSaDays(today, 15)) } },
-          orderBy: { expiresAt: "asc" },
-          select: { balance: true, expiresAt: true, student: { select: { id: true, firstName: true, lastName: true } } },
-          take: 20,
-        })
+      ? Promise.all([
+          prisma.sessionCreditBalance.count({ where: expiringWhere }),
+          prisma.sessionCreditBalance.findMany({
+            where: expiringWhere,
+            orderBy: { expiresAt: "asc" },
+            select: { balance: true, expiresAt: true, student: { select: { id: true, firstName: true, lastName: true } } },
+            take: ENTRY_LIMIT,
+          }),
+        ])
       : none,
+    // Every client with a conflict in 30 days, one row each. Not capped: the count is the row count.
     can("/admin/clients")
       ? prisma.auditLog.findMany({
           where: { action: "contact_field_conflict", entityType: "student", createdAt: { gte: saDayStart(addSaDays(today, -30)) } },
           orderBy: { createdAt: "desc" },
           select: { entityId: true },
-          take: 50,
+          distinct: ["entityId"],
         })
       : none,
   ]);
@@ -186,15 +198,16 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
     });
   }
 
-  if (failedEmails && failedEmails.length > 0) {
+  if (failedEmails && failedEmails[0] > 0) {
+    const [count, rows] = failedEmails;
     items.push({
       key: "email-failed",
       priority: 1,
-      title: `${plural(failedEmails.length, "email")} failed to send this week`,
+      title: `${plural(count, "email")} failed to send this week`,
       detail: "The provider refused these. Usually a mistyped address: correct it, then resend from the record.",
-      count: failedEmails.length,
+      count,
       nav: ["/admin/email-templates"],
-      entries: failedEmails.slice(0, ENTRY_LIMIT).map((e) => ({
+      entries: rows.map((e) => ({
         label: e.to,
         detail: `${e.templateKey ?? e.subject} · ${saFormat(e.sentAt, "d MMM, HH:mm")}`,
         href: e.studentId ? `/admin/clients/${e.studentId}` : undefined,
@@ -202,15 +215,16 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
     });
   }
 
-  if (expiring && expiring.length > 0) {
+  if (expiring && expiring[0] > 0) {
+    const [count, rows] = expiring;
     items.push({
       key: "credits-expiring",
       priority: 2,
-      title: `${plural(expiring.length, "client")} with session credits expiring within 14 days`,
-      count: expiring.length,
+      title: `${plural(count, "client")} with session credits expiring within 14 days`,
+      count,
       // Billing, not Clients: the row is gated by billing access, and Clients is a marketing page.
       nav: ["/admin/invoices"],
-      entries: expiring.slice(0, ENTRY_LIMIT).map((c) => ({
+      entries: rows.map((c) => ({
         label: `${c.student.firstName} ${c.student.lastName}`,
         detail: `${plural(c.balance, "credit")} · expires ${saFormat(c.expiresAt!, "d MMM")}`,
         href: `/admin/clients/${c.student.id}`,
@@ -219,24 +233,27 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
   }
 
   if (conflicts && conflicts.length > 0) {
-    const ids = [...new Set(conflicts.map((c) => c.entityId))];
-    const students = await prisma.student.findMany({
-      where: { id: { in: ids.slice(0, ENTRY_LIMIT) } },
+    // An erased client's entries outlive them in the audit log, but there is nothing left to check.
+    const live = await prisma.student.findMany({
+      where: { id: { in: conflicts.map((c) => c.entityId) }, erasedAt: null },
       select: { id: true, firstName: true, lastName: true },
     });
-    const byId = new Map(students.map((s) => [s.id, s]));
-    items.push({
-      key: "contact-conflicts",
-      priority: 3,
-      title: `${plural(ids.length, "client")} sent contact details that differ from their record`,
-      detail: "Kept as stored. Check whether the new details are a real change.",
-      count: ids.length,
-      nav: ["/admin/clients"],
-      entries: ids.slice(0, ENTRY_LIMIT).flatMap((id) => {
-        const s = byId.get(id);
-        return s ? [{ label: `${s.firstName} ${s.lastName}`, href: `/admin/clients/${id}` }] : [];
-      }),
-    });
+    const byId = new Map(live.map((s) => [s.id, s]));
+    const ids = conflicts.map((c) => c.entityId).filter((id) => byId.has(id));
+    if (ids.length > 0) {
+      items.push({
+        key: "contact-conflicts",
+        priority: 3,
+        title: `${plural(ids.length, "client")} sent contact details that differ from their record`,
+        detail: "Kept as stored. Check whether the new details are a real change.",
+        count: ids.length,
+        nav: ["/admin/clients"],
+        entries: ids.slice(0, ENTRY_LIMIT).map((id) => {
+          const s = byId.get(id)!;
+          return { label: `${s.firstName} ${s.lastName}`, href: `/admin/clients/${id}` };
+        }),
+      });
+    }
   }
 
   return items.sort((a, b) => a.priority - b.priority);
