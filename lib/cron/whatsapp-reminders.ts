@@ -96,6 +96,9 @@ async function processBillingReminders(
   }
 
   const today = getSASTToday();
+  // A request an admin put on hold is not chased here either: the email chaser honours
+  // chasePausedUntil (monthly-billing.ts) and these four steps did not (walk-oct-fixes 01, F8).
+  const notPaused = () => ({ OR: [{ chasePausedUntil: null }, { chasePausedUntil: { lte: new Date() } }] });
 
   // 1. New payment requests — send on billing date
   let sentRequest = 0;
@@ -104,6 +107,7 @@ async function processBillingReminders(
       status: "pending",
       whatsappSentAt: null,
       studentId: { not: null },
+      ...notPaused(),
     },
   });
 
@@ -146,6 +150,7 @@ async function processBillingReminders(
       status: "pending",
       whatsappReminderSentAt: null,
       studentId: { not: null },
+      ...notPaused(),
     },
   });
 
@@ -183,6 +188,7 @@ async function processBillingReminders(
       status: "pending",
       whatsappDueTodaySentAt: null,
       studentId: { not: null },
+      ...notPaused(),
     },
   });
 
@@ -222,6 +228,7 @@ async function processBillingReminders(
       status: { in: ["pending", "overdue"] },
       whatsappOverdueSentAt: null,
       studentId: { not: null },
+      ...notPaused(),
     },
   });
 
