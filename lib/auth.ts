@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { AdminRole } from "@/lib/generated/prisma/client";
 import { ADMIN_ACCESS, type AdminArea } from "./admin-access";
+import { mfaGateTarget } from "./mfa-gate";
 
 /**
  * The PURE half of the admin auth check — verify the user, load the adminUser row,
@@ -16,11 +17,7 @@ import { ADMIN_ACCESS, type AdminArea } from "./admin-access";
  * the skipMfaGate boolean (a primitive, so cache dedupes by value) — the two keys never
  * share a result.
  *
- * 2FA gate (computed in a try/catch — fail open, never lock an admin out over a
- * transient glitch; the setup/challenge pages pass skipMfaGate to avoid a loop):
- *   AAL1 + nextLevel aal2  → has a factor, must step up        → /login/mfa
- *   AAL1 + nextLevel aal1  → no factor (2FA is mandatory)      → /login/mfa/setup
- *   AAL2                   → verified this session             → allowed
+ * 2FA gate: mfaGateTarget below. The setup/challenge pages pass skipMfaGate to avoid a loop.
  */
 const loadAdminContext = cache(async (skipMfaGate: boolean) => {
   const supabase = await createSupabaseServerClient();
@@ -42,16 +39,7 @@ const loadAdminContext = cache(async (skipMfaGate: boolean) => {
 
   let gateTarget: string | null = null;
   if (!skipMfaGate) {
-    try {
-      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2") {
-        gateTarget = "/login/mfa";
-      } else if (aal?.currentLevel === "aal1" && aal?.nextLevel === "aal1") {
-        gateTarget = "/login/mfa/setup";
-      }
-    } catch {
-      gateTarget = null;
-    }
+    gateTarget = await mfaGateTarget(supabase);
   }
 
   return { user, adminUser, gateTarget };
