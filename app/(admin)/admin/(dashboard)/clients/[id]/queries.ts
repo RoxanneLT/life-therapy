@@ -198,12 +198,18 @@ export async function fetchClientInsights(clientId: string) {
  */
 export async function fetchClientActivity(clientId: string): Promise<AuditFeedRow[]> {
   await requireRole("super_admin");
-  const [bookings, paymentRequests, invoices] = await Promise.all([
+  const [bookings, deleted, paymentRequests, invoices] = await Promise.all([
     prisma.booking.findMany({ where: { studentId: clientId }, select: { id: true, recurringSeriesId: true } }),
+    // A deleted booking is gone from the table, so its history is found through its deletion
+    // entry, which records the client in `before` (bookings/actions.ts → booking_deleted).
+    prisma.auditLog.findMany({
+      where: { entityType: "booking", action: "booking_deleted", before: { path: ["studentId"], equals: clientId } },
+      select: { entityId: true },
+    }),
     prisma.paymentRequest.findMany({ where: { studentId: clientId }, select: { id: true } }),
     prisma.invoice.findMany({ where: { studentId: clientId }, select: { id: true } }),
   ]);
-  const bookingIds = bookings.map((b) => b.id);
+  const bookingIds = [...bookings.map((b) => b.id), ...deleted.map((d) => d.entityId)];
   // A series row is keyed by its recurringSeriesId, not by any one booking's id.
   const seriesIds = [...new Set(bookings.map((b) => b.recurringSeriesId).filter((s): s is string => !!s))];
   const rows = await prisma.auditLog.findMany({
