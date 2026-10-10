@@ -147,6 +147,13 @@ export async function markPaymentRequestPaidFromListAction(
 ) {
   const { adminUser } = await requireRole("super_admin");
 
+  // The dialog refuses these too. Here, because the engine reads 0 as "paid in full": since the
+  // demotion writes went (8a52c90), a 0 or negative amount settled the request with no money
+  // received (walk-oct-payments-4, W1).
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    return { error: "Enter the amount received, in cents above zero." };
+  }
+
   const pr = await prisma.paymentRequest.findUniqueOrThrow({
     where: { id: paymentRequestId },
   });

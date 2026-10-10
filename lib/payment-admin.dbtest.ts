@@ -203,6 +203,18 @@ test("a short charge landing while a part payment is recorded is a shortfall, an
   assert.deepEqual(await overpaidCents(pr.id), []);
 });
 
+test("a list payment of zero or less is refused, and settles nothing", async () => {
+  const { markPaymentRequestPaidFromListAction } = await listActions();
+  const pr = await makeRequest(40_000);
+
+  for (const amount of [0, -5_000, 0.5]) {
+    assert.ok((await markPaymentRequestPaidFromListAction(pr.id, "eft", amount)).error);
+  }
+
+  assert.equal((await prisma.paymentRequest.findUniqueOrThrow({ where: { id: pr.id } })).status, "pending");
+  assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 0);
+});
+
 test("recording an EFT on an open request does not bring its voided invoice back as paid", async () => {
   const { markPaymentRequestPaidFromListAction } = await listActions();
   const pr = await makeRequest(40_000);
