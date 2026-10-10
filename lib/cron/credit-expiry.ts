@@ -106,6 +106,8 @@ export async function processCreditExpiry(): Promise<CreditExpiryResult> {
           // tier and neither changes the answer. Selecting them would invite the
           // next reader to filter on them again.
           unsubscribeToken: true,
+          // An erased client has only a placeholder address; nobody is there to warn.
+          erasedAt: true,
         },
       },
     },
@@ -116,7 +118,7 @@ export async function processCreditExpiry(): Promise<CreditExpiryResult> {
     const due = warningDue(cb, now);
     // Called with no argument, which is the honest signature: nothing about the
     // client's consent or pause state can suppress a notice about their own money.
-    if (due && cb.student && mayReceiveAccountNotice()) {
+    if (due && cb.student && !cb.student.erasedAt && mayReceiveAccountNotice()) {
       // Keyed by the EXPIRY DATE, not the month: a new grant pushes the date out
       // and starts a genuinely new cycle that deserves its own warning. Keyed by
       // month, that second cycle would have been silently suppressed.

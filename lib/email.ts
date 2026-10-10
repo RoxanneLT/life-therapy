@@ -84,6 +84,14 @@ async function sendViaSMTP(
 
 export async function sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string }> {
   const { to, subject, html, replyTo, templateKey, studentId, metadata, skipTracking, attachments } = options;
+  // An erased client's placeholder (lib/popia/plan.ts erasedEmail) is nobody's inbox. Each send
+  // path should skip erased records itself; this catches the one that forgets, before a provider
+  // bounce becomes a "failed email" on the dashboard. Not logged: there was no recipient.
+  if (to.toLowerCase().endsWith("@noemail.internal")) {
+    console.warn("Email not sent: the recipient is an erased client's placeholder —", subject);
+    return { success: false, error: "The recipient has been erased." };
+  }
+
   const settings = await getSiteSettings();
 
   const trackingId = skipTracking ? undefined : randomUUID();
