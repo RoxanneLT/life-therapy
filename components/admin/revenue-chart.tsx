@@ -50,9 +50,7 @@ export function RevenueChart({ data, className = "h-[300px]" }: RevenueChartProp
         />
         <ChartTooltip
           content={
-            <ChartTooltipContent
-              formatter={(value) => formatPrice(value as number, "ZAR")}
-            />
+            <ChartTooltipContent valueFormatter={(cents) => formatPrice(cents, "ZAR")} />
           }
         />
         <ChartLegend content={<ChartLegendContent />} />

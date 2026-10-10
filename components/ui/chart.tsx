@@ -129,6 +129,15 @@ const ChartTooltipContent = React.forwardRef<
       indicator?: "line" | "dot" | "dashed"
       nameKey?: string
       labelKey?: string
+      /**
+       * Formats the value only, keeping the colour swatch and series label. `formatter`
+       * replaces the whole row, swatch included, so a chart that only wants Rands uses this.
+       */
+      valueFormatter?: (
+        value: number,
+        name: string,
+        row: Record<string, unknown>
+      ) => React.ReactNode
     }
 >(
   (
@@ -146,6 +155,7 @@ const ChartTooltipContent = React.forwardRef<
       color,
       nameKey,
       labelKey,
+      valueFormatter,
     },
     ref
   ) => {
@@ -260,7 +270,13 @@ const ChartTooltipContent = React.forwardRef<
                         </div>
                         {item.value && (
                           <span className="font-mono font-medium tabular-nums text-foreground">
-                            {item.value.toLocaleString()}
+                            {valueFormatter
+                              ? valueFormatter(
+                                  Number(item.value),
+                                  String(item.dataKey ?? item.name),
+                                  item.payload as Record<string, unknown>
+                                )
+                              : item.value.toLocaleString()}
                           </span>
                         )}
                       </div>

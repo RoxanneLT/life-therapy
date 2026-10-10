@@ -97,13 +97,7 @@ export function RevenueBySourceChart({ data }: RevenueBySourceProps) {
   return (
     <ChartContainer config={revenueBySourceConfig} className="h-[300px] w-full">
       <PieChart accessibilityLayer>
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              formatter={(value) => formatPrice(value as number, "ZAR")}
-            />
-          }
-        />
+        <ChartTooltip content={<ChartTooltipContent valueFormatter={(cents) => formatPrice(cents, "ZAR")} />} />
         <Pie
           data={chartData}
           dataKey="value"
@@ -147,7 +141,7 @@ export function PaymentStatusChart({ data }: PaymentStatusProps) {
         <CartesianGrid vertical={false} />
         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} interval={0} fontSize={11} />
         <YAxis tickLine={false} axisLine={false} width={65} tickFormatter={formatYAxis} />
-        <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPrice(value as number, "ZAR")} />} />
+        <ChartTooltip content={<ChartTooltipContent valueFormatter={(cents) => formatPrice(cents, "ZAR")} />} />
         <ChartLegend content={<ChartLegendContent />} />
         <Bar dataKey="paid" stackId="revenue" fill="var(--color-paid)" radius={[0, 0, 0, 0]} />
         <Bar dataKey="pending" stackId="revenue" fill="var(--color-pending)" />
@@ -179,9 +173,9 @@ export function OutstandingAgingChart({ data }: AgingProps) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value, name, item) => {
-                const count = (item.payload as { count: number }).count;
-                return `${formatPrice(value as number, "ZAR")} (${count} invoice${count !== 1 ? "s" : ""})`;
+              valueFormatter={(cents, _name, row) => {
+                const count = (row as { count: number }).count;
+                return `${formatPrice(cents, "ZAR")} (${count} invoice${count !== 1 ? "s" : ""})`;
               }}
             />
           }
@@ -289,8 +283,7 @@ export function SessionTypeChart({ data }: SessionTypeProps) {
   return (
     <ChartContainer config={sessionTypeConfig} className="h-[300px] w-full">
       <PieChart accessibilityLayer>
-        <ChartTooltip content={<ChartTooltipContent formatter={(value) => {
-          const v = value as number;
+        <ChartTooltip content={<ChartTooltipContent valueFormatter={(v) => {
           const pct = total > 0 ? ((v / total) * 100).toFixed(1) : "0";
           return v + " (" + pct + "%)";
         }} />} />
@@ -387,7 +380,7 @@ export function CancellationTrendChart({ data }: CancellationTrendProps) {
         <ChartTooltip
           content={
             <ChartTooltipContent
-              formatter={(value, name) => {
+              valueFormatter={(value, name) => {
                 if (name === "expected") return value + "% (avg)";
                 return value + "%";
               }}
