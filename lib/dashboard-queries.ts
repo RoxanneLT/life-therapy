@@ -114,10 +114,12 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
       },
       select: { paidAt: true, paidAmountCents: true, totalCents: true },
     }),
-    // Pending payment requests (billed but unpaid) — ZAR only, same reason.
+    // Outstanding payment requests (billed but unpaid) — ZAR only, same reason.
+    // Pending OR overdue: a request the cron marks overdue is still unpaid, and
+    // reading "pending" alone dropped it from every bar on its due date.
     prisma.paymentRequest.findMany({
-      where: { status: "pending", currency: "ZAR", ...billingMonthWhere },
-      select: { billingMonth: true, totalCents: true },
+      where: { status: { in: ["pending", "overdue"] }, currency: "ZAR", ...billingMonthWhere },
+      select: { billingMonth: true, totalCents: true, paidAmountCents: true },
     }),
     // Completed sessions not yet invoiced (postpaid pool) — use actual price
     prisma.booking.findMany({
@@ -173,7 +175,10 @@ export async function getRevenueByMonth(year: number): Promise<MonthlyRevenueDat
     if (!pr.billingMonth) continue;
     const utcMonth = Number.parseInt(pr.billingMonth.split("-")[1], 10) - 1;
     const idx = fyIdx(utcMonth);
-    if (idx >= 0 && idx < 12) months[idx].requested += pr.totalCents;
+    // What is still owed, not the face value: a part-paid request is pending only for
+    // its remainder. (The part already received is not in "actual" either, until the
+    // request settles and its invoice is marked paid.)
+    if (idx >= 0 && idx < 12) months[idx].requested += pr.totalCents - (pr.paidAmountCents ?? 0);
   }
 
   // Completed unbilled → estimated (known amount, just not yet invoiced)

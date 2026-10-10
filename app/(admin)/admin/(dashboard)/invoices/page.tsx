@@ -189,9 +189,12 @@ export default async function InvoicesPage({
       where: { status: "overdue", currency: "ZAR" },
       _sum: { totalCents: true },
     }),
+    // Outstanding = pending OR overdue. The cron moves an unpaid request to "overdue"
+    // after its due date; reading "pending" alone dropped exactly the requests most
+    // in need of chasing off every tab in Billing.
     showPaymentRequests
       ? prisma.paymentRequest.findMany({
-          where: { status: "pending" },
+          where: { status: { in: ["pending", "overdue"] } },
           orderBy: { createdAt: "desc" },
           include: {
             student: { select: { id: true, firstName: true, lastName: true, email: true, billingEmail: true } },
@@ -199,7 +202,7 @@ export default async function InvoicesPage({
           },
         })
       : Promise.resolve([]),
-    prisma.paymentRequest.count({ where: { status: "pending" } }),
+    prisma.paymentRequest.count({ where: { status: { in: ["pending", "overdue"] } } }),
     prisma.booking.count({ where: unbilledWhere }),
   ]);
 
@@ -269,11 +272,11 @@ export default async function InvoicesPage({
   for (const s of lastCycleStats) {
     if (s.status === "paid") lastCyclePaid += s._sum.totalCents ?? 0;
   }
-  // Outstanding = pending payment requests for this billing month
+  // Outstanding = pending or overdue payment requests for this billing month
   let lastCycleOutstanding = 0;
   if (lastCycleBillingMonth) {
     const prTotal = await prisma.paymentRequest.aggregate({
-      where: { status: "pending", billingMonth: lastCycleBillingMonth, currency: "ZAR" },
+      where: { status: { in: ["pending", "overdue"] }, billingMonth: lastCycleBillingMonth, currency: "ZAR" },
       _sum: { totalCents: true, paidAmountCents: true },
     });
     // Outstanding means still owing. A request that took a part payment is not
@@ -339,7 +342,7 @@ export default async function InvoicesPage({
         pendingRequests.length === 0 ? (
           <EmptyState
             icon={Receipt}
-            message="No pending payment requests."
+            message="No outstanding payment requests."
           />
         ) : (
           <div className="flex max-h-full flex-col overflow-hidden rounded-md border bg-card">

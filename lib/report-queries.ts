@@ -72,15 +72,17 @@ export async function getFinancialSummary(fyYear: number) {
       where: { status: "paid", currency: "ZAR", paidAt: { gte: monthStart, lt: monthEnd } },
       select: { totalCents: true },
     }),
+    // Outstanding = pending OR overdue, net of part payments. Overdue requests are the
+    // most outstanding of all; "pending" alone left them out of this figure entirely.
     prisma.paymentRequest.findMany({
-      where: { status: "pending", currency: "ZAR" },
-      select: { totalCents: true },
+      where: { status: { in: ["pending", "overdue"] }, currency: "ZAR" },
+      select: { totalCents: true, paidAmountCents: true },
     }),
   ]);
 
   const totalRevenueCents = paidInvoices.reduce((s, i) => s + i.totalCents, 0);
   const thisMonthRevenueCents = thisMonthInvoices.reduce((s, i) => s + i.totalCents, 0);
-  const outstandingCents = pendingRequests.reduce((s, r) => s + r.totalCents, 0);
+  const outstandingCents = pendingRequests.reduce((s, r) => s + r.totalCents - (r.paidAmountCents ?? 0), 0);
   const invoiceCount = paidInvoices.length;
   const avgInvoiceValueCents = invoiceCount > 0 ? Math.round(totalRevenueCents / invoiceCount) : 0;
 
@@ -160,9 +162,12 @@ export async function getPaymentStatusByMonth(fyYear: number) {
 export async function getOutstandingAging() {
   const now = new Date();
 
+  // Pending OR overdue. Aging measures how long money has been owed, and a request
+  // turns "overdue" the day after it falls due — so "pending" alone emptied every
+  // bucket past 0-30 days, the ones this chart exists to show.
   const pending = await prisma.paymentRequest.findMany({
-    where: { status: "pending", currency: "ZAR" }, // aging buckets are Rand amounts
-    select: { totalCents: true, dueDate: true },
+    where: { status: { in: ["pending", "overdue"] }, currency: "ZAR" }, // aging buckets are Rand amounts
+    select: { totalCents: true, paidAmountCents: true, dueDate: true },
   });
 
   const buckets: { bucket: string; amountCents: number; count: number }[] = [
@@ -182,7 +187,7 @@ export async function getOutstandingAging() {
     else if (daysPast < 60) idx = 1;
     else if (daysPast < 90) idx = 2;
     else idx = 3;
-    buckets[idx].amountCents += req.totalCents;
+    buckets[idx].amountCents += req.totalCents - (req.paidAmountCents ?? 0);
     buckets[idx].count += 1;
   }
 

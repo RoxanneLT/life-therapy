@@ -178,7 +178,9 @@ export async function getAttentionItems(role: AdminRole): Promise<AttentionItem[
       key: "payments-overdue",
       priority: 1,
       title: `${plural(overdue, "payment request")} past due`,
-      href: "/admin/invoices?status=overdue",
+      // The "Requested" tab, which lists payment requests. `?status=overdue` filters the
+      // INVOICE table, so it could never show the requests this row counts.
+      href: "/admin/invoices?status=payment_requested",
       count: overdue,
       nav: ["/admin/invoices"],
     });

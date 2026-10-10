@@ -160,7 +160,8 @@ export async function markPaymentRequestPaidFromListAction(
       entityType: "payment_request",
       entityId: paymentRequestId,
       actorEmail: adminUser.email,
-      before: { status: "pending" },
+      // The request's real status: it is listed on the Requested tab whether pending or overdue.
+      before: { status: pr.status },
       after: { status: fullyPaid ? "paid" : "partial", paymentMethod: method, reference: reference ?? null },
       metadata: {
         studentId: pr.studentId,
