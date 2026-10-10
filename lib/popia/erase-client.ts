@@ -9,6 +9,10 @@ import {
   MODEL_FATES,
   columnsWithFate,
   erasedEmail,
+  ownBookings,
+  ownEmailLogs,
+  partnerBookings,
+  receivedGifts,
   type COLUMN_FATES,
 } from "@/lib/popia/plan";
 import { clinicalPurgeOps } from "@/lib/popia/purge-retained";
@@ -48,9 +52,7 @@ export async function eraseClient(
   if (!student) return { success: false, error: "That client no longer exists." };
   if (student.erasedAt) return { success: false, error: "This client has already been erased." };
 
-  const mine: Prisma.BookingWhereInput = {
-    OR: [{ studentId }, { studentId: null, clientEmail: { equals: student.email, mode: "insensitive" } }],
-  };
+  const mine = ownBookings(studentId, student.email);
   const today = calendarDate(saToday());
 
   const [upcoming, unpaid, unbilled, dependants] = await Promise.all([
@@ -128,11 +130,11 @@ export async function eraseClient(
       data: { ...erased("booking", { clientName: nameless, clientEmail: dead }), studentId } as Prisma.BookingUncheckedUpdateManyInput,
     }),
     prisma.booking.updateMany({
-      where: { couplesPartnerEmail: { equals: email, mode: "insensitive" } },
+      where: partnerBookings(email),
       data: Object.fromEntries(columnsWithFate("booking", "partner").map((c) => [c, null])),
     }),
     prisma.emailLog.updateMany({
-      where: { OR: [{ studentId }, { to: { equals: email, mode: "insensitive" } }] },
+      where: ownEmailLogs(studentId, email),
       data: erased("emailLog", { to: dead, subject: ERASED_TEXT, metadata: Prisma.DbNull }) as Prisma.EmailLogUpdateManyMutationInput,
     }),
     prisma.whatsAppLog.updateMany({
@@ -140,7 +142,7 @@ export async function eraseClient(
       data: erased("whatsAppLog", { to: ERASED_TEXT, metadata: Prisma.DbNull }) as Prisma.WhatsAppLogUpdateManyMutationInput,
     }),
     prisma.gift.updateMany({
-      where: { OR: [{ recipientId: studentId }, { recipientEmail: { equals: email, mode: "insensitive" } }] },
+      where: receivedGifts(studentId, email),
       data: erased("gift", { recipientEmail: dead, recipientName: ERASED_TEXT }) as Prisma.GiftUpdateManyMutationInput,
     }),
     prisma.studentNote.deleteMany({ where: { studentId } }),

@@ -1033,6 +1033,18 @@ check("pii: a personal-data column is encrypted or says why not", () => {
   }
 });
 
+/** Student, and every model carrying a link to one, as model name (camelCase) → schema body. */
+function clientLinkedModels() {
+  const LINK = /^\s+(?:studentId|fromStudentId|toStudentId|buyerId|recipientId)\s/m;
+  const out = new Map();
+  for (const m of read(join(ROOT, "prisma/schema.prisma")).matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    const model = m[1][0].toLowerCase() + m[1].slice(1);
+    if (model === "student" || LINK.test(m[2])) out.set(model, m[2]);
+  }
+  if (out.size < 10) throw new Error(`found ${out.size} client-linked models in prisma/schema.prisma — the parse has broken`);
+  return out;
+}
+
 check("popia: every client-linked column has a fate in the erasure plan", () => {
   // lib/popia/plan.ts says what an erasure does to each client-linked column; erase-client.ts and
   // purge-retained.ts build their writes from it. A column the plan does not name survives every
@@ -1052,13 +1064,10 @@ check("popia: every client-linked column has a fate in the erasure plan", () => 
   const modelFates = new Set([...block("MODEL_FATES").matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]));
   if (columnFates.size < 4 || modelFates.size < 4) throw new Error("read too little from lib/popia/plan.ts — the parse has broken");
 
-  const LINK = /^\s+(?:studentId|fromStudentId|toStudentId|buyerId|recipientId)\s/m;
   const linked = new Set();
-  for (const m of read(join(ROOT, "prisma/schema.prisma")).matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
-    const model = m[1][0].toLowerCase() + m[1].slice(1);
-    if (model !== "student" && !LINK.test(m[2])) continue;
+  for (const [model, body] of clientLinkedModels()) {
     linked.add(model);
-    const cols = m[2].split("\n")
+    const cols = body.split("\n")
       .map((l) => /^\s*(\w+)\s+(?:String|Json|DateTime\??\s+@db\.Date)/.exec(l)?.[1])
       .filter((c) => c && c !== "id" && !c.endsWith("Id"));
     if (!cols.length || modelFates.has(model)) continue;
@@ -1072,6 +1081,21 @@ check("popia: every client-linked column has a fate in the erasure plan", () => 
   }
   for (const model of [...columnFates.keys(), ...modelFates]) {
     if (!linked.has(model)) fail("popia", `lib/popia/plan.ts → ${model}`, "the plan names a model that is no longer linked to a client", "remove the entry");
+  }
+});
+
+check("popia: the export reads every client-linked model", () => {
+  // The access right (POPIA s23) is "everything held about one client", and the erasure plan above
+  // is the list of what that is. Until 2026-10-10 nothing bound the export to it, and it had missed
+  // eleven of twenty-five models: gifts, course notes, quiz answers, invites and more. The same
+  // derived set drives both checks, so a model that gains a link to Student fails here until a
+  // query in the export reads it.
+  const file = "lib/popia/export-client.ts";
+  const src = stripComments(read(join(ROOT, file)));
+  for (const model of clientLinkedModels().keys()) {
+    if (!new RegExp(String.raw`\bprisma\.${model}\.find`).test(src)) {
+      fail("popia", `${file} → ${model}`, "a client-linked model the export never reads, so an access request leaves it out", `read it in exportClientData (rows by studentId, or by the plan's ownership helpers), dropping only tokens that let the holder act as the client`);
+    }
   }
 });
 

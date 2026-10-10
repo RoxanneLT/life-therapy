@@ -21,6 +21,8 @@
  * A whole model can carry one fate instead: "delete" (rows removed at erasure) or "keep: …".
  */
 
+import type { Prisma } from "@/lib/generated/prisma/client";
+
 export type Fate = "erase" | "clinical" | "partner" | `keep: ${string}`;
 export type ModelFate = "delete" | `keep: ${string}`;
 
@@ -136,6 +138,31 @@ export const MODEL_FATES: Record<string, ModelFate> = {
   clientRelationship: "delete",
   relationshipInvite: "delete",
 };
+
+/**
+ * Whose rows are whose. The eraser and the export (lib/popia/export-client.ts) both read these, so
+ * what an erasure blanks and what an access request returns are the same rows. Until 2026-10-10 the
+ * export read `studentId` alone and missed the walk-ins and address-matched mail the eraser took.
+ */
+/** Their bookings, plus walk-ins booked under their address before they had a record. */
+export function ownBookings(studentId: string, email: string): Prisma.BookingWhereInput {
+  return { OR: [{ studentId }, { studentId: null, clientEmail: { equals: email, mode: "insensitive" } }] };
+}
+
+/** Email sent to them, by record or by address. */
+export function ownEmailLogs(studentId: string, email: string): Prisma.EmailLogWhereInput {
+  return { OR: [{ studentId }, { to: { equals: email, mode: "insensitive" } }] };
+}
+
+/** Another client's couples booking that names them as the partner. */
+export function partnerBookings(email: string): Prisma.BookingWhereInput {
+  return { couplesPartnerEmail: { equals: email, mode: "insensitive" } };
+}
+
+/** Gifts bought for them, by record or by the address the buyer typed. */
+export function receivedGifts(studentId: string, email: string): Prisma.GiftWhereInput {
+  return { OR: [{ recipientId: studentId }, { recipientEmail: { equals: email, mode: "insensitive" } }] };
+}
 
 /** The columns of one model with one fate. The executor builds its updates from this. */
 export function columnsWithFate(model: keyof typeof COLUMN_FATES, fate: "erase" | "clinical" | "partner"): string[] {

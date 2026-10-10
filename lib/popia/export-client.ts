@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ownBookings, ownEmailLogs, partnerBookings, receivedGifts } from "@/lib/popia/plan";
 
 /**
  * Everything held about one client, decrypted, as one JSON document: the POPIA s23 access right
@@ -16,11 +17,12 @@ export async function exportClientData(studentId: string, includeTherapistNotes:
   const student = await prisma.student.findUnique({ where: { id: studentId } });
   if (!student) return null;
   const by = { where: { studentId } };
+  const { email } = student;
 
   const [intake, bookings, invoices, paymentRequests, orders, balance, credits, enrollments, certificates, relationships, acceptances, emails, whatsapp] =
     await Promise.all([
       prisma.clientIntake.findUnique(by),
-      prisma.booking.findMany({ ...by, orderBy: { date: "asc" } }),
+      prisma.booking.findMany({ where: ownBookings(studentId, email), orderBy: { date: "asc" } }),
       prisma.invoice.findMany({ ...by, orderBy: { createdAt: "asc" } }),
       prisma.paymentRequest.findMany({ ...by, orderBy: { createdAt: "asc" } }),
       prisma.order.findMany({ ...by, include: { items: true }, orderBy: { createdAt: "asc" } }),
@@ -29,9 +31,42 @@ export async function exportClientData(studentId: string, includeTherapistNotes:
       prisma.enrollment.findMany({ ...by, include: { course: { select: { title: true } } } }),
       prisma.certificate.findMany(by),
       prisma.clientRelationship.findMany({ ...by, select: { relationshipType: true, relationshipLabel: true, createdAt: true } }),
-      prisma.documentAcceptance.findMany({ ...by, select: { documentSlug: true, acceptedAt: true } }),
-      prisma.emailLog.findMany({ ...by, select: { templateKey: true, subject: true, status: true, sentAt: true }, orderBy: { sentAt: "asc" } }),
+      prisma.documentAcceptance.findMany({ ...by, select: { documentSlug: true, documentVersion: true, acceptedAt: true } }),
+      prisma.emailLog.findMany({ where: ownEmailLogs(studentId, email), select: { templateKey: true, subject: true, status: true, sentAt: true }, orderBy: { sentAt: "asc" } }),
       prisma.whatsAppLog.findMany({ ...by, select: { templateName: true, status: true, sentAt: true }, orderBy: { sentAt: "asc" } }),
+    ]);
+
+  // Everything else linked to them. The audit (`popia: the export reads every client-linked model`)
+  // fails when a model gains a link to Student and no query here reads it.
+  const [asPartner, giftsBought, giftsReceived, invitesSent, invitesReceived, commitments, moduleAccess, lectureProgress, courseNotes, quizAttempts, digitalProducts, cart, campaignProgress, dripProgress] =
+    await Promise.all([
+      // Another client's booking: only what concerns them, never the other client's details.
+      prisma.booking.findMany({
+        where: partnerBookings(email),
+        select: { date: true, startTime: true, endTime: true, sessionType: true, status: true, couplesPartnerName: true, couplesPartnerEmail: true, couplesPartnerPhone: true },
+        orderBy: { date: "asc" },
+      }),
+      prisma.gift.findMany({ where: { buyerId: studentId }, omit: { redeemToken: true }, orderBy: { createdAt: "asc" } }),
+      prisma.gift.findMany({
+        where: receivedGifts(studentId, email),
+        select: { recipientName: true, recipientEmail: true, message: true, status: true, deliveryDate: true, redeemedAt: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.relationshipInvite.findMany({ where: { fromStudentId: studentId }, omit: { token: true }, orderBy: { createdAt: "asc" } }),
+      prisma.relationshipInvite.findMany({
+        where: { OR: [{ toStudentId: studentId }, { toEmail: { equals: email, mode: "insensitive" } }] },
+        select: { toName: true, toEmail: true, relationshipType: true, status: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.commitmentAcknowledgement.findMany({ ...by, select: { version: true, acknowledgedAt: true } }),
+      prisma.moduleAccess.findMany({ ...by, include: { module: { select: { title: true } } } }),
+      prisma.lectureProgress.findMany({ ...by, include: { lecture: { select: { title: true } } } }),
+      prisma.studentNote.findMany({ ...by, include: { lecture: { select: { title: true } } }, orderBy: { createdAt: "asc" } }),
+      prisma.quizAttempt.findMany({ ...by, orderBy: { completedAt: "asc" } }),
+      prisma.digitalProductAccess.findMany({ ...by, include: { digitalProduct: { select: { title: true } } } }),
+      prisma.cart.findUnique({ ...by, include: { items: true } }),
+      prisma.campaignProgress.findMany({ ...by, include: { campaign: { select: { name: true } } } }),
+      prisma.dripProgress.findUnique(by),
     ]);
 
   const { unsubscribeToken: _u, supabaseUserId: _s, adminNotes, ...profile } = student;
@@ -43,15 +78,21 @@ export async function exportClientData(studentId: string, includeTherapistNotes:
     bookings: bookings.map(({ confirmationToken: _c, sessionNotes, adminNotes: bookingAdminNotes, ...b }) =>
       includeTherapistNotes ? { ...b, sessionNotes, adminNotes: bookingAdminNotes } : b,
     ),
+    bookingsAsPartner: asPartner,
     invoices,
     paymentRequests,
     orders: orders.map(({ paystackAccessCode: _a, ...o }) => o),
+    gifts: { bought: giftsBought, received: giftsReceived },
     credits: { balance, transactions: credits },
-    enrollments,
-    certificates,
-    relationships,
-    consents: { ...pick(student, ["consentGiven", "consentDate", "consentMethod", "marketingOptIn", "newsletterOptIn", "smsOptIn", "emailOptOut"]), documentAcceptances: acceptances },
-    communications: { emails, whatsapp },
+    learning: { enrollments, moduleAccess, lectureProgress, courseNotes, quizAttempts, certificates, digitalProducts },
+    cart,
+    relationships: { linked: relationships, invitesSent, invitesReceived },
+    consents: {
+      ...pick(student, ["consentGiven", "consentDate", "consentMethod", "marketingOptIn", "newsletterOptIn", "smsOptIn", "emailOptOut"]),
+      documentAcceptances: acceptances,
+      commitmentAcknowledgements: commitments,
+    },
+    communications: { emails, whatsapp, campaignProgress, dripProgress },
   };
 }
 

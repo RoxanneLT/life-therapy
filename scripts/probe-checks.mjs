@@ -586,6 +586,13 @@ const MUTATIONS = [
     expects: ["popia: every client-linked column has a fate in the erasure plan"],
   },
   {
+    path: "lib/popia/export-client.ts",
+    // The client's own course notes dropped from the export again, as before 2026-10-10.
+    find: "      prisma.studentNote.findMany(",
+    replace: "      Promise.resolve([] as never[]) && (",
+    expects: ["popia: the export reads every client-linked model"],
+  },
+  {
     path: "lib/prisma.ts",
     // Listed as encrypted, wired to nothing: invoice's shape from 608598e until the fix.
     find: '      invoice: buildQueryExtension("invoice"),\n',
