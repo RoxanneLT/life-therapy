@@ -1102,8 +1102,10 @@ check("clinical: clinical text reaches only roles that may read it, and never an
   // booking rows must decide through canSeeClinical() or strip with withoutClinicalBookingFields().
   // Two surfaces: READ actions whose requireRole admits such a role, and pages whose ADMIN_ACCESS
   // key admits one. A mutating action loads bookings to change them, not to hand them over, so it
-  // is held to one thing only: it may not write session notes, which a role that cannot read them
-  // could only overwrite blind. Scans codeKeepingLiterals(): roles are string literals.
+  // is held to one thing only: it may not write clinical text — notes or the client's typed reason —
+  // which a role that cannot read it could only overwrite or erase blind. Reinstating a booking
+  // cleared cancellationReason for editors until 2026-10-10, when this list named only the notes.
+  // Scans codeKeepingLiterals(): roles are string literals.
   const NON_CLINICAL = /"(?:marketing|editor)"|\bALL\b/;
   const DECIDES = /\b(?:canSeeClinical|withoutClinicalBookingFields)\s*\(/;
   // The intake decided by a literal is never decided: a file can call canSeeClinical for one prop
@@ -1143,7 +1145,7 @@ check("clinical: clinical text reaches only roles that may read it, and never an
       const body = strip(fn.body);
       if (MUTATION.test(body)) {
         // Shorthand counts: `data: { sessionNotes }` writes the column with no colon after it.
-        if (/\b(?:sessionNotes|adminNotes)\b/.test(body) && !DECIDES.test(body)) {
+        if (/\b(?:sessionNotes|adminNotes|cancellationReason|clientNotes)\b/.test(body) && !DECIDES.test(body)) {
           fail("clinical", `${rel(f)} → ${fn.name}`, `${guard[1].trim()} can call it, and it writes booking notes`, `requireRole("super_admin") — a role that cannot read the notes would overwrite them blind`);
         }
         continue;

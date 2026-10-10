@@ -558,6 +558,13 @@ const MUTATIONS = [
     expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
   },
   {
+    path: "app/(admin)/admin/(dashboard)/bookings/actions.ts",
+    // Reinstate erasing the client's typed cancellation reason again: an editor action, before 2026-10-10.
+    find: "      cancelledBy: null,\n      isLateCancel: false,\n      billingNote: null,\n",
+    replace: "      cancelledBy: null,\n      cancellationReason: null,\n      isLateCancel: false,\n      billingNote: null,\n",
+    expects: ["clinical: clinical text reaches only roles that may read it, and never an export"],
+  },
+  {
     path: "app/(admin)/admin/(dashboard)/bookings/page.tsx",
     // The calendar handing every role the booking notes again.
     find: "    adminNotes: clinical ? b.adminNotes : null,\n",

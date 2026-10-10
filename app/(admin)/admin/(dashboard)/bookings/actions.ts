@@ -1890,13 +1890,18 @@ export async function reinstateBookingAction(id: string) {
 
   // Un-cancel + clear the late-cancellation billing flag so the session is billed
   // once, as a normal session (no double charge).
+  //
+  // `cancellationReason` is deliberately KEPT. It is clinical text the client typed
+  // (lib/clinical-access.ts), and this action is open to editors, who may not write
+  // clinical fields — clearing it destroyed the text with no copy anywhere. Every
+  // display of it is inside a `status === "cancelled"` guard, so on a reinstated
+  // session it shows nowhere; a later cancellation overwrites it.
   await prisma.booking.update({
     where: { id },
     data: {
       status: "confirmed",
       cancelledAt: null,
       cancelledBy: null,
-      cancellationReason: null,
       isLateCancel: false,
       billingNote: null,
       ...(cal?.eventId
