@@ -17,7 +17,7 @@
 import { prisma } from "@/lib/prisma";
 import type { AudienceFilters } from "@/lib/audience-filters";
 import { normalizePhoneForStorage } from "@/lib/phone";
-import { recordAudit } from "@/lib/audit";
+import { maskName, recordAudit } from "@/lib/audit";
 
 interface UpsertContactData {
   email: string;
@@ -48,9 +48,10 @@ const sameText = (a: string, b: string): boolean => a.trim().toLowerCase() === b
  *
  * A non-blank incoming value that DIFFERS from the stored one is not silently dropped: it is
  * recorded as a `contact_field_conflict` audit entry, so a genuine change of number can be found.
- * Name and gender values are recorded. Phone is recorded as differing, never by value, because the
- * column is encrypted and the audit log is not; the booking path stores the new number, encrypted,
- * on the booking itself.
+ * Names are recorded as initials and gender in full. Phone is recorded as differing, never by value,
+ * because the column is encrypted and the audit log is not; the booking path stores the new number,
+ * encrypted, on the booking itself. Names were stored in full until 2026-10-10, when the owner ruled
+ * that audit_logs, which is append-only and outlives a POPIA erasure, must not hold them.
  *
  * For newsletter-only subscribers, creates a Student without a Supabase auth account
  * (supabaseUserId = null). They become full portal users when they later book/register.
@@ -66,15 +67,17 @@ export async function upsertContact(data: UpsertContactData) {
 
   const fill: { firstName?: string; lastName?: string; phone?: string; gender?: string } = {};
   const conflicts: Record<string, { stored: string; incoming: string }> = {};
-  const offer = (field: keyof typeof fill, incoming: string | null | undefined, stored: string | null | undefined, blank: boolean, recordValue = true) => {
+  const asIs = (v: string) => v;
+  const unrecorded = { stored: "[encrypted]", incoming: "[differs — not recorded]" };
+  const offer = (field: keyof typeof fill, incoming: string | null | undefined, stored: string | null | undefined, blank: boolean, record: ((v: string) => string) | null = asIs) => {
     if (isBlank(incoming)) return;
     if (blank) fill[field] = incoming!;
-    else if (!sameText(stored!, incoming!)) conflicts[field] = recordValue ? { stored: stored!, incoming: incoming! } : { stored: "[encrypted]", incoming: "[differs — not recorded]" };
+    else if (!sameText(stored!, incoming!)) conflicts[field] = record ? { stored: record(stored!), incoming: record(incoming!) } : unrecorded;
   };
   if (existing) {
-    offer("firstName", data.firstName, existing.firstName, isBlank(existing.firstName) || existing.firstName === PLACEHOLDER_FIRST_NAME);
-    offer("lastName", data.lastName, existing.lastName, isBlank(existing.lastName));
-    offer("phone", normalizedPhone, existing.phone, isBlank(existing.phone), false);
+    offer("firstName", data.firstName, existing.firstName, isBlank(existing.firstName) || existing.firstName === PLACEHOLDER_FIRST_NAME, maskName);
+    offer("lastName", data.lastName, existing.lastName, isBlank(existing.lastName), maskName);
+    offer("phone", normalizedPhone, existing.phone, isBlank(existing.phone), null);
     offer("gender", data.gender, existing.gender, isBlank(existing.gender));
   }
 

@@ -72,9 +72,10 @@ const SCRUB_KEYS = new Set([
  * outlives a POPIA erasure, so whatever lands here stays for good: an email change recorded both
  * addresses in full until 2026-10-09. A masked value still tells a reader which address it was.
  *
- * Admin accounts and auth events keep theirs. Who held admin access, and which account a sign-in
- * targeted, is the accountability record itself. Only top-level keys are masked: the contact
- * conflict entry nests names under `fields` on purpose, so an admin can apply a genuine change.
+ * Admin accounts keep theirs: who held admin access is the accountability record itself. Auth
+ * events are masked at their writer, recordAuthEvent, which alone knows whether the address is an
+ * admin's. Only top-level keys are masked here; the contact conflict entry masks the names it nests
+ * under `fields` itself (lib/contacts.ts).
  */
 const KEEPS_CONTACT_DETAILS = new Set(["admin_user", "auth"]);
 const EMAIL_KEY = /email$/i;
@@ -87,7 +88,7 @@ function maskEmail(email: string): string {
   return `${email[0]}***${email.slice(at)}`;
 }
 
-function maskName(name: string): string {
+export function maskName(name: string): string {
   return name.split(/\s+/).filter(Boolean).map((w) => `${w[0].toUpperCase()}.`).join(" ");
 }
 
@@ -145,6 +146,11 @@ export type AuthEventAction =
  * Record an authentication event (login, reset request, password change) to the
  * same audit trail. entityType is "auth"; the IP / user-agent / reason go in
  * metadata. Best-effort like recordAudit — never throws.
+ *
+ * An admin's address is stored in full: which admin account a sign-in targeted is the record. Any
+ * other address (a portal client's, or one that matches nobody) is masked, because audit_logs is
+ * append-only and outlives a POPIA erasure (owner's ruling, 2026-10-10). If the admin lookup fails,
+ * the address is masked: the fault errs toward the client's privacy, not toward the record.
  */
 export async function recordAuthEvent(input: {
   action: AuthEventAction;
@@ -154,7 +160,11 @@ export async function recordAuthEvent(input: {
   userId?: string | null;
   reason?: string;
 }): Promise<void> {
-  const email = input.email?.trim().toLowerCase() || "unknown";
+  const given = input.email?.trim().toLowerCase() || "unknown";
+  const isAdmin = await prisma.adminUser
+    .findUnique({ where: { email: given }, select: { id: true } })
+    .then(Boolean, () => false);
+  const email = isAdmin || given === "unknown" ? given : maskEmail(given);
   const ipHash = input.ip ? hashIp(input.ip) : null;
   await recordAudit({
     action: input.action,
@@ -195,6 +205,9 @@ export async function recordAudit(input: AuditInput): Promise<void> {
   }
 }
 
+/** The cron_runs job a lost audit write is filed under; the digest lists each one (lib/cron/with-cron-run.ts). */
+export const AUDIT_GAP_JOB = "audit-write";
+
 async function reportAuditGap(input: AuditInput, err: unknown): Promise<void> {
   const reason = err instanceof Error ? err.message.split("\n").find((l) => l.trim()) ?? err.name : String(err);
   // An auth event's entityId can be the email address, so it is left out there.
@@ -202,7 +215,7 @@ async function reportAuditGap(input: AuditInput, err: unknown): Promise<void> {
   try {
     await prisma.cronRun.create({
       data: {
-        jobName: "audit-write",
+        jobName: AUDIT_GAP_JOB,
         status: "failed",
         finishedAt: new Date(),
         // The action and the record it concerns, never the before/after values.

@@ -87,8 +87,32 @@ function ExternalCleanupList({ holders, contactEmail }: { readonly holders: Exte
       </li>,
     );
   }
-  if (items.length === 0) return <p className="text-sm">Nothing outside this system holds their details.</p>;
-  return <ul className="list-disc space-y-2 pl-5 text-sm">{items}</ul>;
+  return (
+    <>
+      {items.length === 0 ? (
+        <p className="text-sm">Nothing outside this system holds their details.</p>
+      ) : (
+        <ul className="list-disc space-y-2 pl-5 text-sm">{items}</ul>
+      )}
+      <AuditTrailRetention />
+    </>
+  );
+}
+
+/**
+ * The one store inside this system that erasure does not reach. audit_logs is append-only
+ * (80_ops.sql), the record of who did what, and is kept. Since 2026-10-10 it masks a client's names
+ * and sign-in address as they are written (lib/contacts.ts, recordAuthEvent in lib/audit.ts). Rows
+ * written before then are not redacted: the owner chose to state that here rather than rewrite them.
+ */
+function AuditTrailRetention() {
+  return (
+    <p className="text-xs text-muted-foreground">
+      Kept inside this system: the audit trail, which records who did what and cannot be edited. From
+      10 October 2026 it holds only initials and masked addresses for clients. Entries from before
+      then may still show their name or email address; they are kept as the record of those actions.
+    </p>
+  );
 }
 
 /** On an erased client, until someone marks the outside clean-up done. */

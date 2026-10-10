@@ -49,12 +49,15 @@ export default async function ClientDetailPage({
       ? await externalHolders(id)
       : null;
 
-  const contactConflicts = await prisma.auditLog.findMany({
-    where: { entityType: "student", entityId: id, action: "contact_field_conflict" },
-    select: { id: true, createdAt: true, metadata: true },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  // Nothing to reconcile on an erased record, and older entries hold the name it was erased of.
+  const contactConflicts = client.erasedAt
+    ? []
+    : await prisma.auditLog.findMany({
+        where: { entityType: "student", entityId: id, action: "contact_field_conflict" },
+        select: { id: true, createdAt: true, metadata: true },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
 
   const coreClient = JSON.parse(JSON.stringify(client)) as Record<string, unknown>;
   // The client's admin notes are clinical too (lib/popia/plan.ts), and they ride on the row itself.

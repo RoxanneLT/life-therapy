@@ -47,14 +47,16 @@ test("consent is upgraded when a later contact gives it", async () => {
   assert.ok(later.consentDate);
 });
 
-test("a curated name is kept when a different one arrives, and the difference is audited", async () => {
+// audit_logs outlives an erasure, so names go in as initials (owner's ruling, 2026-10-10).
+test("a curated name is kept when a different one arrives, and the difference is audited by initials", async () => {
   const email = testEmail("keep");
   const s = await upsertContact({ email, firstName: "Anne", lastName: "Smith", source: "booking" });
-  const later = await upsertContact({ email, firstName: "Ann", lastName: "Smith", source: "newsletter" });
+  const later = await upsertContact({ email, firstName: "Jo", lastName: "Smith", source: "newsletter" });
   assert.equal(later.firstName, "Anne");
   const [entry, ...rest] = await conflictsFor(s.id);
   assert.equal(rest.length, 0);
-  assert.deepEqual(entry?.metadata, { source: "newsletter", kept: "stored", fields: { firstName: { stored: "Anne", incoming: "Ann" } } });
+  assert.deepEqual(entry?.metadata, { source: "newsletter", kept: "stored", fields: { firstName: { stored: "A.", incoming: "J." } } });
+  assert.ok(!/Anne|Jo\b/.test(JSON.stringify(entry?.metadata)), "a name leaked into the audit log");
 });
 
 test("the 'Friend' placeholder and blank fields are filled, with nothing audited", async () => {

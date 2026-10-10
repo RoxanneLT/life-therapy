@@ -6,7 +6,8 @@ import { saFormat } from "@/lib/dates";
  * records each mismatch as a `contact_field_conflict` audit entry rather than silently dropping it.
  * Read-only: if an incoming value is the right one (a client's new number), edit the record.
  * Phone numbers are never shown here, by design: the audit log is not encrypted, so it never
- * holds one.
+ * holds one. Names arrive as initials from 2026-10-10 (the log outlives a POPIA erasure); older
+ * entries still hold them in full.
  */
 export interface ContactConflict {
   id: string;
@@ -46,7 +47,8 @@ export function ContactConflicts({ entries }: Readonly<{ entries: ContactConflic
       </summary>
       <p className="mt-2 text-muted-foreground">
         These arrived for this client but were not applied, because the record already held a
-        different value. If one is correct, edit the client&apos;s details.
+        different value. If one is correct, edit the client&apos;s details. Names are recorded as
+        initials only, for privacy.
       </p>
       <ul className="mt-2 space-y-2">
         {entries.map((e) => {
