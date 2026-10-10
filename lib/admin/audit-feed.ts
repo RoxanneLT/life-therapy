@@ -14,6 +14,8 @@ const LABELS: Record<string, string> = {
   client_erased: "Erased client (POPIA)",
   booking_no_show: "Marked no-show",
   admin_mfa_removed: "Removed admin two-factor",
+  admin_mfa_enrolled: "Set up own two-factor",
+  admin_mfa_self_removed: "Removed own two-factor",
   login_failure: "Sign-in failed",
   login_success: "Signed in",
   mfa_failure: "Two-factor failed",

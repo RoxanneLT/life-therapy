@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ShieldCheck, ShieldOff, Loader2, Smartphone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { recordOwnMfaChangeAction } from "@/app/(public)/login/mfa/actions";
 
 interface Factor {
   id: string;
@@ -102,6 +103,8 @@ export function MfaSetup() {
         return;
       }
       toast.success("Two-factor authentication is now enabled.");
+      // The audit row and the owner's notice: the change itself is done, so a failure here is logged, not shown.
+      await recordOwnMfaChangeAction("added").catch((err) => console.error("[mfa] notice failed:", err));
       setPending(null);
       setCode("");
       await loadFactors();
@@ -126,6 +129,7 @@ export function MfaSetup() {
       return;
     }
     toast.success("Two-factor authentication removed.");
+    await recordOwnMfaChangeAction("removed").catch((err) => console.error("[mfa] notice failed:", err));
     await loadFactors();
   }
 

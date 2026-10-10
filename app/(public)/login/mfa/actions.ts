@@ -6,6 +6,45 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { safeNextPath } from "@/lib/safe-redirect";
 import { stepUpWithTotp } from "@/lib/mfa-step-up";
+import { getAuthenticatedAdmin } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { recordAudit } from "@/lib/audit";
+import { sendSecurityNotice } from "@/lib/security-notice";
+
+/**
+ * An admin added or removed their OWN second factor. Both happen in the browser
+ * (components/admin/mfa-setup.tsx, against Supabase directly), so until 2026-10-10 neither left an
+ * audit row or told anyone. A takeover that swaps the authenticator was invisible to the owner
+ * (pleks security comparison, item 3). The client calls this after the change succeeds.
+ *
+ * The claim is checked against Supabase, not taken from the browser: "added" with no verified
+ * factor records and sends nothing. A forged "removed" can only mail the caller's own inbox.
+ * skipMfaGate, because the setup page is where an admin with no factor yet has to be.
+ */
+export async function recordOwnMfaChangeAction(change: "added" | "removed"): Promise<{ error?: string }> {
+  const { user, adminUser } = await getAuthenticatedAdmin({ skipMfaGate: true });
+
+  const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: user.id });
+  if (error) return { error: error.message };
+  const verified = (data?.factors ?? []).filter((f) => f.status === "verified").length;
+  if (change === "added" && verified === 0) return {};
+
+  await recordAudit({
+    action: change === "added" ? "admin_mfa_enrolled" : "admin_mfa_self_removed",
+    entityType: "admin_user",
+    entityId: adminUser.id,
+    actorEmail: adminUser.email,
+    metadata: { verifiedFactors: verified },
+  });
+  await sendSecurityNotice(
+    adminUser.email,
+    adminUser.name,
+    change === "added"
+      ? "An authenticator app was just added to your Life-Therapy admin account for two-factor sign-in. If this wasn't you, contact us straight away."
+      : "Two-factor sign-in was just removed from your Life-Therapy admin account. If this wasn't you, contact us straight away.",
+  );
+  return {};
+}
 
 /**
  * Verify a TOTP code on the SERVER so the AAL2 session is written to cookies

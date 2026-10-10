@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { mayReceiveMarketing, isAutoPaused } from "@/lib/engagement";
 import { requireRole } from "@/lib/auth";
 import { recordAudit } from "@/lib/audit";
+import { sendSecurityNotice } from "@/lib/security-notice";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
@@ -1799,7 +1800,7 @@ export async function updateClientEmailAction(
   // Get current student (need supabaseUserId)
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    select: { supabaseUserId: true, email: true },
+    select: { supabaseUserId: true, email: true, firstName: true },
   });
   if (!student) return { success: false, error: "Client not found." };
 
@@ -1843,6 +1844,17 @@ export async function updateClientEmailAction(
     after: { email },
     metadata: { loginMoved: Boolean(student.supabaseUserId) },
   });
+  // The OLD address is told when the login moves: it is the only inbox that can say "that was not
+  // me" or "that address is wrong" once reset links go to the new one (pleks security comparison,
+  // item 3). Not a save quietly emailing: like cancelling a session, the change and the notice are
+  // one act, and account-tier mail that nothing suppresses (lib/security-notice.ts).
+  if (student.supabaseUserId && student.email.toLowerCase() !== email.toLowerCase()) {
+    await sendSecurityNotice(
+      student.email,
+      student.firstName,
+      `The email address you sign in to Life-Therapy with was changed to ${email} by the practice. Password reset links now go there. If you didn't ask for this, or the new address is wrong, reply to this email straight away.`,
+    );
+  }
 
   revalidatePath(`/admin/clients/${studentId}`);
   return { success: true };
