@@ -4135,8 +4135,10 @@ check("relationships: a partner lookup reads both ends of the row", () => {
     for (const m of src.matchAll(/clientRelationship\.\w+\(\{[\s\S]{0,400}?\}\)/g)) {
       const q = m[0];
       if (!/relationshipType:\s*""|partner/i.test(q) && !/relationshipType/.test(q)) continue;
-      // Reading both columns, or pinning a specific pair, or fetching by row id: fine.
-      if (/relatedStudentId/.test(q) || /\bid:\s/.test(q)) continue;
+      // Reading both columns, or pinning a specific pair, or fetching by row id: fine. So is
+      // ownRelationships() from lib/popia/plan.ts, which ORs both. A where spread from a variable
+      // is invisible here: the export read `{ ...by }` one-sided until 2026-10-10 and passed.
+      if (/relatedStudentId/.test(q) || /\bid:\s/.test(q) || /\bownRelationships\s*\(/.test(q)) continue;
       if (!/studentId/.test(q)) continue;
       fail(
         "relationships",

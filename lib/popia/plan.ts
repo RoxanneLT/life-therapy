@@ -164,6 +164,16 @@ export function receivedGifts(studentId: string, email: string): Prisma.GiftWher
   return { OR: [{ recipientId: studentId }, { recipientEmail: { equals: email, mode: "insensitive" } }] };
 }
 
+/** Relationships naming them on either side: addRelationshipAction can write one direction only. */
+export function ownRelationships(studentId: string): Prisma.ClientRelationshipWhereInput {
+  return { OR: [{ studentId }, { relatedStudentId: studentId }] };
+}
+
+/** WhatsApp messages sent to them, by record or by the number they went to. */
+export function ownWhatsAppLogs(studentId: string, phone: string | null): Prisma.WhatsAppLogWhereInput {
+  return { OR: [{ studentId }, ...(phone ? [{ to: phone }] : [])] };
+}
+
 /** The columns of one model with one fate. The executor builds its updates from this. */
 export function columnsWithFate(model: keyof typeof COLUMN_FATES, fate: "erase" | "clinical" | "partner"): string[] {
   return Object.entries(COLUMN_FATES[model])

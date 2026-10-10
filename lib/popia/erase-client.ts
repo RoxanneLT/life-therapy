@@ -11,6 +11,8 @@ import {
   erasedEmail,
   ownBookings,
   ownEmailLogs,
+  ownRelationships,
+  ownWhatsAppLogs,
   partnerBookings,
   receivedGifts,
   type COLUMN_FATES,
@@ -138,7 +140,7 @@ export async function eraseClient(
       data: erased("emailLog", { to: dead, subject: ERASED_TEXT, metadata: Prisma.DbNull }) as Prisma.EmailLogUpdateManyMutationInput,
     }),
     prisma.whatsAppLog.updateMany({
-      where: { OR: [{ studentId }, ...(student.phone ? [{ to: student.phone }] : [])] },
+      where: ownWhatsAppLogs(studentId, student.phone),
       data: erased("whatsAppLog", { to: ERASED_TEXT, metadata: Prisma.DbNull }) as Prisma.WhatsAppLogUpdateManyMutationInput,
     }),
     prisma.gift.updateMany({
@@ -147,7 +149,7 @@ export async function eraseClient(
     }),
     prisma.studentNote.deleteMany({ where: { studentId } }),
     prisma.quizAttempt.deleteMany({ where: { studentId } }),
-    prisma.clientRelationship.deleteMany({ where: { OR: [{ studentId }, { relatedStudentId: studentId }] } }),
+    prisma.clientRelationship.deleteMany({ where: ownRelationships(studentId) }),
     prisma.relationshipInvite.deleteMany({
       where: { OR: [{ fromStudentId: studentId }, { toStudentId: studentId }, { toEmail: { equals: email, mode: "insensitive" } }] },
     }),

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ownBookings, ownEmailLogs, partnerBookings, receivedGifts } from "@/lib/popia/plan";
+import { ownBookings, ownEmailLogs, ownRelationships, ownWhatsAppLogs, partnerBookings, receivedGifts } from "@/lib/popia/plan";
 
 /**
  * Everything held about one client, decrypted, as one JSON document: the POPIA s23 access right
@@ -30,10 +30,10 @@ export async function exportClientData(studentId: string, includeTherapistNotes:
       prisma.sessionCreditTransaction.findMany({ ...by, orderBy: { createdAt: "asc" } }),
       prisma.enrollment.findMany({ ...by, include: { course: { select: { title: true } } } }),
       prisma.certificate.findMany(by),
-      prisma.clientRelationship.findMany({ ...by, select: { relationshipType: true, relationshipLabel: true, createdAt: true } }),
+      prisma.clientRelationship.findMany({ where: ownRelationships(studentId), select: { relationshipType: true, relationshipLabel: true, createdAt: true } }),
       prisma.documentAcceptance.findMany({ ...by, select: { documentSlug: true, documentVersion: true, acceptedAt: true } }),
       prisma.emailLog.findMany({ where: ownEmailLogs(studentId, email), select: { templateKey: true, subject: true, status: true, sentAt: true }, orderBy: { sentAt: "asc" } }),
-      prisma.whatsAppLog.findMany({ ...by, select: { templateName: true, status: true, sentAt: true }, orderBy: { sentAt: "asc" } }),
+      prisma.whatsAppLog.findMany({ where: ownWhatsAppLogs(studentId, student.phone), select: { templateName: true, status: true, sentAt: true }, orderBy: { sentAt: "asc" } }),
     ]);
 
   // Everything else linked to them. The audit (`popia: the export reads every client-linked model`)
