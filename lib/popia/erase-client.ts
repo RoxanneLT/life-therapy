@@ -43,7 +43,7 @@ export async function eraseClient(
 ): Promise<{ success: true; retainUntil: string | null; contactEmail: string } | { success: false; error: string }> {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
-    select: { id: true, email: true, phone: true, supabaseUserId: true, erasedAt: true },
+    select: { id: true, email: true, phone: true, supabaseUserId: true, erasedAt: true, billingType: true },
   });
   if (!student) return { success: false, error: "That client no longer exists." };
   if (student.erasedAt) return { success: false, error: "This client has already been erased." };
@@ -53,9 +53,22 @@ export async function eraseClient(
   };
   const today = calendarDate(saToday());
 
-  const [upcoming, unpaid, dependants] = await Promise.all([
+  const [upcoming, unpaid, unbilled, dependants] = await Promise.all([
     prisma.booking.count({ where: { AND: [mine, { status: { in: [...ACTIVE] }, date: { gte: today } }] } }),
     prisma.paymentRequest.count({ where: { studentId, status: { in: ["pending", "overdue"] } } }),
+    // A postpaid client's sessions held but not yet billed: the monthly run would otherwise bill
+    // the anonymous record — a request on an erased client, the state `unpaid` exists to refuse.
+    // The same set getUnbilledBookings bills (lib/generate-payment-requests.ts), with no date bound.
+    student.billingType === "postpaid"
+      ? prisma.booking.count({
+          where: {
+            studentId,
+            OR: [{ status: { in: ["completed", "no_show"] } }, { status: "cancelled", isLateCancel: true }],
+            paymentRequestId: null,
+            invoiceId: null,
+          },
+        })
+      : 0,
     prisma.student.count({
       where: {
         id: { not: studentId },
@@ -68,6 +81,7 @@ export async function eraseClient(
   ]);
   if (upcoming) return { success: false, error: `Cancel this client's ${upcoming} upcoming session${upcoming === 1 ? "" : "s"} first, so credits and the calendar are handled.` };
   if (unpaid) return { success: false, error: `Settle or void this client's ${unpaid} unpaid payment request${unpaid === 1 ? "" : "s"} first.` };
+  if (unbilled) return { success: false, error: `This client has ${unbilled} session${unbilled === 1 ? "" : "s"} not yet billed. Bill them first, so the payment request goes to the client while they can still receive it.` };
   if (dependants) return { success: false, error: `This client pays for ${dependants} other client${dependants === 1 ? "" : "s"}. Reassign their billing first.` };
 
   if (student.supabaseUserId) {

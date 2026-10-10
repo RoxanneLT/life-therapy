@@ -131,3 +131,13 @@ test("refuses while an upcoming session would be left half-done, and changes not
   assert.equal(untouched.erasedAt, null);
   assert.notEqual(untouched.email, erasedEmail(student.id));
 });
+
+test("refuses a postpaid client with a session not yet billed, so the monthly run never bills an erased record", async () => {
+  const student = await makeStudent("unbilled", { billingType: "postpaid" });
+  await makeBooking(student.id, { date: addSaDays(saToday(), -4), status: "completed" });
+  const res = await eraseClient(student.id, "admin@example.test");
+  assert.equal(res.success, false);
+  assert.match(!res.success ? res.error : "", /not yet billed/);
+  const untouched = await prisma.student.findUniqueOrThrow({ where: { id: student.id } });
+  assert.equal(untouched.erasedAt, null);
+});

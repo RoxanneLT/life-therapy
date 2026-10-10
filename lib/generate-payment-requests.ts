@@ -387,9 +387,12 @@ export async function generateMonthlyPaymentRequests(
   );
   const billingMonth = `${year}-${String(month).padStart(2, "0")}`;
 
-  // 1. Get all postpaid students
+  // 1. Get all postpaid students — never an erased one. Erasure keeps `billingType` (it
+  // describes the retained financial records), so without this an erased client with an
+  // unbilled session was billed, and emailed at the placeholder address, on the 1st.
+  // The eraser refuses that case first; this holds it for any record that slips past.
   const postpaidStudents = await prisma.student.findMany({
-    where: { billingType: "postpaid" },
+    where: { billingType: "postpaid", erasedAt: null },
   });
 
   if (postpaidStudents.length === 0) return [];
