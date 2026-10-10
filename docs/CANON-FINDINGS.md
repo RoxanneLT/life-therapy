@@ -58,6 +58,19 @@ FIX        a "deleted/erased" flag, a currency — require one `census` of every
            other channels and client-side mirrors included. Must not turn every walk into a census:
            only a change of meaning triggers it.
 
+### CF-15 · A permission enforced by rewriting the stored value on save is a fail-open
+OBSERVED   A role barred from targeting campaigns by assessment answers had those filters stripped
+           on save, and send was refused only when the stored row still held them — so a save by
+           that role erased the restriction and widened the audience, then the send went through.
+COMMAND    walker, `.handoff/walk-oct-fixes/01-walker.md` F1 (life-therapy; fixed in the commit
+           "campaigns: a role that cannot target by assessment cannot save over it")
+WHY IT IS  Any stack where a guard on action B reads state that action A may rewrite has it: the
+CANON'S    strip-on-write looks like enforcement and is the bypass. The safe default inverts it —
+           refuse the write, never normalise it.
+SMALLEST   One line in the walker's surfaces: "a role restriction applied by rewriting a value on
+FIX        save — does any later guard read that value?" Must not forbid stripping input on CREATE,
+           where no stored value exists to erase.
+
 ---
 
 ## 2 · Lesson answers
