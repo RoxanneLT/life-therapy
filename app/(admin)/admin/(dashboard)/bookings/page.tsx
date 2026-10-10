@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/admin/page-header";
 import { requireAccess } from "@/lib/auth";
 import { canSeeClinical } from "@/lib/clinical-access";
+import { recordViews } from "@/lib/access-log";
 import { getSessionTypeConfig, TIMEZONE } from "@/lib/booking-config";
 import { getSiteSettings, getBusinessHours } from "@/lib/settings";
 import { format } from "date-fns";
@@ -197,6 +198,16 @@ export default async function BookingsPage({ searchParams }: Props) {
       where: { status: "confirmed", date: { lt: calendarDate(todaySast) } },
     }),
   ]);
+
+  // The serialised list below carries each session's notes to a clinical role; record those reads.
+  if (clinical) {
+    await recordViews({
+      actorEmail: adminUser.email,
+      entityType: "booking",
+      entityIds: bookings.filter((b) => b.adminNotes).map((b) => b.id),
+      area: `bookings ${view}`,
+    });
+  }
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
