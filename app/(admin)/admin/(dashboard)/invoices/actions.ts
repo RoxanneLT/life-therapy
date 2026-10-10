@@ -156,9 +156,11 @@ export async function markPaymentRequestPaidFromListAction(
     return { error: `This payment request is already ${pr.status === "paid" ? "paid" : "voided"}. Refresh the page.` };
   }
 
-  // Check if an invoice already exists for this PR (from a prior partial payment)
+  // Check if an invoice already exists for this PR (from a prior partial payment). Not a voided or
+  // credited one: matching any status brought a voided tax invoice back as paid when the EFT was
+  // recorded on its still-open request (walk-oct-payments-3, F2).
   const existingInvoice = await prisma.invoice.findFirst({
-    where: { paymentRequestId },
+    where: { paymentRequestId, status: { notIn: ["cancelled", "credited"] } },
   });
 
   // Money that arrived BEFORE this payment. A Paystack short payment records

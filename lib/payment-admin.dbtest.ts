@@ -138,3 +138,33 @@ test("a re-click on a request whose invoice is paid finishes the request, not a 
   assert.deepEqual({ status: row.status, invoiceId: row.invoiceId }, { status: "paid", invoiceId: inv.id });
   assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 1);
 });
+
+test("a second charge on a halfway-settled request is recorded as an overpayment, once", async () => {
+  const pr = await makeRequest(40_000);
+  const inv = await makeInvoice(40_000, { paymentRequestId: pr.id });
+  // The invoice is paid, the request was never told, so the portal offers the full balance again.
+  await prisma.invoice.update({ where: { id: inv.id }, data: { status: "paid", paidAmountCents: 40_000 } });
+  const second = ref("second");
+
+  // Asserted after the first delivery: Paystack does not redeliver a 200, and a redelivery found the
+  // request paid and recorded the charge by the closed-row path, which hid the loss.
+  assert.equal(await deliver({ paymentRequestId: pr.id }, 40_000, second), 200);
+  assert.deepEqual(await overpaidCents(pr.id), [40_000]);
+  assert.equal(await deliver({ paymentRequestId: pr.id }, 40_000, second), 200);
+
+  const row = await prisma.paymentRequest.findUniqueOrThrow({ where: { id: pr.id } });
+  assert.deepEqual({ status: row.status, invoiceId: row.invoiceId }, { status: "paid", invoiceId: inv.id });
+  assert.deepEqual(await overpaidCents(pr.id), [40_000]);
+  assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 1);
+});
+
+test("recording an EFT on an open request does not bring its voided invoice back as paid", async () => {
+  const { markPaymentRequestPaidFromListAction } = await listActions();
+  const pr = await makeRequest(40_000);
+  const voided = await makeInvoice(40_000, { paymentRequestId: pr.id });
+  await prisma.invoice.update({ where: { id: voided.id }, data: { status: "cancelled" } });
+
+  await markPaymentRequestPaidFromListAction(pr.id, "eft", 40_000, "EFT-2");
+
+  assert.equal((await prisma.invoice.findUniqueOrThrow({ where: { id: voided.id } })).status, "cancelled");
+});

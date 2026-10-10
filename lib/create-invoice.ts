@@ -256,12 +256,41 @@ export async function createInvoiceFromPaymentRequest(
   // Its invoice is paid but the request is not: a settlement written halfway (the invoice and the
   // request are two writes on the new-invoice path). Finish it rather than issue a second tax
   // invoice, which an admin's re-click did (walk-oct-payments-2 03, F4).
+  //
+  // A Paystack charge reaching here is not the one that paid the invoice (the lookup by reference
+  // above would have found it), so it is a second charge. Finishing the request without it charged
+  // the client twice and left no row naming the second charge (walk-oct-payments-3, F1). It is
+  // recorded as an overpayment, in the same transaction, which is also the webhook's retry marker.
   const paidInvoice = await prisma.invoice.findFirst({ where: { paymentRequestId, status: "paid" }, orderBy: { createdAt: "desc" } });
   if (paidInvoice && pr.status !== "cancelled") {
-    await prisma.paymentRequest.update({
-      where: { id: paymentRequestId },
-      data: { status: "paid", invoiceId: paidInvoice.id, paidAmountCents: paidInvoice.paidAmountCents ?? pr.totalCents },
-    });
+    const settled = paidInvoice.paidAmountCents ?? pr.totalCents;
+    const paidToDate = Math.max(settled, pr.totalCents) + payment.amountCents;
+    await prisma.$transaction([
+      prisma.paymentRequest.update({
+        where: { id: paymentRequestId },
+        data: { status: "paid", invoiceId: paidInvoice.id, paidAmountCents: settled },
+      }),
+      ...(payment.method === "paystack" && payment.amountCents > 0
+        ? [
+            prisma.auditLog.create({
+              data: {
+                action: "payment_overpaid",
+                entityType: "payment_request",
+                entityId: paymentRequestId,
+                actorEmail: "paystack-webhook",
+                metadata: {
+                  expectedCents: pr.totalCents,
+                  paidToDateCents: paidToDate,
+                  overpaidCents: paidToDate - pr.totalCents,
+                  currency: pr.currency,
+                  reference: payment.reference,
+                  note: `A second charge on a request already settled by invoice ${paidInvoice.invoiceNumber}. Refund or credit it by hand.`,
+                },
+              },
+            }),
+          ]
+        : []),
+    ]);
     return paidInvoice;
   }
 
