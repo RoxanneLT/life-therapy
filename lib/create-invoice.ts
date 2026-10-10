@@ -244,6 +244,12 @@ export async function createInvoiceFromPaymentRequest(
     include: { student: true, billingEntity: true },
   });
 
+  // Settled already: a second settlement made a second tax invoice for the same request
+  // (walk-oct-payments 01, F6). Money arriving on a paid request is the webhook's to record.
+  if (pr.status === "paid" && pr.invoiceId) {
+    return prisma.invoice.findUniqueOrThrow({ where: { id: pr.invoiceId } });
+  }
+
   // What this settlement brings the request to. `payment.amountCents` is THIS payment, added to
   // what came before; 0 means the admin is recording it as paid in full. Never below what the rows
   // already record (receivedCents takes the request and its invoice as one record).

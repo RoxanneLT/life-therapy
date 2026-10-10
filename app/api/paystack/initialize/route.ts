@@ -2,10 +2,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { prisma } from "@/lib/prisma";
 import { initializeTransaction } from "@/lib/paystack";
 import { NextResponse } from "next/server";
-import { appBaseUrl } from "@/lib/region";
+import { getBaseUrlForCurrency } from "@/lib/region";
 import { createPaymentRequestLink } from "@/lib/payment-request-link";
-
-const APP_URL = appBaseUrl();
 
 export async function POST(request: Request) {
   // Auth check
@@ -130,13 +128,15 @@ async function handleInvoice(
   }
 
   const reference = `inv-${invoice.id.slice(-8)}-${Date.now()}`;
+  const currency = invoice.currency || "ZAR";
 
   const result = await initializeTransaction({
     email,
     amount: balance,
-    currency: invoice.currency || "ZAR",
+    currency,
     reference,
-    callback_url: `${APP_URL}/portal/invoices`,
+    // The client's own domain, as a request link does (lib/payment-request-link.ts).
+    callback_url: `${getBaseUrlForCurrency(currency)}/portal/invoices`,
     metadata: { invoiceId: invoice.id },
   });
 

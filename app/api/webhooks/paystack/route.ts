@@ -7,6 +7,7 @@ import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
 import { loadRequestAmounts, receivedCents } from "@/lib/billing";
 import { refreshPaymentLink } from "@/lib/payment-request-link";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 /**
  * POST /api/webhooks/paystack
@@ -57,7 +58,12 @@ export async function POST(request: Request) {
         });
 
         if (pr?.status === "paid") {
-          console.log(`PR ${paymentRequestId} already paid, skipping`);
+          // A retry of the charge that settled it is skipped. Any other charge is real money on a
+          // settled request (a second tab, an old link, a request also marked paid by hand), and
+          // this return used to drop it without a trace (walk-oct-payments 01, F2).
+          if (!(await counted("payment_request", paymentRequestId, data.reference))) {
+            await recordOverpayment("payment_request", paymentRequestId, pr, (await loadRequestAmounts(pr)).received + data.amount, data.reference);
+          }
           return new Response("OK", { status: 200 });
         }
         // A part payment is added to what came before, so a retried webhook must not add it twice.
@@ -93,19 +99,18 @@ export async function POST(request: Request) {
           // genuinely paid most of it — a discrepancy only a human reading audit
           // entries could ever spot, and the reminder/overdue emails would chase the
           // whole amount. The linked invoice, if a part payment made one, keeps step.
-          await prisma.paymentRequest.update({
-            where: { id: paymentRequestId },
-            data: { paidAmountCents: paidToDate, paystackReference: data.reference },
-          });
-          if (pr.invoiceId) {
-            await prisma.invoice.update({ where: { id: pr.invoiceId }, data: { paidAmountCents: paidToDate } });
-          }
-          await recordAudit({
-            action: "payment_shortfall",
-            entityType: "payment_request",
-            entityId: paymentRequestId,
-            actorEmail: "paystack-webhook",
-            metadata: {
+          // The audit row is also the retry marker (partRecorded), so it is written in the same
+          // transaction as the money: written after it, a failed audit let a redelivery add the
+          // payment twice (walk-oct-payments 01, F4).
+          await prisma.$transaction([
+            prisma.paymentRequest.update({
+              where: { id: paymentRequestId },
+              data: { paidAmountCents: paidToDate, paystackReference: data.reference },
+            }),
+            ...(pr.invoiceId
+              ? [prisma.invoice.update({ where: { id: pr.invoiceId }, data: { paidAmountCents: paidToDate } })]
+              : []),
+            shortfallMarker("payment_request", paymentRequestId, {
               expectedCents: pr.totalCents,
               receivedCents: data.amount,
               paidToDateCents: paidToDate,
@@ -114,8 +119,8 @@ export async function POST(request: Request) {
               reference: data.reference,
               studentId: pr.studentId,
               note: "Part payment: the balance is still owed, and the stored payment link is now for it.",
-            },
-          });
+            }),
+          ]);
           // The stored link is what the pro-forma and the reminders send; it still charges the old amount.
           await refreshPaymentLink(paymentRequestId);
           // 200 so Paystack stops retrying — the money is real and recorded above.
@@ -142,7 +147,10 @@ export async function POST(request: Request) {
           console.error("Failed to send invoice email:", err),
         );
       } catch (err) {
+        // Not 200: Paystack retries until it gets one, and every write above is safe to repeat
+        // (the marker, the invoice found by reference, the paid-row check). A 200 here dropped it.
         console.error("Paystack webhook PR error:", err);
+        return new Response("Payment request not recorded", { status: 500 });
       }
     }
 
@@ -155,7 +163,13 @@ export async function POST(request: Request) {
         });
 
         if (existing?.status === "paid") {
-          console.log(`Invoice ${invoiceId} already paid, skipping`);
+          // As for a request above: a retry is skipped, other money on a paid invoice is recorded.
+          if (!(await counted("invoice", invoiceId, data.reference))) {
+            const settled = existing.paymentRequestId
+              ? await prisma.paymentRequest.findUnique({ where: { id: existing.paymentRequestId }, select: { paidAmountCents: true } })
+              : null;
+            await recordOverpayment("invoice", invoiceId, existing, receivedCents(settled ?? { paidAmountCents: null }, existing) + data.amount, data.reference);
+          }
           return new Response("OK", { status: 200 });
         }
         if (await partRecorded("invoice", invoiceId, data.reference)) {
@@ -183,24 +197,20 @@ export async function POST(request: Request) {
           );
           // Record what actually arrived — the invoice HAS a paidAmountCents column,
           // so the money is not lost, it is just not called settlement.
-          await prisma.invoice.update({
-            where: { id: invoiceId },
-            data: {
-              paidAmountCents: invPaidToDate,
-              paystackReference: data.reference,
-              paymentMethod: "paystack",
-            },
-          });
-          if (request) {
-            await prisma.paymentRequest.update({ where: { id: request.id }, data: { paidAmountCents: invPaidToDate } });
-            await refreshPaymentLink(request.id);
-          }
-          await recordAudit({
-            action: "payment_shortfall",
-            entityType: "invoice",
-            entityId: invoiceId,
-            actorEmail: "paystack-webhook",
-            metadata: {
+          // In one transaction with its retry marker, as on the request path.
+          await prisma.$transaction([
+            prisma.invoice.update({
+              where: { id: invoiceId },
+              data: {
+                paidAmountCents: invPaidToDate,
+                paystackReference: data.reference,
+                paymentMethod: "paystack",
+              },
+            }),
+            ...(request
+              ? [prisma.paymentRequest.update({ where: { id: request.id }, data: { paidAmountCents: invPaidToDate } })]
+              : []),
+            shortfallMarker("invoice", invoiceId, {
               expectedCents: existing.totalCents,
               receivedCents: data.amount,
               paidToDateCents: invPaidToDate,
@@ -208,8 +218,9 @@ export async function POST(request: Request) {
               currency: existing.currency,
               reference: data.reference,
               note: "Part payment: the balance is still owed.",
-            },
-          });
+            }),
+          ]);
+          if (request) await refreshPaymentLink(request.id);
           return new Response("OK", { status: 200 });
         }
 
@@ -241,7 +252,9 @@ export async function POST(request: Request) {
           console.error("Failed to send invoice email:", err),
         );
       } catch (err) {
+        // Retried, as on the request path above.
         console.error("Paystack webhook invoice error:", err);
+        return new Response("Invoice payment not recorded", { status: 500 });
       }
     }
 
@@ -253,13 +266,38 @@ export async function POST(request: Request) {
   return new Response("OK", { status: 200 });
 }
 
+type Entity = "payment_request" | "invoice";
+
 /** A part payment already added by an earlier delivery of this webhook (Paystack retries until it gets a 200). */
-async function partRecorded(entityType: "payment_request" | "invoice", entityId: string, reference: string): Promise<boolean> {
-  const row = await prisma.auditLog.findFirst({
-    where: { action: "payment_shortfall", entityType, entityId, metadata: { path: ["reference"], equals: reference } },
+async function partRecorded(entityType: Entity, entityId: string, reference: string): Promise<boolean> {
+  return !!(await markerFor(["payment_shortfall"], entityType, entityId, reference));
+}
+
+/**
+ * This charge is already on the books: it settled an invoice (which keeps its reference), or an
+ * earlier delivery recorded it as a part payment or an overpayment.
+ */
+async function counted(entityType: Entity, entityId: string, reference: string): Promise<boolean> {
+  const settledBy = await prisma.invoice.findFirst({ where: { paystackReference: reference }, select: { id: true } });
+  return !!settledBy || !!(await markerFor(["payment_shortfall", "payment_overpaid"], entityType, entityId, reference));
+}
+
+function markerFor(actions: string[], entityType: Entity, entityId: string, reference: string) {
+  return prisma.auditLog.findFirst({
+    where: { action: { in: actions }, entityType, entityId, metadata: { path: ["reference"], equals: reference } },
     select: { id: true },
   });
-  return !!row;
+}
+
+/**
+ * The part payment's audit row, built to run inside the transaction that writes the money, since it
+ * is also the retry marker. Written directly, not through recordAudit, which swallows its own
+ * failure; the metadata is amounts and ids, nothing recordAudit would mask.
+ */
+function shortfallMarker(entityType: Entity, entityId: string, metadata: Prisma.InputJsonObject) {
+  return prisma.auditLog.create({
+    data: { action: "payment_shortfall", entityType, entityId, actorEmail: "paystack-webhook", metadata },
+  });
 }
 
 /**
@@ -267,12 +305,14 @@ async function partRecorded(entityType: "payment_request" | "invoice", entityId:
  * the client's; it is recorded for a human to refund or credit, and settlement goes ahead.
  */
 async function recordOverpayment(
-  entityType: "payment_request" | "invoice",
+  entityType: Entity,
   entityId: string,
   row: { totalCents: number; currency: string | null },
   paidToDateCents: number,
   reference: string,
 ) {
+  // A retried delivery (now that a throw returns 500) must not record the same money twice.
+  if (await markerFor(["payment_overpaid"], entityType, entityId, reference)) return;
   console.error(`[paystack] OVERPAYMENT on ${entityType} ${entityId}: owed ${row.totalCents}, received ${paidToDateCents} to date.`);
   await recordAudit({
     action: "payment_overpaid",

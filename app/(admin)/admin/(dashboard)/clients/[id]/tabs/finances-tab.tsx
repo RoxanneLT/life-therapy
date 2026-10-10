@@ -956,7 +956,11 @@ function PaymentRequestsSection({
 
   function handleMarkPaid(prId: string) {
     startTransition(async () => {
-      await markPaymentRequestPaidAction(prId, "manual", undefined, clientId);
+      const result = await markPaymentRequestPaidAction(prId, "manual", undefined, clientId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success("Payment request marked as paid");
       onSuccess?.();
     });

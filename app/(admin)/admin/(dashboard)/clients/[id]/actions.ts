@@ -12,7 +12,7 @@ import { sendEmail } from "@/lib/email";
 import { renderEmail } from "@/lib/email-render";
 import { getUnbilledBookings } from "@/lib/generate-payment-requests";
 import { getSiteSettings, getBranchAddresses } from "@/lib/settings";
-import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, type BillingContact } from "@/lib/billing";
+import { resolveBillingContact, getSessionRate, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents, loadRequestAmounts, type BillingContact } from "@/lib/billing";
 import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { format } from "date-fns";
@@ -22,7 +22,7 @@ import { confirmWithTotp } from "@/lib/mfa-step-up";
 import { eraseClient } from "@/lib/popia/erase-client";
 import { externalHolders, type ExternalHolders } from "@/lib/popia/external-holders";
 import { exportClientData } from "@/lib/popia/export-client";
-import { createPaymentRequestLink } from "@/lib/payment-request-link";
+import { createPaymentRequestLink, refreshPaymentLink } from "@/lib/payment-request-link";
 import { erasedRefusal } from "@/lib/popia/erased-guard";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
@@ -1924,6 +1924,8 @@ export async function markPaymentRequestPaidAction(
 
   // Read before paying it, so the audit row states what it really was: pending or overdue.
   const prior = await prisma.paymentRequest.findUnique({ where: { id: paymentRequestId }, select: { status: true } });
+  if (!prior) return { error: "That payment request no longer exists." };
+  if (prior.status === "paid") return { error: "This payment request is already paid." };
 
   const { createInvoiceFromPaymentRequest } = await import("@/lib/create-invoice");
 
@@ -1938,12 +1940,13 @@ export async function markPaymentRequestPaidAction(
     entityType: "payment_request",
     entityId: paymentRequestId,
     actorEmail: adminUser.email,
-    before: { status: prior?.status ?? null },
+    before: { status: prior.status },
     after: { status: "paid", paymentMethod: method, reference: reference ?? null },
     metadata: { studentId },
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
+  return {};
 }
 
 // ────────────────────────────────────────────────────────────
@@ -2247,11 +2250,20 @@ export async function updatePaymentRequestAction(data: {
   try {
     const pr = await prisma.paymentRequest.findUniqueOrThrow({
       where: { id: data.paymentRequestId },
-      select: { status: true, totalCents: true, paymentUrl: true, studentId: true, currency: true },
+      select: { id: true, status: true, totalCents: true, paidAmountCents: true, invoiceId: true, studentId: true, currency: true },
     });
 
     if (!["draft", "pending", "overdue"].includes(pr.status)) {
       return { success: false, error: "This payment request can no longer be edited" };
+    }
+    // Money received means a tax invoice may already exist for these lines (a part payment makes
+    // one), and settling it later keeps ITS totals: an amend would leave a paid invoice for the
+    // wrong amount (walk-oct-payments 01, F1). Refused rather than re-costing a tax document.
+    if ((await loadRequestAmounts(pr)).received > 0) {
+      return {
+        success: false,
+        error: "Money has already been received on this request, so it can no longer be changed. Record the balance, or void it and raise a new one.",
+      };
     }
 
     const settings = await getSiteSettings();
@@ -2303,20 +2315,9 @@ export async function updatePaymentRequestAction(data: {
       },
     });
 
-    // Regenerate Paystack link if amount changed and URL exists
-    if (amountChanged && pr.paymentUrl) {
-      const studentId = pr.studentId || data.studentId;
-      const student = await prisma.student.findUnique({
-        where: { id: studentId },
-        select: { email: true, billingEmail: true },
-      });
-      const email = student?.billingEmail || student?.email || "";
-      if (email) {
-        // Reads the total just written, less anything already received.
-        const link = await createPaymentRequestLink(data.paymentRequestId, email).catch((err: unknown) => ({ error: String(err) }));
-        if ("error" in link) console.error("Paystack regeneration failed:", link.error);
-      }
-    }
+    // A stored link still charges the old amount: replace it, or clear it when no new one can be
+    // made, so the pro-forma and reminders never send a stale amount (walk-oct-payments 01, F3).
+    if (amountChanged) await refreshPaymentLink(data.paymentRequestId);
 
     // Regenerate pro-forma PDF
     try {
