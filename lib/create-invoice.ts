@@ -15,7 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { recordAudit } from "@/lib/audit";
 import { getSiteSettings } from "@/lib/settings";
 import { resolveBillingContact, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents } from "@/lib/billing";
-import { getNextInvoiceNumber } from "@/lib/invoice-numbering";
+import { getNextInvoiceNumber, type SequenceDb } from "@/lib/invoice-numbering";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
 import type { Invoice } from "@/lib/generated/prisma/client";
@@ -89,6 +89,8 @@ async function createInvoiceRecord(params: {
   billingMonth?: string;
   dueDate?: Date;
   status?: string;
+  /** Written in the invoice's own transaction: a row that must never be seen apart from it. */
+  alongside?: (tx: SequenceDb, invoice: Invoice) => Promise<unknown>;
 }): Promise<Invoice> {
   const settings = await getSiteSettings();
   // VAT is ZAR-only — an international invoice is zero-rated. This is the
@@ -124,7 +126,7 @@ async function createInvoiceRecord(params: {
   const prefix = settings.invoicePrefix || "LT";
   const invoice = await prisma.$transaction(async (tx) => {
     const { number: invoiceNumber } = await getNextInvoiceNumber(params.billingName, prefix, new Date(), tx);
-    return tx.invoice.create({
+    const created = await tx.invoice.create({
       data: {
         invoiceNumber,
         type: params.type,
@@ -157,6 +159,8 @@ async function createInvoiceRecord(params: {
         dueDate: params.dueDate,
       },
     });
+    await params.alongside?.(tx, created);
+    return created;
   });
 
   // Generate PDF (non-blocking — don't fail the invoice creation)
@@ -321,6 +325,7 @@ export async function createInvoiceFromPaymentRequest(
   });
   const prior = receivedCents(pr, openInvoice);
   const paidToDate = payment.amountCents > 0 ? prior + payment.amountCents : Math.max(prior, pr.totalCents);
+  const settles = paidToDate >= pr.totalCents;
 
   if (openInvoice) {
     // Both rows in one transaction, so a failure cannot leave one paid and the other open (W3).
@@ -394,10 +399,19 @@ export async function createInvoiceFromPaymentRequest(
     periodStart: pr.periodStart,
     periodEnd: pr.periodEnd,
     billingMonth: pr.billingMonth,
-    status: "paid",
+    // A part payment's invoice is born open, and the request is linked in the same transaction. It
+    // was created paid, the request marked paid, and the caller demoted both afterwards: lost, or
+    // overtaken by a webhook in the gap, a part-paid request read as settled and its next charge was
+    // recorded as a refund (walk-oct-payments-3 03, G1).
+    status: settles ? "paid" : "payment_requested",
+    alongside: (tx, created) =>
+      tx.paymentRequest.update({
+        where: { id: paymentRequestId },
+        data: { invoiceId: created.id, paidAmountCents: paidToDate, ...(settles ? { status: "paid" } : {}) },
+      }),
   });
 
-  // Link the invoice back to the payment request and mark it paid.
+  // The request is linked to the invoice inside its transaction (above).
   //
   // paidAmountCents is stamped on the FULL-payment path too, not just on the short
   // payment the webhook rejects. If only shortfalls populated it, "null" would mean
@@ -405,15 +419,6 @@ export async function createInvoiceFromPaymentRequest(
   // be unreadable without cross-checking the status. It means one thing: what we
   // actually received to date — a request that took R600 short via Paystack and is
   // settled later must not read as though only the settling payment ever arrived.
-  await prisma.paymentRequest.update({
-    where: { id: paymentRequestId },
-    data: {
-      invoiceId: invoice.id,
-      status: "paid",
-      paidAmountCents: paidToDate,
-    },
-  });
-
   return invoice;
 }
 

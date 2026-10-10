@@ -1379,27 +1379,23 @@ export async function markInvoicePaidAction(
 
   // Read before writing, so the audit row records the status the invoice really had.
   const prior = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      status: "paid",
-      paymentMethod: method,
-      eftReference: method === "eft" ? reference : undefined,
-      paidAt: new Date(),
-    },
-  });
-
-  // If linked to a payment request, mark it paid too
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    select: { paymentRequestId: true, totalCents: true },
-  });
-  if (invoice?.paymentRequestId) {
-    await prisma.paymentRequest.update({
-      where: { id: invoice.paymentRequestId },
-      data: { status: "paid" },
+  // The invoice and its linked request in one transaction: apart, a lost second write left a paid
+  // invoice beside an open request, which a later charge read as settled (walk-oct-payments-3 03, G1).
+  await prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: "paid",
+        paymentMethod: method,
+        eftReference: method === "eft" ? reference : undefined,
+        paidAt: new Date(),
+      },
+      select: { paymentRequestId: true },
     });
-  }
+    if (invoice.paymentRequestId) {
+      await tx.paymentRequest.update({ where: { id: invoice.paymentRequestId }, data: { status: "paid" } });
+    }
+  });
 
   await recordAudit({
     action: "payment_recorded",

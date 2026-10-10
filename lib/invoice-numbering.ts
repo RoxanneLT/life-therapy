@@ -55,7 +55,7 @@ function formatInvoiceNumber(
  * gives it back. The row lock the increment takes also serialises concurrent creates.
  */
 /** A Prisma client or a transaction handle, as CreditDb in lib/credits.ts. */
-type SequenceDb = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">;
+export type SequenceDb = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">;
 
 export async function getNextInvoiceNumber(
   billingName: string,

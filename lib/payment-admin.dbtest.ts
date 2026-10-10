@@ -21,6 +21,18 @@ mock.module(pathToFileURL(join(process.cwd(), "lib/auth.ts")).href, {
   namedExports: { requireRole: async () => ({ adminUser: { email: "dbtest@example.test", role: "super_admin" }, user: {} }) },
 });
 mock.module("next/cache", { namedExports: { revalidatePath: () => {}, revalidateTag: () => {} } });
+// Storage is unreachable, so every PDF fails, as it did unmocked. The hook runs once, inside the
+// first PDF call, to put a webhook delivery in the gap between an invoice and the writes after it.
+let duringPdf: (() => Promise<void>) | null = null;
+const noStorage = async () => {
+  const hook = duringPdf;
+  duringPdf = null;
+  if (hook) await hook();
+  throw new Error("no storage in test:db");
+};
+mock.module(pathToFileURL(join(process.cwd(), "lib/generate-invoice-pdf.ts")).href, {
+  namedExports: { generateAndStoreInvoicePDF: noStorage, generateAndStoreProformaPDF: noStorage, generateProformaInvoicePDF: noStorage },
+});
 
 // Imported on first use, after the mocks above are in place.
 const listActions = () => import("@/app/(admin)/admin/(dashboard)/invoices/actions");
@@ -169,6 +181,26 @@ test("an old full link paid on a part-paid, hand-settled request records one ove
   // Paid by hand counts as paid in full, so all 40k is the client's (the closedRow reading).
   assert.deepEqual(await overpaidCents(pr.id), [40_000]);
   assert.equal((await prisma.paymentRequest.findUniqueOrThrow({ where: { id: pr.id } })).status, "paid");
+});
+
+test("a short charge landing while a part payment is recorded is a shortfall, and the request stays owed", async () => {
+  const { markPaymentRequestPaidFromListAction } = await listActions();
+  const pr = await makeRequest(40_000);
+  let status = 0;
+  // The invoice was created paid and demoted after its PDF, so a charge arriving in between read
+  // the request as settled and was recorded as a refund (walk-oct-payments-3 03, G1).
+  duringPdf = async () => {
+    status = await deliver({ paymentRequestId: pr.id }, 20_000, ref("short"));
+  };
+
+  assert.deepEqual(await markPaymentRequestPaidFromListAction(pr.id, "eft", 10_000, "EFT-3"), {});
+  assert.equal(status, 200);
+
+  const inv = await prisma.invoice.findFirstOrThrow({ where: { paymentRequestId: pr.id } });
+  assert.deepEqual({ status: inv.status, paid: inv.paidAmountCents }, { status: "payment_requested", paid: 30_000 });
+  const row = await prisma.paymentRequest.findUniqueOrThrow({ where: { id: pr.id } });
+  assert.deepEqual({ status: row.status, paid: row.paidAmountCents }, { status: "pending", paid: 30_000 });
+  assert.deepEqual(await overpaidCents(pr.id), []);
 });
 
 test("recording an EFT on an open request does not bring its voided invoice back as paid", async () => {

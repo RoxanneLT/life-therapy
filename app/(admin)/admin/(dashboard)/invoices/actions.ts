@@ -28,23 +28,24 @@ export async function markInvoicePaidFromListAction(
 
   // Read before writing, so the audit row records the status the invoice really had.
   const prior = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
-  const invoice = await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      status: "paid",
-      paymentMethod: method,
-      eftReference: method === "eft" ? reference : undefined,
-      paidAt: new Date(),
-    },
-    select: { paymentRequestId: true, studentId: true },
-  });
-
-  if (invoice.paymentRequestId) {
-    await prisma.paymentRequest.update({
-      where: { id: invoice.paymentRequestId },
-      data: { status: "paid" },
+  // The invoice and its request in one transaction: apart, a lost second write left a paid invoice
+  // beside an open request, which a later charge read as settled (walk-oct-payments-3 03, G1).
+  const invoice = await prisma.$transaction(async (tx) => {
+    const updated = await tx.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: "paid",
+        paymentMethod: method,
+        eftReference: method === "eft" ? reference : undefined,
+        paidAt: new Date(),
+      },
+      select: { paymentRequestId: true, studentId: true },
     });
-  }
+    if (updated.paymentRequestId) {
+      await tx.paymentRequest.update({ where: { id: updated.paymentRequestId }, data: { status: "paid" } });
+    }
+    return updated;
+  });
 
   await recordAudit({
     action: "payment_recorded",
@@ -195,26 +196,28 @@ export async function markPaymentRequestPaidFromListAction(
     const newPaidAmount = alreadyReceived + amountCents;
     const isFullyPaid = newPaidAmount >= pr.totalCents;
 
-    await prisma.invoice.update({
-      where: { id: existingInvoice.id },
-      data: {
-        paidAmountCents: newPaidAmount,
-        status: isFullyPaid ? "paid" : "payment_requested",
-        paidAt: isFullyPaid ? new Date() : existingInvoice.paidAt,
-        paymentMethod: method,
-        eftReference: method === "eft" ? [existingInvoice.eftReference, reference].filter(Boolean).join(", ") : existingInvoice.eftReference,
-      },
-    });
-
-    // The running total belongs on the request too, not only on the invoice —
-    // it is what the reminder/overdue emails and the pro-forma read.
-    await prisma.paymentRequest.update({
-      where: { id: paymentRequestId },
-      data: {
-        paidAmountCents: newPaidAmount,
-        ...(isFullyPaid ? { status: "paid" } : {}),
-      },
-    });
+    // The running total belongs on the request too, not only on the invoice — it is what the
+    // reminder/overdue emails and the pro-forma read. Both rows or neither: apart, a lost second
+    // write left the two disagreeing about whether the request is settled (walk-oct-payments-3 03, G1).
+    await prisma.$transaction([
+      prisma.invoice.update({
+        where: { id: existingInvoice.id },
+        data: {
+          paidAmountCents: newPaidAmount,
+          status: isFullyPaid ? "paid" : "payment_requested",
+          paidAt: isFullyPaid ? new Date() : existingInvoice.paidAt,
+          paymentMethod: method,
+          eftReference: method === "eft" ? [existingInvoice.eftReference, reference].filter(Boolean).join(", ") : existingInvoice.eftReference,
+        },
+      }),
+      prisma.paymentRequest.update({
+        where: { id: paymentRequestId },
+        data: {
+          paidAmountCents: newPaidAmount,
+          ...(isFullyPaid ? { status: "paid" } : {}),
+        },
+      }),
+    ]);
 
     await generateAndStoreInvoicePDF(existingInvoice.id).catch(console.error);
     // Only send email on full payment
@@ -245,35 +248,13 @@ export async function markPaymentRequestPaidFromListAction(
   const newPaidAmount = alreadyReceived + amountCents;
   const isPartial = newPaidAmount < pr.totalCents;
 
-  // Partial payment: the request stays unpaid, invoice shows what has been received so far. Its
-  // status is written back as it was read: createInvoiceFromPaymentRequest has just set it to
-  // "paid", so this write is what keeps the balance chased. Writing "pending" here turned an
-  // overdue request back into a current one (walk-oct-fixes 01, F7); writing nothing left a
-  // part-paid request "paid" (walk-oct-final 01, F1).
+  // A partial payment's invoice is created open, and the request keeps the status it had, both in
+  // the engine's one transaction, with the running total on both rows. They were created paid and
+  // demoted here in two more writes; lost or overtaken by a webhook, that left a part-paid request
+  // reading as settled (walk-oct-payments-3 03, G1). Writing "pending" turned an overdue request
+  // current (walk-oct-fixes 01, F7); writing nothing left it "paid" (walk-oct-final 01, F1).
   if (isPartial) {
-    await prisma.paymentRequest.update({
-      where: { id: paymentRequestId },
-      data: { status: pr.status, paidAmountCents: newPaidAmount },
-    });
-    await prisma.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        status: "payment_requested",
-        paidAmountCents: newPaidAmount,
-      },
-    });
     await refreshPaymentLink(paymentRequestId);
-  } else if (newPaidAmount > amountCents) {
-    // Settled, but earlier money made up part of it — record the true total on
-    // both rows so the invoice does not understate what was paid for it.
-    await prisma.paymentRequest.update({
-      where: { id: paymentRequestId },
-      data: { paidAmountCents: newPaidAmount },
-    });
-    await prisma.invoice.update({
-      where: { id: invoice.id },
-      data: { paidAmountCents: newPaidAmount },
-    });
   }
 
   await generateAndStoreInvoicePDF(invoice.id).catch(console.error);
