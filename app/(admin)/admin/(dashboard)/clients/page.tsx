@@ -96,11 +96,13 @@ export default async function ClientsPage({
     where.clientStatus = activeTab;
   }
   if (q) {
+    // No phone: the column holds ciphertext (encrypted at rest), so a `contains` on it never
+    // matched a typed number and only looked like it searched. Searching by number would need a
+    // separate digits-hash column, which the owner declined on 2026-10-10.
     where.OR = [
       { firstName: { contains: q, mode: "insensitive" } },
       { lastName: { contains: q, mode: "insensitive" } },
       { email: { contains: q, mode: "insensitive" } },
-      { phone: { contains: q, mode: "insensitive" } },
     ];
   }
 
