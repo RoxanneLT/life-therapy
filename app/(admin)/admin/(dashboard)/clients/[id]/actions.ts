@@ -301,6 +301,7 @@ export async function adminLateCancelWithFeeAction(
     const dateStr = format(new Date(booking.date), "d MMM yyyy");
 
     const invoice = await createManualInvoice({
+      actorEmail: adminUser.email,
       type: "late_cancel",
       studentId,
       // The booking's own currency — the fee is the session price, in the currency
@@ -1351,6 +1352,8 @@ export async function markInvoicePaidAction(
 ) {
   const { adminUser } = await requireRole("super_admin");
 
+  // Read before writing, so the audit row records the status the invoice really had.
+  const prior = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
   await prisma.invoice.update({
     where: { id: invoiceId },
     data: {
@@ -1378,7 +1381,7 @@ export async function markInvoicePaidAction(
     entityType: "invoice",
     entityId: invoiceId,
     actorEmail: adminUser.email,
-    before: { status: "pending" },
+    before: { status: prior?.status ?? null },
     after: { status: "paid", paymentMethod: method, reference: reference ?? null },
     metadata: { studentId },
   });
@@ -1968,11 +1971,12 @@ export async function generateAdHocInvoiceAction(params: {
   reference?: string;
   type?: string;
 }) {
-  await requireRole("super_admin");
+  const { adminUser } = await requireRole("super_admin");
 
   const { createManualInvoice } = await import("@/lib/create-invoice");
 
   const invoice = await createManualInvoice({
+    actorEmail: adminUser.email,
     type: params.type || "ad_hoc_session",
     studentId: params.studentId,
     lineItems: params.lineItems,

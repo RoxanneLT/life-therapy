@@ -2095,6 +2095,7 @@ export async function adminCreateHistoricalBookingAction(data: AdminCreateHistor
 
       const dateStr = format(bookingDate, "d MMM yyyy");
       const invoice = await createManualInvoice({
+        actorEmail: adminUser.email,
         type: "ad_hoc_session",
         studentId: student.id,
         paymentMethod: "eft" as const,

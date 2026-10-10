@@ -22,6 +22,8 @@ export async function markInvoicePaidFromListAction(
 ) {
   const { adminUser } = await requireRole("super_admin");
 
+  // Read before writing, so the audit row records the status the invoice really had.
+  const prior = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
   const invoice = await prisma.invoice.update({
     where: { id: invoiceId },
     data: {
@@ -45,7 +47,7 @@ export async function markInvoicePaidFromListAction(
     entityType: "invoice",
     entityId: invoiceId,
     actorEmail: adminUser.email,
-    before: { status: "pending" },
+    before: { status: prior?.status ?? null },
     after: { status: "paid", paymentMethod: method, reference: reference ?? null },
     metadata: { studentId: invoice.studentId, source: "invoice_list" },
   });
@@ -227,11 +229,13 @@ export async function markPaymentRequestPaidFromListAction(
   const newPaidAmount = alreadyReceived + amountCents;
   const isPartial = newPaidAmount < pr.totalCents;
 
-  // Partial payment: keep PR pending, invoice shows what has been received so far
+  // Partial payment: the request stays unpaid, invoice shows what has been received so far. Its
+  // status is left as it was: writing "pending" turned an overdue request back into a current one
+  // (walk-oct-fixes 01, F7).
   if (isPartial) {
     await prisma.paymentRequest.update({
       where: { id: paymentRequestId },
-      data: { status: "pending", paidAmountCents: newPaidAmount },
+      data: { paidAmountCents: newPaidAmount },
     });
     await prisma.invoice.update({
       where: { id: invoice.id },

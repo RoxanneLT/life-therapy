@@ -12,6 +12,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { recordAudit } from "@/lib/audit";
 import { getSiteSettings } from "@/lib/settings";
 import { resolveBillingContact, calculateInvoiceTotals, vatApplies, resolveClientCurrency } from "@/lib/billing";
 import { getNextInvoiceNumber } from "@/lib/invoice-numbering";
@@ -319,8 +320,14 @@ export async function createInvoiceFromPaymentRequest(
 
 /**
  * Create a manual invoice (admin marks session as paid via EFT/cash).
+ *
+ * It records the payment in the audit trail itself, because every caller is an admin recording
+ * money received and none of the three did (ad-hoc invoice, late-cancel fee, historical booking).
+ * Payment recording is on CLAUDE.md §4's audit-worthy list; the audit check reads action bodies,
+ * so a write one file away went unseen (walk-oct-batch 03, F4).
  */
 export async function createManualInvoice(params: {
+  actorEmail: string;
   type: string;
   studentId?: string;
   billingEntityId?: string;
@@ -362,7 +369,7 @@ export async function createManualInvoice(params: {
     billingVatNumber = entity.vatNumber ?? undefined;
   }
 
-  return createInvoiceRecord({
+  const invoice = await createInvoiceRecord({
     type: params.type,
     studentId: params.studentId,
     billingEntityId: params.billingEntityId,
@@ -378,4 +385,16 @@ export async function createManualInvoice(params: {
     eftReference: params.paymentMethod === "eft" ? params.paymentReference : undefined,
     status: "paid",
   });
+
+  await recordAudit({
+    action: "payment_recorded",
+    entityType: "invoice",
+    entityId: invoice.id,
+    actorEmail: params.actorEmail,
+    before: null,
+    after: { status: "paid", paymentMethod: params.paymentMethod, reference: params.paymentReference ?? null, totalCents: invoice.totalCents, currency },
+    metadata: { studentId: params.studentId ?? null, billingEntityId: params.billingEntityId ?? null, source: params.type },
+  });
+
+  return invoice;
 }
