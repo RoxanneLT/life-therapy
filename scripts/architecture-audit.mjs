@@ -3692,7 +3692,10 @@ check("audit-trail: an audit-worthy action records one", () => {
  * is that these happen when the user clicks Send — not when they click Save.
  */
 const REACHES_OUTSIDE =
-  /\bsendEmail\s*\(|\bsendInvoiceEmail\s*\(|\bsendPaymentRequestEmail\s*\(|\bgenerateAndStoreInvoicePDF\s*\(|\binitializeTransaction\s*\(/;
+  /\bsendEmail\s*\(|\bsendInvoiceEmail\s*\(|\bsendPaymentRequestEmail\s*\(|\bsendSecurityNotice\s*\(|\bgenerateAndStoreInvoicePDF\s*\(|\binitializeTransaction\s*\(/;
+// sendSecurityNotice is listed by name because it sends one file away: until 2026-10-10 three
+// save-named actions emailed through it and this check passed without an entry for any of them
+// (walk-oct-security F2). A new wrapper around sendEmail needs adding here the same way.
 
 const SAVE_SIDE_EFFECT_ALLOWED = [
   {
@@ -3705,6 +3708,22 @@ const SAVE_SIDE_EFFECT_ALLOWED = [
     fn: "updatePaymentRequestAction",
     why: "regenerates the Paystack link because the AMOUNT changed. Leaving the old link live would " +
          "let a client pay a figure the request no longer says. It creates a link; it does not send one.",
+  },
+  {
+    fn: "updateClientEmailAction",
+    why: "moving a client's LOGIN tells the old address, which after the save can no longer reset the " +
+         "password. Sent only when the login exists and the address really changed; a takeover by email " +
+         "swap is otherwise invisible to the owner. Account-tier, and the change and the notice are one act.",
+  },
+  {
+    fn: "updateUser",
+    why: "an admin's role changed. The account's owner is told by the act itself, so a quiet escalation " +
+         "or demotion is never discovered later from a missing menu.",
+  },
+  {
+    fn: "updatePasswordAction",
+    why: "a password reset by email link. The inbox that proved control is told, because if it was not " +
+         "them it is the one place they will see it.",
   },
 ];
 

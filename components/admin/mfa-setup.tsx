@@ -27,6 +27,20 @@ import { ShieldCheck, ShieldOff, Loader2, Smartphone, Trash2 } from "lucide-reac
 import { toast } from "sonner";
 import { recordOwnMfaChangeAction } from "@/app/(public)/login/mfa/actions";
 
+/**
+ * The audit row and the owner's notice for a change already made. The change itself is done, so
+ * a failure is logged, not shown. The action RETURNS its refusals, so a .catch alone would drop
+ * them silently (walk-oct-security-4 F1).
+ */
+async function reportOwnMfaChange(change: "added" | "removed") {
+  try {
+    const result = await recordOwnMfaChangeAction(change);
+    if (result.error) console.error(`[mfa] ${change} not recorded:`, result.error);
+  } catch (err) {
+    console.error(`[mfa] ${change} not recorded:`, err);
+  }
+}
+
 interface Factor {
   id: string;
   friendlyName?: string;
@@ -103,8 +117,7 @@ export function MfaSetup() {
         return;
       }
       toast.success("Two-factor authentication is now enabled.");
-      // The audit row and the owner's notice: the change itself is done, so a failure here is logged, not shown.
-      await recordOwnMfaChangeAction("added").catch((err) => console.error("[mfa] notice failed:", err));
+      await reportOwnMfaChange("added");
       setPending(null);
       setCode("");
       await loadFactors();
@@ -129,7 +142,7 @@ export function MfaSetup() {
       return;
     }
     toast.success("Two-factor authentication removed.");
-    await recordOwnMfaChangeAction("removed").catch((err) => console.error("[mfa] notice failed:", err));
+    await reportOwnMfaChange("removed");
     await loadFactors();
   }
 

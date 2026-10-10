@@ -253,6 +253,27 @@ export async function changePassword(
  * helps a colleague who lost their authenticator). The colleague then signs in
  * with their password alone and can re-enrol.
  */
+/**
+ * deleteFactor RETURNS its error rather than throwing, so each result is read. Until 2026-10-10
+ * a failed delete still recorded the removal, reported success, and told the target their 2FA was
+ * gone while it was still live (walk-oct-security-5 F3).
+ */
+async function deleteEveryFactor(userId: string, factors: { id: string; status: string }[]) {
+  const outcome = { removed: 0, verifiedRemoved: 0, verifiedSurvived: 0, failure: null as string | null };
+  for (const factor of factors) {
+    const { error } = await supabaseAdmin.auth.admin.mfa.deleteFactor({ id: factor.id, userId });
+    const verified = factor.status === "verified";
+    if (error) {
+      outcome.failure ??= error.message;
+      if (verified) outcome.verifiedSurvived++;
+    } else {
+      outcome.removed++;
+      if (verified) outcome.verifiedRemoved++;
+    }
+  }
+  return outcome;
+}
+
 export async function removeUserMfaAction(
   adminUserId: string,
   stepUpCode: string,
@@ -275,25 +296,37 @@ export async function removeUserMfaAction(
   });
   if (error) return { error: error.message };
 
-  for (const factor of data?.factors ?? []) {
-    await supabaseAdmin.auth.admin.mfa.deleteFactor({
-      id: factor.id,
-      userId: target.supabaseUserId,
+  const all = data?.factors ?? [];
+  if (all.length === 0) return { error: "This admin has no two-factor set up, so there is nothing to remove." };
+
+  const outcome = await deleteEveryFactor(target.supabaseUserId, all);
+
+  if (outcome.removed > 0) {
+    await recordAudit({
+      action: "admin_mfa_removed",
+      entityType: "admin_user",
+      entityId: adminUserId,
+      actorEmail: actor.email,
+      metadata: {
+        targetEmail: target.email,
+        factorsRemoved: outcome.removed,
+        ...(outcome.failure ? { factorsFailed: all.length - outcome.removed } : {}),
+      },
     });
   }
-
-  await recordAudit({
-    action: "admin_mfa_removed",
-    entityType: "admin_user",
-    entityId: adminUserId,
-    actorEmail: actor.email,
-    metadata: { targetEmail: target.email, factorsRemoved: data?.factors?.length ?? 0 },
-  });
-  await sendSecurityNotice(
-    target.email,
-    target.name,
-    `Two-factor sign-in was removed from your Life-Therapy admin account by ${actor.email}. Sign in and set it up again.`,
-  );
+  // The target is told when their sign-in lost its second factor: a verified one went and no
+  // verified one survived. An unverified survivor protects nothing, so it does not count.
+  if (outcome.verifiedRemoved > 0 && outcome.verifiedSurvived === 0) {
+    await sendSecurityNotice(
+      target.email,
+      target.name,
+      `Two-factor sign-in was removed from your Life-Therapy admin account by ${actor.email}. Sign in and set it up again.`,
+    );
+  }
+  if (outcome.failure) {
+    revalidatePath(`/admin/users/${adminUserId}`);
+    return { error: `Two-factor could not be fully removed: ${outcome.failure}` };
+  }
 
   revalidatePath(`/admin/users/${adminUserId}`);
   return { success: true };
