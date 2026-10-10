@@ -20,7 +20,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { format, isToday } from "date-fns";
 import { getSessionTypeConfig } from "@/lib/booking-config";
-import { formatByCurrency } from "@/lib/utils";
+import { formatByCurrency, formatPrice } from "@/lib/utils";
+import { receivedByRequest } from "@/lib/billing";
 import Link from "next/link";
 
 export default async function PortalDashboardPage() {
@@ -73,6 +74,7 @@ export default async function PortalDashboardPage() {
         id: true,
         invoiceNumber: true,
         totalCents: true,
+        currency: true,
         status: true,
         createdAt: true,
       },
@@ -81,15 +83,17 @@ export default async function PortalDashboardPage() {
     // EUR/GBP, and a bare _sum would add their cents to any ZAR ones and render
     // the total with a hardcoded "R". The client would see their own money in the
     // wrong currency, on their own portal.
-    prisma.paymentRequest.groupBy({
-      by: ["currency"],
-      // Pending OR overdue, net of part payments — the same set /portal/invoices lists. Pending
-      // alone made the card vanish the day a request went overdue, when it mattered most.
+    // Pending OR overdue — the set /portal/invoices lists. Pending alone made the card vanish the
+    // day a request went overdue, when it mattered most.
+    prisma.paymentRequest.findMany({
       where: { studentId: student.id, status: { in: ["pending", "overdue"] } },
-      _count: true,
-      _sum: { totalCents: true, paidAmountCents: true },
+      select: { id: true, currency: true, totalCents: true, paidAmountCents: true, invoiceId: true },
     }),
   ]);
+  // Net of what was received, read the way lib/billing.ts reads it for every client-facing amount
+  // (the request's or its invoice's record, whichever holds more), so this card and the page it
+  // links to state the same balance.
+  const received = await receivedByRequest(pendingPayments);
 
   const currentBalance = creditBalance?.balance ?? 0;
 
@@ -98,9 +102,9 @@ export default async function PortalDashboardPage() {
     : null;
   const bookingIsToday = nextBooking ? isToday(new Date(nextBooking.date)) : false;
 
-  const outstandingCount = pendingPayments.reduce((n, g) => n + (g._count ?? 0), 0);
+  const outstandingCount = pendingPayments.length;
   const outstandingTotal = formatByCurrency(
-    pendingPayments.map((g) => ({ currency: g.currency, cents: (g._sum.totalCents ?? 0) - (g._sum.paidAmountCents ?? 0) })),
+    pendingPayments.map((pr) => ({ currency: pr.currency, cents: Math.max(0, pr.totalCents - (received.get(pr.id) ?? 0)) })),
   );
 
   return (
@@ -293,7 +297,7 @@ export default async function PortalDashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-sm font-medium">
-                        R{(inv.totalCents / 100).toFixed(2)}
+                        {formatPrice(inv.totalCents, inv.currency)}
                       </span>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         inv.status === "paid"

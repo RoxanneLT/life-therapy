@@ -12,6 +12,7 @@ import { saMonthStart } from "@/lib/dates";
 import { formatPrice } from "@/lib/utils";
 import { PayButton } from "./pay-button";
 import { readLineItems } from "@/lib/billing-types";
+import { receivedByRequest } from "@/lib/billing";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -56,6 +57,8 @@ export default async function PortalInvoicesPage({
     },
     orderBy: { createdAt: "desc" },
   });
+  // The balance still owed, as the home card states it (lib/billing.ts reads what was received).
+  const received = await receivedByRequest(pendingRequests);
 
   // Invoice history
   const invoiceWhere: Record<string, unknown> = {
@@ -154,8 +157,13 @@ export default async function PortalInvoicesPage({
 
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <p className="text-lg font-bold">
-                          {formatPrice(pr.totalCents, pr.currency)}
+                          {formatPrice(Math.max(0, pr.totalCents - (received.get(pr.id) ?? 0)), pr.currency)}
                         </p>
+                        {(received.get(pr.id) ?? 0) > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            of {formatPrice(pr.totalCents, pr.currency)}, part paid
+                          </p>
+                        )}
                         <PayButton type="payment_request" id={pr.id} />
                       </div>
                     </div>
