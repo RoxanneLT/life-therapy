@@ -66,6 +66,10 @@ async function main() {
     await exec(server, `CREATE DATABASE "${DB}"`);
     const url = withDatabase(server, DB);
     await applyAll(url, { write: true, log: () => {} });
+    // Invoice numbers come from one row, which production has and prisma/sql/ does not create. Seeded
+    // here, once: each file upserting it in a `before` raced when the files ran in parallel, and the
+    // loser's unique violation failed that file's every test (walk-oct-payments-3 02, F5).
+    await exec(url, `INSERT INTO "invoice_sequences" ("id") VALUES ('global') ON CONFLICT DO NOTHING`);
     console.log(`test:db → ${host} · ${DB} built from prisma/sql/ · ${files.length} file(s)\n`);
 
     // Module mocks let a test drive a server action with requireRole and next/cache stood in, so

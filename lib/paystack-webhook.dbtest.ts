@@ -1,5 +1,5 @@
 import { makeStudent } from "@/test/db/harness";
-import { after, before, test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -16,8 +16,7 @@ const route = () => import("@/app/api/webhooks/paystack/route");
 const settle: typeof import("@/lib/create-invoice").createInvoiceFromPaymentRequest = async (...args) =>
   (await import("@/lib/create-invoice")).createInvoiceFromPaymentRequest(...args);
 
-// Invoice numbers come from one row, which production has and a database built from prisma/sql/ does not.
-before(() => prisma.invoiceSequence.upsert({ where: { id: "global" }, create: { id: "global" }, update: {} }));
+// The invoice_sequences row the engine numbers from is seeded once by scripts/db-test.mjs.
 after(() => prisma.$disconnect());
 
 /**

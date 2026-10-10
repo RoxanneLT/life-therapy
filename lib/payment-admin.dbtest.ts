@@ -1,5 +1,5 @@
 import { makeStudent } from "@/test/db/harness";
-import { after, before, mock, test } from "node:test";
+import { after, mock, test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -27,7 +27,6 @@ const listActions = () => import("@/app/(admin)/admin/(dashboard)/invoices/actio
 const clientActions = () => import("@/app/(admin)/admin/(dashboard)/clients/[id]/actions");
 const route = () => import("@/app/api/webhooks/paystack/route");
 
-before(() => prisma.invoiceSequence.upsert({ where: { id: "global" }, create: { id: "global" }, update: {} }));
 after(() => prisma.$disconnect());
 
 async function deliver(metadata: Record<string, string>, amount: number, reference: string) {
@@ -156,6 +155,20 @@ test("a second charge on a halfway-settled request is recorded as an overpayment
   assert.deepEqual({ status: row.status, invoiceId: row.invoiceId }, { status: "paid", invoiceId: inv.id });
   assert.deepEqual(await overpaidCents(pr.id), [40_000]);
   assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 1);
+});
+
+test("an old full link paid on a part-paid, hand-settled request records one overpayment, not two", async () => {
+  const pr = await makeRequest(40_000);
+  const inv = await makeInvoice(40_000, { paymentRequestId: pr.id });
+  // 10k part-paid on both rows, then the invoice marked paid by hand and the request write lost.
+  await prisma.paymentRequest.update({ where: { id: pr.id }, data: { paidAmountCents: 10_000, invoiceId: inv.id } });
+  await prisma.invoice.update({ where: { id: inv.id }, data: { status: "paid", paidAmountCents: 10_000 } });
+
+  assert.equal(await deliver({ paymentRequestId: pr.id }, 40_000, ref("old-link")), 200);
+
+  // Paid by hand counts as paid in full, so all 40k is the client's (the closedRow reading).
+  assert.deepEqual(await overpaidCents(pr.id), [40_000]);
+  assert.equal((await prisma.paymentRequest.findUniqueOrThrow({ where: { id: pr.id } })).status, "paid");
 });
 
 test("recording an EFT on an open request does not bring its voided invoice back as paid", async () => {

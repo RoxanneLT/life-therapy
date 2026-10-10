@@ -265,12 +265,18 @@ export async function createInvoiceFromPaymentRequest(
   if (paidInvoice && pr.status !== "cancelled") {
     const settled = paidInvoice.paidAmountCents ?? pr.totalCents;
     const paidToDate = Math.max(settled, pr.totalCents) + payment.amountCents;
+    const recorded =
+      payment.reference &&
+      (await prisma.auditLog.findFirst({
+        where: { action: "payment_overpaid", entityType: "payment_request", entityId: paymentRequestId, metadata: { path: ["reference"], equals: payment.reference } },
+        select: { id: true },
+      }));
     await prisma.$transaction([
       prisma.paymentRequest.update({
         where: { id: paymentRequestId },
         data: { status: "paid", invoiceId: paidInvoice.id, paidAmountCents: settled },
       }),
-      ...(payment.method === "paystack" && payment.amountCents > 0
+      ...(payment.method === "paystack" && payment.amountCents > 0 && !recorded
         ? [
             prisma.auditLog.create({
               data: {

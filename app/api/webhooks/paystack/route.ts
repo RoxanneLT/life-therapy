@@ -74,6 +74,15 @@ export async function POST(request: Request) {
           return new Response("OK", { status: 200 });
         }
 
+        // Its invoice is paid but the request was never told: a settlement written halfway. The
+        // request is closed in all but status, so the engine finishes it and records this charge.
+        // Judged here as well, by received + charge, it wrote a second overpaid row for the same
+        // charge with a different figure (walk-oct-payments-3 02, F3).
+        if (pr && (await prisma.invoice.findFirst({ where: { paymentRequestId, status: "paid" }, select: { id: true } }))) {
+          await createInvoiceFromPaymentRequest(paymentRequestId, { reference: data.reference, method: "paystack", amountCents: data.amount });
+          return new Response("OK", { status: 200 });
+        }
+
         // Does the money that arrived, with what came before it, settle what is owed NOW?
         //
         // A link is for the balance (lib/payment-request-link.ts), so the charge that finishes a
