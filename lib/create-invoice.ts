@@ -14,7 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { recordAudit } from "@/lib/audit";
 import { getSiteSettings } from "@/lib/settings";
-import { resolveBillingContact, calculateInvoiceTotals, vatApplies, resolveClientCurrency } from "@/lib/billing";
+import { resolveBillingContact, calculateInvoiceTotals, vatApplies, resolveClientCurrency, receivedCents } from "@/lib/billing";
 import { getNextInvoiceNumber } from "@/lib/invoice-numbering";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billing-types";
@@ -244,6 +244,47 @@ export async function createInvoiceFromPaymentRequest(
     include: { student: true, billingEntity: true },
   });
 
+  // What this settlement brings the request to. `payment.amountCents` is THIS payment, added to
+  // what came before; 0 means the admin is recording it as paid in full. Never below what the rows
+  // already record (receivedCents takes the request and its invoice as one record).
+  //
+  // A part payment from the invoice list makes the request's invoice early, in
+  // "payment_requested". The payment that finishes the request settles THAT invoice: creating
+  // another gave one request two tax invoices and dropped the part payment from the row
+  // (walk-oct-final 02, N1). Invoice.paymentRequestId is not unique, so this is the only guard.
+  const openInvoice = await prisma.invoice.findFirst({
+    where: { paymentRequestId, status: "payment_requested" },
+    orderBy: { createdAt: "desc" },
+  });
+  const prior = receivedCents(pr, openInvoice);
+  const paidToDate = payment.amountCents > 0 ? prior + payment.amountCents : Math.max(prior, pr.totalCents);
+
+  if (openInvoice) {
+    const invoice = await prisma.invoice.update({
+      where: { id: openInvoice.id },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+        paidAmountCents: paidToDate,
+        paymentMethod: payment.method,
+        ...(payment.method === "paystack" ? { paystackReference: payment.reference, paymentUrl: null } : {}),
+        ...(payment.method === "eft" && payment.reference
+          ? { eftReference: [openInvoice.eftReference, payment.reference].filter(Boolean).join(", ") }
+          : {}),
+      },
+    });
+    await prisma.paymentRequest.update({
+      where: { id: paymentRequestId },
+      data: { invoiceId: invoice.id, status: "paid", paidAmountCents: paidToDate },
+    });
+    try {
+      await generateAndStoreInvoicePDF(invoice.id);
+    } catch (err) {
+      console.error(`Failed to generate PDF for invoice ${invoice.id}:`, err);
+    }
+    return invoice;
+  }
+
   // Lenient on read: these rows may predate validation, and refusing to build an
   // invoice from a historical request would strand the money rather than bill it.
   const lineItems = readLineItems(pr.lineItems);
@@ -282,7 +323,7 @@ export async function createInvoiceFromPaymentRequest(
     paymentMethod: payment.method,
     paystackReference: payment.method === "paystack" ? payment.reference : undefined,
     eftReference: payment.method === "eft" ? payment.reference : undefined,
-    paidAmountCents: payment.amountCents || pr.totalCents,
+    paidAmountCents: paidToDate,
     paymentRequestId: pr.id,
     periodStart: pr.periodStart,
     periodEnd: pr.periodEnd,
@@ -296,22 +337,14 @@ export async function createInvoiceFromPaymentRequest(
   // payment the webhook rejects. If only shortfalls populated it, "null" would mean
   // two different things — nothing received, or paid in full — and the column would
   // be unreadable without cross-checking the status. It means one thing: what we
-  // actually received. `payment.amountCents` is 0 for admin-recorded settlements
-  // (the caller passes the PR's own total), so fall back to the request total.
-  //
-  // Never below what the row already records: a request that took R600 short via
-  // Paystack and is settled later must not read as though only the settling
-  // payment ever arrived. Callers that know the true running total (the admin
-  // Record Payment flow, which adds this payment to what came before) write it
-  // again straight after — this floor is for everyone else.
-  const settledCents = payment.amountCents > 0 ? payment.amountCents : pr.totalCents;
-
+  // actually received to date — a request that took R600 short via Paystack and is
+  // settled later must not read as though only the settling payment ever arrived.
   await prisma.paymentRequest.update({
     where: { id: paymentRequestId },
     data: {
       invoiceId: invoice.id,
       status: "paid",
-      paidAmountCents: Math.max(pr.paidAmountCents ?? 0, settledCents),
+      paidAmountCents: paidToDate,
     },
   });
 

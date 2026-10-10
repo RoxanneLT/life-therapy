@@ -225,7 +225,9 @@ export default async function PortalInvoicesPage({
                         {formatPrice(inv.totalCents, inv.currency)}
                       </p>
 
-                      {(inv.status === "payment_requested" ||
+                      {/* A part-paid request's invoice is paid through the request, whose button is above. */}
+                      {!inv.paymentRequestId &&
+                        (inv.status === "payment_requested" ||
                         inv.status === "overdue") && (
                         <PayButton type="invoice" id={inv.id} />
                       )}

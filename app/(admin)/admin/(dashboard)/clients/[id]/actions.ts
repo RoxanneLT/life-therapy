@@ -17,13 +17,12 @@ import { parseLineItems, readLineItems, type InvoiceLineItem } from "@/lib/billi
 import { removeBookingFromCalendar } from "@/lib/calendar-removal";
 import { format } from "date-fns";
 import { saToday, calendarDate, addSaDays } from "@/lib/dates";
-import { initializeTransaction } from "@/lib/paystack";
 import type { Booking, Student } from "@/lib/generated/prisma/client";
-import { appBaseUrl } from "@/lib/region";
 import { confirmWithTotp } from "@/lib/mfa-step-up";
 import { eraseClient } from "@/lib/popia/erase-client";
 import { externalHolders, type ExternalHolders } from "@/lib/popia/external-holders";
 import { exportClientData } from "@/lib/popia/export-client";
+import { createPaymentRequestLink } from "@/lib/payment-request-link";
 import { erasedRefusal } from "@/lib/popia/erased-guard";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
@@ -1487,8 +1486,6 @@ export async function resendInvoiceAction(invoiceId: string) {
 // Payment Requests — Regenerate payment link
 // ────────────────────────────────────────────────────────────
 
-const APP_URL = appBaseUrl();
-
 /**
  * Refusals are RETURNED. Every reason this can decline — the request is already
  * paid, there is no billing email, Paystack said no — reached the admin as the
@@ -1512,45 +1509,9 @@ export async function regeneratePaymentLinkAction(
     };
   }
 
-  // Resolve email — handle both student and corporate billing entity
-  let email: string;
-  if (pr.billingEntityId) {
-    const entity = await prisma.billingEntity.findUnique({
-      where: { id: pr.billingEntityId },
-    });
-    email = entity?.email || "";
-  } else {
-    const student = await prisma.student.findUnique({
-      where: { id: pr.studentId! },
-      select: { email: true, billingEmail: true },
-    });
-    email = student?.billingEmail || student?.email || "";
-  }
-
-  if (!email) {
-    return {
-      success: false,
-      error: "No billing email on this client — add one before generating a payment link.",
-    };
-  }
-
-  const reference = `pr-${pr.id.slice(-8)}-${Date.now()}`;
-  const result = await initializeTransaction({
-    email,
-    amount: pr.totalCents,
-    currency: pr.currency || "ZAR",
-    reference,
-    callback_url: `${APP_URL}/portal/invoices`,
-    metadata: { paymentRequestId: pr.id },
-  });
-
-  await prisma.paymentRequest.update({
-    where: { id: pr.id },
-    data: {
-      paymentUrl: result.authorization_url,
-      paystackReference: reference,
-    },
-  });
+  // For the balance, to the request's billing contact (lib/payment-request-link.ts).
+  const link = await createPaymentRequestLink(pr.id);
+  if ("error" in link) return { success: false, error: link.error };
 
   await recordAudit({
     action: "payment_link_regenerated",
@@ -1561,7 +1522,7 @@ export async function regeneratePaymentLinkAction(
   });
 
   revalidatePath(`/admin/clients/${studentId}`);
-  return { success: true, paymentUrl: result.authorization_url };
+  return { success: true, paymentUrl: link.url };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -2160,23 +2121,8 @@ export async function createManualPaymentRequestAction(data: {
       const email = student?.billingEmail || student?.email || "";
 
       if (email) {
-        try {
-          const reference = `pr-${pr.id.slice(-8)}-${Date.now()}`;
-          const result = await initializeTransaction({
-            email,
-            amount: pr.totalCents,
-            currency: pr.currency || "ZAR",
-            reference,
-            callback_url: `${appBaseUrl()}/portal/invoices`,
-            metadata: { paymentRequestId: pr.id },
-          });
-          await prisma.paymentRequest.update({
-            where: { id: pr.id },
-            data: { paymentUrl: result.authorization_url, paystackReference: reference },
-          });
-        } catch (err) {
-          console.error("Paystack link generation failed:", err);
-        }
+        const link = await createPaymentRequestLink(pr.id, email).catch((err: unknown) => ({ error: String(err) }));
+        if ("error" in link) console.error("Paystack link generation failed:", link.error);
       }
 
       // Send email with pro-forma PDF
@@ -2366,23 +2312,9 @@ export async function updatePaymentRequestAction(data: {
       });
       const email = student?.billingEmail || student?.email || "";
       if (email) {
-        try {
-          const reference = `pr-${data.paymentRequestId.slice(-8)}-${Date.now()}`;
-          const result = await initializeTransaction({
-            email,
-            amount: totals.totalCents,
-            currency: pr.currency || "ZAR",
-            reference,
-            callback_url: `${appBaseUrl()}/portal/invoices`,
-            metadata: { paymentRequestId: data.paymentRequestId },
-          });
-          await prisma.paymentRequest.update({
-            where: { id: data.paymentRequestId },
-            data: { paymentUrl: result.authorization_url, paystackReference: reference },
-          });
-        } catch (err) {
-          console.error("Paystack regeneration failed:", err);
-        }
+        // Reads the total just written, less anything already received.
+        const link = await createPaymentRequestLink(data.paymentRequestId, email).catch((err: unknown) => ({ error: String(err) }));
+        if ("error" in link) console.error("Paystack regeneration failed:", link.error);
       }
     }
 

@@ -8,6 +8,7 @@ import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { generateAndStoreInvoicePDF } from "@/lib/generate-invoice-pdf";
 import { sendInvoiceEmail } from "@/lib/send-invoice";
+import { refreshPaymentLink } from "@/lib/payment-request-link";
 import { saDateStr, saDayStart, addSaDays } from "@/lib/dates";
 import { resolveClientCurrencies, receivedCents } from "@/lib/billing";
 
@@ -207,6 +208,9 @@ export async function markPaymentRequestPaidFromListAction(
     // Only send email on full payment
     if (isFullyPaid) {
       await sendInvoiceEmail(existingInvoice.id).catch(console.error);
+    } else {
+      // The stored link still charges the old amount (lib/payment-request-link.ts).
+      await refreshPaymentLink(paymentRequestId);
     }
 
     await auditPayment(isFullyPaid);
@@ -246,6 +250,7 @@ export async function markPaymentRequestPaidFromListAction(
         paidAmountCents: newPaidAmount,
       },
     });
+    await refreshPaymentLink(paymentRequestId);
   } else if (newPaidAmount > amountCents) {
     // Settled, but earlier money made up part of it — record the true total on
     // both rows so the invoice does not understate what was paid for it.

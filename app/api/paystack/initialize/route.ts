@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { initializeTransaction } from "@/lib/paystack";
 import { NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/region";
+import { createPaymentRequestLink } from "@/lib/payment-request-link";
 
 const APP_URL = appBaseUrl();
 
@@ -77,29 +78,15 @@ async function handlePaymentRequest(
     );
   }
 
-  const reference = `pr-${pr.id.slice(-8)}-${Date.now()}`;
-  const email = student.billingEmail || student.email;
-
-  const result = await initializeTransaction({
-    email,
-    amount: pr.totalCents,
-    currency: pr.currency || "ZAR",
-    reference,
-    callback_url: `${APP_URL}/portal/invoices`,
-    metadata: { paymentRequestId: pr.id },
-  });
-
-  await prisma.paymentRequest.update({
-    where: { id: pr.id },
-    data: {
-      paymentUrl: result.authorization_url,
-      paystackReference: reference,
-    },
-  });
+  // Charges the balance, not the total: the page beside this button shows what is still owed.
+  const link = await createPaymentRequestLink(pr.id, student.billingEmail || student.email);
+  if ("error" in link) {
+    return NextResponse.json({ error: link.error }, { status: 400 });
+  }
 
   return NextResponse.json({
-    authorization_url: result.authorization_url,
-    reference: result.reference,
+    authorization_url: link.url,
+    reference: link.reference,
   });
 }
 
@@ -126,12 +113,27 @@ async function handleInvoice(
     );
   }
 
-  const reference = `inv-${invoice.id.slice(-8)}-${Date.now()}`;
   const email = student.billingEmail || student.email;
+
+  // An invoice a part payment made for a request is the request's money: paying it here charged the
+  // full total and left the request owing (walk-oct-final 02, N1). It is paid through the request.
+  if (invoice.paymentRequestId) {
+    const link = await createPaymentRequestLink(invoice.paymentRequestId, email);
+    if ("error" in link) return NextResponse.json({ error: link.error }, { status: 400 });
+    return NextResponse.json({ authorization_url: link.url, reference: link.reference });
+  }
+
+  // What is still owed, not the total: the webhook adds this charge to what came before.
+  const balance = invoice.totalCents - (invoice.paidAmountCents ?? 0);
+  if (balance <= 0) {
+    return NextResponse.json({ error: "Nothing is left to pay on this invoice." }, { status: 400 });
+  }
+
+  const reference = `inv-${invoice.id.slice(-8)}-${Date.now()}`;
 
   const result = await initializeTransaction({
     email,
-    amount: invoice.totalCents,
+    amount: balance,
     currency: invoice.currency || "ZAR",
     reference,
     callback_url: `${APP_URL}/portal/invoices`,
