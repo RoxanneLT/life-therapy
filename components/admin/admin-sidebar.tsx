@@ -20,7 +20,6 @@ import {
   Timer,
   Receipt,
   BarChart3,
-  Search,
   Menu,
   ChevronLeft,
 } from "lucide-react";
@@ -56,7 +55,6 @@ const navGroups: NavGroup[] = [
     label: "Content",
     items: [
       { href: "/admin/pages", label: "Pages", icon: FileText },
-      { href: "/admin/seo", label: "SEO", icon: Search },
       { href: "/admin/courses", label: "Courses", icon: GraduationCap },
       { href: "/admin/testimonials", label: "Testimonials", icon: Quote },
     ],

@@ -32,7 +32,6 @@ export const ADMIN_ACCESS = {
   "/admin/bookings/settings": SUPER,
 
   "/admin/pages": ["super_admin", "editor"],
-  "/admin/seo": ["super_admin", "editor"],
   "/admin/courses": ["super_admin", "editor"],
   "/admin/testimonials": ALL,
 

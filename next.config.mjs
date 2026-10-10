@@ -46,6 +46,12 @@ const nextConfig = {
         destination: "/admin/clients",
         permanent: true,
       },
+      // SEO is a tab on each page's editor; the separate screen over the same rows was removed.
+      {
+        source: "/admin/seo",
+        destination: "/admin/pages",
+        permanent: false,
+      },
       {
         source: "/products/self-esteem-starter-kit",
         destination: "/packages",

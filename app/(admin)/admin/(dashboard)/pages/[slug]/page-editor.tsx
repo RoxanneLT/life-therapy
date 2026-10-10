@@ -36,8 +36,9 @@ import {
   reorderSections,
   togglePagePublished,
   toggleSectionVisibility,
+  updatePageSeo,
 } from "./actions";
-import { updatePageSeo } from "@/app/(admin)/admin/(dashboard)/seo/actions";
+import { toast } from "sonner";
 import {
   Plus,
   ChevronUp,
@@ -391,9 +392,20 @@ function SeoTab({ seo, pageSlug }: { seo: SeoData | null; pageSlug: string }) {
     const formData = new FormData(e.currentTarget);
     formData.set("ogImageUrl", ogImageUrl);
 
-    await updatePageSeo(seo.id, formData);
-
+    // Silence read as success: a failed save used to leave the button spinning with no word.
+    let result: { error?: string };
+    try {
+      result = await updatePageSeo(seo.id, formData);
+    } catch {
+      result = { error: "Could not save. Please try again." };
+    }
     setSaving(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success("SEO saved");
     setSaved(true);
     router.refresh();
     setTimeout(() => setSaved(false), 1500);
