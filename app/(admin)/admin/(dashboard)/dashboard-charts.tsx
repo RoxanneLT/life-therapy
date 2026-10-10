@@ -1,4 +1,6 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarDays, Banknote } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { DashboardCardTitle } from "./dashboard-card-title";
 import { getBookingsByMonth, getRevenueByMonth } from "@/lib/dashboard-queries";
 import { BookingsChart } from "@/components/admin/bookings-chart";
 import { RevenueChart } from "@/components/admin/revenue-chart";
@@ -34,7 +36,7 @@ export async function DashboardCharts({ role, year }: Readonly<{ role: AdminRole
         {bookingsByMonth && (
           <Card className="flex flex-col">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium">Bookings per Month</CardTitle>
+              <DashboardCardTitle icon={CalendarDays}>Bookings per Month</DashboardCardTitle>
               <CardDescription>Planned &amp; completed sessions</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">
@@ -45,7 +47,7 @@ export async function DashboardCharts({ role, year }: Readonly<{ role: AdminRole
         {revenueByMonth && (
           <Card className="flex flex-col">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-medium">Revenue per Month</CardTitle>
+              <DashboardCardTitle icon={Banknote}>Revenue per Month</DashboardCardTitle>
               <CardDescription>Paid, pending &amp; estimated revenue</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { DashboardCardTitle } from "./dashboard-card-title";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, UserCheck, CreditCard, Clock, Cake, Banknote, Video } from "lucide-react";
 import { formatByCurrency } from "@/lib/utils";
@@ -111,8 +112,7 @@ export async function DashboardGlance({ role }: Readonly<{ role: AdminRole }>) {
       {can("/admin/bookings") && (
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Next Session</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <DashboardCardTitle icon={Clock}>Next Session</DashboardCardTitle>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col justify-between gap-3">
             {nextSession ? (
@@ -151,8 +151,7 @@ export async function DashboardGlance({ role }: Readonly<{ role: AdminRole }>) {
       {can("/admin/clients") && (
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Birthdays</CardTitle>
-            <Cake className="h-4 w-4 text-muted-foreground" />
+            <DashboardCardTitle icon={Cake}>Upcoming Birthdays</DashboardCardTitle>
           </CardHeader>
           <CardContent>
             {upcomingBirthdays.length > 0 ? (
@@ -256,8 +255,7 @@ export async function DashboardStats({ role }: Readonly<{ role: AdminRole }>) {
         <Link key={stat.label} href={stat.href}>
           <Card className="transition-shadow hover:shadow-md">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <DashboardCardTitle icon={stat.icon}>{stat.label}</DashboardCardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold">{stat.value}</p>

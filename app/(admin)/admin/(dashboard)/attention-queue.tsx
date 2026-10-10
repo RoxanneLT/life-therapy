@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { DashboardCardTitle } from "./dashboard-card-title";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getAttentionItems, type AttentionItem } from "@/lib/dashboard-attention";
@@ -20,10 +21,7 @@ export async function AttentionQueue({ role }: Readonly<{ role: AdminRole }>) {
   return (
     <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="flex items-center gap-2 text-base font-medium">
-          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          Needs attention
-        </CardTitle>
+        <DashboardCardTitle icon={AlertTriangle}>Needs attention</DashboardCardTitle>
         {items.length > 0 && (
           <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">
             {items.length}
