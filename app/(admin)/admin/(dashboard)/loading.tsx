@@ -1,5 +1,5 @@
 import { AttentionQueueSkeleton } from "./attention-queue";
-import { DashboardOverviewSkeleton } from "./dashboard-overview";
+import { DashboardGlanceSkeleton, DashboardStatsSkeleton, DashboardTopRow } from "./dashboard-overview";
 import { DashboardChartsSkeleton } from "./dashboard-charts";
 
 /** The same skeletons the page streams behind, so arriving here and the page filling in look alike. */
@@ -10,8 +10,8 @@ export default function DashboardLoading() {
         <div className="h-8 w-56 rounded-md bg-muted" />
         <div className="h-4 w-72 rounded bg-muted" />
       </div>
-      <AttentionQueueSkeleton />
-      <DashboardOverviewSkeleton />
+      <DashboardTopRow attention={<AttentionQueueSkeleton />} glance={<DashboardGlanceSkeleton />} />
+      <DashboardStatsSkeleton />
       <DashboardChartsSkeleton />
     </div>
   );

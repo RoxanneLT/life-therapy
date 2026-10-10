@@ -18,7 +18,7 @@ export async function AttentionQueue({ role }: Readonly<{ role: AdminRole }>) {
   const items = await getAttentionItems(role);
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="flex items-center gap-2 text-base font-medium">
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />

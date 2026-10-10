@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { requireAccess } from "@/lib/auth";
 import { saToday } from "@/lib/dates";
 import { AttentionQueue, AttentionQueueSkeleton } from "./attention-queue";
-import { DashboardOverview, DashboardOverviewSkeleton } from "./dashboard-overview";
+import { DashboardGlance, DashboardGlanceSkeleton, DashboardStats, DashboardStatsSkeleton, DashboardTopRow } from "./dashboard-overview";
 import { DashboardCharts, DashboardChartsSkeleton } from "./dashboard-charts";
 
 /**
@@ -34,12 +34,21 @@ export default async function AdminDashboard({
         description="Here's what's happening on your platform today."
       />
 
-      <Suspense fallback={<AttentionQueueSkeleton />}>
-        <AttentionQueue role={adminUser.role} />
-      </Suspense>
+      <DashboardTopRow
+        attention={
+          <Suspense fallback={<AttentionQueueSkeleton />}>
+            <AttentionQueue role={adminUser.role} />
+          </Suspense>
+        }
+        glance={
+          <Suspense fallback={<DashboardGlanceSkeleton />}>
+            <DashboardGlance role={adminUser.role} />
+          </Suspense>
+        }
+      />
 
-      <Suspense fallback={<DashboardOverviewSkeleton />}>
-        <DashboardOverview role={adminUser.role} />
+      <Suspense fallback={<DashboardStatsSkeleton />}>
+        <DashboardStats role={adminUser.role} />
       </Suspense>
 
       <Suspense key={validYear} fallback={<DashboardChartsSkeleton />}>
