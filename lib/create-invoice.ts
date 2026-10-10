@@ -120,47 +120,43 @@ async function createInvoiceRecord(params: {
     vatPercent,
   );
 
-  // Get next invoice number
+  // The number and the invoice in one transaction, so a create that fails gives its number back.
   const prefix = settings.invoicePrefix || "LT";
-  const { number: invoiceNumber } = await getNextInvoiceNumber(
-    params.billingName,
-    prefix,
-    new Date(),
-  );
-
-  // Create the invoice
-  const invoice = await prisma.invoice.create({
-    data: {
-      invoiceNumber,
-      type: params.type,
-      studentId: params.studentId,
-      billingEntityId: params.billingEntityId,
-      billingName: params.billingName,
-      billingEmail: params.billingEmail,
-      billingAddress: params.billingAddress,
-      billingVatNumber: params.billingVatNumber,
-      currency: params.currency,
-      subtotalCents: totals.subtotalCents,
-      discountCents: totals.discountCents,
-      discountPercent: params.invoiceDiscountPercent ?? 0,
-      vatPercent,
-      vatAmountCents: totals.vatAmountCents,
-      totalCents: totals.totalCents,
-      lineItems: lineItems as unknown as Parameters<typeof prisma.invoice.create>[0]["data"]["lineItems"],
-      status: params.status ?? "paid",
-      paymentMethod: params.paymentMethod,
-      paystackReference: params.paystackReference,
-      eftReference: params.eftReference,
-      paidAt: params.status === "paid" || !params.status ? new Date() : undefined,
-      paidAmountCents: params.paidAmountCents ?? totals.totalCents,
-      issuedAt: new Date(),
-      orderId: params.orderId,
-      paymentRequestId: params.paymentRequestId,
-      periodStart: params.periodStart,
-      periodEnd: params.periodEnd,
-      billingMonth: params.billingMonth,
-      dueDate: params.dueDate,
-    },
+  const invoice = await prisma.$transaction(async (tx) => {
+    const { number: invoiceNumber } = await getNextInvoiceNumber(params.billingName, prefix, new Date(), tx);
+    return tx.invoice.create({
+      data: {
+        invoiceNumber,
+        type: params.type,
+        studentId: params.studentId,
+        billingEntityId: params.billingEntityId,
+        billingName: params.billingName,
+        billingEmail: params.billingEmail,
+        billingAddress: params.billingAddress,
+        billingVatNumber: params.billingVatNumber,
+        currency: params.currency,
+        subtotalCents: totals.subtotalCents,
+        discountCents: totals.discountCents,
+        discountPercent: params.invoiceDiscountPercent ?? 0,
+        vatPercent,
+        vatAmountCents: totals.vatAmountCents,
+        totalCents: totals.totalCents,
+        lineItems: lineItems as unknown as Parameters<typeof prisma.invoice.create>[0]["data"]["lineItems"],
+        status: params.status ?? "paid",
+        paymentMethod: params.paymentMethod,
+        paystackReference: params.paystackReference,
+        eftReference: params.eftReference,
+        paidAt: params.status === "paid" || !params.status ? new Date() : undefined,
+        paidAmountCents: params.paidAmountCents ?? totals.totalCents,
+        issuedAt: new Date(),
+        orderId: params.orderId,
+        paymentRequestId: params.paymentRequestId,
+        periodStart: params.periodStart,
+        periodEnd: params.periodEnd,
+        billingMonth: params.billingMonth,
+        dueDate: params.dueDate,
+      },
+    });
   });
 
   // Generate PDF (non-blocking — don't fail the invoice creation)

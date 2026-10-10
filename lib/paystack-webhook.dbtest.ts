@@ -242,3 +242,16 @@ test("the settlement engine refuses a voided request and writes nothing", async 
   assert.equal((await request(pr.id)).status, "cancelled");
   assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 0);
 });
+
+test("a charge already on another invoice is refused by the index, and the failed create spends no number", async () => {
+  const charge = ref("dup");
+  await makeInvoice(10_000).then((inv) => prisma.invoice.update({ where: { id: inv.id }, data: { paystackReference: charge } }));
+  const pr = await makeRequest(10_000);
+  const sequence = async () => (await prisma.invoiceSequence.findUniqueOrThrow({ where: { id: "global" } })).nextNumber;
+  const before = await sequence();
+
+  await assert.rejects(settle(pr.id, { reference: charge, method: "paystack", amountCents: 10_000 }), /Unique constraint/);
+
+  assert.equal(await sequence(), before, "the number is given back with the create that failed");
+  assert.equal(await prisma.invoice.count({ where: { paymentRequestId: pr.id } }), 0);
+});

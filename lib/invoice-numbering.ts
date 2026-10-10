@@ -49,25 +49,31 @@ function formatInvoiceNumber(
  * Atomically fetch and increment the global invoice sequence, then
  * return the formatted invoice number.
  *
- * Uses a Prisma interactive transaction to guarantee uniqueness even
- * under concurrent requests.
+ * Pass the transaction that creates the invoice as `tx`. Taken in a transaction of its own, the
+ * number was spent even when the create that followed failed, so a retried settlement left a gap
+ * in the tax-invoice sequence (walk-oct-payments-2, W3). In the same transaction, a failed create
+ * gives it back. The row lock the increment takes also serialises concurrent creates.
  */
+/** A Prisma client or a transaction handle, as CreditDb in lib/credits.ts. */
+type SequenceDb = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">;
+
 export async function getNextInvoiceNumber(
   billingName: string,
   prefix: string,
   date: Date,
+  tx?: SequenceDb,
 ): Promise<{ number: string; sequence: number }> {
   const initials = extractInitials(billingName);
 
-  const result = await prisma.$transaction(async (tx) => {
-    // Atomically increment and return the new sequence value
-    const updated = await tx.invoiceSequence.update({
+  const take = async (client: SequenceDb) => {
+    const updated = await client.invoiceSequence.update({
       where: { id: "global" },
       data: { nextNumber: { increment: 1 } },
     });
     // The sequence we use is the value *before* increment
     return updated.nextNumber - 1;
-  });
+  };
+  const result = tx ? await take(tx) : await prisma.$transaction(take);
 
   return {
     number: formatInvoiceNumber(date, prefix, initials, result),
