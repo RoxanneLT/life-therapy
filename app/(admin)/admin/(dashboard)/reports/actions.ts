@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv";
 import { requireRole } from "@/lib/auth";
 import { recordExport } from "@/lib/access-log";
-import { saFormat, saToday } from "@/lib/dates";
+import { addSaDays, calendarDate, isSaDateStr, saDayStart, saFormat, saToday } from "@/lib/dates";
 
 /**
  * SAST, not the server's zone — these rows are a financial register. `toLocaleDateString`
@@ -26,21 +26,36 @@ function formatCurrency(cents: number): string {
  */
 const toCsvRow = csvRow;
 
+/**
+ * The date range a register covers, as SAST days, or the refusal to show.
+ *
+ * Checked, not trusted: `new Date("garbage")` is an Invalid Date, which compares false both
+ * ways, so the query matched nothing and the export downloaded an empty CSV that read as
+ * "no invoices in that range".
+ */
+function registerRange(from: string, to: string): { from: string; to: string } | { error: string } {
+  if (!from || !to) return { error: "Please select a date range." };
+  if (!isSaDateStr(from) || !isSaDateStr(to)) return { error: "That date range is not valid." };
+  if (from > to) return { error: "The start date is after the end date." };
+  return { from, to };
+}
+
 export async function exportInvoiceRegister(
   from: string,
   to: string
 ): Promise<{ csv: string; filename: string } | { error: string }> {
   const { adminUser } = await requireRole("super_admin");
 
-  if (!from || !to) return { error: "Please select a date range." };
+  const range = registerRange(from, to);
+  if ("error" in range) return range;
 
-  const fromDate = new Date(from);
-  const toDate = new Date(to);
-  toDate.setHours(23, 59, 59, 999);
-
+  // `createdAt` is an instant, so the range is SAST days: from the start of `from` to the
+  // start of the day after `to`. `new Date(from)` was UTC midnight (02:00 SAST) and
+  // `setHours` ran in the server's zone, so an invoice raised at 01:00 SAST on the 1st
+  // exported with the previous month — while its Date column, already SAST, said the 1st.
   const invoices = await prisma.invoice.findMany({
     where: {
-      createdAt: { gte: fromDate, lte: toDate },
+      createdAt: { gte: saDayStart(range.from), lt: saDayStart(addSaDays(range.to, 1)) },
     },
     orderBy: { createdAt: "asc" },
     include: {
@@ -56,6 +71,8 @@ export async function exportInvoiceRegister(
     "Billing Name",
     "Billing Email",
     "Type",
+    // Amounts are in the invoice's own currency, which is not always ZAR.
+    "Currency",
     "Subtotal",
     "Discount",
     "VAT",
@@ -77,6 +94,7 @@ export async function exportInvoiceRegister(
       inv.billingName,
       inv.billingEmail,
       inv.type,
+      inv.currency,
       formatCurrency(inv.subtotalCents),
       formatCurrency(inv.discountCents),
       formatCurrency(inv.vatAmountCents),
@@ -101,15 +119,13 @@ export async function exportSessionRegister(
 ): Promise<{ csv: string; filename: string } | { error: string }> {
   const { adminUser } = await requireRole("super_admin");
 
-  if (!from || !to) return { error: "Please select a date range." };
+  const range = registerRange(from, to);
+  if ("error" in range) return range;
 
-  const fromDate = new Date(from);
-  const toDate = new Date(to);
-  toDate.setHours(23, 59, 59, 999);
-
+  // `date` is a calendar day (@db.Date, stored at UTC midnight), so both ends are days.
   const bookings = await prisma.booking.findMany({
     where: {
-      date: { gte: fromDate, lte: toDate },
+      date: { gte: calendarDate(range.from), lte: calendarDate(range.to) },
     },
     orderBy: { date: "asc" },
     include: {
