@@ -215,14 +215,18 @@ export async function fetchClientActivity(clientId: string): Promise<AuditFeedRo
     prisma.paymentRequest.findMany({ where: { studentId: clientId }, select: { id: true } }),
     prisma.invoice.findMany({ where: { studentId: clientId }, select: { id: true } }),
   ]);
-  const idsOf = (metadata: unknown): string[] => {
-    const ids = (metadata as { ids?: unknown } | null)?.ids;
+  const idsOf = (metadata: unknown, key: "ids" | "seriesIds"): string[] => {
+    const ids = (metadata as Record<string, unknown> | null)?.[key];
     return Array.isArray(ids) ? ids.filter((i): i is string => typeof i === "string") : [];
   };
-  const bookingIds = [...bookings.map((b) => b.id), ...deleted.map((d) => d.entityId), ...bulkDeleted.flatMap((r) => idsOf(r.metadata))];
+  const bookingIds = [...bookings.map((b) => b.id), ...deleted.map((d) => d.entityId), ...bulkDeleted.flatMap((r) => idsOf(r.metadata, "ids"))];
   // A series row is keyed by its recurringSeriesId, not by any one booking's id, and a fully
-  // deleted series is known only from the `before` of its deletions.
-  const deletedSeries = deleted.map((d) => (d.before as { recurringSeriesId?: unknown } | null)?.recurringSeriesId);
+  // deleted series is known only from its deletions: `before` on a single delete, seriesIds on a
+  // bulk one (recorded since 2026-10-10; older bulk rows carry no series).
+  const deletedSeries = [
+    ...deleted.map((d) => (d.before as { recurringSeriesId?: unknown } | null)?.recurringSeriesId),
+    ...bulkDeleted.flatMap((r) => idsOf(r.metadata, "seriesIds")),
+  ];
   const seriesIds = [
     ...new Set([...bookings.map((b) => b.recurringSeriesId), ...deletedSeries].filter((s): s is string => typeof s === "string" && !!s)),
   ];

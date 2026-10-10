@@ -1649,7 +1649,8 @@ export async function bulkDeleteCancelledFutureBookingsAction(studentId: string)
     entityType: "bulk",
     entityId: `student:${studentId}`,
     actorEmail: adminUser.email,
-    metadata: { count: result.count, ids: deletedIds, studentId, skippedLateCancels: lateCancelCount },
+    // seriesIds lets the client's Activity tab keep a deleted series' rows (clients/[id]/queries.ts).
+    metadata: { count: result.count, ids: deletedIds, seriesIds, studentId, skippedLateCancels: lateCancelCount },
   });
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/clients/${studentId}`);
