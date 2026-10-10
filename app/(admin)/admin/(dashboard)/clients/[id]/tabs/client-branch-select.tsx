@@ -62,7 +62,12 @@ export function ClientBranchSelect({
     setValue(v);
     startTransition(async () => {
       try {
-        await updateClientBranchAction(studentId, v === NONE ? null : v);
+        const result = await updateClientBranchAction(studentId, v === NONE ? null : v);
+        if (result.error) {
+          toast.error(result.error);
+          setValue(previous);
+          return;
+        }
         // `value` seeds from the `current` prop, so without a refresh the change
         // reverts on the next mount of this tab — a save that undoes itself.
         router.refresh();

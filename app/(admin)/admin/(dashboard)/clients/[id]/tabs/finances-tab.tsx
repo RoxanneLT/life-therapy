@@ -513,6 +513,10 @@ function BillingConfigCard({
     const newType = checked ? "postpaid" : "prepaid";
     startTransition(async () => {
       const result = await updateBillingTypeAction(clientId, newType);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
       let msg = `Billing type set to ${newType}`;
       if (result.restoredCount > 0) {
         msg += ` · ${result.restoredCount} session price${result.restoredCount !== 1 ? "s" : ""} restored`;
@@ -540,7 +544,11 @@ function BillingConfigCard({
 
   function handleEmailSave() {
     startTransition(async () => {
-      await updateBillingEmailAction(clientId, localEmail);
+      const result = await updateBillingEmailAction(clientId, localEmail);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success("Billing email updated");
       onSuccess?.();
     });
@@ -548,11 +556,15 @@ function BillingConfigCard({
 
   function handleDiscountSave() {
     startTransition(async () => {
-      await updateStandingDiscountAction(
+      const result = await updateStandingDiscountAction(
         clientId,
         localPercent || null,
         localFixed || null,
       );
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success("Standing discount updated");
       onSuccess?.();
     });
@@ -685,7 +697,11 @@ function BillingConfigCard({
                   const val = v === "self" ? null : v;
                   setLocalIndivBilled(val);
                   startTransition(async () => {
-                    await updateBillingAssignmentAction(clientId, "individual", val);
+                    const result = await updateBillingAssignmentAction(clientId, "individual", val);
+                    if (result?.error) {
+                      toast.error(result.error);
+                      return;
+                    }
                     toast.success("Individual billing assignment updated");
                     onSuccess?.();
                   });
@@ -712,7 +728,11 @@ function BillingConfigCard({
                   const val = v === "self" ? null : v;
                   setLocalCouplesBilled(val);
                   startTransition(async () => {
-                    await updateBillingAssignmentAction(clientId, "couples", val);
+                    const result = await updateBillingAssignmentAction(clientId, "couples", val);
+                    if (result?.error) {
+                      toast.error(result.error);
+                      return;
+                    }
                     toast.success("Couples billing assignment updated");
                     onSuccess?.();
                   });

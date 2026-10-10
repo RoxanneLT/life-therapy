@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole, getAuthenticatedAdmin } from "@/lib/auth";
+import { erasedRefusal } from "@/lib/popia/erased-guard";
 import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { upsertContact } from "@/lib/contacts";
@@ -173,7 +174,8 @@ export async function bulkAssignBranchAction(
   const { adminUser } = await requireRole("super_admin", "editor");
   if (studentIds.length === 0) return { success: true, count: 0 };
   const res = await prisma.student.updateMany({
-    where: { id: { in: studentIds } },
+    // An erased client keeps their row; nothing is written to it (lib/popia/erased-guard.ts).
+    where: { id: { in: studentIds }, erasedAt: null },
     data: { branch: branch || null },
   });
   await recordAudit({
@@ -195,6 +197,8 @@ export async function bulkAssignBranchAction(
 export async function updateAdminNotesAction(clientId: string, notes: string) {
   // Notes are clinical: only a role that may read them may write them (lib/clinical-access.ts).
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(clientId);
+  if (erased) return { error: erased };
 
   await prisma.student.update({
     where: { id: clientId },
@@ -225,6 +229,8 @@ export async function updateClientProfileAction(
   formData: FormData,
 ): Promise<{ success: boolean; error?: string }> {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(clientId);
+  if (erased) return { success: false, error: erased };
 
   try {
     const firstName = (formData.get("firstName") as string)?.trim();
@@ -292,6 +298,8 @@ export async function updateClientProfileAction(
 
 export async function updateClientStatusAction(clientId: string, status: string) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(clientId);
+  if (erased) return { error: erased };
 
   const validStatuses = ["potential", "active", "inactive", "archived"];
   if (!validStatuses.includes(status)) throw new Error("Invalid status");
@@ -379,6 +387,8 @@ interface ConvertData {
 export async function convertToClientAction(clientId: string, data: ConvertData) {
   const { adminUser } = await getAuthenticatedAdmin();
   await requireRole("super_admin");
+  const erased = await erasedRefusal(clientId);
+  if (erased) return { error: erased };
 
   const client = await prisma.student.findUnique({
     where: { id: clientId },

@@ -593,6 +593,20 @@ const MUTATIONS = [
     expects: ["popia: the export reads every client-linked model"],
   },
   {
+    path: "app/(admin)/admin/(dashboard)/clients/actions.ts",
+    // The Personal tab's save without its guard: retyping a name onto an erased client, as before 2026-10-10.
+    find: "  const erased = await erasedRefusal(clientId);\n  if (erased) return { success: false, error: erased };\n",
+    replace: "",
+    expects: ["popia: an admin action does not write to an erased client"],
+  },
+  {
+    path: "app/(admin)/admin/(dashboard)/clients/actions.ts",
+    // The bulk branch write without its filter: the one action guarded by its where, not a call.
+    find: "where: { id: { in: studentIds }, erasedAt: null },",
+    replace: "where: { id: { in: studentIds } },",
+    expects: ["popia: an admin action does not write to an erased client"],
+  },
+  {
     path: "lib/prisma.ts",
     // Listed as encrypted, wired to nothing: invoice's shape from 608598e until the fix.
     find: '      invoice: buildQueryExtension("invoice"),\n',

@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useClientInsights } from "../use-client-data";
@@ -88,7 +89,11 @@ export function OverviewTab({ client, canSeeClinical = false }: Readonly<Overvie
 
   function handleSaveNotes() {
     startTransition(async () => {
-      await updateAdminNotesAction(client.id as string, notes);
+      const result = await updateAdminNotesAction(client.id as string, notes);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       // `notes` is local state seeded from the prop: the save shows on screen but
       // is undone the next time this tab mounts, which reads the page's stale copy.
       router.refresh();

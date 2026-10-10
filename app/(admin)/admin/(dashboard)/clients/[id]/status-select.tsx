@@ -84,7 +84,11 @@ export function StatusSelect({
   function applyStatusChange(value: string) {
     startTransition(async () => {
       try {
-        await updateClientStatusAction(clientId, value);
+        const result = await updateClientStatusAction(clientId, value);
+        if (result?.error) {
+          alert(result.error);
+          return;
+        }
         // The select renders `currentStatus`, a server prop. revalidatePath marks
         // the route stale but leaves the mounted page alone, so without this the
         // dropdown snapped back to the old status on a save that had succeeded.

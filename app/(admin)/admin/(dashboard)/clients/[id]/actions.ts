@@ -24,6 +24,7 @@ import { confirmWithTotp } from "@/lib/mfa-step-up";
 import { eraseClient } from "@/lib/popia/erase-client";
 import { externalHolders, type ExternalHolders } from "@/lib/popia/external-holders";
 import { exportClientData } from "@/lib/popia/export-client";
+import { erasedRefusal } from "@/lib/popia/erased-guard";
 
 /** Auto-activate a payer if they're inactive but the billed client is active */
 async function autoActivatePayerIfNeeded(
@@ -62,6 +63,8 @@ async function autoActivatePayerIfNeeded(
 
 export async function createIntakeAction(studentId: string) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   await prisma.clientIntake.create({
     data: {
@@ -98,6 +101,8 @@ export async function updateIntakeAction(
   },
 ) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   await prisma.clientIntake.upsert({
     where: { studentId },
@@ -435,6 +440,8 @@ export async function updateCommPrefAction(
   if (!ALLOWED_COMM_FIELDS.includes(field as (typeof ALLOWED_COMM_FIELDS)[number])) {
     throw new Error("Invalid field");
   }
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   await prisma.student.update({
     where: { id: studentId },
@@ -510,6 +517,8 @@ export async function resetDripAction(studentId: string) {
 
 export async function updateTagsAction(studentId: string, tags: string[]) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
   await prisma.student.update({
     where: { id: studentId },
     data: { tags },
@@ -543,8 +552,10 @@ export async function getBranchOptionsAction(): Promise<
 export async function updateClientBranchAction(
   studentId: string,
   branch: string | null,
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   const { adminUser } = await requireRole("super_admin", "editor");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { success: false, error: erased };
   await prisma.student.update({
     where: { id: studentId },
     data: { branch: branch || null },
@@ -665,6 +676,8 @@ export async function getAvailableCoursesAction(studentId: string) {
 export async function updateBillingTypeAction(studentId: string, billingType: string) {
   const { adminUser } = await requireRole("super_admin");
   if (!["prepaid", "postpaid"].includes(billingType)) throw new Error("Invalid billing type");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { restoredCount: 0, error: erased };
 
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -744,6 +757,8 @@ export async function updateBillingTypeAction(studentId: string, billingType: st
  */
 export async function updateBillFullMonthAction(studentId: string, billFullMonth: boolean) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -850,6 +865,8 @@ export async function restoreZeroPriceSessionsAction(
 
 export async function updateBillingEmailAction(studentId: string, email: string) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   const existing = await prisma.student.findUnique({
     where: { id: studentId },
@@ -883,6 +900,8 @@ export async function updateStandingDiscountAction(
   fixed: number | null,
 ) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   const before = await prisma.student.findUnique({
     where: { id: studentId },
@@ -1009,6 +1028,8 @@ export async function createClientAndLinkRelationshipAction(data: {
   relationshipLabel?: string;
 }): Promise<CreateLinkedClientResult> {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(data.parentClientId);
+  if (erased) return { success: false, error: erased };
 
   // Determine email
   let email = data.email?.trim().toLowerCase();
@@ -1260,6 +1281,8 @@ export async function updateBillingAssignmentAction(
   relationshipId: string | null,
 ) {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { error: erased };
 
   // Validate: if relationshipId is provided, ensure it's a relationship involving this student
   if (relationshipId) {
@@ -1795,6 +1818,8 @@ export async function updateClientEmailAction(
   newEmail: string,
 ): Promise<{ success: true } | { success: false; error: string }> {
   const { adminUser } = await requireRole("super_admin");
+  const erased = await erasedRefusal(studentId);
+  if (erased) return { success: false, error: erased };
 
   const email = newEmail.trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

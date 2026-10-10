@@ -260,7 +260,11 @@ function EmailPreferences({
 
   function handleToggle(field: string, currentValue: boolean) {
     startTransition(async () => {
-      await updateCommPrefAction(clientId, field, !currentValue);
+      const result = await updateCommPrefAction(clientId, field, !currentValue);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       onSuccess?.();
     });
   }
@@ -482,13 +486,26 @@ function TagsSection({
     const updated = [...localTags, tag];
     setLocalTags(updated);
     setNewTag("");
-    startTransition(async () => { await updateTagsAction(clientId, updated); onSuccess?.(); });
+    saveTags(updated);
   }
 
   function handleRemove(tag: string) {
     const updated = localTags.filter((t) => t !== tag);
     setLocalTags(updated);
-    startTransition(async () => { await updateTagsAction(clientId, updated); onSuccess?.(); });
+    saveTags(updated);
+  }
+
+  function saveTags(updated: string[]) {
+    const previous = localTags;
+    startTransition(async () => {
+      const result = await updateTagsAction(clientId, updated);
+      if (result?.error) {
+        toast.error(result.error);
+        setLocalTags(previous);
+        return;
+      }
+      onSuccess?.();
+    });
   }
 
   return (

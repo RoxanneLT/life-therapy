@@ -1099,6 +1099,30 @@ check("popia: the export reads every client-linked model", () => {
   }
 });
 
+check("popia: an admin action does not write to an erased client", () => {
+  // An erasure blanks the Student row and keeps it. Until 2026-10-10 every edit action accepted
+  // it, so saving the Personal tab of an erased client put a name and number back on a record the
+  // page still called erased (lib/popia/erased-guard.ts). An admin action that writes a Student or
+  // intake row must ask erasedRefusal() first, or, for a bulk write, exclude erased rows in its
+  // where. The erasure's own actions are what erasedAt exists for and are skipped. Helpers an
+  // action calls are not followed: a write must sit in the action's own body to be seen.
+  const WRITES = /\bprisma\.(?:student\.(?:update|updateMany|upsert)|clientIntake\.(?:create|update|upsert))\s*\(/;
+  const OWN = new Set(["eraseClientAction", "markErasureExternalDoneAction"]);
+  let seen = 0;
+  for (const f of walk(join(APP, "(admin)"), /\.tsx?$/)) {
+    const raw = read(f);
+    if (!isActionModule(raw)) continue;
+    for (const fn of serverActions(code(raw))) {
+      if (OWN.has(fn.name) || !WRITES.test(fn.body)) continue;
+      seen++;
+      if (!/\berasedRefusal\s*\(/.test(fn.body) && !/\berasedAt\s*:\s*null\b/.test(fn.body)) {
+        fail("popia", `${rel(f)} → ${fn.name}`, "writes a client record without refusing an erased one, so an edit can restore what the erasure removed", "return the refusal from erasedRefusal(studentId) in lib/popia/erased-guard.ts before writing; a bulk write adds erasedAt: null to its where");
+      }
+    }
+  }
+  if (seen < 10) throw new Error(`found ${seen} admin actions writing a client record — the scan has broken`);
+});
+
 check("access-log: every export records who took it", () => {
   // An export is a copy of client data leaving the system. Until 2026-10-09 none was recorded, so
   // nobody could say who had taken the whole client list (lib/access-log.ts). An action that builds

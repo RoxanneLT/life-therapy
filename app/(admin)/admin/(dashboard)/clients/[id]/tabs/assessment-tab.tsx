@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,7 +53,11 @@ function EmptyState({ clientId }: { clientId: string }) {
 
   function handleCreate() {
     startTransition(async () => {
-      await createIntakeAction(clientId);
+      const result = await createIntakeAction(clientId);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       // The intake arrives as a server prop. Without a refresh the tab kept
       // showing "No assessment recorded yet" over an assessment that now exists,
       // and a second click created nothing while looking like it had failed.
@@ -96,7 +101,7 @@ function AssessmentForm({
 
   function handleSave() {
     startTransition(async () => {
-      await updateIntakeAction(clientId, {
+      const result = await updateIntakeAction(clientId, {
         behaviours,
         feelings,
         symptoms,
@@ -105,6 +110,10 @@ function AssessmentForm({
         otherSymptoms: otherSymptoms.trim() || undefined,
         adminNotes: adminNotes.trim() || undefined,
       });
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
       // These fields seed local state from the prop, so the saved values survive
       // on screen but are lost the moment the tab remounts — leave and come back
       // and the form shows what was there before the save.

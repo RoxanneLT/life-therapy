@@ -111,7 +111,7 @@ export function ConvertDialog({
     setError("");
     startTransition(async () => {
       try {
-        await convertToClientAction(client.id, {
+        const result = await convertToClientAction(client.id, {
           hybridPackageId: selectedPackageId || undefined,
           credits: selectedPackageId ? undefined : manualCredits || undefined,
           adminNotes: adminNotes.trim() || undefined,
@@ -119,6 +119,10 @@ export function ConvertDialog({
           feelings: feelings.length > 0 ? feelings : undefined,
           symptoms: symptoms.length > 0 ? symptoms : undefined,
         });
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
         // Conversion rewrites status, credits and intake — all server props on
         // this page. Refresh, or the profile still reads "potential" afterwards.
         router.refresh();
