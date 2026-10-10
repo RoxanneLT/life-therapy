@@ -17,12 +17,17 @@ function audienceFor(role: AdminRole, filters: AudienceFilters | undefined) {
   return canSeeClinical(role) ? filters : withoutAssessmentFilters(filters);
 }
 
-/** The refusal when a non-clinical role tries to send a campaign someone else targeted by assessment. */
-async function assessmentRefusal(role: AdminRole, campaignId: string): Promise<string | null> {
+/**
+ * The refusal when a non-clinical role tries to send, schedule or SAVE a campaign someone else
+ * targeted by assessment. The save matters most: stripping the filters on save and then letting
+ * the send through widened "clients with anxiety" to everyone (walk-oct-fixes 01, F1). A role
+ * that may not use a field gets a refusal, never a rewrite of the stored value.
+ */
+async function assessmentRefusal(role: AdminRole, campaignId: string, verb: "send" | "schedule" | "edit"): Promise<string | null> {
   if (canSeeClinical(role)) return null;
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { audienceFilters: true } });
   return usesAssessmentFilters(campaign?.audienceFilters as AudienceFilters | null)
-    ? "This campaign targets clients by their assessment answers, so only a super admin can send it."
+    ? `This campaign targets clients by their assessment answers, so only a super admin can ${verb} it.`
     : null;
 }
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -132,6 +137,10 @@ export async function saveCampaignAction(
   const id = formData.get("id") as string | null;
   const name = (formData.get("name") as string)?.trim();
   if (!name) return { success: false, error: "The campaign needs a name before it can be saved." };
+  if (id) {
+    const refusal = await assessmentRefusal(adminUser.role, id, "edit");
+    if (refusal) return { success: false, error: refusal };
+  }
 
   const filterSource = (formData.get("filterSource") as string) || undefined;
   const filterClientStatus = (formData.get("filterClientStatus") as string) || undefined;
@@ -169,7 +178,7 @@ export async function saveCampaignAction(
 export async function sendCampaignAction(campaignId: string) {
   const { adminUser } = await requireRole("super_admin", "marketing");
 
-  const refusal = await assessmentRefusal(adminUser.role, campaignId);
+  const refusal = await assessmentRefusal(adminUser.role, campaignId, "send");
   if (refusal) return { error: refusal };
 
   await prisma.campaign.update({
@@ -195,7 +204,7 @@ export async function scheduleCampaignAction(
 ): Promise<{ error: string } | undefined> {
   const { adminUser } = await requireRole("super_admin", "marketing");
 
-  const refusal = await assessmentRefusal(adminUser.role, campaignId);
+  const refusal = await assessmentRefusal(adminUser.role, campaignId, "schedule");
   if (refusal) return { error: refusal };
 
   const campaign = await prisma.campaign.findUnique({
