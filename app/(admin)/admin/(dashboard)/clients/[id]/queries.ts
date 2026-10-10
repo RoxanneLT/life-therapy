@@ -198,20 +198,34 @@ export async function fetchClientInsights(clientId: string) {
  */
 export async function fetchClientActivity(clientId: string): Promise<AuditFeedRow[]> {
   await requireRole("super_admin");
-  const [bookings, deleted, paymentRequests, invoices] = await Promise.all([
+  const [bookings, deleted, bulkDeleted, paymentRequests, invoices] = await Promise.all([
     prisma.booking.findMany({ where: { studentId: clientId }, select: { id: true, recurringSeriesId: true } }),
     // A deleted booking is gone from the table, so its history is found through its deletion
-    // entry, which records the client in `before` (bookings/actions.ts → booking_deleted).
+    // entry. Two paths delete one: a single delete records the client in `before`, and the bulk
+    // delete of cancelled future sessions lists the ids in one row keyed to the client
+    // (bookings/actions.ts → booking_deleted, cancelled_bookings_bulk_deleted).
     prisma.auditLog.findMany({
       where: { entityType: "booking", action: "booking_deleted", before: { path: ["studentId"], equals: clientId } },
-      select: { entityId: true },
+      select: { entityId: true, before: true },
+    }),
+    prisma.auditLog.findMany({
+      where: { entityType: "bulk", action: "cancelled_bookings_bulk_deleted", entityId: `student:${clientId}` },
+      select: { metadata: true },
     }),
     prisma.paymentRequest.findMany({ where: { studentId: clientId }, select: { id: true } }),
     prisma.invoice.findMany({ where: { studentId: clientId }, select: { id: true } }),
   ]);
-  const bookingIds = [...bookings.map((b) => b.id), ...deleted.map((d) => d.entityId)];
-  // A series row is keyed by its recurringSeriesId, not by any one booking's id.
-  const seriesIds = [...new Set(bookings.map((b) => b.recurringSeriesId).filter((s): s is string => !!s))];
+  const idsOf = (metadata: unknown): string[] => {
+    const ids = (metadata as { ids?: unknown } | null)?.ids;
+    return Array.isArray(ids) ? ids.filter((i): i is string => typeof i === "string") : [];
+  };
+  const bookingIds = [...bookings.map((b) => b.id), ...deleted.map((d) => d.entityId), ...bulkDeleted.flatMap((r) => idsOf(r.metadata))];
+  // A series row is keyed by its recurringSeriesId, not by any one booking's id, and a fully
+  // deleted series is known only from the `before` of its deletions.
+  const deletedSeries = deleted.map((d) => (d.before as { recurringSeriesId?: unknown } | null)?.recurringSeriesId);
+  const seriesIds = [
+    ...new Set([...bookings.map((b) => b.recurringSeriesId), ...deletedSeries].filter((s): s is string => typeof s === "string" && !!s)),
+  ];
   const rows = await prisma.auditLog.findMany({
     where: {
       OR: [
